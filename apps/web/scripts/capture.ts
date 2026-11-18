@@ -112,9 +112,9 @@ export async function captureScreenshot(opts: {
   allowConsole?: boolean;
   /**
    * How long `goto` waits. `networkidle` by default (every route captured so far relies on it).
-   * ⚠️ The program preview never goes idle under `next start` (its links prefetch fixture ids until
-   * the preview's `BuilderLinkPrefetch` is wired), so a capture there passes `load` and its
-   * interaction waits on elements instead (CAT-3 B2-ii).
+   * ⚠️ The program preview did not go idle under `next start` while its links prefetched fixture
+   * ids (404s); #593 stopped that, and whether it now goes idle is unverified, so a capture there
+   * still passes `load` and its interaction waits on elements instead (CAT-3 B2-ii).
    */
   waitUntil?: 'load' | 'networkidle';
 }): Promise<string[]> {

@@ -1238,25 +1238,28 @@ describe('declared-day ±1 bound (shared across writers)', () => {
   const ciForm = (day: string) =>
     checkinForm({ profileId: PROFILE_ID, day, values: { [HABIT.key]: '1' } });
 
-  it.each([-1, 0, 1])('accepts a day within ±1 (offset %s)', async (offset) => {
+  it.each([-1, 0])('accepts today and yesterday (offset %s)', async (offset) => {
     const day = localDay(offset);
     expect((await logBodyweightAction(initial, bwForm(day))).ok).toBe(true);
     expect((await logStrengthSessionAction(initial, strForm(day))).ok).toBe(true);
     expect((await logCheckinsAction(initial, ciForm(day))).ok).toBe(true);
-    // Sanity: the offset day is exactly ±1 (or 0) from the active-tz today.
-    expect(Math.abs(isoDayDiff(day, localDay()))).toBeLessThanOrEqual(1);
+    // Sanity: the offset day is yesterday or today in the active-tz.
+    expect(isoDayDiff(day, localDay())).toBeLessThanOrEqual(0);
   });
 
-  it('rejects a day more than +1 ahead (stale/forward tab) on every writer', async () => {
-    const day = localDay(2);
-    const bw = await logBodyweightAction(initial, bwForm(day));
-    const str = await logStrengthSessionAction(initial, strForm(day));
-    const ci = await logCheckinsAction(initial, ciForm(day));
-    for (const res of [bw, str, ci]) expect(res.ok).toBe(false);
-    expect(logBodyweight).not.toHaveBeenCalled();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
+  it.each([1, 2])(
+    'rejects a day after today (offset %s) on every writer (FAM-1 D32)',
+    async (offset) => {
+      const day = localDay(offset);
+      const bw = await logBodyweightAction(initial, bwForm(day));
+      const str = await logStrengthSessionAction(initial, strForm(day));
+      const ci = await logCheckinsAction(initial, ciForm(day));
+      for (const res of [bw, str, ci]) expect(res.ok).toBe(false);
+      expect(logBodyweight).not.toHaveBeenCalled();
+      expect(logStrengthSession).not.toHaveBeenCalled();
+      expect(logCheckinEntries).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects a malformed day on bodyweight/strength (after zod, before the DAL)', async () => {
     expect((await logBodyweightAction(initial, bwForm('not-a-date'))).ok).toBe(false);

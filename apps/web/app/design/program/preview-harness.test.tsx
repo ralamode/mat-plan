@@ -62,7 +62,7 @@ vi.mock('@/components/day/not-on-a-program', () => ({ NotOnAProgram: probe('not-
 import { pickerOptions, previewHowTo } from './picker-options';
 import { SETTINGS_COPY } from '@/lib/constants';
 
-import { PreviewHarness } from './preview-harness';
+import { PreviewHarness, previewHouseholdOf } from './preview-harness';
 import {
   parsePreview,
   PREVIEW_SCREEN_NAMES,
@@ -305,5 +305,32 @@ describe('the preview harness', () => {
     // A builder screen is the page: it renders its own <h1>, so the harness adds none.
     render(<PreviewHarness screen="program" fixture="family-program" failNext={false} />);
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+});
+
+describe('the Programs list beside a program page on the preview (C36)', () => {
+  it('is the list built from the same world as the page, so the two agree about an archived athlete', () => {
+    const page = PROGRAM_VIEW_FIXTURES['family-program-archived-athlete'];
+    const list = previewHouseholdOf('family-program-archived-athlete', page);
+    expect(list).toEqual(PROGRAM_LIST_FIXTURES['programs-list-archived-athlete']);
+    const onThePage = page.athletes.map((a) => a.name);
+    const entry = list.find((p) => p.programPublicId === page.programPublicId)!;
+    expect(entry.athletes).toEqual(onThePage);
+  });
+
+  it('is the seeded household for a page from the seeded world, plus the page’s program when it is new', () => {
+    const seeded = PROGRAM_LIST_FIXTURES['programs-list'];
+    expect(previewHouseholdOf('family-program', PROGRAM_VIEW_FIXTURES['family-program'])).toEqual(
+      seeded,
+    );
+    const fresh = PROGRAM_VIEW_FIXTURES['new-program-empty'];
+    expect(previewHouseholdOf('new-program-empty', fresh)).toEqual([
+      ...seeded,
+      { programPublicId: fresh.programPublicId, name: fresh.name, athletes: [] },
+    ]);
+    // A copy of the list each time: a fake may change what it is handed.
+    expect(previewHouseholdOf('family-program', PROGRAM_VIEW_FIXTURES['family-program'])).not.toBe(
+      seeded,
+    );
   });
 });

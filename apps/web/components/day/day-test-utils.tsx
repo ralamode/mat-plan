@@ -42,7 +42,7 @@ export function makeMount(createFake: FakeFactory) {
     options: {
       failNext?: boolean;
       wrap?: (actions: Actions) => Partial<DayActions>;
-      /** Hand the screen `amendRow`, as 12d's routes will: Change (13b-ii). */
+      /** Hand the screen `amendRow`, as the day page does since 12d: Change (13b-ii). */
       change?: boolean;
     } = {},
   ) {
@@ -101,7 +101,7 @@ export const LOG_PREFIX = DAY_COPY.logLabel('');
 export const isTick = (name: string) => name.startsWith(LOG_PREFIX);
 export const tick = (el: HTMLElement) => within(el).getByRole('button', { name: isTick });
 export const field = (el: HTMLElement) => within(el).getByRole<HTMLInputElement>('textbox');
-export const status = () => screen.getByRole('status').textContent?.replace(/ $/, '');
+export const status = () => screen.getByRole('status').textContent;
 
 /** A tap in a browser's order: pointer-down (while the field still has focus), focus, click. */
 export async function press(button: HTMLElement) {

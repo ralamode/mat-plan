@@ -10,6 +10,7 @@ import {
   saveWorkoutSchema,
   TRANSPORT_REFUSALS,
   weekDraftSchema,
+  weekExceedsDaySlots,
   weekRepeatsAWorkout,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
@@ -52,6 +53,7 @@ const INVALID = { ok: false, reason: PROGRAM_REFUSAL.invalid } as const;
  * and the builder reads it as "this page is stale" (`isStaleWeek`).
  */
 const ONCE_PER_DAY = { ok: false, reason: PROGRAM_REFUSAL.once_per_day } as const;
+const LIMIT_REACHED = { ok: false, reason: PROGRAM_REFUSAL.limit_reached } as const;
 
 /** The builder's pages: the list, each program and each workout editor live under it. */
 function refreshPrograms() {
@@ -113,7 +115,11 @@ export async function saveWeekAction(draft: unknown): Promise<ProgramAnswer<'sav
       const entry = await enterMutation(TRANSPORT_REFUSALS);
       if (!entry.ok) return entry;
       const parsed = weekDraftSchema.safeParse(draft);
-      if (!parsed.success) return weekRepeatsAWorkout(draft) ? ONCE_PER_DAY : INVALID;
+      // In the fake's order (C25, C35): a workout twice on a day, then a day past MAX_DAY_SLOTS.
+      if (!parsed.success) {
+        if (weekRepeatsAWorkout(draft)) return ONCE_PER_DAY;
+        return weekExceedsDaySlots(draft) ? LIMIT_REACHED : INVALID;
+      }
       const result = await saveHouseholdWeek(parsed.data);
       if (!result.ok) return { ok: false, reason: result.reason };
       refreshPrograms();

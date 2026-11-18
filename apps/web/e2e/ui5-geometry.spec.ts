@@ -29,15 +29,24 @@ import { SETTINGS_PATH, ADD_ATHLETE_PATH } from '@/lib/constants';
  * ⚠️ **Rounded to whole pixels** — sub-pixel differences between runs are noise, a 1px layout shift
  * is not something this guard needs to catch, and brittleness here would get the test deleted.
  */
+/** The first form control on a page: what `firstControlX` measures unless a page names its own. */
+const FIRST_CONTROL = 'input:not([type=hidden]), button, select';
+/** The day page's Next arrow: the last child of the date row in `day-nav.tsx`. */
+const DAY_NEXT_ARROW = 'nav[aria-label="Change day"] > div:first-child > :last-child';
+
 const PAGES = [
-  { name: 'the day page', path: SEED_PROFILE_ROUTE },
-  { name: 'household settings', path: SETTINGS_PATH },
-  { name: 'add an athlete', path: ADD_ATHLETE_PATH },
+  // The day page's first control is the Next arrow, found by its place in the date row, not as the
+  // first `<button>` (FAM-1 12c). On a program, Next day is a link (look-ahead), so the first
+  // `<button>` became whatever the day holds, such as Bodyweight's Change. The arrow sits at the same
+  // x whether it is a link or a disabled button, so the recorded baseline still applies.
+  { name: 'the day page', path: SEED_PROFILE_ROUTE, firstControl: DAY_NEXT_ARROW },
+  { name: 'household settings', path: SETTINGS_PATH, firstControl: FIRST_CONTROL },
+  { name: 'add an athlete', path: ADD_ATHLETE_PATH, firstControl: FIRST_CONTROL },
 ] as const;
 
 /** What a layout change moves. Position, box, the spacing between children, and total height. */
-async function geometryOf(page: import('@playwright/test').Page) {
-  return page.evaluate(() => {
+async function geometryOf(page: import('@playwright/test').Page, firstControl: string) {
+  return page.evaluate((firstControl) => {
     const main = document.querySelector('main');
     const cs = main ? getComputedStyle(main) : null;
     // 🔴 **Layout properties, never content-dependent boxes.** The first version pinned `main`'s
@@ -78,11 +87,11 @@ async function geometryOf(page: import('@playwright/test').Page) {
         return f && m ? Math.round(f.y - (m.y + m.height)) : null;
       })(),
       h1XWidth: rect('h1'),
-      firstControlX: rect('input:not([type=hidden]), button, select'),
+      firstControlX: rect(firstControl),
       mainCount: document.querySelectorAll('main').length,
       footerInsideMain: !!document.querySelector('main footer'),
     };
-  });
+  }, firstControl);
 }
 
 /**
@@ -167,14 +176,14 @@ for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
   test.describe(`phone geometry at ${viewport.width}px`, () => {
     test.use({ viewport });
 
-    for (const { name, path } of PAGES) {
+    for (const { name, path, firstControl } of PAGES) {
       test(`${name} is unchanged`, async ({ page }) => {
         // ⚠️ `networkidle`, the suite's idiom (`day-navigation.spec.ts:18`). At the default
         // `load` the measurement caught a `loading.tsx`'s `<main aria-busy>` still in the DOM
         // beside the streamed page's, and reported two `<main>` elements — a timing artifact, not
         // the duplicate landmark it looks like.
         await page.goto(path, { waitUntil: 'networkidle' });
-        const geometry = await geometryOf(page);
+        const geometry = await geometryOf(page, firstControl);
 
         // Two invariants that hold regardless of the numbers, and that the shell could break.
         expect(geometry.mainCount, 'exactly one <main>').toBe(1);

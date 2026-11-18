@@ -15,6 +15,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
+
+- **What & why it's debt:** `apps/web/app/p/[profileId]/loading.tsx` reserves the athlete
+  switcher's 44px row below `lg`, but `AthleteSwitcher` renders nothing when the household has no
+  other athlete (`apps/web/components/day/athlete-switcher.tsx`). A Suspense fallback has no data, so
+  it cannot know the count; 12c chose to reserve the row for the common case, a household of several.
+- **Impact:** in a one-athlete household, on a phone or tablet, the content below the header moves
+  up by one row when the page replaces the skeleton. This is a layout shift on that path only. Nothing
+  has measured it against the CLS budget.
+- **The fix:** keep a row of that height in the real header too, for example the athlete's name as
+  static text when there is no one to switch to, so the skeleton and the page agree. Alternatively,
+  have the fallback read the household's athlete count from a value it can see without the DAL.
+- **Severity:** low. Maintainer, 2026-11-17: "Add to tech-debt".
+
 ### Two shell-wrapper walks (added 2026-11-17, DX-18 1b)
 
 - **What & why it's debt:** `.claude/hooks/guard-process-kill.mjs` imports `lex()` from
@@ -740,6 +754,11 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   ⚠️ **"Announce the same sentence again" now has two idioms**: `Announcer`'s `messageKey` (3b-bw) and
   `components/day/day-screen.tsx` appending U+00A0 (FAM-1 13). The day screen is lane C's; it moves onto
   `messageKey` when that lane next touches it.
+  ✅ **The day screen moved (FAM-1 12c, 2026-11-17)**: each announcement is a new `messageKey`, and
+  `day-screen.test.tsx` proves a repeat is a new node with the same text. ⚠️ **One copy is left:**
+  `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
+  prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
+  at 15c, which wires that dialog.
 - **Severity:** low.
 
 ### The focus ring is under 3:1 app-wide (found 2026-11-16, #442 review)
@@ -771,18 +790,6 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
   assume:** a replayed submit after a success would then refuse rather than no-op.
 - **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
   rule is scoped to `/api/sync`, so there is no standing convention this violates.
-
-### The strength writer's replay re-select is not scoped to the profile (found 2026-10-02, #212 review)
-
-- **What & why:** `reselectLiveByClientId` (`packages/db/src/writers/strength-session.ts`, from #59)
-  re-selects a session by `client_id` only. Replaying another profile's session `client_id` under
-  profile B would attach B's entries to A's session, and since V1-24 3a-ii return A's public id as
-  `savedId`.
-- **Impact:** low today: it needs a device-generated `client_id` that is never exposed, and ownership
-  is existence-only until AUTH-1. It becomes a cross-household leak once households exist.
-- **Proposed fix:** add the profile (or household) to the re-select's WHERE, with a `db:verify` proof.
-  Fold into AUTH-1's ownership pass.
-- **Severity:** medium after AUTH-1.
 
 ### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
 

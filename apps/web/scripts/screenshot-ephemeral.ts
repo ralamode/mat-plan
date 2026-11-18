@@ -51,6 +51,7 @@ import {
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
+import { DAY_COPY } from '../components/day/day-copy';
 import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
 import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
@@ -438,6 +439,12 @@ const STATES = {
   // V1-24 3b-page — a logged practice: the Life row with its minutes, after a real tap. Interaction-only.
   'practice-logged': null,
   'bodyweight-closed-empty': seedClosedDays,
+  // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
+  // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
+  'day-look-ahead': null,
+  // FAM-1 12d — Change on a set row, typed over and not yet saved ("Not saved. Was …" and the ✕),
+  // in today's superset. Interaction-only: the state exists only between typing and leaving the row.
+  'day-change-typed-over': null,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
   'bodyweight-rejected': null,
@@ -702,6 +709,34 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   // Retry-safe: the three widths share one database, and only the first finds the button.
   'practice-logged': (page) => logPractice(page),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
+  // The page's own Next arrow, not `gotoDaysAgo(-1)`: that counts from the app's default zone, which
+  // can be a day behind the zone the page renders in, and then "tomorrow" is the page's today.
+  'day-change-typed-over': async (page) => {
+    const superset = page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
+    if ((await superset.count()) === 0) {
+      throw new Error(
+        'day-change-typed-over: no superset today (Heavy A or B runs Mon, Wed, Fri and Sat); pass a ?d= that has one',
+      );
+    }
+    const tick = superset.getByRole('button', { name: /^Log .* set 1$/ }).first();
+    if ((await tick.getAttribute('aria-pressed')) !== 'true') {
+      await tick.click();
+      await page.waitForFunction(
+        (el) => el?.getAttribute('aria-pressed') === 'true' && !el.getAttribute('aria-busy'),
+        await tick.elementHandle(),
+      );
+    }
+    const load = superset.getByRole('textbox', { name: /set 1, in (?!reps$)/ }).first();
+    await load.fill(String(Number(await load.inputValue()) + 5));
+    await superset.getByText(/^Not saved\. Was /).waitFor();
+  },
+  'day-look-ahead': async (page) => {
+    await page
+      .getByRole('navigation', { name: 'Change day' })
+      .getByRole('link', { name: /^Next day/ })
+      .click();
+    await page.getByText(/^Tomorrow ·/).waitFor();
+  },
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });
     await section.getByLabel('Unit').selectOption('kg');

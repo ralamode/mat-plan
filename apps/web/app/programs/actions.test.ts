@@ -1,6 +1,7 @@
 import {
   E2E_SESSION_BYPASS_USER,
   emptyWeek,
+  MAX_DAY_SLOTS,
   PROGRAM_REFUSAL,
   TRACKING_TYPE,
 } from '@mat-plan/shared';
@@ -242,6 +243,22 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
     upper.days[1] = [{ workoutPublicId: WORKOUT_ID.toUpperCase(), label: null }];
     await saveWeekAction(upper);
     expect(vi.mocked(saveHouseholdWeek).mock.calls[0]![0]).toEqual(weekInput());
+  });
+
+  it('a day past MAX_DAY_SLOTS is limit_reached, as the fake says (C35); a repeat on it is still once_per_day', async () => {
+    const long = weekInput();
+    long.days[1] = Array.from({ length: MAX_DAY_SLOTS + 1 }, (_, i) => ({
+      workoutPublicId: `019826b4-0000-7000-8000-${String(i).padStart(12, '0')}`,
+      label: null,
+    }));
+    expect(await saveWeekAction(long)).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.limit_reached,
+    });
+    long.days[1] = [...long.days[1]!, long.days[1]![0]!];
+    expect(await saveWeekAction(long)).toEqual({ ok: false, reason: PROGRAM_REFUSAL.once_per_day });
+    expect(saveHouseholdWeek).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('copy and new item hand the DAL the client’s ids and text verbatim', async () => {

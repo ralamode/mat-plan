@@ -8,13 +8,14 @@ import {
   BROWSE_KINDS,
   BROWSE_OPEN_AT_MOST,
   browseTree,
+  byFoldedName,
   MOVEMENT_FAMILIES,
   MOVEMENT_FAMILY_LABELS,
   MUSCLE_BODY_AREA,
   movementFamilyOf,
 } from './families';
 import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS, CATALOG_FIXTURE_OPTIONS } from './fixture';
-import { catalogHowToOf, catalogOptionOf, type CatalogOption } from './option';
+import { catalogHowToOf, catalogHowToSchema, catalogOptionOf, type CatalogOption } from './option';
 import { MODALITIES, MUSCLES } from './vocabulary';
 
 const entryWith = (slug: string): CatalogMovement => {
@@ -225,6 +226,72 @@ describe('the browse families (P12)', () => {
     for (const entry of [...CATALOG_FIXTURE, ...CATALOG_MOVEMENTS]) {
       expect(MOVEMENT_FAMILY_LABELS[movementFamilyOf(entry)], entry.slug).toBeTruthy();
     }
+  });
+});
+
+describe('catalogHowToSchema: what the "How to" read answers, and nothing else (P16)', () => {
+  const withSteps = CATALOG_FIXTURE.find((entry) => entry.instructions !== undefined)!;
+  const answer = catalogHowToOf(CATALOG_FIXTURE, withSteps.slug)!;
+
+  it('takes what catalogHowToOf answers, unchanged', () => {
+    expect(catalogHowToSchema.parse(answer)).toEqual(answer);
+    expect(Object.keys(answer).sort()).toEqual(['instructions', 'name', 'supervision']);
+  });
+
+  it('🔴 is strict: a slug, an id or any other key is refused, so none can ride along', () => {
+    expect(catalogHowToSchema.safeParse({ ...answer, slug: withSteps.slug }).success).toBe(false);
+    expect(catalogHowToSchema.safeParse({ ...answer, publicId: 'x' }).success).toBe(false);
+  });
+
+  it('needs all three: the label is null when there is none, never absent', () => {
+    const { supervision: _s, ...noLabel } = answer;
+    expect(catalogHowToSchema.safeParse(noLabel).success).toBe(false);
+    expect(catalogHowToSchema.safeParse({ ...answer, supervision: null }).success).toBe(true);
+    expect(catalogHowToSchema.safeParse({ ...answer, instructions: '' }).success).toBe(false);
+  });
+});
+
+describe('byFoldedName: the order a list of movements is read in (K24)', () => {
+  const named = (...names: string[]) => names.map((name) => ({ name }));
+  const sorted = (...names: string[]) =>
+    named(...names)
+      .sort(byFoldedName)
+      .map((row) => row.name);
+
+  it('orders by the folded name, so case and punctuation do not decide', () => {
+    expect(sorted('push-up', 'Ab rollout', 'Zercher squat', 'bear crawl')).toEqual([
+      'Ab rollout',
+      'bear crawl',
+      'push-up',
+      'Zercher squat',
+    ]);
+  });
+
+  it('orders two names that fold alike by the name as written, whatever order they came in', () => {
+    const pair = ['Push-up', 'push up'];
+    expect(sorted(...pair)).toEqual(sorted(...[...pair].reverse()));
+    expect(byFoldedName({ name: 'Plank' }, { name: 'Plank' })).toBe(0);
+  });
+
+  it('is the order browseTree lists a family in, where a raw comparison would differ', () => {
+    // Every other name in lower case: by code unit a lower-case name sorts after every capital,
+    // so a tree sorted on the raw name would not be in this order.
+    const mixed = CATALOG_FIXTURE_OPTIONS.map((option, i) => ({
+      ...option,
+      name: i % 2 === 1 ? option.name.toLowerCase() : option.name,
+    }));
+    const raw = (a: { name: string }, b: { name: string }) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    let differs = 0;
+    for (const kind of browseTree(mixed)) {
+      for (const family of kind.families) {
+        expect([...family.options].sort(byFoldedName)).toEqual(family.options);
+        const byRaw = [...family.options].sort(raw);
+        if (byRaw.some((option, i) => option !== family.options[i])) differs += 1;
+      }
+    }
+    // The sample must tell the two orders apart, or this test would pass for either.
+    expect(differs).toBeGreaterThan(0);
   });
 });
 
