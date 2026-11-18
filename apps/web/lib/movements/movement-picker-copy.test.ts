@@ -172,3 +172,43 @@ describe('the filters (CAT-3 B2-ii) — every counted sentence, both ways', () =
     );
   });
 });
+
+describe('the line after the results: rows no filter can judge are never "not in your filters" (⏳ until chunk R)', () => {
+  it('only judged rows hidden: the B2-ii sentences, unchanged', () => {
+    expect(COPY.outsideLine(2, 0, 'squat', true)).toBe(COPY.outsideMore(2));
+    expect(COPY.outsideLine(2, 0, 'squat', false)).toBe(COPY.outsideAll(2, 'squat'));
+  });
+
+  it('only bare rows hidden, some results shown: says they are hidden and why, one and many', () => {
+    expect(COPY.outsideLine(1, 1, 'squat', true)).toBe(
+      'Your filters hide 1 more: its equipment and muscles aren’t known yet.',
+    );
+    expect(COPY.outsideLine(3, 3, 'squat', true)).toBe(
+      'Your filters hide 3 more: their equipment and muscles aren’t known yet.',
+    );
+  });
+
+  it('only bare rows, nothing shown: names the query', () => {
+    expect(COPY.outsideLine(1, 1, 'squat', false)).toBe(
+      'Your filters hide 1 movement for "squat": its equipment and muscles aren’t known yet.',
+    );
+    expect(COPY.outsideLine(2, 2, 'squat', false)).toBe(
+      'Your filters hide 2 movements for "squat": their equipment and muscles aren’t known yet.',
+    );
+  });
+
+  it('both: the judged sentence first, then the bare one with "also"', () => {
+    expect(COPY.outsideLine(3, 1, 'squat', true)).toBe(
+      `${COPY.outsideMore(2)} Your filters also hide 1 more: its equipment and muscles aren’t known yet.`,
+    );
+    expect(COPY.outsideLine(5, 2, 'squat', false)).toBe(
+      `${COPY.outsideAll(3, 'squat')} Your filters also hide 2 more: their equipment and muscles aren’t known yet.`,
+    );
+  });
+
+  it('never starts with "No equipment" (a library row\'s equipment words)', () => {
+    for (const line of [COPY.outsideLine(1, 1, 'q', true), COPY.outsideLine(1, 1, 'q', false)]) {
+      expect(line.startsWith(COPY.emptyEquipment)).toBe(false);
+    }
+  });
+});

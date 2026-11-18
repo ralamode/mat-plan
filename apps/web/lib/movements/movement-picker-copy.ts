@@ -171,6 +171,32 @@ export const MOVEMENT_PICKER_COPY = {
       one: `${n} movement for ${quote(query)} is not in your filters.`,
       other: `${n} movements for ${quote(query)} are not in your filters.`,
     }),
+  /**
+   * The line after the results under a query with filters on (P10), whole. `outside` is every row
+   * the filters hid (`outsideFilters`); `bare` is those with no library data (`outsideWithoutData`,
+   * ⏳ until CAT-3 chunk R): no filter can judge them, so they are never "not in your filters"
+   * (board call after a UX lens, 2026-11-18; the words are the lens's, and never start "No
+   * equipment"). `shown` is whether any row passed.
+   */
+  outsideLine: (outside: number, bare: number, query: string, shown: boolean): string => {
+    const judged = outside - bare;
+    const hidden = (also: boolean) =>
+      plural(bare, {
+        one: `Your filters ${also ? 'also ' : ''}hide 1 more: its equipment and muscles aren’t known yet.`,
+        other: `Your filters ${also ? 'also ' : ''}hide ${bare} more: their equipment and muscles aren’t known yet.`,
+      });
+    if (judged === 0) {
+      if (shown) return hidden(false);
+      return plural(bare, {
+        one: `Your filters hide 1 movement for ${quote(query)}: its equipment and muscles aren’t known yet.`,
+        other: `Your filters hide ${bare} movements for ${quote(query)}: their equipment and muscles aren’t known yet.`,
+      });
+    }
+    const first = shown
+      ? MOVEMENT_PICKER_COPY.outsideMore(judged)
+      : MOVEMENT_PICKER_COPY.outsideAll(judged, query);
+    return bare > 0 ? `${first} ${hidden(true)}` : first;
+  },
   /** Browsing with nothing that fits (P10). */
   noneFit: 'No movements fit your filters.',
   /** Browsing with a filter on, until B3's tree (P12's heading). */
