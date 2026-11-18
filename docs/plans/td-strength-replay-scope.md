@@ -198,11 +198,10 @@ count confirms rather than gates; the fix is forward-safe either way.
 
 ## Out-of-scope / deferred
 
-- **Ownership on the two read joins**, as defence in depth: `sessions.profile_id =
-entries.profile_id`, which `queries/day/day-plan.ts:376` already does. Both files belong to other
-  lanes, so the board routes them. The day read (`apps/web/lib/dal/entries.ts:168-186`) is queued with
-  lane S. The month export (`packages/db/src/queries/export-month.ts:97`) is in lane E's FAM-1 14a,
-  whose plan is #582 (open). **Until that merges, the export on `main` still joins by id alone.**
+- **Ownership on the day read's join** (`apps/web/lib/dal/entries.ts:168-186`), as defence in
+  depth: `sessions.profile_id = entries.profile_id`, which `queries/day/day-plan.ts:376` already
+  does. Lane S's file, so it is queued with that lane. The month export's join got the same conjunct
+  and a live-session check in FAM-1 14a (#582, merged 2026-11-18).
 - `isNull(sessions.workout_id)` on the session re-select: unreachable today, because day-page sessions
   get server-minted ids (`writers/day/log-row.ts:288,315`).
 - The other graph writers: `insertBodyweightEntry` already pins profile and metric;
@@ -249,15 +248,15 @@ None.
 > Models: high-stakes writer · correctness: opus, reuse: opus (the Fable spend limit runs until
 > 2026-11-19 03:00 ET). Docs, process and the personal-data scan were done by the author session.
 
-| Lens        | Sev | Finding                                                                                                                           | Response                                                                                                                          |
-| ----------- | --- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| correctness | P1  | The PR body and this plan said the export's join already carries the owner conjunct. #582 is an open plan PR; `main` joins by id. | **Fixed.** Out-of-scope now says the export is lane E's FAM-1 14a (plan #582, open), and that until it merges `main` joins by id. |
-| correctness | P2  | Case 3's comment overstated what its positive control proves.                                                                     | **Fixed.** It says what it proves: the profile and `movX` resolve under `B_SCOPE`.                                                |
-| correctness | P2  | The other-household arm has no mutation of its own.                                                                               | **No change.** Already stated in the README row for 440 and in the block comment.                                                 |
-| reuse       | P2  | `upsertReturningId`'s comment said it was the writer's re-select shape, which it no longer is.                                    | **Fixed.** It says it mirrors only the `deleted_at` guard.                                                                        |
-| reuse       | P2  | The two fixture profile ids were typed out again.                                                                                 | **Fixed.** The fixtures return `publicId`; the block uses `sessionProfileA/B.publicId`.                                           |
-| reuse       | P2  | The refusal regex had two copies (B0's and this block's).                                                                         | **Fixed.** One module-level `REPLAY_REFUSED`, used by both.                                                                       |
-| reuse       | P2  | "Was this entry written" was queried twice.                                                                                       | **Fixed.** A local `entryExists`.                                                                                                 |
+| Lens        | Sev | Finding                                                                                                        | Response                                                                                                                                     |
+| ----------- | --- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| correctness | P1  | The PR body and this plan said the export's join already carries the owner conjunct while #582 was still open. | **Fixed, then resolved.** #582 merged (2026-11-18) with the conjunct (`export-month.ts:123-129` on `main`); the text now cites it as merged. |
+| correctness | P2  | Case 3's comment overstated what its positive control proves.                                                  | **Fixed.** It says what it proves: the profile and `movX` resolve under `B_SCOPE`.                                                           |
+| correctness | P2  | The other-household arm has no mutation of its own.                                                            | **No change.** Already stated in the README row for 440 and in the block comment.                                                            |
+| reuse       | P2  | `upsertReturningId`'s comment said it was the writer's re-select shape, which it no longer is.                 | **Fixed.** It says it mirrors only the `deleted_at` guard.                                                                                   |
+| reuse       | P2  | The two fixture profile ids were typed out again.                                                              | **Fixed.** The fixtures return `publicId`; the block uses `sessionProfileA/B.publicId`.                                                      |
+| reuse       | P2  | The refusal regex had two copies (B0's and this block's).                                                      | **Fixed.** One module-level `REPLAY_REFUSED`, used by both.                                                                                  |
+| reuse       | P2  | "Was this entry written" was queried twice.                                                                    | **Fixed.** A local `entryExists`.                                                                                                            |
 
 Found outside the diff (correctness): the session re-select matches the profile but not
 `activity_date`, so the athlete's own replay with a different `day` attaches entries to a session on
