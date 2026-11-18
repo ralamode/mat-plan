@@ -410,25 +410,76 @@ export const newWorkoutEmpty: WorkoutDraft = deepFreeze({
 
 // ── ProgramList, ProgramView ────────────────────────────────────────────────────────────────────
 
+/**
+ * The world each program fixture was built from, for the data lane (plan §6, "Fixtures are tested
+ * from both sides"; C36, mirroring `DAY_PLAN_FIXTURE_SOURCES`): a proof seeds this state and
+ * asserts its read deep-equals the fixture. `program` is the program whose page the fixture is.
+ *
+ * `before` is the world the fixture changes from, or `null` when the fixture is the seeded world
+ * itself: the proof seeds `before ?? world` and makes the change (a Take off, a copy, a create,
+ * an archive) with the real writers, and so reaches `world`.
+ */
+export type ProgramViewFixtureSource = { world: World; program: string; before: World | null };
+export type ProgramListFixtureSource = { world: World; before: World | null };
+
+/** "Take off" on Athlete Two, today: `to` is the first day off, so tomorrow. */
+const afterTakeOffWorld = edit(seeded, (world) => {
+  const assignment = world.assign.a2?.find((a) => a.prog === 'p1');
+  if (assignment) assignment.to = addDays(world.today, 1);
+});
+/** A program right after it was created: named, and nothing else. */
+const newProgramWorld = edit(seeded, (world) => {
+  world.programs.push({ id: 'p1001', name: 'New program', workouts: [], week: emptyWeek() });
+});
+/** Conditioning copied from the Family program into Adult One's, on Mondays, labelled Evening. */
+const withCopyWorld = edit(seeded, (world) => {
+  const copy = structuredClone(workoutOf(programOf(world, 'p1'), 'w4'));
+  copy.wid = 'w1001';
+  copy.from = { prog: 'Family program', on: world.today };
+  const adult = programOf(world, 'p3');
+  adult.workouts.push(copy);
+  adult.week[1].push({ label: 'Evening', wid: copy.wid });
+});
+/** Athlete Two archived while still on the Family program: the assignment is untouched. */
+const archivedAthleteWorld = edit(seeded, (world) => {
+  for (const athlete of world.athletes) if (athlete.id === 'a2') athlete.archived = true;
+});
+
+export const PROGRAM_LIST_FIXTURE_SOURCES = deepFreeze({
+  'programs-list': { world: seeded, before: null },
+  'programs-list-archived-athlete': { world: archivedAthleteWorld, before: seeded },
+} satisfies Record<string, ProgramListFixtureSource>);
+
+export const PROGRAM_VIEW_FIXTURE_SOURCES = deepFreeze({
+  'family-program': { world: seeded, program: 'p1', before: null },
+  'family-program-after-take-off': { world: afterTakeOffWorld, program: 'p1', before: seeded },
+  'new-program-empty': { world: newProgramWorld, program: 'p1001', before: seeded },
+  'adult-program-with-copy': { world: withCopyWorld, program: 'p3', before: seeded },
+  'family-program-archived-athlete': {
+    world: archivedAthleteWorld,
+    program: 'p1',
+    before: seeded,
+  },
+} satisfies Record<string, ProgramViewFixtureSource>);
+
+const listOf = (name: keyof typeof PROGRAM_LIST_FIXTURE_SOURCES): ProgramList =>
+  deepFreeze(programList(PROGRAM_LIST_FIXTURE_SOURCES[name].world));
+const viewOf = (name: keyof typeof PROGRAM_VIEW_FIXTURE_SOURCES): ProgramView => {
+  const { world, program } = PROGRAM_VIEW_FIXTURE_SOURCES[name];
+  return deepFreeze(programView(world, program));
+};
+
 /** "Programs: the list, with who's on each". */
-export const programsList: ProgramList = deepFreeze(programList(seeded));
+export const programsList: ProgramList = listOf('programs-list');
 
 /** "One program": the Family program's page. Also what the Put-on and Copy dialogs open with. */
-export const familyProgram: ProgramView = deepFreeze(programView(seeded, 'p1'));
+export const familyProgram: ProgramView = viewOf('family-program');
 
 /**
  * The Family program's page after "Take off" on Athlete Two, today: they stay listed until the end
  * of today, with today as their last day.
  */
-export const familyProgramAfterTakeOff: ProgramView = deepFreeze(
-  programView(
-    edit(seeded, (world) => {
-      const assignment = world.assign.a2?.find((a) => a.prog === 'p1');
-      if (assignment) assignment.to = addDays(world.today, 1);
-    }),
-    'p1',
-  ),
-);
+export const familyProgramAfterTakeOff: ProgramView = viewOf('family-program-after-take-off');
 
 /**
  * "Build a new program from scratch", right after it was created: nobody on it, no workouts, an
@@ -439,32 +490,25 @@ export const familyProgramAfterTakeOff: ProgramView = deepFreeze(
  * program with its name field open, holds nothing a query could return; this fixture is the first
  * state that does, under the prototype's placeholder name.
  */
-export const newProgramEmpty: ProgramView = deepFreeze(
-  programView(
-    edit(seeded, (world) => {
-      world.programs.push({ id: 'p1001', name: 'New program', workouts: [], week: emptyWeek() });
-    }),
-    'p1001',
-  ),
-);
+export const newProgramEmpty: ProgramView = viewOf('new-program-empty');
 
 /**
  * "A copied workout, showing where it came from": Conditioning copied from the Family program into
  * Adult One's, on Mondays, labelled Evening.
  */
-export const adultProgramWithCopy: ProgramView = deepFreeze(
-  programView(
-    edit(seeded, (world) => {
-      const copy = structuredClone(workoutOf(programOf(world, 'p1'), 'w4'));
-      copy.wid = 'w1001';
-      copy.from = { prog: 'Family program', on: world.today };
-      const adult = programOf(world, 'p3');
-      adult.workouts.push(copy);
-      adult.week[1].push({ label: 'Evening', wid: copy.wid });
-    }),
-    'p3',
-  ),
-);
+export const adultProgramWithCopy: ProgramView = viewOf('adult-program-with-copy');
+
+/**
+ * The Family program's page with Athlete Two archived while still on it. NOT a prototype state
+ * (C36). **An archived athlete is in neither `athletes` nor `candidates`**: every list of a
+ * household leaves them out (the day page's switcher, C18), and Put on refuses them, so offering
+ * one would be a choice that always fails. Their assignment is untouched, so they are back on the
+ * page when restored.
+ */
+export const familyProgramArchivedAthlete: ProgramView = viewOf('family-program-archived-athlete');
+
+/** The Programs list of that same household: the Family program names Athlete One alone (C36). */
+export const programsListArchivedAthlete: ProgramList = listOf('programs-list-archived-athlete');
 
 // ── The lists a suite iterates ──────────────────────────────────────────────────────────────────
 
@@ -495,11 +539,13 @@ export const WORKOUT_DRAFT_FIXTURES = {
 
 export const PROGRAM_LIST_FIXTURES = {
   'programs-list': programsList,
-} as const satisfies Record<string, ProgramList>;
+  'programs-list-archived-athlete': programsListArchivedAthlete,
+} as const satisfies Record<keyof typeof PROGRAM_LIST_FIXTURE_SOURCES, ProgramList>;
 
 export const PROGRAM_VIEW_FIXTURES = {
   'family-program': familyProgram,
   'family-program-after-take-off': familyProgramAfterTakeOff,
   'new-program-empty': newProgramEmpty,
   'adult-program-with-copy': adultProgramWithCopy,
-} as const satisfies Record<string, ProgramView>;
+  'family-program-archived-athlete': familyProgramArchivedAthlete,
+} as const satisfies Record<keyof typeof PROGRAM_VIEW_FIXTURE_SOURCES, ProgramView>;

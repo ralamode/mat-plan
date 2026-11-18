@@ -4,7 +4,9 @@ import type { ProgramList, ProgramView } from '@mat-plan/shared';
 import {
   DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
+  PROGRAM_LIST_FIXTURE_SOURCES,
   PROGRAM_LIST_FIXTURES,
+  PROGRAM_VIEW_FIXTURE_SOURCES,
   PROGRAM_VIEW_FIXTURES,
   programsList,
   familyProgram,
@@ -72,7 +74,7 @@ function PreviewScreen({ screen, fixture, failNext }: PreviewSelection) {
       const program = named(PROGRAM_VIEW_FIXTURES, fixture);
       return (
         <ProgramsPreview
-          seed={{ ...BUILDER, programs: householdOf(program), program }}
+          seed={{ ...BUILDER, programs: previewHouseholdOf(fixture, program), program }}
           failNext={failNext}
         >
           {(state, actions) =>
@@ -131,16 +133,21 @@ const BUILDER: FakeProgramState = {
   items: [...pickerOptions],
 };
 
-/** The Programs list a program's page belongs to: the fixture household's, plus a new program. */
-function householdOf(program: ProgramView): ProgramList {
+/**
+ * The Programs list a program's page belongs to: the list fixture built from the SAME world as the
+ * page's fixture where there is one (so a page that leaves an archived athlete out sits beside a
+ * list that does too, C36), else the seeded household's; plus the program itself when it is new.
+ */
+export function previewHouseholdOf(fixture: string, program: ProgramView): ProgramList {
+  const views: Record<string, { world: unknown }> = PROGRAM_VIEW_FIXTURE_SOURCES;
+  const world = views[fixture]?.world;
+  const sameWorld = Object.entries(PROGRAM_LIST_FIXTURE_SOURCES).find(
+    ([, source]) => source.world === world,
+  )?.[0] as keyof typeof PROGRAM_LIST_FIXTURES | undefined;
+  const list: ProgramList = sameWorld ? PROGRAM_LIST_FIXTURES[sameWorld] : programsList;
   const { programPublicId, name } = program;
-  if (programsList.some((listed) => listed.programPublicId === programPublicId)) {
-    return [...programsList];
-  }
-  return [
-    ...programsList,
-    { programPublicId, name, athletes: program.athletes.map((a) => a.name) },
-  ];
+  if (list.some((listed) => listed.programPublicId === programPublicId)) return [...list];
+  return [...list, { programPublicId, name, athletes: program.athletes.map((a) => a.name) }];
 }
 
 function ProgramsPreview({
