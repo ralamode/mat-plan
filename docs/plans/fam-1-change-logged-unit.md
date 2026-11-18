@@ -2,7 +2,7 @@
 
 > Backlog: [plan.md](../plan.md) row `FAM-1`, the follow-up the [12d plan](./fam-1-12d-change-on-page.md)
 > cut ("Not in this PR", first bullet), decision D20. Branch: `docs/fam-1-change-logged-unit-plan`.
-> Lane C ([day-page.md](../features/day-page.md)). **Rev 2, after a three-lens UX panel** (§
+> Lane C ([day-page.md](../features/day-page.md)). **Rev 2, after a three-lens UX panel; Form 1 chosen by the maintainer (2026-11-18)** (§
 > Review-response log). No code: this plan compares three forms so the maintainer can pick one, and
 > plans a guard that is owed whichever form is picked.
 
@@ -219,8 +219,9 @@ Every PR adds a changelog fragment and screenshots at three widths; Forms 1 and 
 
 ## Open questions
 
-- **Which form?** The maintainer's choice; the recommendation above is Form 1 plus the line, after
-  the guard.
+- **Which form?** **Decided: Form 1** _(maintainer, 2026-11-18, relayed by the board)_. Reps
+  only for weight × reps, plus the no-conversion line on every other-unit row; distance and count
+  rows get the line only. Built after the other-unit empty-✓ guard (H9, approved the same day).
 
 ## Review-response log
 
