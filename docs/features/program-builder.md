@@ -323,8 +323,9 @@ flowchart LR
       `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`, as the
       preview's fake does.
     - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
-      helper): a week's program, then each workout it names (distinct, at most
-      `WEEK_PROBE_LIMIT`); a copy's TARGET program, then its source workout by id alone
+      helper): a week's program, then each workout it names (distinct, every one, looked up in
+      one read of the program's live workout ids, lane P's `programWorkoutIds`, 6c-ii); a copy's
+      TARGET program, then its source workout by id alone
       (`workoutInHousehold`).
     - **The item picker's data** (`lib/dal/program/picker.ts`, CAT-3 P11-i): the household's own
       items and, ⏳ **until the catalog's fresh start (CAT-3 chunk R), every old built-in**
