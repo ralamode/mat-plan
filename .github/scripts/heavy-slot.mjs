@@ -150,7 +150,9 @@ function describe(h) {
   return (
     `${clean(h.lane ?? 'unknown lane', 80)} ` +
     `(${clean(h.command ?? '?', 200)}, since ${clean(h.startedAt ?? '?', 40)})` +
-    (left ? ` [only leftover processes, group ${left}: kill -TERM -- -${left} ends them]` : '')
+    (left
+      ? ` [only leftover processes, group ${left}: kill -TERM -- -${left} ends them, or kill -KILL -- -${left} if they ignore TERM]`
+      : '')
   );
 }
 

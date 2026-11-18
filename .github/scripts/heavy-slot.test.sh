@@ -296,7 +296,7 @@ import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { runUnderSlot } from '$SLOT';
 if (!runUnderSlot('test runner 3')) {
-  const c = spawn('sh', ['-c', "trap '' TERM INT HUP; sleep 30"], { stdio: 'ignore' });
+  const c = spawn('sh', ['-c', "trap '' TERM INT HUP; sleep 300"], { stdio: 'ignore' });
   writeFileSync(process.env.RUNNER_OUT, process.pid + ' ' + c.pid);
   setTimeout(() => {}, 30000);
 }
@@ -318,8 +318,10 @@ code=$?
 check "a busy slot held only by leftovers names their group and how to end it" '[ "$code" = 2 ] && grep -qF "kill -TERM -- -$group3" "$T/out"'
 check "…and the waiting wrapper says which group it waits for" 'grep -qF "(group $group3)" "$T/runner3.log"'
 kill -INT "$wrapper3"
+# Checked BEFORE waiting on the run, and bounded (wait_for, ~5s): the leftover would otherwise end on
+# its own and pass this without the escalation.
+check "Ctrl-C to a waiting wrapper ends the leftovers and frees the slot" 'wait_for gone && wait_for "! kill -0 $kid3 2>/dev/null"'
 wait "$outer3" 2>/dev/null
-check "Ctrl-C to a waiting wrapper ends the leftovers and frees the slot" 'wait_for gone && ! kill -0 "$kid3" 2>/dev/null'
 
 hold
 kill -TSTP "$HOLDER"
