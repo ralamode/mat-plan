@@ -91,7 +91,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
 - **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
 
-### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff)
+### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff) — ✅ CLOSED 2026-11-18
+
+- **Closed by `OPS-2` PR 1:** the expansion and `CALISTHENICS_RAMP_SCHEDULE` are deleted (plan D4, the maintainer's Q6), so no seed writes `ramp_targets`; `verify/seed.ts`'s Proof A counts the table after a production seed.
 
 - **What & why it's debt:** `packages/db/src/seed.ts` expands `CALISTHENICS_RAMP_SCHEDULE` into
   `ramp_targets` rows for every profile with `kind = 'kid'`, with no household predicate and no
@@ -521,29 +523,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `proxy()`, and the tombstone cases in `proxy.test.ts` (no count here — `proxy.ts` says why). ⚠️ Deleting the function but leaving
   `proxy()`'s return unwrapped is the whole change — do not also narrow `proxy()`'s return type back
   to `NextResponse`, which is wrong for an unrelated reason (`withClerk`'s auto-proxy branch).
-
-### Clerk's script loads on the PUBLIC pages, including the privacy notice (found 2026-11-03, #326 review)
-
-- **What:** `app/layout.tsx` renders `<ClerkProvider dynamic>` conditioned on `clerkIsConfigured()` —
-  the **keys**, not the **path** — so `clerk.browser.js` is emitted on every rendered route and
-  clerk-js opens a connection to Clerk's Frontend API. Measured against production:
-  `curl -sL https://mat-plan.dev/privacy` carries the script tag, and so does the landing page.
-- 🔴 **Why it matters more than it looks.** `/` and `/privacy` are the two routes a **stranger** can
-  open — someone sent here by a consent screen to decide whether to trust this app with a child's
-  health data. Today that person's IP is seen by Clerk, and by Cloudflare which fronts
-  `clerk.mat-plan.dev`, **because they read the privacy notice**. OSS-2 made `/` deliberately
-  branchless and PRIV-2 made `/privacy` read no cookie and query no database; both of those
-  properties are about this app's own server, and a third-party script on the same page is the part
-  neither of them covers.
-- **Impact:** no data about anyone's training leaves — this is an IP address and a user agent on two
-  public pages. But it is exactly the shape a privacy notice is read to find out about, and until
-  2026-11-03 the notice said the opposite ("your browser talks to this app and nothing else").
-- **Proposed fix:** scope the provider to the routes that need it. `/sign-in` needs it, and so does
-  `/p` (the sign-out control calls `useClerk()`); `/` and `/privacy` need nothing from Clerk.
-  ⚠️ Not a one-liner: `app/layout.tsx` is the root layout, the provider feeds the `x-nonce` wiring,
-  and `lib/clerk.ts`'s keys-absent branch exists because the provider **throws** without a key — so
-  the split has to keep all three true. Check whether a route-group layout is the cleanest seam.
-- **Severity:** medium. It is disclosed now, which is the floor, not the fix.
 
 ### `@clerk/nextjs` version citations drift silently across the tree (found 2026-11-05, AUTH-1 1d PR 0)
 
@@ -989,7 +968,7 @@ success.` Harmless there — nothing referenced the files yet.
   | **Squawk** migration lint                                       | ✅ wired — `ci.yml` `quality`, added migrations only (#135)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
   | **`pnpm audit`** (fail high/critical)                           | ✅ **wired — SEC-5** ([plan](./plans/sec-5-verify-in-ci.md)): `pnpm audit:check` runs in `ci.yml`'s `quality` job on **every PR and every push to `main`**, after the install, and its self-test runs before it. The rule is stated once, in [SECURITY.md](../.github/SECURITY.md) → Supply chain. It was local-only for the two weeks after this audit, and in that window **four** advisories reached `main` with CI green — `next` RCE (GHSA-vcvr-r3jv-pc5j, #182), `source-map-js` DoS (GHSA-68fv-2mgg-jv7q, #222), `fast-uri` + a critical `proxy-addr` (#227), `sharp` → librsvg (GHSA-wq5f-xc86-pv6w, #235) — **every one found by accident** during unrelated work, never by a gate. The gap was the gate, not the advisories |
   | **CodeQL**                                                      | ✅ wired — `codeql.yml`, but **not a PR check** (see below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-  | **Neon-branch apply** on PRs                                    | ❌ **still absent** — `migrate.yml` runs only on merge to `main`, and warns-and-skips if `DATABASE_URL_UNPOOLED` is unset                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+  | **Neon-branch apply** on PRs                                    | ❌ **still absent** — `migrate.yml` runs only on merge to `main`, and (since `OPS-2` PR 1) fails if `PROD_DATABASE_URL_UNPOOLED` is unset                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 - **What CodeQL being "wired" does and does not mean.** `codeql.yml` runs `javascript-typescript` over the
   whole workspace on **push to `main`, weekly (Mon 06:17 UTC), and `workflow_dispatch`** — deliberately

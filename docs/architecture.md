@@ -47,7 +47,7 @@ flowchart TB
   ACT -.->|"scrubbed errors"| SENTRY
   RSC -.->|"scrubbed errors"| SENTRY
   ACT -.->|"Clerk user id, mutations only"| UPSTASH
-  GHA ==>|"prod DDL + seed on every merge<br/>holds DATABASE_URL_UNPOOLED"| NEON
+  GHA ==>|"prod DDL + seed on every merge<br/>holds PROD_DATABASE_URL_UNPOOLED;<br/>the seed writes reference data only"| NEON
 ```
 
 ⚠️ **This is the containers view, not the egress list.** Sentry, Upstash and GitHub Actions are drawn
@@ -65,6 +65,9 @@ are optional and unset, `lib/clerk.ts` renders no provider without them, and the
 all; `e2e/theme.spec.ts` asserts zero requests to any Clerk host. The dashed `proxy.ts ⇢ Clerk` edge
 is the other half 1a wired: `clerkMiddleware()` is composed **inside** `proxy.ts` so `auth()` can
 answer at all, and 1a removed the `api` exclusion from its matcher for that reason.
+✅ **Since 2026-11-18 the `UI ==> CLERK` edge starts only on non-public pages**: the provider renders
+from each non-public segment's layout (`components/layout/clerk-root.tsx`), so `/` and `/privacy`,
+opened directly, fetch no Clerk code ([plan](./plans/td-clerk-off-public-pages.md)).
 
 ## 2. Write path — logging one entry
 
@@ -254,8 +257,8 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
   is the whole boundary (SEC-1's scar; CVE-2025-29927).
 - ⚠️ **The ≥2-live-households throw is gone with the old body**, and was not ported to an alert: two
   live households is the intended end state once a family is invited, so it would fire on every
-  request forever. The creator is closed instead — `seed.ts` refuses to insert when a live household
-  exists, which matters because `migrate.yml` seeds production on every merge.
+  request forever. The creator is closed instead — the fixture seed (`seedFixtures`) refuses to insert
+  when a live household exists. Since `OPS-2` PR 1 production's seed writes no household at all.
 - ✅ **`movements` came inside the seam at `TEN-2b`.** Movement resolution takes a
   `HouseholdScope` (`findOrCreateMovement`, and `resolveMovementByPublicId` since `PICK-1` PR 2;
   the `findOrCreateMovementId` wrapper that used to sit in the DAL is deleted) and resolves
@@ -952,8 +955,9 @@ sequenceDiagram
   OP->>CH: done + what remains (notice → Deleting your data)
 ```
 
-⛔ **Two preconditions this diagram assumes**: the household is **not in the seed** (`db:seed` runs on
-every merge and would re-create it — `OPS-2`), and **`OPS-3`'s per-household restore has been
+⛔ **Two preconditions this diagram assumes**: the household's `public_id` is **not a seed id** (an
+older seed could re-create it; the seeded household goes with `CAT-3`'s fresh start instead, see
+`runbooks.md` → "A household or athlete with a seed id"), and **`OPS-3`'s per-household restore has been
 rehearsed** (without it a mistaken deletion is not practically recoverable, because the branch above
 restores _everyone_).
 

@@ -1,7 +1,7 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -236,7 +236,7 @@ export async function seed(
+@@ -289,7 +289,7 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
      .onConflictDoNothing({ target: schema.equipment.code });
    await db
      .insert(schema.muscles)
@@ -9,4 +9,4 @@ diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
 +    .values(MUSCLES.slice(1).map((code) => ({ code })))
      .onConflictDoNothing({ target: schema.muscles.code });
  
-   // 🔴 **CONDITIONAL ON NO LIVE HOUSEHOLD EXISTING — `AUTH-1` 1c-4.**
+   // V1-2: the FULL catalog (activity_types + metric_definitions + movements), sourced from

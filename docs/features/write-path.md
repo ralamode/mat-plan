@@ -760,6 +760,10 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
 
 ## Traps
 
+- **A household-scoped write in the seed goes inside the `fixtures` branch** (`seedFixtures`), never in
+  `seedReference` (`OPS-2` PR 1). Production's `db:seed` runs without the flag on every push to `main`,
+  so anything outside the branch reaches a real family's database. `verify/seed.ts`'s Proof A counts
+  every `HOUSEHOLD_GRAPH` table after a production seed, and it fails on the first such row.
 - **A DB constraint reached by a crafted body is a 500 that discards the whole transaction.** For a
   gym-floor session that is the worst possible failure — the athlete loses everything they logged.
   Validate at the boundary so the constraint is a backstop, not the error message.

@@ -10,7 +10,7 @@ Do these once to get a deployed app running against a real database:
 
 1. **Neon** — create the project, grab the pooled + direct connection strings.
 2. **Vercel** — set the root directory + environment variables.
-3. **GitHub** — add the `DATABASE_URL_UNPOOLED` secret (the migrator uses it).
+3. **GitHub** — add the `PROD_DATABASE_URL_UNPOOLED` secret (the migrator uses it; named `DATABASE_URL_UNPOOLED` before `OPS-2` PR 1).
 4. **First migration** — run the migrate workflow once.
 5. **Local** (optional) — create `apps/web/.env.local` for `pnpm dev`.
 
@@ -66,7 +66,8 @@ value is identical:
 The migrator runs in GitHub Actions, so the **direct** string is a repo secret, not a Vercel var:
 
 - Repo → **Settings → Secrets and variables → Actions → New repository secret**
-- Name: `DATABASE_URL_UNPOOLED` · Value: Neon **direct/unpooled** string.
+- Name: `PROD_DATABASE_URL_UNPOOLED` · Value: Neon **direct/unpooled** string. (`migrate.yml` passes it to
+  the scripts as `DATABASE_URL_UNPOOLED`, the name they read.)
 
 ## 3b. Optional hardening vars (V1-14a)
 
@@ -101,8 +102,10 @@ trigger it), run it manually:
 
 - Repo → **Actions → "Migrate (production)" → Run workflow** (on `main`).
 
-It runs `db:migrate` then the idempotent `db:seed` (reference `units` + the v0 profile). Re-running is
-safe. Until the secret exists the job **skips with a warning** rather than failing.
+It runs `db:migrate` then the idempotent `db:seed`, which writes **reference data only** since `OPS-2`
+PR 1: no household, no athlete. A new deployment gets its one household, `Home`, from migration
+0001, and no athletes and no member: those come from the app. Re-running is safe. Since `OPS-2` PR 1
+a missing secret **fails** the job rather than skipping.
 
 _Alternatively, apply once from your machine_ (same result):
 
@@ -173,8 +176,9 @@ auto-migrates the **next** `pnpm dev`. You do nothing special for dev.
   pre-merge we prove migrations on PGlite + Docker PG, not an actual Neon branch.
 
 **The one discipline:** `db:seed` runs on **prod** (on merge), so seed **only reference/catalog data,
-or nothing** — never fictional or per-user "play" data (which is why, e.g., V1-6b-1 ships its ramp
-schedule empty). Play data belongs to your dev sandbox only. Manual prod data fixes go through
+or nothing** — never fictional or per-user "play" data. Since `OPS-2` PR 1 the code enforces it:
+anything household-scoped is in `seedFixtures`, written only with `SEED_FIXTURES=1` (local and the
+preview). A local `db:seed` needs that flag to get the fixture athletes. Play data belongs to your dev sandbox only. Manual prod data fixes go through
 [runbooks.md](./runbooks.md), not the seed.
 
 ## Rules

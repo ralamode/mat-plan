@@ -6,6 +6,9 @@
  * tests in every package that look up a cell by header name share one reader instead of a `split(',')`
  * that breaks on a quoted comma; an importer reading these files back (IMP-1) could use it too.
  * It reads a single line: a quoted cell never holds a line break, because `csvRow` refuses one.
+ *
+ * ⚠️ An importer reading these files back (IMP-1) must also strip the leading `'` that `csvRow` puts
+ * before a formula-like value (`FORMULA_LEAD`); this reader returns the cell as written.
  */
 export function readCsvLine(line: string): string[] {
   const cells: string[] = [];

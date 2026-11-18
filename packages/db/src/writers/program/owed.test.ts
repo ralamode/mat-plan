@@ -16,6 +16,5 @@ import { describe, it } from 'vitest';
  */
 
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
-  it.todo('6d: take off ends the program after today; logged days keep their rows');
   it.todo('6d: two open assignments at one place in an athlete’s order are refused');
 });

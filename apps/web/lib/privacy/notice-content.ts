@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-16. This is a beta."
+            "text": "Last updated: 2026-11-18. This is a beta."
           }
         ]
       }
@@ -1163,7 +1163,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           },
           {
             "k": "text",
-            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. ⚠️ "
+            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser on the sign-in screen and on every page once you are signed in (new in this version: no longer on the home page or this one, below). ⚠️ "
           },
           {
             "k": "strong",
@@ -1287,46 +1287,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. "
+        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. ✅ "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "One"
+            "text": "New in this version: opened directly, before you sign in, the home page and this page\nload no Clerk code."
           }
         ]
       },
       {
         "k": "text",
-        "text": " thing is not this app, and it is not tracking: "
+        "text": " Your browser talks to this app, which runs on Vercel (above), and nothing else.\n"
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Clerk's code loads on every page,\nincluding this one"
+            "text": "Clerk's code loads when you open the sign-in screen, and on every page once you are signed in"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's\ndomain — and opens a connection to them. So "
+        "text": ",\nfrom clerk.mat-plan.dev — Clerk's own servers, under a name on this app's domain — and opens a\nconnection to them, so Clerk sees your IP address and your browser there, and so does Cloudflare,\nwhich Clerk puts in front of that address. Two edges, so this is exact: if you reach this page from a\nsigned-in page, Clerk's code is already running in your browser; and "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Clerk sees your IP address and your browser on every\npage you open here"
+            "text": "if you are signed in, opening\nany page directly, this one included, usually sends your browser briefly to Clerk to refresh your\nsign-in"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", whether or not you sign in, and so does Cloudflare, which Clerk puts in front of\nthat address."
+        "text": " (Clerk then sees the address of the page you asked for). The \"before you sign in\" above is\nthe part that holds for everyone."
       }
     ]
   },
@@ -1342,13 +1342,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "This paragraph used to say your browser talked to this app and nothing else, and that the\nsign-in screen was the exception. That was wrong, and it was wrong on this very page"
+            "text": "Until 2026-11-18 Clerk's code loaded on every page, including this one"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — checked\nagainst the live site on 2026-11-03, not assumed. Scoping Clerk's code to the screens that need it is\nworth doing and is not done yet; until it is, the honest version is the one above."
+        "text": ", and an earlier\nversion of this paragraph wrongly said the sign-in screen was the only exception (checked against the\nlive site on 2026-11-03). That is fixed, not just disclosed."
       }
     ]
   },
@@ -1663,7 +1663,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete\nor household. "
+        "text": " (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete\nor household, and asking for one program, workout or typed item to be removed. "
       },
       {
         "k": "strong",
@@ -1794,13 +1794,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "no way to permanently remove one single item on demand"
+            "text": "no way to permanently remove one single logged item on demand"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the finest grain for a\npermanent removal is an athlete. Ask, and that is done."
+        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.)"
       }
     ]
   },
@@ -1844,7 +1844,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it."
+        "text": ", and\nthe folders are named by an internal identifier, not by a person. A workout's name goes out exactly as\ntyped, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a\nname typed into any of them goes with it. One change is made on the way out: a value that starts with\n=, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it\nas a formula."
       }
     ]
   },
@@ -2021,7 +2021,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the three athletes the app\nstarted with cannot yet, because setup would put them back."
+        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the athletes the app started with\ncannot be erased one at a time yet, because an older copy of the setup could put them back; they are\nremoved together, with the rest of the starting data, when the app is started fresh."
       }
     ]
   },
@@ -2043,7 +2043,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not hidden. Your\nsign-in accounts are deleted too."
+        "text": ", not hidden. Your\nsign-in accounts are deleted too. The household the app started with is the one exception for now: it\nis removed with the rest of the starting data when the app is started fresh, not on its own."
       }
     ]
   },

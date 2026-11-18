@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-16. This is a beta.**
+**Last updated: 2026-11-18. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -150,16 +150,16 @@ still works.
 
 Running the app means other companies handle some of your data. Each one, and what it gets:
 
-| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                                                                                        |
-| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                                                                                     |
-| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                                                                          |
-| **Upstash**    | **The identifier of whoever is signed in**, briefly, to stop the app being hammered. A counter that expires in minutes. ✅ **It no longer receives your IP address at all** (new in this version): the IP was only ever used to stop someone guessing the shared access code, and there is no code to guess. No name, no email, and never any training or weigh-in data.                                               |
-| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. ⚠️ **And, if you join the waitlist, your email address — with no account attached to it**, submitted on Clerk's own page. Never any training or weigh-in data. |
-| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                                                                                |
-| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                                                                                 |
+| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                                                                                                                                                                                              |
+| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Upstash**    | **The identifier of whoever is signed in**, briefly, to stop the app being hammered. A counter that expires in minutes. ✅ **It no longer receives your IP address at all** (new in this version): the IP was only ever used to stop someone guessing the shared access code, and there is no code to guess. No name, no email, and never any training or weigh-in data.                                                                                                                                                     |
+| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser on the sign-in screen and on every page once you are signed in (new in this version: no longer on the home page or this one, below). ⚠️ **And, if you join the waitlist, your email address — with no account attached to it**, submitted on Clerk's own page. Never any training or weigh-in data. |
+| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                                                                                                                                                                                      |
+| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers
 before anything reaches Sentry, there is no error reporting in your browser at all, and no session
@@ -173,16 +173,20 @@ the item was created. The event carries no name and nothing that was logged. Thi
 to reach another family's data gets noticed.
 
 **No tracking.** No advertising network, no analytics product, no social buttons, no third-party
-fonts. **One** thing is not this app, and it is not tracking: **Clerk's code loads on every page,
-including this one**, from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's
-domain — and opens a connection to them. So **Clerk sees your IP address and your browser on every
-page you open here**, whether or not you sign in, and so does Cloudflare, which Clerk puts in front of
-that address.
+fonts. ✅ **New in this version: opened directly, before you sign in, the home page and this page
+load no Clerk code.** Your browser talks to this app, which runs on Vercel (above), and nothing else.
+**Clerk's code loads when you open the sign-in screen, and on every page once you are signed in**,
+from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's domain — and opens a
+connection to them, so Clerk sees your IP address and your browser there, and so does Cloudflare,
+which Clerk puts in front of that address. Two edges, so this is exact: if you reach this page from a
+signed-in page, Clerk's code is already running in your browser; and **if you are signed in, opening
+any page directly, this one included, usually sends your browser briefly to Clerk to refresh your
+sign-in** (Clerk then sees the address of the page you asked for). The "before you sign in" above is
+the part that holds for everyone.
 
-⚠️ **This paragraph used to say your browser talked to this app and nothing else, and that the
-sign-in screen was the exception. That was wrong, and it was wrong on this very page** — checked
-against the live site on 2026-11-03, not assumed. Scoping Clerk's code to the screens that need it is
-worth doing and is not done yet; until it is, the honest version is the one above.
+⚠️ **Until 2026-11-18 Clerk's code loaded on every page, including this one**, and an earlier
+version of this paragraph wrongly said the sign-in screen was the only exception (checked against the
+live site on 2026-11-03). That is fixed, not just disclosed.
 
 Tapping **Continue with Google** then sends you to Google, which sees your IP address and browser
 too. Nothing about your athletes, their training or their weight is ever involved in any of it, and
@@ -210,8 +214,8 @@ weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the 
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
 does not record who did. A cleared one is not removed from the database, and it is **not in the
-export** (ask for a full copy, below, and it is included). The only way anything comes out of the database today is deleting a whole athlete
-or household. **Nothing automatically removes a hidden row.** You should know that before you log
+export** (ask for a full copy, below, and it is included). The only ways anything comes out of the database today are deleting a whole athlete
+or household, and asking for one program, workout or typed item to be removed. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
 **What is being built, so you know what to expect.** A **Clear this day** control, which hides
@@ -230,8 +234,9 @@ field, as above. Two things are worth saying plainly about every clear:
 - **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
   until a removal that runs a set number of days later is built.
 
-There is still **no way to permanently remove one single item on demand** — the finest grain for a
-permanent removal is an athlete. Ask, and that is done.
+There is still **no way to permanently remove one single logged item on demand**: the finest grain for
+removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
+on request.)
 
 ## Getting your data out
 
@@ -241,7 +246,9 @@ athlete logs from a program has one row per exercise in the strength log, with t
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
 typed, and a typed movement name and a note on a logged entry or weigh-in go out in the file too, so a
-name typed into any of them goes with it.
+name typed into any of them goes with it. One change is made on the way out: a value that starts with
+=, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it
+as a formula.
 
 **What the export does not yet include**, so you are not surprised: check-ins and other logged life
 activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
@@ -283,12 +290,14 @@ program it was copied into removed too; and a movement your household typed that
 log, or a program you chose to remove, used. A program another athlete has trained on is not
 removed, and we will tell you. For an athlete,
 the record of the deletion holds the athlete's internal identifier and no login ids unless their
-account went too. An athlete added through the app can be erased today; the three athletes the app
-started with cannot yet, because setup would put them back.
+account went too. An athlete added through the app can be erased today; the athletes the app started with
+cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
+removed together, with the rest of the starting data, when the app is started fresh.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
-sign-in accounts are deleted too.
+sign-in accounts are deleted too. The household the app started with is the one exception for now: it
+is removed with the rest of the starting data when the app is started fresh, not on its own.
 
 Because this cannot be undone, both of the steps below stay in place:
 

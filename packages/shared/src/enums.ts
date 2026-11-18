@@ -88,7 +88,7 @@ export const MUSCLE_ROLE = keyBySelf(MUSCLE_ROLES);
  * `households.name` is `NOT NULL` and nothing in the app reads it, so a fixed, neutral value is the
  * whole answer: no name is asked for, so no personal data is typed in. Here beside `HOUSEHOLD_ROLE`
  * rather than in `seed-ids.ts` because it names REAL households, not seed rows.
- * ⚠️ `seed.ts` still types the literal; `OPS-2` PR 1 rewrites that insert and adopts this then.
+ * The seed's fixture household (`seedFixtures`) writes it too, since `OPS-2` PR 1.
  */
 export const HOUSEHOLD_DEFAULT_NAME = 'Home';
 
