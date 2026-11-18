@@ -53,6 +53,7 @@ import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from 
 import { captureScreenshot, routeSlug } from './capture';
 import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
+import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
 import {
   freePort,
   isLocalDbUrl,
@@ -594,6 +595,8 @@ async function openPickerFilters(page: Page) {
   // nothing: tap until the sheet opens, a bounded number of times.
   const open = page.getByRole('button', { name: ITEM_PICKER_COPY.open, exact: true });
   for (let tries = 0; ; tries++) {
+    // A sheet that opened late hides the button behind it: look before tapping again.
+    if (await page.getByRole('dialog').isVisible()) break;
     await open.click();
     try {
       await page.getByRole('dialog').waitFor({ timeout: 2_000 });
@@ -602,12 +605,15 @@ async function openPickerFilters(page: Page) {
       if (tries >= 10) throw error;
     }
   }
-  await page.getByRole('button', { name: /^Filters, / }).click();
+  await page.getByRole('button', { name: PICKER_COPY.filtersName(0), exact: true }).click();
   await page.getByRole('heading', { name: PICKER_COPY.filtersHeading, exact: true }).waitFor();
 }
 /** Tick "Quads" and go back to the list (the e2e spec's filter). */
 async function quadsOnThenBack(page: Page) {
-  await page.getByRole('checkbox', { name: new RegExp(`^Quads${PICKER_COPY.choiceJoin}`) }).check();
+  const quads = MUSCLE_LABELS[MUSCLE.quadriceps];
+  await page
+    .getByRole('checkbox', { name: new RegExp(`^${quads}${PICKER_COPY.choiceJoin}`) })
+    .check();
   await page.getByRole('button', { name: PICKER_COPY.filtersBack, exact: true }).click();
   await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
 }
