@@ -9,7 +9,8 @@ the maintainer's reopen call.
   - D41: a newly added program takes its place by the household's Programs-list order ("Keep household order (ADR)");
   - D41: a Put on that undoes a same-day Take off keeps the place the program had ("Its previous place");
   - this plan's open question: **when another Put on has moved things since, the reopen takes the smaller of its old place and the number of the athlete's other programs** ("B: reopen at old number"). No ADR change. The rare case where that is not where it was is accepted: the athlete fixes it with the reorder.
-- **Gates:** #633 (6d-ii). Its `placeAssignments`, the one writer of an athlete's order, is what this builds on. Step 15c waits for 6d-iii; step 15 does not (row 6d-iii). Until 6d-iii ships, a Put on from the app puts a new program last.
+- **Approved:** the maintainer, 2026-11-18 ("Approve"), the revised plan; the code follows in its own PR.
+- **Gates:** #633 (6d-ii, merged). Its `placeAssignments`, the one writer of an athlete's order, is what this builds on. Step 15c waits for 6d-iii; step 15 does not (row 6d-iii). Until 6d-iii ships, a Put on from the app puts a new program last.
 - Roadmap alignment (2026-11-18): advances FAM-1 lane P (D41); gates 15c; touches no `ID-1` item.
 
 **Terms.** An athlete's order is the `idx` of their **open** assignment rows (`active_to IS NULL`),
