@@ -4,7 +4,7 @@ import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
 import { inHousehold } from '../../writers/ownership';
-import { currentPrograms, type ProgramOnDay } from '../day/day-plan';
+import { currentPrograms, type CurrentProgram } from '../day/day-plan';
 import { dayAssignments, type DayAssignment } from '../day/scheduled';
 
 /** One of the household's athletes, with their current programs in their own order. */
@@ -15,7 +15,7 @@ export type AthleteOnPrograms = {
   /** Their live assignment rows, in `(idx, id)` order (`dayAssignments`). */
   assignments: DayAssignment[];
   /** Each program they are on now or start later, once, in their order (`currentPrograms`). */
-  current: ProgramOnDay[];
+  current: CurrentProgram[];
 };
 
 /**
