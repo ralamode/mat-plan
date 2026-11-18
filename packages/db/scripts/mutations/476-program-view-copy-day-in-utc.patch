@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
+index 123aa5b4..e4bff890 100644
+--- a/packages/db/src/queries/program/program-view.ts
++++ b/packages/db/src/queries/program/program-view.ts
+@@ -25,7 +25,7 @@ function localDayOf(tz: string): (instant: Date) => string {
+   let format: Intl.DateTimeFormat;
+   try {
+     format = new Intl.DateTimeFormat('en-CA', {
+-      timeZone: tz,
++      timeZone: 'UTC',
+       year: 'numeric',
+       month: '2-digit',
+       day: '2-digit',

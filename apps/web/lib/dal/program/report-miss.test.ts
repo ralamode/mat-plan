@@ -11,13 +11,14 @@ vi.mock('@mat-plan/db', () => ({
   programIn: vi.fn(async () => true),
   workoutIn: vi.fn(async () => true),
   workoutInHousehold: vi.fn(async () => true),
+  programWorkoutIds: vi.fn(async () => new Set<string>()),
 }));
 
-import { programIn, workoutIn, workoutInHousehold } from '@mat-plan/db';
+import { programIn, programWorkoutIds, workoutIn, workoutInHousehold } from '@mat-plan/db';
 
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
-import { reportCopyMiss, reportProgramMiss, reportWeekMiss, WEEK_PROBE_LIMIT } from './report-miss';
+import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
@@ -81,37 +82,62 @@ describe('which program id missed the household (FAM-1 7a-i, C11)', () => {
 const OTHER_WORKOUT = '019826b4-0000-7000-8000-0000000000b2';
 
 describe('a week (FAM-1 7a-ii): its program, then the first workout it names that is not the program’s', () => {
-  it('the program missing is reported, and no workout is read', async () => {
-    vi.mocked(programIn).mockResolvedValueOnce(false);
+  const known = (...ids: string[]) =>
+    vi.mocked(programWorkoutIds).mockResolvedValueOnce(new Set(ids));
+
+  it('the program missing is reported, and no workout is looked up', async () => {
+    vi.mocked(programWorkoutIds).mockResolvedValueOnce(null);
     await reportWeekMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: [WORKOUT_ID] });
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMiss]]);
-    expect(workoutIn).not.toHaveBeenCalled();
+    expect(vi.mocked(programWorkoutIds).mock.calls).toEqual([[db, SCOPE, PROGRAM_ID]]);
   });
 
-  it('🔴 a foreign workout on any day is reported: the first one, once, each id read once', async () => {
-    vi.mocked(workoutIn).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  it('🔴 a foreign workout on any day is reported: the first one, once, with ONE read of the program', async () => {
+    known(WORKOUT_ID);
     await reportWeekMiss(SCOPE, {
       programPublicId: PROGRAM_ID,
       workoutPublicIds: [WORKOUT_ID, WORKOUT_ID, OTHER_WORKOUT],
     });
-    expect(vi.mocked(workoutIn).mock.calls).toEqual([
-      [db, SCOPE, PROGRAM_ID, WORKOUT_ID],
-      [db, SCOPE, PROGRAM_ID, OTHER_WORKOUT],
-    ]);
+    expect(vi.mocked(programWorkoutIds).mock.calls).toEqual([[db, SCOPE, PROGRAM_ID]]);
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[missOf(OTHER_WORKOUT)]]);
   });
 
-  it(`reads at most ${WEEK_PROBE_LIMIT} DISTINCT workout ids: a repeat does not use up the cap`, async () => {
+  it('🔴 checks every id, however many: a foreign id after sixty of the program’s own is reported (6c-ii)', async () => {
     const ids = Array.from(
-      { length: WEEK_PROBE_LIMIT + 5 },
+      { length: 60 },
       (_, i) => `019826b4-0000-7000-8000-${String(i).padStart(12, '0')}`,
     );
-    // Every id twice, side by side: deduplicating AFTER the cut would read only half the cap.
-    const twice = ids.flatMap((id) => [id, id]);
-    await reportWeekMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: twice });
-    expect(vi.mocked(workoutIn).mock.calls.map((call) => call[3])).toEqual(
-      ids.slice(0, WEEK_PROBE_LIMIT),
+    known(...ids);
+    await reportWeekMiss(SCOPE, {
+      programPublicId: PROGRAM_ID,
+      workoutPublicIds: [...ids, ...ids, OTHER_WORKOUT],
+    });
+    expect(vi.mocked(programWorkoutIds)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[missOf(OTHER_WORKOUT)]]);
+  });
+
+  it('every id the program has: nothing is reported', async () => {
+    known(WORKOUT_ID, OTHER_WORKOUT);
+    await reportWeekMiss(SCOPE, {
+      programPublicId: PROGRAM_ID,
+      workoutPublicIds: [OTHER_WORKOUT, WORKOUT_ID],
+    });
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+
+  it('with no scope, the program is reported and nothing is read', async () => {
+    await reportWeekMiss(null, { programPublicId: PROGRAM_ID, workoutPublicIds: [WORKOUT_ID] });
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMiss]]);
+    expect(programWorkoutIds).not.toHaveBeenCalled();
+  });
+
+  it('a failed read reports nothing, and does not throw', async () => {
+    vi.mocked(programWorkoutIds).mockRejectedValueOnce(
+      new Error('canceling statement due to timeout'),
     );
+    await expect(
+      reportWeekMiss(SCOPE, { programPublicId: PROGRAM_ID, workoutPublicIds: [WORKOUT_ID] }),
+    ).resolves.toBeUndefined();
     expect(reportScopeMiss).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@ export * from './prescription-live-in';
 export {
   currentPrograms,
   resolveDayPlan,
+  type CurrentProgram,
   type CurrentProgramRow,
   type ProgramOnDay,
   type ResolvedDayPlan,

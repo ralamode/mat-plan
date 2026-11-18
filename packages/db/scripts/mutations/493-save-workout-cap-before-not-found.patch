@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
+index 40de5d1e..2c027b9d 100644
+--- a/packages/db/src/writers/program/save-workout.ts
++++ b/packages/db/src/writers/program/save-workout.ts
+@@ -149,14 +149,14 @@ export async function saveWorkout(
+         ? w.clientId === draft.workoutClientId
+         : w.publicId === draft.workoutPublicId,
+     );
+-    if ((draft.workoutPublicId !== null && !self) || self?.deletedAt) {
+-      return refuse(PROGRAM_REFUSAL.not_found);
+-    }
+     // A NEW workout in a full program (C35, invariant 30), judged before the name. An edit and a
+     // replay have `self`, so neither is capped.
+     if (!self && workouts.filter((w) => !w.deletedAt).length >= MAX_PROGRAM_WORKOUTS) {
+       return refuse(PROGRAM_REFUSAL.limit_reached);
+     }
++    if ((draft.workoutPublicId !== null && !self) || self?.deletedAt) {
++      return refuse(PROGRAM_REFUSAL.not_found);
++    }
+     const folded = foldName(draft.name);
+     if (workouts.some((w) => w !== self && !w.deletedAt && foldName(w.name) === folded)) {
+       return refuse(PROGRAM_REFUSAL.name_taken);

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import {
+  MAX_PROGRAM_WORKOUTS,
   foldName,
   newId,
   PROGRAM_REFUSAL,
@@ -82,9 +83,11 @@ const quantityColumns = (q: WorkoutDraftItem['quantities'][number]) => ({
  *    fields do not fit its type.
  * 2. `not_found`: the program is not this household's live program, or `workoutPublicId` names no
  *    live workout of it.
- * 3. `name_taken`: another live workout of the program has the same folded name (plan D5).
- * 4. `not_found`: an item is not available to the household.
- * 5. `invalid`: an item's `trackingType` is not the item's own, or a `prescriptionClientId` this
+ * 3. `limit_reached`: a NEW workout in a program that holds `MAX_PROGRAM_WORKOUTS` live workouts
+ *    (C35; an edit and a replay are never capped), judged before the name.
+ * 4. `name_taken`: another live workout of the program has the same folded name (plan D5).
+ * 5. `not_found`: an item is not available to the household.
+ * 6. `invalid`: an item's `trackingType` is not the item's own, or a `prescriptionClientId` this
  *    workout already knows names another item or a removed card.
  *
  * `not_found` is one answer for every miss (ADR 0006), so a caller cannot tell which id missed.
@@ -148,6 +151,11 @@ export async function saveWorkout(
     );
     if ((draft.workoutPublicId !== null && !self) || self?.deletedAt) {
       return refuse(PROGRAM_REFUSAL.not_found);
+    }
+    // A NEW workout in a full program (C35, invariant 30), judged before the name. An edit and a
+    // replay have `self`, so neither is capped.
+    if (!self && workouts.filter((w) => !w.deletedAt).length >= MAX_PROGRAM_WORKOUTS) {
+      return refuse(PROGRAM_REFUSAL.limit_reached);
     }
     const folded = foldName(draft.name);
     if (workouts.some((w) => w !== self && !w.deletedAt && foldName(w.name) === folded)) {

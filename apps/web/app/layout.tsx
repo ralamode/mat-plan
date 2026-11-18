@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { headers } from 'next/headers';
 
+import { StyleNonce } from '@/components/layout/style-nonce';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { CLERK_CSS_LAYER, clerkIsConfigured } from '@/lib/clerk';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -131,6 +132,9 @@ export default async function RootLayout({
           authenticated page.
         */}
         <ThemeProvider nonce={nonce}>{body}</ThemeProvider>
+        {/* The sheet scroll lock's `<style>` needs the page's nonce; it reads it from the DOM, not
+            from `nonce` here, which is new on every refresh (`style-nonce.tsx`). */}
+        <StyleNonce />
       </body>
     </html>
   );

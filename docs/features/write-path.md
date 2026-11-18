@@ -369,8 +369,10 @@ The shapes those lanes agree on, the fakes and the preview route are
    nowhere else.
 
    `householdRowIs(scope)` and `householdMemberInHousehold(scope)` (`PRIV-3` PR 1) are two more
-   leaves of the same kind, for the `households` row and its `household_members`. Their only
-   consumer is the erasure graph ([erasure.md](./erasure.md)); no writer calls them.
+   leaves of the same kind, for the `households` row and its `household_members`. Their consumer is
+   the erasure graph ([erasure.md](./erasure.md)), and `householdRowIs` has one more: `newItem`'s
+   per-household advisory lock (FAM-1 caps, C35), which reads only the row's `id` as the lock's key.
+   No writer writes a household row through either.
 
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
