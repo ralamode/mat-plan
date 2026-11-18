@@ -336,28 +336,30 @@ export async function logRow(
 
     // The entry. Bare `ON CONFLICT DO NOTHING`: the `client_id` and the row arbiter
     // (`ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`) both skip it, and the branch below asks which.
-    const [entry] = await tx
-      .insert(schema.entries)
-      .values({
-        publicId: newId(),
-        clientId: write.clientId,
-        profileId,
-        activityDate: write.day,
-        unit: entryUnitFor(trackingType, unit),
-        movementName: movement.name,
-        activityTypeId: args.activityTypeId,
-        movementId: prescription.movementId,
-        sessionId,
-        supersetId,
-        supersetOrder: supersetId === null ? null : prescription.supersetOrder,
-        prescriptionId: prescription.id,
-        prescriptionSet: write.set,
-        // What the row was logged against, frozen (D7). `''` is a real value (a Check) and stays
-        // `''`. The quantities are the target's, so a range renders as the day page shows it.
-        prescribedSnapshot: text,
-      })
-      .onConflictDoNothing()
-      .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
+    const insertEntry = () =>
+      tx
+        .insert(schema.entries)
+        .values({
+          publicId: newId(),
+          clientId: write.clientId,
+          profileId,
+          activityDate: write.day,
+          unit: entryUnitFor(trackingType, unit),
+          movementName: movement.name,
+          activityTypeId: args.activityTypeId,
+          movementId: prescription.movementId,
+          sessionId,
+          supersetId,
+          supersetOrder: supersetId === null ? null : prescription.supersetOrder,
+          prescriptionId: prescription.id,
+          prescriptionSet: write.set,
+          // What the row was logged against, frozen (D7). `''` is a real value (a Check) and stays
+          // `''`. The quantities are the target's, so a range renders as the day page shows it.
+          prescribedSnapshot: text,
+        })
+        .onConflictDoNothing()
+        .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
+    let [entry] = await insertEntry();
 
     if (!entry) {
       // Nothing inserted. The `client_id` is held (a concurrent first call), or the set is.
@@ -374,9 +376,16 @@ export async function logRow(
         )
         .limit(1);
       if (taken) refuse(ROW_REFUSAL.slot_taken);
-      throw new Error(
-        `row client_id ${write.clientId} neither inserted nor held, and its set is free`,
-      );
+      // 🔴 **Neither held nor taken: retried ONCE** (lane S's #578 pattern). The insert and these
+      // reads are separate statements, so the entry that held the set can be un-ticked or cleared by
+      // another phone between them: nothing holds the set by the time it is read, and the same ✓
+      // inserts on a second try. Every other cause of this miss conflicts again, and still throws.
+      [entry] = await insertEntry();
+      if (!entry) {
+        throw new Error(
+          `row client_id ${write.clientId} neither inserted nor held, and its set is free`,
+        );
+      }
     }
 
     // The set row: one per ✓ (D3).
