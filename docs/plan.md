@@ -1906,7 +1906,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
-  drill branch. _(Beta 0.)_
+  drill branch. _(Before the first outside invite. Moved off Beta 0's path to the family's trial week
+  by the maintainer, 2026-11-18; the precondition below stands for any outside family's data.)_
 
   **The deletion ledger is now defined** — `PRIV-1` was its first writer, so it specified it rather
   than naming an artifact that did not exist:
