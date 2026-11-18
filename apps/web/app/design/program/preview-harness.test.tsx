@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  * red each time a lane filled a stub in, and this file is the contract owner's: the lane would have
  * to edit it, and owe its guide. What a screen renders is tested beside the screen.
  */
-type Mounted = { screen: string; props: Record<string, unknown> };
+type Mounted = { screen: string; props: Record<string, unknown>; prefetch?: boolean };
 const { mounted, probe } = vi.hoisted(() => {
   const mounted = { calls: [] as Mounted[] };
   // Hoisted with the mocks below, which run before any other line of this file.
@@ -30,14 +30,26 @@ const { mounted, probe } = vi.hoisted(() => {
   };
   return { mounted, probe };
 });
-vi.mock('@/components/program-builder/programs-list-screen', () => ({
-  ProgramsListScreen: probe('programs-list'),
+/**
+ * A builder screen's probe also records what `BuilderLinkPrefetch` says where the screen is
+ * mounted: that is what each of its links would read.
+ */
+async function builderProbe(name: string) {
+  const { use } = await import('react');
+  const { BuilderLinkPrefetch } = await import('@/components/program-builder/route-link');
+  return (props: Record<string, unknown>) => {
+    mounted.calls.push({ screen: name, props, prefetch: use(BuilderLinkPrefetch) });
+    return null;
+  };
+}
+vi.mock('@/components/program-builder/programs-list-screen', async () => ({
+  ProgramsListScreen: await builderProbe('programs-list'),
 }));
-vi.mock('@/components/program-builder/program-screen', () => ({
-  ProgramScreen: probe('program'),
+vi.mock('@/components/program-builder/program-screen', async () => ({
+  ProgramScreen: await builderProbe('program'),
 }));
-vi.mock('@/components/program-builder/workout-editor-screen', () => ({
-  WorkoutEditorScreen: probe('workout-editor'),
+vi.mock('@/components/program-builder/workout-editor-screen', async () => ({
+  WorkoutEditorScreen: await builderProbe('workout-editor'),
 }));
 vi.mock('@/components/day/day-screen', () => ({ DayScreen: probe('day') }));
 // The three parts the day page places itself (plan D34), which the day case mounts around the screen.
@@ -50,7 +62,7 @@ vi.mock('@/components/day/not-on-a-program', () => ({ NotOnAProgram: probe('not-
 import { pickerOptions, previewHowTo } from './picker-options';
 import { SETTINGS_COPY } from '@/lib/constants';
 
-import { PreviewHarness } from './preview-harness';
+import { PreviewHarness, previewHouseholdOf } from './preview-harness';
 import {
   parsePreview,
   PREVIEW_SCREEN_NAMES,
@@ -141,6 +153,17 @@ describe('the preview harness', () => {
       const [first] = Object.values(actions);
       const result = await first!({});
       expect(result.reason === PROGRAM_REFUSAL.retry).toBe(entry.failNext);
+    },
+  );
+
+  it.each(PREVIEW_SCREEN_NAMES.filter((name) => name !== 'day'))(
+    '%s: its links do not prefetch, since a fixture id is no real page',
+    (name) => {
+      const [fixture] = PREVIEW_SCREENS[name].fixtures;
+      render(<PreviewHarness screen={name} fixture={fixture!} failNext={false} />);
+      const builder = mounted.calls.filter((call) => call.screen === name);
+      expect(builder.length).toBeGreaterThan(0);
+      expect(builder.map((call) => call.prefetch)).toEqual(builder.map(() => false));
     },
   );
 
@@ -282,5 +305,32 @@ describe('the preview harness', () => {
     // A builder screen is the page: it renders its own <h1>, so the harness adds none.
     render(<PreviewHarness screen="program" fixture="family-program" failNext={false} />);
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+});
+
+describe('the Programs list beside a program page on the preview (C36)', () => {
+  it('is the list built from the same world as the page, so the two agree about an archived athlete', () => {
+    const page = PROGRAM_VIEW_FIXTURES['family-program-archived-athlete'];
+    const list = previewHouseholdOf('family-program-archived-athlete', page);
+    expect(list).toEqual(PROGRAM_LIST_FIXTURES['programs-list-archived-athlete']);
+    const onThePage = page.athletes.map((a) => a.name);
+    const entry = list.find((p) => p.programPublicId === page.programPublicId)!;
+    expect(entry.athletes).toEqual(onThePage);
+  });
+
+  it('is the seeded household for a page from the seeded world, plus the page’s program when it is new', () => {
+    const seeded = PROGRAM_LIST_FIXTURES['programs-list'];
+    expect(previewHouseholdOf('family-program', PROGRAM_VIEW_FIXTURES['family-program'])).toEqual(
+      seeded,
+    );
+    const fresh = PROGRAM_VIEW_FIXTURES['new-program-empty'];
+    expect(previewHouseholdOf('new-program-empty', fresh)).toEqual([
+      ...seeded,
+      { programPublicId: fresh.programPublicId, name: fresh.name, athletes: [] },
+    ]);
+    // A copy of the list each time: a fake may change what it is handed.
+    expect(previewHouseholdOf('family-program', PROGRAM_VIEW_FIXTURES['family-program'])).not.toBe(
+      seeded,
+    );
   });
 });

@@ -375,9 +375,10 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     future,
     // The switcher's list, as the picker lists a household: an archived athlete is not in it,
     // their own day included (`DayPlan.athletes`).
-    athletes: world.athletes
-      .filter((a) => !a.archived)
-      .map((a) => ({ profilePublicId: fixtureIds.athlete(a.id), name: a.name })),
+    athletes: unarchived(world).map((a) => ({
+      profilePublicId: fixtureIds.athlete(a.id),
+      name: a.name,
+    })),
     onProgram: on.length ? 'yes' : current.length ? 'not-this-day' : 'never',
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
     currentPrograms: current.map((a) => programRef(world, a.prog)),
@@ -406,10 +407,14 @@ export function workoutDraft(world: World, programId: string, wid: string): Work
   };
 }
 
+/** The household's athletes as every list shows them: the ones who are not archived. */
+const unarchived = (world: World) => world.athletes.filter((a) => !a.archived);
+
 export function programList(world: World): ProgramList {
   return world.programs.map((program) => ({
     ...programRef(world, program.id),
-    athletes: world.athletes
+    // Who is on it, of the athletes who are not archived (C36): as every list of a household.
+    athletes: unarchived(world)
       .filter((a) => currentPrograms(world, a.id).some((asg) => asg.prog === program.id))
       .map((a) => a.name),
   }));
@@ -424,7 +429,9 @@ export function programView(world: World, programId: string): ProgramView {
   return {
     ...programRef(world, programId),
     today: world.today,
-    athletes: world.athletes.flatMap((a) => {
+    // An archived athlete is in neither list (C36): their assignment stays, and so they are back
+    // on the page when restored. Put on would refuse them, so they are no candidate either.
+    athletes: unarchived(world).flatMap((a) => {
       const assignment = assignmentOf(a.id);
       if (!assignment) return [];
       return {
@@ -435,7 +442,7 @@ export function programView(world: World, programId: string): ProgramView {
         alsoOn: namesOf(a.id).filter((name) => name !== program.name),
       };
     }),
-    candidates: world.athletes.map((a) => ({
+    candidates: unarchived(world).map((a) => ({
       profilePublicId: fixtureIds.athlete(a.id),
       name: a.name,
       on: assignmentOf(a.id) !== undefined,

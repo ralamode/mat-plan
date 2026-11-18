@@ -109,6 +109,13 @@ export type SheetProps = {
    */
   onReturned?: () => void;
   /**
+   * Escape, before the sheet acts on it. **Call `event.preventDefault()` to keep the sheet open**:
+   * the movement picker's filter panel closes itself on Escape and leaves the list open (CAT-3
+   * B2-ii, panel row 11), as a nested dialog would, without a second modal sheet (one open sheet
+   * at a time, below). Not called for the back gesture or the ✕, which always close the sheet.
+   */
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  /**
    * The design-inventory page scopes a candidate palette with `[data-tokens]` on a wrapper, but
    * `Dialog.Portal` mounts under `document.body` — outside every cell. Forwarded so the portaled
    * surface carries the palette it is demonstrating.
@@ -390,6 +397,7 @@ export function Sheet({
   footer,
   status,
   initialFocus,
+  onEscapeKeyDown,
   onReturned,
   dataTokens,
 }: SheetProps) {
@@ -444,6 +452,8 @@ export function Sheet({
           onPointerDownOutside={(e) => {
             if (!isDialog) e.preventDefault();
           }}
+          // A consumer's own Escape first: `preventDefault` keeps the sheet open (see the prop).
+          onEscapeKeyDown={onEscapeKeyDown}
           onOpenAutoFocus={(e) => {
             // See `initialFocus`. Radix would otherwise pick the first tabbable candidate, which is
             // never the `tabIndex={-1}` title this file has always claimed is the target.

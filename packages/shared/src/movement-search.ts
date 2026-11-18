@@ -493,6 +493,16 @@ export type MovementSearchResult<T> = MovementMatchResult<T> & {
    */
   readonly outsideFilters: number;
   /**
+   * ⏳ How many of `outsideFilters` are library rows whose taxonomy was not read (no `equipment`
+   * field): they pass no filter because nothing is known about them, not because they need
+   * something else, so the screen can say so. Until the catalog's fresh start these are the old
+   * built-ins with no library entry (spec K22). Always at most `outsideFilters`.
+   *
+   * TODO(CAT-3 chunk R, the fresh start): every library row has taxonomy then, this is always 0,
+   * and the field goes.
+   */
+  readonly outsideWithoutData: number;
+  /**
    * The row Enter picks, or `null` (P5): a hit; or the only match there is to pick, when it was
    * found by its own name or through a short form. Under a filter "the only match" counts the
    * filtered matches and the custom items that MATCHED (they are on the screen, set apart), so
@@ -509,7 +519,7 @@ export type MovementSearchResult<T> = MovementMatchResult<T> & {
 /** The search before the filters: every field that does not depend on them. */
 type Found<T> = Omit<
   MovementSearchResult<T>,
-  'hitsOutsideFilters' | 'custom' | 'outsideFilters' | 'enterTarget'
+  'hitsOutsideFilters' | 'custom' | 'outsideFilters' | 'outsideWithoutData' | 'enterTarget'
 >;
 
 /**
@@ -570,6 +580,7 @@ export function searchMovementOptions<T extends MatchableMovement & FilterableMo
       hitsOutsideFilters: [],
       custom: [],
       outsideFilters: 0,
+      outsideWithoutData: 0,
       enterTarget: enterTargetOf(found, beyondHits),
     };
   }
@@ -577,6 +588,7 @@ export function searchMovementOptions<T extends MatchableMovement & FilterableMo
   const kept = (rows: readonly T[]) => rows.filter((option) => option.isCatalog && fits(option));
   const everyRow = [...new Set([...beyondHits, ...found.near, ...found.someWords])];
   const keptMatches = kept(beyondHits);
+  const outside = everyRow.filter((option) => option.isCatalog && !fits(option));
   return {
     ...found,
     matches: [...found.hits, ...keptMatches],
@@ -584,7 +596,8 @@ export function searchMovementOptions<T extends MatchableMovement & FilterableMo
     someWords: kept(found.someWords),
     hitsOutsideFilters: found.hits.filter((option) => option.isCatalog && !fits(option)),
     custom: everyRow.filter((option) => !option.isCatalog),
-    outsideFilters: everyRow.filter((option) => option.isCatalog && !fits(option)).length,
+    outsideFilters: outside.length,
+    outsideWithoutData: outside.filter((option) => option.equipment === undefined).length,
     // Only a custom item that MATCHED stands beside the filtered matches as something to pick.
     enterTarget: enterTargetOf(found, [
       ...keptMatches,

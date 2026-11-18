@@ -110,6 +110,13 @@ export async function captureScreenshot(opts: {
    * (an `error.tsx` boundary). Default: any error or warning fails the run, after the shots are written.
    */
   allowConsole?: boolean;
+  /**
+   * How long `goto` waits. `networkidle` by default (every route captured so far relies on it).
+   * ⚠️ The program preview did not go idle under `next start` while its links prefetched fixture
+   * ids (404s); #593 stopped that, and whether it now goes idle is unverified, so a capture there
+   * still passes `load` and its interaction waits on elements instead (CAT-3 B2-ii).
+   */
+  waitUntil?: 'load' | 'networkidle';
 }): Promise<string[]> {
   const name = opts.name ?? routeSlug(opts.route);
   await mkdir('.screenshots', { recursive: true });
@@ -168,7 +175,7 @@ export async function captureScreenshot(opts: {
       // but once `gateLogin` goes the conditional has no body: there is nothing to do differently
       // for a public route, because nothing logs in. Every route is navigated the same way, and
       // whether the caller is authenticated is decided before the server boots.
-      await page.goto(opts.route, { waitUntil: 'networkidle' });
+      await page.goto(opts.route, { waitUntil: opts.waitUntil ?? 'networkidle' });
       if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;
       await page.screenshot({ path, fullPage: !opts.viewportOnly });
