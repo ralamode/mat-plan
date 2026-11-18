@@ -35,6 +35,7 @@ describe('buttonVariants — focus-visible ring', () => {
     // live in the same base string and would be lost by the same regeneration.
     const cls = buttonVariants({ size });
     expect(cls).toContain('focus-visible:ring-3');
-    expect(cls).toContain('focus-visible:ring-ring/50');
+    expect(cls).toContain('focus-visible:ring-ring');
+    expect(cls).not.toContain('focus-visible:ring-ring/');
   });
 });

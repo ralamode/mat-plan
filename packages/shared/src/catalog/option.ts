@@ -1,7 +1,15 @@
-import type { MovementPattern, TrackingType } from '../movements';
+import { z } from 'zod';
+
+import { movementNameSchema, type MovementPattern, type TrackingType } from '../movements';
 import type { Unit } from '../units';
-import type { CatalogMovement } from './entry';
-import type { Equipment, Modality, Muscle, Supervision } from './vocabulary';
+import { catalogInstructionsSchema, type CatalogMovement } from './entry';
+import {
+  supervisionSchema,
+  type Equipment,
+  type Modality,
+  type Muscle,
+  type Supervision,
+} from './vocabulary';
 
 /**
  * What the picker knows about a library movement beyond its name (CAT-3 spec, chunk C0b-2; P11):
@@ -82,12 +90,13 @@ export function catalogOptionOf(entry: CatalogMovement, publicId: string): Catal
 }
 
 /** What "How to" shows for one movement (P16, K17): the steps, with the label that goes above them. */
-export type CatalogHowTo = {
-  readonly name: string;
+export const catalogHowToSchema = z.strictObject({
+  name: movementNameSchema,
   /** One step a line, as authored. */
-  readonly instructions: string;
-  readonly supervision: Supervision | null;
-};
+  instructions: catalogInstructionsSchema,
+  supervision: supervisionSchema.nullable(),
+});
+export type CatalogHowTo = Readonly<z.infer<typeof catalogHowToSchema>>;
 
 /**
  * One entry's "How to", by slug, or `null` when there is no such entry or it has no instructions.
@@ -99,8 +108,10 @@ export type CatalogHowTo = {
  * one without having the other in hand.
  *
  * **By slug, and an option carries none** (a slug is the library's key, never a row's public
- * id): the server action behind "How to" takes the option's `publicId`, finds that row's slug
- * under the caller's scope, and calls this.
+ * id): the read behind "How to" (a Route Handler, `app/programs/how-to/[optionId]/route.ts`,
+ * FAM-1 7b) takes the option's `publicId`, finds that row's slug under the caller's scope, and
+ * calls this. It builds its answer with `catalogHowToSchema`, which is strict, so no slug or id
+ * can ride along; the picker's loader parses with the same schema.
  */
 export function catalogHowToOf(
   entries: readonly CatalogMovement[],

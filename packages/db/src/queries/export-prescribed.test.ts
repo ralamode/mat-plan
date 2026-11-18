@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolvePrescribed, rolesNeedingLiveMatch } from './prescribed-snapshot';
+import { resolvePrescribed, rolesNeedingLiveMatch } from './export-prescribed';
 
 const row = (over = {}) => ({
   prescribedSnapshot: null as string | null,

@@ -3,6 +3,8 @@ import 'server-only';
 import {
   bodyweightMonthRows,
   foldStrengthMonth,
+  resolvePrescribed,
+  rolesNeedingLiveMatch,
   type HouseholdScope,
   loggedMonths,
   programDayRows,
@@ -22,7 +24,6 @@ import {
   liveMatchesByKey,
 } from '@mat-plan/shared/csv';
 
-import { resolvePrescribed, rolesNeedingLiveMatch } from '../csv/prescribed-snapshot';
 import { db } from './db';
 import { getHouseholdScope } from './household';
 import { getProfileByPublicId } from './profiles';

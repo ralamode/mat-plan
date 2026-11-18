@@ -46,11 +46,14 @@ import {
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
+  NAV_RAIL_COPY,
+  SETTINGS_PATH,
   STRENGTH_COPY,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
+import { DAY_COPY } from '../components/day/day-copy';
 import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
 import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
@@ -441,6 +444,9 @@ const STATES = {
   // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
   // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
   'day-look-ahead': null,
+  // FAM-1 12d — Change on a set row, typed over and not yet saved ("Not saved. Was …" and the ✕),
+  // in today's superset. Interaction-only: the state exists only between typing and leaving the row.
+  'day-change-typed-over': null,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
   'bodyweight-rejected': null,
@@ -462,6 +468,13 @@ const STATES = {
   'rename-rejected': null,
   // U0 — the shared sheet, OPEN. Not reachable by route: it exists only after a tap, and a closed
   // cell shows two buttons and nothing of the component under review.
+  // The focus ring (the tech-debt focus-ring fix): keyboard focus on a field, a button and a nav row.
+  // Interaction-only: `:focus-visible` exists only after keyboard input, which no fixture can seed.
+  'focus-field': null,
+  'focus-button': null,
+  'focus-nav-row': null,
+  'focus-rail-row': null,
+  'focus-group-row': null,
   'sheet-open': null,
   'sheet-dialog-open': null,
   // CAT-3 B2-ii — the movement picker's filters, on the preview's workout editor. Interaction-only:
@@ -621,6 +634,20 @@ async function quadsOnThenBack(page: Page) {
   await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
 }
 
+/**
+ * Resolve once no FINITE transition or animation is running, so a capture is not mid-animation. An
+ * infinite one (`animate-spin`, `animate-pulse`) never finishes, so it is not waited for.
+ */
+async function settleAnimations(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (a) => a.playState !== 'running' || a.effect?.getComputedTiming().endTime === Infinity,
+      ),
+  );
+}
+
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
   'form-partial-sets': async (page) => {
     const { reps, weight } = await scaffoldOpenCard(page);
@@ -678,6 +705,41 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('searchbox').fill('chin');
     await page.getByText(PICKER_COPY.outsideAll(4, 'chin'), { exact: true }).waitFor();
   },
+  // A key press first, so the programmatic focus that follows counts as KEYBOARD focus and
+  // `:focus-visible` (the ring under test) applies, as it does when a person tabs there.
+  // Then wait out any running transition: `Button` has `transition-all`, and a capture taken
+  // mid-animation shows a faint hairline instead of the ring (#614's review).
+  'focus-field': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('input[name="name"]').first().focus();
+    await settleAnimations(page);
+  },
+  'focus-button': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('form button[type="submit"]').first().focus();
+    await settleAnimations(page);
+  },
+  'focus-nav-row': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator(`a[href="${SETTINGS_PATH}"]`).first().focus();
+    await settleAnimations(page);
+  },
+  // A row of the builder's grouped list (`group-list.tsx`), whose ring now comes inset from
+  // `NAV_ROW_CLASS` alone. Route: the programs-list preview.
+  'focus-group-row': async (page) => {
+    await page.keyboard.press('Shift');
+    await page.locator('main ul a').first().focus();
+    await settleAnimations(page);
+  },
+  // A row INSIDE the nav rail's scrolling list, the case `NAV_ROW_CLASS`'s `ring-inset` exists for
+  // (an outer ring would be clipped there). The rail renders from the tablet width up.
+  'focus-rail-row': async (page) => {
+    await page.keyboard.press('Shift');
+    const row = page.locator(`nav[aria-label="${NAV_RAIL_COPY.label}"] ul a`).first();
+    if ((await row.count()) === 0) return; // mobile: no rail, the capture shows the page as is
+    await row.focus();
+    await settleAnimations(page);
+  },
   'sheet-open': async (page) => {
     await page.getByRole('button', { name: 'Open sheet' }).first().click();
     await page.getByRole('dialog').waitFor();
@@ -707,6 +769,25 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   // The page's own Next arrow, not `gotoDaysAgo(-1)`: that counts from the app's default zone, which
   // can be a day behind the zone the page renders in, and then "tomorrow" is the page's today.
+  'day-change-typed-over': async (page) => {
+    const superset = page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
+    if ((await superset.count()) === 0) {
+      throw new Error(
+        'day-change-typed-over: no superset today (Heavy A or B runs Mon, Wed, Fri and Sat); pass a ?d= that has one',
+      );
+    }
+    const tick = superset.getByRole('button', { name: /^Log .* set 1$/ }).first();
+    if ((await tick.getAttribute('aria-pressed')) !== 'true') {
+      await tick.click();
+      await page.waitForFunction(
+        (el) => el?.getAttribute('aria-pressed') === 'true' && !el.getAttribute('aria-busy'),
+        await tick.elementHandle(),
+      );
+    }
+    const load = superset.getByRole('textbox', { name: /set 1, in (?!reps$)/ }).first();
+    await load.fill(String(Number(await load.inputValue()) + 5));
+    await superset.getByText(/^Not saved\. Was /).waitFor();
+  },
   'day-look-ahead': async (page) => {
     await page
       .getByRole('navigation', { name: 'Change day' })
