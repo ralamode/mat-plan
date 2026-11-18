@@ -1,5 +1,5 @@
 /**
- * Lane P's writers behind `ProgramActions` (FAM-1 plan §5, 6a-ii): what `packages/db/src/index.ts`
+ * Lane P's writers behind `ProgramActions` and `DayActions.reorderPrograms` (FAM-1 plan §5, 6a-ii): what `packages/db/src/index.ts`
  * publishes to the app. **Named exports only**, so the helpers beside them (`programNameTaken`,
  * `freeProgramSlug`, `lostSlugRace`, `shiftIntoBand`) stay inside the package.
  */
@@ -11,3 +11,4 @@ export { saveWorkout } from './save-workout';
 export { saveWeek } from './save-week';
 export { putOn } from './assign';
 export { takeOff } from './take-off';
+export { reorderPrograms } from './reorder-programs';

@@ -228,9 +228,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    (`preview-harness.test.tsx`) mocks the four screens and asserts only what the harness hands
    them, so filling a stub in changes no file here; a screen's own output is tested beside the
    screen. And each lane's list of owed tests is a file in its own directory:
-   `packages/db/src/writers/program/owed.test.ts` (P), `packages/db/src/writers/day/owed.test.ts`
+   `packages/db/src/writers/day/owed.test.ts`
    (E), `apps/web/components/program-builder/owed.test.ts` (B) and
-   `apps/web/components/day/owed.test.ts` (C). Lanes A and S have no guide, so their lines stay in
+   `apps/web/components/day/owed.test.ts` (C). Lane P's list is empty and its file is gone (6d-ii, #633). Lanes A and S have no guide, so their lines stay in
    `packages/shared/src/program/owed.test.ts` and are edited under the seam rule, one PR at a time.
 10. **Every text a person types is refused if it holds a control character** (a NUL reaches Postgres,
     which refuses it, and the action then throws instead of answering `invalid`).
