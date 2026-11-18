@@ -409,7 +409,7 @@ describe('browseTree (P12)', () => {
     expect(tied[0]!.families[1]!.options.map((option) => option.name)).toEqual(['B', 'b']);
   });
 
-  it('opens every group when a filter leaves twenty or fewer', () => {
+  it('opens every group when the list holds twenty or fewer, filter or not', () => {
     expect(BROWSE_OPEN_AT_MOST).toBe(20);
   });
 });

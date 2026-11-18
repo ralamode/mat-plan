@@ -118,7 +118,7 @@ export const BROWSE_OPEN_AT_MOST = 20;
 export const BROWSE_FLAT_KINDS: readonly Modality[] = [MODALITY.conditioning];
 
 export type BrowseFamily<T> = {
-  /** `null`, with `label`, for the one family of a kind that has no family level. */
+  /** `null` (and so is `label`) for the one family of a kind that has no family level. */
   readonly family: MovementFamily | null;
   readonly label: string | null;
   readonly options: readonly T[];
@@ -143,7 +143,8 @@ export function byFoldedName(a: { readonly name: string }, b: { readonly name: s
 
 /**
  * "All movements" as a tree (P12): the kinds in `BROWSE_KINDS`' order, each with its families,
- * the biggest first (ties by label), each with its movements by name. **A kind or a family with
+ * the biggest first (ties by label), each with its movements by name. A kind in
+ * `BROWSE_FLAT_KINDS` has one family with no name and no label instead (K27). **A kind or a family with
  * nothing in it is left out**, so a filtered list shows no empty heading. A count is
  * `options.length`; the whole tree's is the sum of its kinds'.
  *
