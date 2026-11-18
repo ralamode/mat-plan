@@ -7,9 +7,12 @@ name: Migrate + seed (production)
 # is safe; destructive contract steps are gated behind a later, separate deploy.
 #
 # Runs on EVERY push to main (no path filter) so reference-data changes — a new
-# catalog row / profile in seed.ts or @mat-plan/shared — reach prod even when the
-# PR has no migration. This is drift-proof: `db:migrate` is a no-op when nothing is
-# pending, and `db:seed` is idempotent (ON CONFLICT DO NOTHING). A brittle per-file
+# catalog row in seed.ts or @mat-plan/shared — reach prod even when the PR has no
+# migration. OPS-2 PR 1: production's seed writes REFERENCE DATA ONLY (no household,
+# no athlete, no program); those are fixtures, written only behind the fixtures flag,
+# which this workflow never sets (apps/web/test/seed-fixtures-is-contained.test.ts).
+# This is drift-proof: `db:migrate` is a no-op when nothing is pending, and `db:seed` is
+# idempotent (ON CONFLICT DO NOTHING; `units` is upserted only where it differs). A brittle per-file
 # `paths` allowlist would silently miss seed-only PRs (which is exactly how prod
 # drifted after V1-2/V1-3 shipped no migration).
 #
@@ -49,6 +52,12 @@ jobs:
     # from `main`; this makes the instruction unnecessary rather than merely written down. A push to
     # `main` and a dispatch from `main` both satisfy it, so the documented procedure is unchanged.
     if: github.ref == 'refs/heads/main'
+    # OPS-2 PR 1: PROD_DATABASE_URL_UNPOOLED is an ENVIRONMENT secret of "Production" (the maintainer,
+    # 2026-11-18), so only a job that declares this environment can read it. That environment's
+    # deployment-branch policy must be "main only" (docs/runbooks.md -> "Rotate or rename the
+    # production database secret"). No older version of this file declares it, so an old run re-run
+    # from the Actions tab cannot read the secret even before the old one is deleted.
+    environment: Production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -66,16 +75,26 @@ jobs:
 
       - name: Apply migrations + idempotent seed (direct/unpooled Neon string)
         env:
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          # 🔴 OPS-2 PR 1 (D-S2, the maintainer's decision, 2026-11-18): the production string is read
+          # from a RENAMED secret, `PROD_DATABASE_URL_UNPOOLED`, and the old `DATABASE_URL_UNPOOLED` is
+          # deleted once this file's first run is green. From then on, an OLD run re-run from the Actions
+          # tab reads the old name, finds it empty and exits 0 with a warning (every older version of
+          # this step did), so it cannot re-seed production with code that wrote households. The env var
+          # keeps its old name: the scripts read DATABASE_URL_UNPOOLED. Steps: docs/runbooks.md ->
+          # "Rotate or rename the production database secret".
+          DATABASE_URL_UNPOOLED: ${{ secrets.PROD_DATABASE_URL_UNPOOLED }}
           # OPS-1: there are now TWO migrator secrets, so a mis-paste is live in both directions —
           # and this is the QUIET direction: the preview string here would leave this job GREEN
           # while production stopped being migrated and drifted. Both scripts refuse a target whose
           # database name disagrees. See packages/shared/src/db-environment.ts.
           EXPECTED_DB_ENV: production
         run: |
+          # OPS-2 PR 1: absent is an ERROR now, not a skip. Production is wired, and since the rename a
+          # missing secret means the operator has not created PROD_DATABASE_URL_UNPOOLED: skipping
+          # would leave this job green while no migration reached production.
           if [ -z "$DATABASE_URL_UNPOOLED" ]; then
-            echo "::warning::DATABASE_URL_UNPOOLED secret not set — skipping (Neon not wired yet)."
-            exit 0
+            echo "::error::PROD_DATABASE_URL_UNPOOLED is not set, so production cannot be migrated or seeded. Create it (docs/runbooks.md -> \"Rotate or rename the production database secret\")."
+            exit 1
           fi
           pnpm --filter @mat-plan/db db:migrate
           pnpm --filter @mat-plan/db db:seed

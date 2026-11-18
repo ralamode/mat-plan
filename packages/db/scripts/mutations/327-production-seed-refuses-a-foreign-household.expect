@@ -1,0 +1,1 @@
+OPS-2 C: with a live household under a foreign public_id, seed({ fixtures: false }) resolves

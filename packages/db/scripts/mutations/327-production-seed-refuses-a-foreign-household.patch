@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -217,6 +217,11 @@ export async function seed(
+   // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
+   // for fixtures, which production's seed never does. So, since OPS-2 PR 1, are the seed household and
+   // its athletes, which they need first. Program rows a database already holds are left alone.
++  const [owned] = await db
++    .select({ id: schema.households.id })
++    .from(schema.households)
++    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
++  if (!owned) throw new Error('seed: refusing to seed into a household this seed does not own');
+   if (fixtures) {
+     const household = await seedFixtures(db);
+     await seedProgram(db, PROGRAM_SEED);

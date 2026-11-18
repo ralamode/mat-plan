@@ -448,7 +448,8 @@ Their deliverables are unchanged and still written below; only when they start h
       verified by a scan over every ref.
 - [ ] No open P0. DX-5(a) merge gates are enforced.
 - [ ] Previews hold no production data and no production credential; fork protection is on (OPS-1).
-- [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2).
+- [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2; PR 1 in review).
+- [ ] The live app holds no test athletes (OPS-2 PR 2, or `CAT-3`'s fresh start, whichever runs first).
 - [ ] A single household has been restored from backup without touching any other (OPS-3).
 - [ ] `db:verify` proves that a second household cannot read, write, correct or export the first's data —
       every entry point, including the movement catalog (TEN-1).
