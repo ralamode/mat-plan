@@ -78,17 +78,9 @@ describe.each([
 });
 
 describe('pinned, so a reskin cannot separate them', () => {
-  it.each([
-    ['light', ':root'],
-    ['dark', '.dark'],
-  ] as const)(
-    '%s: ring on the tint is under 3:1, so a ✓ focuses with ring-foreground',
-    (_t, sel) => {
-      const t = tokensOf(sel);
-      expect(ratioOf(t['ring']!, t['done-surface']!, t['background']!)!).toBeLessThan(AA_LARGE);
-    },
-  );
-
+  // `ring` on the tint was pinned UNDER 3:1 here until the focus-ring fix made it 4.27 light and
+  // 5.16 dark; `app/focus-ring.test.ts` now pins it at or above 3:1 on every ground, the tint
+  // included. The ✓ keeps `foreground` for the offset-over-the-fill reason in docs/design.md.
   it.each([
     ['light', ':root'],
     ['dark', '.dark'],
