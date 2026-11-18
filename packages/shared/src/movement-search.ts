@@ -685,8 +685,15 @@ function hitsOf<T>(ranked: readonly Row<T>[], shortFormHit: T | null): T[] {
 export type MovementFilterCounts = {
   /** Rows on the screen under the filters as they are. */
   readonly total: number;
+  /** If the equipment choice were "Any equipment", with the muscles as they are. */
+  readonly equipmentAny: number;
   /** If the equipment choice were "No equipment", with the muscles as they are. */
   readonly equipmentNone: number;
+  /**
+   * If the equipment choice were "Uses at least one of…", with the items already ticked
+   * (`chosenEquipment`, kept while another choice is on) and the muscles as they are.
+   */
+  readonly equipmentChosen: number;
   /** For each item: if it alone were ticked under "chosen", with the muscles as they are. */
   readonly equipment: ReadonlyMap<Equipment, number>;
   /** For each muscle: if it alone were ticked, with the equipment choice as it is. */
@@ -708,6 +715,11 @@ export type MovementFilterCounts = {
  * Items are joined by "any of" and so are muscles, so a choice that counts zero alone can add no
  * row to whatever is already ticked: greying it hides nothing. Every vocabulary code has an
  * entry, in the vocabulary's order; `equipmentFilterOrder` gives the order the panel lists them.
+ *
+ * **The three equipment choices each have their number here** (`equipmentAny`, `equipmentNone`,
+ * `equipmentChosen`), so a panel showing a number beside each calls this once, never once a
+ * choice _(maintainer, 2026-11-17, from the filter panel's review)_. The one that is the choice
+ * in force equals `total`.
  */
 export function movementFilterCounts<T extends MatchableMovement & FilterableMovement>(
   options: readonly T[],
@@ -730,7 +742,9 @@ export function movementFilterCounts<T extends MatchableMovement & FilterableMov
   const { filters } = search;
   return {
     total: count(filters),
+    equipmentAny: count({ ...filters, equipment: 'any' }),
     equipmentNone: count({ ...filters, equipment: 'none' }),
+    equipmentChosen: count({ ...filters, equipment: 'chosen' }),
     equipment: new Map(
       EQUIPMENT.map((item) => [
         item,

@@ -311,6 +311,9 @@ describe('the same search, over the test library (properties)', () => {
     filters({ muscles: ['chest', 'quadriceps'] }),
     filters({ equipment: 'none', muscles: ['obliques'] }),
     filters({ equipment: 'chosen', chosenEquipment: ['dumbbell'], muscles: ['lats'] }),
+    // Items stay ticked while another equipment choice is on: `equipmentChosen` counts them.
+    filters({ equipment: 'none', chosenEquipment: ['bench'] }),
+    filters({ equipment: 'any', chosenEquipment: ['dumbbell'], muscles: ['lats'] }),
   ];
   const isSubsequence = <T>(part: readonly T[], whole: readonly T[]) => {
     let at = 0;
@@ -392,7 +395,16 @@ describe('the same search, over the test library (properties)', () => {
         };
         const label = `${query} ${JSON.stringify(given)}`;
         expect(counts.total, label).toBe(shownUnder(given));
+        expect(counts.equipmentAny, label).toBe(shownUnder({ ...given, equipment: 'any' }));
         expect(counts.equipmentNone, label).toBe(shownUnder({ ...given, equipment: 'none' }));
+        expect(counts.equipmentChosen, label).toBe(shownUnder({ ...given, equipment: 'chosen' }));
+        // The choice in force is the list as it is.
+        expect(
+          { any: counts.equipmentAny, none: counts.equipmentNone, chosen: counts.equipmentChosen }[
+            given.equipment
+          ],
+          label,
+        ).toBe(counts.total);
         expect([...counts.equipment.keys()], label).toEqual([...EQUIPMENT]);
         expect([...counts.muscles.keys()], label).toEqual([...MUSCLES]);
         for (const item of ['dumbbell', 'bench', 'rowing_machine', 'pool'] as const) {
@@ -419,6 +431,30 @@ describe('the counts in the panel (P7)', () => {
     expect(browsing.equipment.get('kettlebell')).toBe(0);
     expect(browsing.muscles.get('lats')).toBe(2);
     expect(browsing.muscles.get('shins')).toBe(0);
+  });
+
+  it('🔴 gives each of the three equipment choices its number, from one call', () => {
+    const browsing = movementFilterCounts(ALL, { query: '', filters: NO_MOVEMENT_FILTERS });
+    expect(browsing.equipmentAny).toBe(7);
+    // "Uses at least one of…" with nothing ticked filters nothing.
+    expect(browsing.equipmentChosen).toBe(7);
+    // "No equipment" is on and Bench is still ticked from before: each choice says what it would show.
+    const none = movementFilterCounts(ALL, {
+      query: '',
+      filters: filters({ equipment: 'none', chosenEquipment: ['bench'] }),
+    });
+    expect(none.total).toBe(3);
+    expect(none.equipmentNone).toBe(3);
+    expect(none.equipmentAny).toBe(7);
+    expect(none.equipmentChosen).toBe(2);
+    // The muscles stay as they are under every one of the three.
+    const lats = movementFilterCounts(ALL, {
+      query: '',
+      filters: filters({ equipment: 'none', chosenEquipment: ['dumbbell'], muscles: ['lats'] }),
+    });
+    expect(lats.equipmentAny).toBe(2);
+    expect(lats.equipmentNone).toBe(0);
+    expect(lats.equipmentChosen).toBe(1);
   });
 
   it('counts under the other kind’s filters, and under the query', () => {

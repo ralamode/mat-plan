@@ -576,7 +576,11 @@ under its own CAT-3 heading).
     are. With a query that counts the hits and the custom items the query found, which are shown
     whatever the filters, so while an exact name is typed nothing greys; with no query it counts
     the library movements that fit. Zero means greyed and not tickable, unless it is already
-    ticked. `equipmentFilterOrder` lists the items most first, the zero ones last.
+    ticked. `equipmentFilterOrder` lists the items most first, the zero ones last. The three
+    equipment choices each have their number in the same answer (`equipmentAny`, `equipmentNone`,
+    `equipmentChosen`: the last counts the items already ticked, which stay ticked while another
+    choice is on), so the panel calls `movementFilterCounts` once, never once a choice
+    _(maintainer, 2026-11-17)_.
 18. **Enter picks a hit, or the only match when it was found by its own name or through a short
     form** (`enterTarget` on the result, spec P5). Never a row found by another name, a near
     miss or a some-words row, 🔴 and a filter does not change that: a custom item set apart
