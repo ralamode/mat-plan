@@ -233,7 +233,7 @@ flowchart TD
     athlete's programs from `athletesOnPrograms`, which calls the day page's own `dayAssignments` and
     `currentPrograms` (lane E exported them for this second consumer), so "current as of today"
     (on it now or starting later), the athlete's order and the one-row-per-program rule cannot
-    differ between the two pages. An archived athlete is on no page and no candidate. A program's
+    differ between the two pages. An archived or removed athlete is listed on neither program page and is not a candidate. A program's
     order is the order it was made (`program_blocks.id`: no column orders them); athletes are
     earliest made first. Both reads take `today` (and `readProgramView` the household's `tz`, for a
     copy's day) from the caller and parse their answer with the contract's schema. Each proof seeds
@@ -244,8 +244,9 @@ flowchart TD
     `program-view-copy-day-in-utc`, `program-view-drops-the-last-day`,
     `program-view-lists-removed-workouts`, `program-workout-ids-keep-removed`,
     `program-view-also-on-includes-itself`, `program-reads-drop-upcoming-starts`,
-    `program-view-takes-an-offset-zone`). The zone must be an IANA name or `UTC`: Postgres reads a
-    bare offset with the sign reversed.
+    `program-reads-list-removed-athletes`). A copy's day is computed in JS with `Intl`, as the app's
+    `localDayIso` is, not with Postgres's `at time zone`, which reads a bare offset with the sign
+    reversed.
 
 ## Changing it
 

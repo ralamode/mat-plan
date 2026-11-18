@@ -13,5 +13,5 @@ app calls them yet; step 7b puts them behind the DAL and mounts the pages.
   - its week, and the household's other programs for "Copy to…".
 - Both use the day page's own rule for who is on what, so the two pages always agree. An archived
   athlete is on neither.
-- A new read answers a program's live workout ids in one query, so the week's report of an id from
-  another household no longer needs to stop after 50.
+- A new read answers a program's live workout ids at once, so the week's report of an id the program
+  does not hold (another household's, or a removed one) no longer stops after 50 ids.

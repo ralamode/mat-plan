@@ -3124,11 +3124,30 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       'FAM-1 6c-ii: …and in the Programs list',
     );
 
-    // ── A zone Postgres would read backwards is refused ──
+    // ── A bare offset dates a copy as its zone does; a zone `Intl` refuses is the caller's bug ──
+    const copyDayIn = async (tz: string) =>
+      (
+        await readProgramView(exec, scope, ids.get(fixtureIds.program('p3'))!, { today, tz })
+      )?.workouts.find((w) => w.workoutPublicId === copied.workoutPublicId)?.copiedFrom?.on;
+    assert.equal(
+      await copyDayIn('+14:00'),
+      await copyDayIn('Pacific/Kiritimati'),
+      'FAM-1 6c-ii: a bare offset dates a copy as the zone of that offset does',
+    );
     await assert.rejects(
-      readProgramView(exec, scope, ids.get(fixtureIds.program('p1'))!, { today, tz: '+05:00' }),
-      /needs an IANA time zone/,
-      'FAM-1 6c-ii: the program-view read refuses a bare offset as its time zone',
+      readProgramView(exec, scope, ids.get(fixtureIds.program('p1'))!, { today, tz: 'Not/AZone' }),
+      /needs a time zone Intl accepts/,
+      'FAM-1 6c-ii: the program-view read refuses a zone Intl refuses',
+    );
+    assert.equal(
+      (
+        await readProgramView(exec, scope, ids.get(fixtureIds.program('p1'))!.toUpperCase(), {
+          today,
+          tz: VIEW_TZ,
+        })
+      )?.name,
+      'Family program',
+      'FAM-1 6c-ii: the program-view read takes an upper-case id',
     );
 
     // ── What is not counted, and what is not listed ──
@@ -3166,6 +3185,19 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         ?.athletes,
       ['Athlete One'],
       'FAM-1 6c-ii: …nor listed in the Programs list',
+    );
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, ids.get(fixtureIds.athlete('a3'))!));
+    const deleted = await view('p1');
+    assert.deepEqual(
+      [
+        deleted?.candidates.map((c) => c.name),
+        (await readProgramList(exec, scope, today)).flatMap((p) => p.athletes),
+      ],
+      [['Athlete One'], ['Athlete One', 'Athlete One']],
+      'FAM-1 6c-ii: a removed athlete is neither a candidate nor listed',
     );
     const gone = ids.get(fixtureIds.program('p2'))!;
     await hide(tx, gone);
