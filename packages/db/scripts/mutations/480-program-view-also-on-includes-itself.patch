@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
+index bd5fe95e..50c85941 100644
+--- a/packages/db/src/queries/program/program-view.ts
++++ b/packages/db/src/queries/program/program-view.ts
+@@ -83,7 +83,7 @@ export async function readProgramView(
+       name: athlete.name,
+       since: placing.activeFrom,
+       lastDay: placing.activeTo,
+-      alsoOn: athlete.current.filter((p) => p.blockId !== program.id).map((p) => p.name),
++      alsoOn: athlete.current.map((p) => p.name),
+     });
+   }
+ 

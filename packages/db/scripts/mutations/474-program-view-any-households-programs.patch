@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/program-view.ts b/packages/db/src/queries/program/program-view.ts
+index bd5fe95e..454bd3d4 100644
+--- a/packages/db/src/queries/program/program-view.ts
++++ b/packages/db/src/queries/program/program-view.ts
+@@ -62,7 +62,7 @@ export async function readProgramView(
+       name: schema.programBlocks.name,
+     })
+     .from(schema.programBlocks)
+-    .where(liveTemplateBlockIn(scope))
++    .where(isNull(schema.programBlocks.deletedAt))
+     .orderBy(asc(schema.programBlocks.id));
+   const program = programs.find((p) => p.publicId === programPublicId.toLowerCase());
+   if (!program) return null;

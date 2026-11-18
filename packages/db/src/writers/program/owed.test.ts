@@ -15,11 +15,6 @@ import { describe, it } from 'vitest';
  * These are a to-do list, not skipped tests: nothing here was ever a passing test.
  */
 
-describe('ProgramList and ProgramView: owed by their consumers', () => {
-  it.todo('6c: the program-list query deep-equals programs-list');
-  it.todo('6c: the program-view query deep-equals family-program');
-});
-
 describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
   it.todo('6d: take off ends the program after today; logged days keep their rows');
   it.todo('6d: two open assignments at one place in an athlete’s order are refused');
