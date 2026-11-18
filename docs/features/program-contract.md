@@ -468,15 +468,14 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - **The weekday cap is in `weekDaysSchema`**, so a week past it fails the parse.
       `weekExceedsDaySlots(draft)` tells that from any other failure, as `weekRepeatsAWorkout`
       does for a repeat, and **a repeat is asked first**: `once_per_day`, then `limit_reached`,
-      then `invalid`. The fake answers this way; lane P's writers and the real actions follow in
-      their own PRs, and until they do the real `saveWeek` answers `invalid` for a long day.
+      then `invalid`. The fake, the real action (#603) and lane P's writer (#605) all answer this way.
     - **The workouts cap is the program's the write lands in.** For a copy into another program
       that is the other program's, never the source's. ⚠️ The fake holds only the program on
       screen, so it counts that one alone: a copy into another program is never refused by the
       fake, and a save for a program that is not on screen is not counted either. The real
       writers count the destination.
     - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
-      `weekDaysSchema`. That is safe only while no writer stores a longer day. `saveWeek` parses the draft. **`copyWorkout` adds a slot to each weekday it names without parsing a week, and on `main` nothing stops it passing the cap: neither lane P's writer nor the fake refuses yet.** Decided overnight, 2026-11-18: the copy is refused whole with `limit_reached` when one of those weekdays is already full (the destination program's week; judged with the workouts cap). Lane P's caps PR brings it to the writer and the next contract PR to the fake; until both merge this is an open gap, reachable only once a screen calls the real copy (7b). The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      `weekDaysSchema`. That is safe because no writer stores a longer day: `saveWeek` parses the draft, and **`copyWorkout`, which adds a slot to each weekday it names without parsing a week, refuses the whole copy with `limit_reached` when one of them is already full** (the destination program's week; judged with the workouts cap; lane P's writer, #605). ⚠️ The fake does not refuse it yet: that follows in the next contract PR. The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
       caps (`ProgramView.workouts` has none), and how many programs a household has is not
       capped.
 31. **An archived athlete is on no program page and no Programs list** (contract change C36;
