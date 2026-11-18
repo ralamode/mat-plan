@@ -22,3 +22,18 @@ regexes = [
   '''ci-e2e-placeholder-1234''',
   '''ci-build-placeholder''',
 ]
+
+# A catalog approval line in packages/shared/src/catalog/data/approved.json: a movement slug and its
+# entryHash (sha-256 hex). A slug with "sumo" in it (sumo_deadlift) trips the default
+# sumologic-access-token rule, whose keyword is "sumo". Scoped to THAT rule AND that one file AND that
+# exact line shape (a slug containing sumo, then 64 lowercase hex, nothing else), so every other rule
+# still runs on the line, and a hex secret under a "sumo" key anywhere else is still caught.
+# ⚠️ CI runs gitleaks 8.24.3 (the action's default), not the local 8.30.x: use only config features
+# 8.24.3 has. A top-level [[allowlists]] with targetRules is silently ignored there.
+[[rules]]
+id = "sumologic-access-token"
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(?:^|/)packages/shared/src/catalog/data/approved\.json$''']
+regexTarget = "line"
+regexes = ['''^\s*"[a-z0-9_-]*sumo[a-z0-9_-]*": "[0-9a-f]{64}",?$''']

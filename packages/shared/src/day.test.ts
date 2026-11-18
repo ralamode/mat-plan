@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addDays,
+  dayOpenFor,
   localWeekday,
   MONDAY_FIRST,
   WEEKDAYS,
@@ -112,5 +113,39 @@ describe('inWritableWindow: today and yesterday, never a day after today (FAM-1 
     expect(inWritableWindow('2026-12-31', '2027-01-01')).toBe(true);
     expect(inWritableWindow('2027-01-01', '2026-12-31')).toBe(false);
     expect(inWritableWindow('2026-02-28', '2026-03-01')).toBe(true);
+  });
+});
+
+describe('dayOpenFor: the writable window, and never for an archived athlete (C34)', () => {
+  const TODAY = '2026-09-30';
+  const DAYS = ['2026-09-27', '2026-09-28', '2026-09-29', TODAY, '2026-10-01', '2026-10-02'];
+
+  it('is open today and yesterday for an athlete who is not archived, and on no other day', () => {
+    const open = DAYS.filter((day) => dayOpenFor({ archived: false }, day, TODAY));
+    expect(open).toEqual(['2026-09-29', TODAY]);
+  });
+
+  it('agrees with inWritableWindow on every day, for an athlete who is not archived', () => {
+    for (const day of DAYS) {
+      expect(dayOpenFor({ archived: false }, day, TODAY)).toBe(inWritableWindow(day, TODAY));
+    }
+  });
+
+  it('is never open for an archived athlete, today and yesterday included', () => {
+    for (const day of DAYS) {
+      expect(dayOpenFor({ archived: true }, day, TODAY)).toBe(false);
+    }
+  });
+
+  it('takes the day before today, in that order: yesterday is open and tomorrow is not', () => {
+    // Swapping the two days turns yesterday into tomorrow, so this fails if the function's
+    // parameters are swapped.
+    expect(dayOpenFor({ archived: false }, '2026-09-29', TODAY)).toBe(true);
+    expect(dayOpenFor({ archived: false }, TODAY, '2026-09-29')).toBe(false);
+  });
+
+  it('is exported from the root barrel', async () => {
+    const barrel = await import('./index');
+    expect(barrel.dayOpenFor).toBe(dayOpenFor);
   });
 });

@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from 'node:fs';
+import { globSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -14,15 +14,17 @@ const REPO = resolve(WEB_DIR, '../..');
  *
  * 1c-3a gave the harnesses a *principal*; this chunk gives that principal a `household_members` row,
  * because from `1c-4` the household scope is derived from it. The row is written by the committed
- * `household-claim-2026-10-25` correction, which is also the writer `packages/db/scripts/verify.ts`
+ * `household-claim-2026-10-25` correction, one of the two writers `packages/db/scripts/verify.ts`
  * names when it asserts _"the seed writes NO household_members row"_ — the seed must keep writing
- * none, because `migrate.yml` seeds **production**.
+ * none, because `migrate.yml` seeds **production**. The other writer, `create-household-…`
+ * (`PRIV-3` RC), binds REAL accounts and is run by hand only: item 4 below pins that no workflow
+ * runs it.
  *
  * The sibling guard for the principal (`bypass-is-contained.test.ts`) explains why a prose rule is
- * not enough here: it exists because `ci.yml` stated one and nothing checked it. Three things this
+ * not enough here: it exists because `ci.yml` stated one and nothing checked it. Four things this
  * file pins that nothing else can:
  *
- *  1. **No workflow but `ci.yml` runs the claim correction.** `migrate.yml` seeds production, and a
+ *  1. **Nothing under `.github/` but `ci.yml` names the claim correction.** `migrate.yml` seeds production, and a
  *     copy of the step there is the one way this row reaches a real database. The correction itself
  *     refuses (it will not bind this principal to a non-local target), so this is the second half of
  *     a belt-and-braces, not the only control.
@@ -34,6 +36,9 @@ const REPO = resolve(WEB_DIR, '../..');
  *     is `pnpm dev`, against the **persistent** cluster. The correction refuses a second identical
  *     bind, so a `pnpm dev` that linked would die on its *second* start — after the change had
  *     shipped, in somebody's working day, with nothing in CI having seen it.
+ *  4. **Nothing under `.github/` names `create-household-…` or its input variable** (`PRIV-3` RC). Its input
+ *     is a list of real sign-in accounts, and an Actions log is public; the correction prints counts
+ *     only, but the variable itself would sit in the workflow file or in a secret wired to it.
  */
 describe('the fixture membership is contained (AUTH-1 1c-4a)', () => {
   /**
@@ -51,6 +56,29 @@ describe('the fixture membership is contained (AUTH-1 1c-4a)', () => {
     expect(m, 'the claim correction must still be named in the registry').not.toBeNull();
     return m![1];
   })();
+  /** `create-household-…`, read from the registry the same way. */
+  const CREATE_HOUSEHOLD = (() => {
+    const registry = readFileSync(
+      join(REPO, 'packages/db/scripts/corrections/registry.ts'),
+      'utf8',
+    );
+    const m = registry.match(/'(create-household-[\d-]+)'/);
+    expect(m, 'the create-household correction must still be named in the registry').not.toBeNull();
+    return m![1];
+  })();
+  /** Its input variable, read from where it is defined (`accounts.ts`). */
+  const CREATE_HOUSEHOLD_ENV = (() => {
+    const accounts = readFileSync(
+      join(REPO, 'packages/db/scripts/corrections/accounts.ts'),
+      'utf8',
+    );
+    const m = accounts.match(/CREATE_HOUSEHOLD_ACCOUNTS_ENV = '([A-Z_]+)'/);
+    expect(
+      m,
+      'the create-household input variable must still be defined in accounts.ts',
+    ).not.toBeNull();
+    return m![1];
+  })();
   /** The two throwaway harnesses. Both delete their database on exit. */
   const LINKERS = ['scripts/e2e-local.ts', 'scripts/screenshot-ephemeral.ts'];
   /** Defines the helper. Not a caller. */
@@ -60,17 +88,37 @@ describe('the fixture membership is contained (AUTH-1 1c-4a)', () => {
 
   const relative = (f: string) => f.replace(/^.*apps\/web\//, '');
 
-  it('only the CI smoke job runs the claim correction', () => {
-    const workflows = globSync('.github/workflows/*.{yml,yaml}', { cwd: REPO })
-      .map((f) => join(REPO, f))
-      .filter((f) => new RegExp(`db:correct\\s+${CORRECTION}`).test(readFileSync(f, 'utf8')));
+  /**
+   * Every FILE under `.github/` — workflows, composite actions and the scripts they run — relative
+   * to the repo root. ⚠️ Not only `workflows/*.yml`: a step that calls `node .github/scripts/x.mjs`
+   * can run a correction just as well, and a pin that reads one directory is a pin with a side door.
+   */
+  const githubFiles = () =>
+    globSync('.github/**/*', { cwd: REPO }).filter((f) => statSync(join(REPO, f)).isFile());
+  /** The `.github/` files whose text names `needle` anywhere, by its bare name. */
+  const githubFilesNaming = (needle: string) =>
+    githubFiles().filter((f) => readFileSync(join(REPO, f), 'utf8').includes(needle));
 
+  it('only the CI smoke job runs the claim correction', () => {
     // Non-vacuity: a mis-rooted glob must fail loudly rather than pass by finding nothing.
-    expect(globSync('.github/workflows/*.{yml,yaml}', { cwd: REPO }).length).toBeGreaterThan(3);
+    expect(githubFiles().length).toBeGreaterThan(10);
+    // The BARE name, anywhere under `.github/`: `db:correct\s+<name>` missed a name passed through a
+    // variable, a line continuation or a script, which is every way a second caller would look.
     expect(
-      workflows.map((f) => f.replace(`${REPO}/`, '')),
-      'migrate.yml seeds PRODUCTION — the fixture membership must never be written from a workflow other than the smoke job',
+      githubFilesNaming(CORRECTION),
+      'migrate.yml seeds PRODUCTION — the fixture membership must never be written from anywhere under .github/ but the smoke job',
     ).toEqual(['.github/workflows/ci.yml']);
+  });
+
+  it('🔴 nothing under .github/ names create-household or its input variable (PRIV-3 RC)', () => {
+    expect(githubFiles().length).toBeGreaterThan(10);
+    // The bare prefix, not only this date's name: a later `create-household-<date>` is the same risk.
+    const prefix = CREATE_HOUSEHOLD.replace(/[\d-]+$/, '-');
+    expect(prefix, 'non-vacuity: the prefix is the name less its date').toBe('create-household-');
+    expect(
+      [...new Set([...githubFilesNaming(prefix), ...githubFilesNaming(CREATE_HOUSEHOLD_ENV)])],
+      'create-household binds REAL sign-in accounts and is run by hand only; an Actions log is public',
+    ).toEqual([]);
   });
 
   it("CI's literals are the committed constants, and there is exactly one of each", () => {
