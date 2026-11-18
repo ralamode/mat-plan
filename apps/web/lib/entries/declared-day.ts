@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   addDays,
+  dayOpenFor,
   inWritableWindow,
   isoDayDiff,
   isoDaySchema,
@@ -61,7 +62,8 @@ export function isWritableDay(day: string, today: string): boolean {
  * - `closedDay`: not today or yesterday. Read-only for everyone.
  * - `future`: a day after today, which the page shows only as look-ahead (FAM-1 12c): its own
  *   notice, no Bodyweight or Life, never the closed-day sentence.
- * - `writable`: a log form may render — not closed, and the athlete is not archived.
+ * - `writable`: a log form may render — the shared `dayOpenFor` (C34): not closed, and the athlete
+ *   is not archived.
  * - `amendable`: a logged value offers Change. Follows the DAY only: an archived athlete's weight on
  *   today or yesterday stays correctable, as before.
  * - `showClosedNotice`: the read-only sentence, on a PAST closed day. Not for an archived athlete,
@@ -74,7 +76,7 @@ export function dayPageFlags(day: string, today: string, archived: boolean) {
   return {
     closedDay,
     future,
-    writable: !closedDay && !archived,
+    writable: dayOpenFor({ archived }, day, today),
     amendable: !closedDay,
     showClosedNotice: closedDay && !future && !archived,
   };

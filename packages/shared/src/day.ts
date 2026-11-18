@@ -52,7 +52,8 @@ export function inWritableWindow(day: string, today: string): boolean {
  * otherwise), and what a day's Restore all is held to (FAM-1 plan D32; the maintainer, 2026-11-17:
  * an archived athlete's day is never writable; contract change C34).
  *
- * ⚠️ **As of C34 only the contract's fixture world calls this.** The day resolver and the row
+ * ⚠️ **As of C34 only the contract's fixture world and the day page's `dayPageFlags` (plan step 12c,
+ * `apps/web/lib/entries/declared-day.ts`) call this.** The day resolver and the row
  * writer call lane E's `rowDayOpen`, and Restore all calls lane S's `dayIsOpen`
  * (`clear-day-actions.ts`): the same rule, written twice more. Each switches in its own lane's PR.
  *
