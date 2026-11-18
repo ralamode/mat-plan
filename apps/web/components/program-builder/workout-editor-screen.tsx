@@ -13,7 +13,6 @@ import {
   type WorkoutDraft,
   type WorkoutDraftItem,
 } from '@mat-plan/shared';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { flushSync } from 'react-dom';
@@ -67,6 +66,7 @@ import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
 import { linkWithNext, normalizeSupersets, unlinkFromNext } from './supersets';
 import { focusField, holdUnderThumb, isSameTap, useAttempt } from './use-attempt';
+import { BuilderLink } from './route-link';
 
 /**
  * The workout editor: one screen of item cards and one Save (FAM-1 step 8; plan §8 "Workout
@@ -502,7 +502,7 @@ export function WorkoutEditorScreen({
         noValidate
       >
         <div className="flex flex-col gap-2">
-          <Link
+          <BuilderLink
             href={back}
             className={NAV_LINK_CLASS}
             onClick={(event) => {
@@ -520,7 +520,7 @@ export function WorkoutEditorScreen({
             ) : (
               EDITOR_COPY.backToProgram
             )}
-          </Link>
+          </BuilderLink>
           <h1 id={HEADING_ID} className="text-2xl font-semibold tracking-tight">
             {loaded.draft.workoutPublicId ? EDITOR_COPY.editWorkout : EDITOR_COPY.newWorkout}
           </h1>

@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -121,7 +121,7 @@
+@@ -121,7 +121,7 @@ const prescriptionRows = (s: HouseholdScope) =>
  const prescriptionsOf = (s: HouseholdScope) =>
    sql`(SELECT ${schema.prescriptions.id} FROM ${schema.prescriptions} WHERE ${prescriptionRows(s)})`;
  const assignmentRows = (s: HouseholdScope) =>
 -  sql`(${schema.programAssignments.profileId} IN ${profilesOf(s)} AND ${schema.programAssignments.blockId} IN ${blocksOf(s)})`;
 +  sql`(${schema.programAssignments.profileId} IN ${profilesOf(s)} OR ${schema.programAssignments.blockId} IN ${blocksOf(s)})`;
- 
- /**
-  * 🔴 **The 19 tables, child before parent.** Order is step 4 of the runbook's "Delete a household",
+ // CAT-3 A1. No `deleted_at` filter, as `blocksOf`: a hidden movement's join rows are still the
+ // household's, and a global movement (household_id NULL) is matched by no household.
+ const movementsOf = (s: HouseholdScope) =>

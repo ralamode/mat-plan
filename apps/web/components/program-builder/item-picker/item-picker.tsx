@@ -31,6 +31,7 @@ import {
   cleanName,
   createdText,
   existedText,
+  existedUnlistedText,
   ITEM_PICKER_COPY as COPY,
   newItemLabel,
   newItemRefusal,
@@ -126,6 +127,11 @@ export function ItemPicker({
     pending: boolean;
     /** Create was pressed: the name's problems show from then on, not on the first keystroke. */
     tried: boolean;
+    /**
+     * The last Create got no answer (a failure that is not the name's): its write may have landed,
+     * so an `existed` answer to the same name and type is that first try's, not someone else's.
+     */
+    unanswered?: { name: string; type: TrackingType };
   } | null>(null);
   const { begin, isCurrent, cancel } = useAttempt();
   const createRef = useRef<HTMLButtonElement>(null);
@@ -223,13 +229,16 @@ export function ItemPicker({
     (!cleaned || nameIssue ? nameRef.current : typeRef.current)?.focus();
   };
 
-  /** What to say once an item is chosen: selected, or not ticked because the workout is full. */
-  const said = (ticked: boolean, option: MovementOptionDTO, existed: boolean) =>
-    !ticked
-      ? notTickedText(option.name)
-      : existed
-        ? existedText(option.name, TRACKING_TYPE_LABELS[option.trackingType])
-        : createdText(option.name);
+  /**
+   * What to say once an item is chosen: selected, or not ticked because the workout is full. An
+   * item that `existed` but was not `listed` is not "in the list", and nothing new was made.
+   */
+  const said = (ticked: boolean, option: MovementOptionDTO, existed: boolean, listed = true) => {
+    if (!ticked) return notTickedText(option.name);
+    if (!existed) return createdText(option.name);
+    const type = TRACKING_TYPE_LABELS[option.trackingType];
+    return listed ? existedText(option.name, type) : existedUnlistedText(option.name, type);
+  };
 
   /** `at` is the Create tap's `event.timeStamp`. */
   async function create(at: number) {
@@ -245,6 +254,10 @@ export function ItemPicker({
     setNoticeNow('');
     const result = await newItem({ name: cleaned, trackingType });
     const known = result.ok ? byId.get(result.itemPublicId) : undefined;
+    // TODO(CAT-3 chunk R): an unlisted `existed` answer that is a BUILT-IN is built here as a custom
+    // item with no unit, so it reads "Custom item" and its card drops the declared unit. Unreachable
+    // while every built-in is listed (picker.ts); live once a row outside the list exists. The fix
+    // needs the answer's owner and unit, or a re-read (7a-ii review; board, 2026-11-17).
     const made = (answer: Extract<typeof result, { ok: true }>): MovementOptionDTO => ({
       publicId: answer.itemPublicId,
       // The stored name: the existing item's own when `existed`, the cleaned typed one otherwise.
@@ -262,7 +275,16 @@ export function ItemPicker({
     }
     if (!result.ok) {
       const refusal = newItemRefusal(result.reason);
-      setForm((now) => now && { ...now, pending: false, error: refusal.field, tried: true });
+      setForm(
+        (now) =>
+          now && {
+            ...now,
+            pending: false,
+            error: refusal.field,
+            tried: true,
+            unanswered: refusal.field ? now.unanswered : { name: cleaned, type: trackingType },
+          },
+      );
       // A name refusal is the name's; a failure to reach the server is not, so it is not marked
       // on the field.
       if (refusal.footer) setNotice(refusal.footer);
@@ -273,7 +295,16 @@ export function ItemPicker({
     }
     const option = known ?? made(result);
     if (!known) onCreated(option);
-    setNotice(said(select(option), option, result.existed));
+    // A retry whose first try landed: this person made it, with the type they chose. The ANSWER must
+    // be that item too (its stored name and type are the item's own, contract C8): an item another
+    // device made meanwhile, under another type or spelling, is someone else's.
+    const ownRetry =
+      !known &&
+      form.unanswered?.name === cleaned &&
+      form.unanswered.type === trackingType &&
+      result.name === cleaned &&
+      result.trackingType === trackingType;
+    setNotice(said(select(option), option, result.existed && !ownRetry, !!known));
     closeForm(at, option.publicId);
   }
 

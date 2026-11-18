@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index bbbbbb23..a344b198 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -122,7 +122,7 @@ export async function writeCheckinEntries(
+   const missed = args.values.filter((_, i) => first[i] === null);
+   if (missed.length === 0) return first as CheckinWriteResult[];
+ 
+-  const retried = await attemptCheckinEntries(exec, { ...args, values: missed });
++  const retried = missed.map(() => null);
+   const byClientId = new Map(missed.map((v, i) => [v.clientId, retried[i]]));
+   return args.values.map((v, i) => {
+     const result = first[i] ?? byClientId.get(v.clientId);

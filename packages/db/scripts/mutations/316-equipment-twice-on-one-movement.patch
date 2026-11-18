@@ -1,0 +1,12 @@
+diff --git a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+--- a/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
++++ b/packages/db/migrations/0032_cat3_a1_catalog_tables.sql
+@@ -82,7 +82,7 @@ ALTER TABLE "movement_equipment" ADD CONSTRAINT "movement_equipment_movement_id_
+ ALTER TABLE "movement_equipment" ADD CONSTRAINT "movement_equipment_equipment_code_equipment_code_fk" FOREIGN KEY ("equipment_code") REFERENCES "public"."equipment"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ ALTER TABLE "movement_muscles" ADD CONSTRAINT "movement_muscles_movement_id_movements_id_fk" FOREIGN KEY ("movement_id") REFERENCES "public"."movements"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ ALTER TABLE "movement_muscles" ADD CONSTRAINT "movement_muscles_muscle_code_muscles_code_fk" FOREIGN KEY ("muscle_code") REFERENCES "public"."muscles"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-CREATE UNIQUE INDEX "uq_movement_equipment_pair" ON "movement_equipment" USING btree ("movement_id","equipment_code");--> statement-breakpoint
++CREATE INDEX "uq_movement_equipment_pair" ON "movement_equipment" USING btree ("movement_id","equipment_code");--> statement-breakpoint
+ CREATE INDEX "idx_movement_equipment_equipment_code" ON "movement_equipment" USING btree ("equipment_code");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_movement_muscles_pair" ON "movement_muscles" USING btree ("movement_id","muscle_code");--> statement-breakpoint
+ CREATE UNIQUE INDEX "uq_movement_muscles_one_primary" ON "movement_muscles" USING btree ("movement_id") WHERE "movement_muscles"."role" = 'primary';--> statement-breakpoint

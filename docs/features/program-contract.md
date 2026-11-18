@@ -81,7 +81,7 @@ flowchart LR
 | `apps/web/app/design/program/fakes.ts`            | `createFakeProgramActions`, `createFakeDayActions`: the prototype's rules over one fixture, with a `failNext()` switch. The program fake's clock is `ProgramView.today`.                                                                                                                                                                                                                                                                                                                                                                                            |
 | `apps/web/app/design/program/picker-options.ts`   | The `picker-options` fixture: the test library as library rows (`catalogOptionOf` over `CATALOG_FIXTURE`) and the prototype's items as the household's own, one row a name (a name in both is the library's row under the item's id when the two log alike, else the household's item); and `previewHowTo(publicId)`, the preview's "How to" read. Here because its shape is the web's `MovementOptionDTO`.                                                                                                                                                         |
 | `apps/web/app/design/program/preview-registry.ts` | Which screens exist and which fixtures each takes; the route's URL scheme. Data only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `apps/web/app/design/program/preview-harness.tsx` | The client component that mounts a screen with a fixture and a fake, and feeds a fake's changes back as props. It hands the picker `previewHowTo` as its "How to" loader.                                                                                                                                                                                                                                                                                                                                                                                           |
 | `apps/web/app/design/program/page.tsx`            | `/design/program`: the index of states, or one state. Behind `requireSession()`, `noindex`, linked from nowhere.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `apps/web/e2e/program-preview-a11y.spec.ts`       | Walks every state of the registry: axe, 44px targets, no sideways scroll at 360px.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
@@ -437,6 +437,17 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     the server's default are the same string on any engine; a cut inside a flag or a family
     leaves a plainer emoji, never a broken one. The dialog's prefill and the writer's default
     are this one function (invariant 20 is the rule for the copy's name).
+29. **A row action answers `bad_value` for input its schema refuses, in the fake as in the real
+    action** (contract change C31, from #547's review). The real actions parse first and answer
+    `bad_value` for anything the schema refuses (12b's `writeRow`); the fake's un-tick and re-tick
+    answered `not_found` there and now answer the same word. `not_found` stays for an entry that
+    is not this athlete's on that day. **A hide token is one the app could have written**: `hiddenAtSchema`
+    (`packages/shared/src/hide.ts`, lane S's) refuses 30 February, month 13 and year 0000, which
+    have the token's shape and fail the database's cast, and hour 24 and second 60, which pass
+    the cast as the next midnight or minute and so are a second spelling of an instant.
+    Refusing all five keeps each token to one spelling, and `rowRetickSchema` takes that rule whole
+    (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
+    real action refuses before anything is read, and the fake changes nothing.
 
 ## Traps
 
@@ -576,7 +587,11 @@ under its own CAT-3 heading).
     are. With a query that counts the hits and the custom items the query found, which are shown
     whatever the filters, so while an exact name is typed nothing greys; with no query it counts
     the library movements that fit. Zero means greyed and not tickable, unless it is already
-    ticked. `equipmentFilterOrder` lists the items most first, the zero ones last.
+    ticked. `equipmentFilterOrder` lists the items most first, the zero ones last. The three
+    equipment choices each have their number in the same answer (`equipmentAny`, `equipmentNone`,
+    `equipmentChosen`: the last counts the items already ticked, which stay ticked while another
+    choice is on), so the panel calls `movementFilterCounts` once, not once per choice
+    _(maintainer, 2026-11-17)_.
 18. **Enter picks a hit, or the only match when it was found by its own name or through a short
     form** (`enterTarget` on the result, spec P5). Never a row found by another name, a near
     miss or a some-words row, 🔴 and a filter does not change that: a custom item set apart

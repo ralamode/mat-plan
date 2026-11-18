@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/schema.ts b/packages/db/src/schema.ts
+--- a/packages/db/src/schema.ts
++++ b/packages/db/src/schema.ts
+@@ -778,7 +778,7 @@ export const movementGlobalRowHasPattern = (t: {
+   pattern: AnyPgColumn;
+   modality: AnyPgColumn;
+ }) =>
+-  sql`${t.householdId} is not null or ${t.pattern} is not null or (${t.modality} is not null and ${t.modality} <> 'strength')`;
++  sql`${t.householdId} is not null or ${t.pattern} is not null or (${t.modality} is not null and ${t.modality} <> 'skill')`;
+ 
+ /** `CAT-3` A1: the two CHECKs on `movements.modality`, named for `db:verify`'s matchers. */
+ export const MOVEMENT_MODALITY_CHECK = 'movements_modality_check';
