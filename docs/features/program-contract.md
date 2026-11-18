@@ -455,6 +455,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     `MAX_PROGRAM_WORKOUTS` (50: a saved new workout and a copy alike) and `MAX_DAY_SLOTS` (30: one
     weekday of one program's week), in `program-shapes.ts`. The refusal is its own word because
     `invalid` reads as "something typed is wrong" and a screen marks a field for it.
+    - **The item cap is `newItem`'s.** The old Strength form's logger also makes a household item
+      for a typed name (`resolveSessionMovements`), outside this cap and its lock, and stays so
+      until that form is retired (step 12f) or the library's fresh start: refusing a set
+      mid-workout over an item count would cost more than it protects (decided overnight,
+      2026-11-18; an accepted gap).
     - **Never capped:** an edit of a workout that exists; a replay of a create (the same client
       id answers as the first call did); `newItem` for a name that already names an item, which
       selects it (invariant 15).
@@ -471,8 +476,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       fake, and a save for a program that is not on screen is not counted either. The real
       writers count the destination.
     - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
-      `weekDaysSchema`. That is safe: every writer parses the draft first, and the week's table
-      is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      `weekDaysSchema`. That is safe only while no writer stores a longer day. `saveWeek` parses the draft. **`copyWorkout` adds a slot to each weekday it names without parsing a week, and on `main` nothing stops it passing the cap: neither lane P's writer nor the fake refuses yet.** Decided overnight, 2026-11-18: the copy is refused whole with `limit_reached` when one of those weekdays is already full (the destination program's week; judged with the workouts cap). Lane P's caps PR brings it to the writer and the next contract PR to the fake; until both merge this is an open gap, reachable only once a screen calls the real copy (7b). The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
       caps (`ProgramView.workouts` has none), and how many programs a household has is not
       capped.
 31. **An archived athlete is on no program page and no Programs list** (contract change C36;
