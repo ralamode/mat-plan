@@ -2899,14 +2899,15 @@ async function capsHousehold(tx: VerifyTx) {
     .insert(schema.households)
     .values({ publicId: newId(), name: 'Verify caps' })
     .returning({ id: schema.households.id });
-  return Object.assign(householdScopeForScript(household!.id), { proofId: household!.id });
+  const scope = householdScopeForScript(household!.id);
+  return { scope, proofId: household!.id };
 }
 
 async function verifyCaps(): Promise<void> {
   // ── The household's own items ──
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const scope = await capsHousehold(tx);
+    const { scope, proofId } = await capsHousehold(tx);
     for (let i = 0; i < MAX_HOUSEHOLD_ITEMS - 1; i++) {
       await insertMovementOwnedBy(exec, scope, {
         publicId: newId(),
@@ -2943,8 +2944,9 @@ async function verifyCaps(): Promise<void> {
     );
     // The lock was taken under its namespace, keyed by the household (waiting is unprovable on
     // PGlite's one connection; the key is not).
-    const [key] = (await tx.execute(sql`select hashint8(${scope.proofId}::bigint) as k`))
-      .rows as Array<{ k: number }>;
+    const [key] = (await tx.execute(sql`select hashint8(${proofId}::bigint) as k`)).rows as Array<{
+      k: number;
+    }>;
     const locks = (
       await tx.execute(
         sql`select classid::bigint as c, objid::bigint as o from pg_locks where locktype = 'advisory' and objsubid = 2`,
@@ -2982,7 +2984,7 @@ async function verifyCaps(): Promise<void> {
   // ── A program's workouts, a copy's destination, and a weekday's slots ──
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
-    const scope = await capsHousehold(tx);
+    const { scope } = await capsHousehold(tx);
     const full = await mustCreate(tx, scope, 'Caps full program');
     const roomy = await mustCreate(tx, scope, 'Caps roomy program');
     const workouts: string[] = [];
