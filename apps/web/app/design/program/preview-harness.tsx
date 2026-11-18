@@ -44,7 +44,8 @@ import { dayPreviewHrefFor, type PreviewSelection } from './preview-registry';
  * causes, so a screen needs no code that exists only for the preview.
  *
  * **No builder link prefetches here.** The screens hold fixture ids, so every `/programs/<id>` a
- * Next `<Link>` would prefetch is a page that answers 404, once a link a page load. The builder's
+ * Next `<Link>` would prefetch is a page that answers 404: in a production build, one for each
+ * link on each page load. The builder's
  * links read `BuilderLinkPrefetch` (lane B's `route-link.tsx`); this is the one place that says
  * `false`. A real page provides nothing and prefetches as Next does.
  */
