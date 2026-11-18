@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/save-workout.ts b/packages/db/src/writers/program/save-workout.ts
-index 40de5d1e..3b180a77 100644
+index 40de5d1e..2c027b9d 100644
 --- a/packages/db/src/writers/program/save-workout.ts
 +++ b/packages/db/src/writers/program/save-workout.ts
 @@ -149,14 +149,14 @@ export async function saveWorkout(
@@ -11,8 +11,7 @@ index 40de5d1e..3b180a77 100644
 -    }
      // A NEW workout in a full program (C35, invariant 30), judged before the name. An edit and a
      // replay have `self`, so neither is capped.
--    if (!self && workouts.filter((w) => !w.deletedAt).length >= MAX_PROGRAM_WORKOUTS) {
-+    if ((!self || draft.workoutPublicId !== null) && workouts.filter((w) => !w.deletedAt).length >= MAX_PROGRAM_WORKOUTS) {
+     if (!self && workouts.filter((w) => !w.deletedAt).length >= MAX_PROGRAM_WORKOUTS) {
        return refuse(PROGRAM_REFUSAL.limit_reached);
      }
 +    if ((draft.workoutPublicId !== null && !self) || self?.deletedAt) {

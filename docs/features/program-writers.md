@@ -167,7 +167,7 @@ flowchart TD
     **Refusals, in the preview fake's order:** `once_per_day` when a day names a workout twice,
     whatever else is wrong with the draft and also when the ids differ only in case (after a refused
     parse, shared `weekRepeatsAWorkout`, the fake's own rule: `week-repeat-loses-to-other-errors`); then `limit_reached` for a day past
-    `MAX_DAY_SLOTS` (`weekExceedsDaySlots`, C35, invariant 21); then `invalid` (the schema); then `not_found` (the program, or a workout that is not one of its live workouts:
+    `MAX_DAY_SLOTS` (`weekExceedsDaySlots`, C35, the contract's invariant 30); then `invalid` (the schema); then `not_found` (the program, or a workout that is not one of its live workouts:
     `week-takes-any-programs-workout`, `week-takes-a-hidden-workout`). `readWeek` leaves out a hidden
     workout's slot (`week-read-shows-a-hidden-workout`), and saving the week as read hides it.
     ⚠️ **An accepted race:** a ✓ checks `isScheduledOn` unlocked, so a `saveWeek` that takes the

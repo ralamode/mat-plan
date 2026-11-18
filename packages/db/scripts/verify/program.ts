@@ -3210,6 +3210,25 @@ async function verifyCaps(): Promise<void> {
       ).ok,
       'FAM-1 caps: a copy onto a day with room is made',
     );
+
+    // A removed workout's slot is not on the week the page shows, so it does not count either.
+    await tx
+      .update(schema.workouts)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.workouts.publicId, dayWorkouts[1]!));
+    assert.ok(
+      (
+        await copyWorkout(exec, scope, {
+          clientId: newId(),
+          workoutPublicId: dayWorkouts[0]!,
+          toProgramPublicId: spare,
+          name: 'Caps day copy after a removal',
+          weekdays: [1],
+          label: null,
+        })
+      ).ok,
+      'FAM-1 caps: a removed workout’s slot does not count toward its weekday',
+    );
   });
   console.log(
     '✓ FAM-1 caps: items, workouts (a copy counts its destination) and a weekday’s slots answer limit_reached past their caps; an edit, a replay and an existing item never do',
