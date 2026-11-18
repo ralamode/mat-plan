@@ -31,6 +31,7 @@ import {
   createdText,
   EDITOR_COPY,
   existedText,
+  existedUnlistedText,
   ITEM_PICKER_COPY,
   newItemLabel,
   notTickedText,
@@ -191,7 +192,7 @@ describe('the item picker (FAM-1 9)', () => {
     expect(row('Sprawls').getAttribute('aria-checked')).toBe('false');
   });
 
-  it('a new item not in the list takes the name the server stored', async () => {
+  it('🔴 an item the list did not have takes the stored name, and says nothing new was made (7a-ii)', async () => {
     editor({
       newItem: vi.fn().mockResolvedValue({
         ok: true,
@@ -211,9 +212,14 @@ describe('the item picker (FAM-1 9)', () => {
     await waitFor(() => expect(row('Bear Crawl').getAttribute('aria-checked')).toBe('true'));
     await waitFor(() =>
       expect(
-        within(sheet()).getAllByText(existedText('Bear Crawl', TRACKING_TYPE_LABELS.reps)).length,
+        within(sheet()).getAllByText(existedUnlistedText('Bear Crawl', TRACKING_TYPE_LABELS.reps))
+          .length,
       ).toBeGreaterThan(0),
     );
+    // Not "is in the list": it was not.
+    expect(
+      within(sheet()).queryByText(existedText('Bear Crawl', TRACKING_TYPE_LABELS.reps)),
+    ).toBeNull();
   });
 
   it('with nothing ticked, Add says so and does nothing', () => {

@@ -77,13 +77,13 @@ beforeEach(() => {
   vi.mocked(getHouseholdScope).mockResolvedValue(SCOPE);
 });
 
-describe('which rows the picker lists (maintainer, 2026-11-17: "only ones with library data")', () => {
-  it('the household’s own items, and only the built-ins the library has an entry for', async () => {
+describe('which rows the picker lists (maintainer, 2026-11-17: "Show all 35 until reset")', () => {
+  it('⏳ every built-in and the household’s own items, until the fresh start (CAT-3 chunk R)', async () => {
     const listed = builtIn({ slug: 'pull-up', name: 'Pull-Up', trackingType: TRACKING_TYPE.reps });
     const hidden = builtIn({ slug: 'back_squat', name: 'Back Squat' });
     vi.mocked(movementOptions).mockResolvedValueOnce([listed, hidden, own]);
     const data = await getItemPickerData();
-    expect(data?.options.map((o) => o.name)).toEqual(['Pull-Up', 'Garage Circuit']);
+    expect(data?.options.map((o) => o.name)).toEqual(['Pull-Up', 'Back Squat', 'Garage Circuit']);
     expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE]]);
   });
 
@@ -143,6 +143,22 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  it('⏳ a built-in the library has no entry for: the row with NO taxonomy, never a placeholder one', () => {
+    const option = pickerOptionOf(
+      builtIn({ slug: 'back_squat', name: 'Back Squat', aliases: ['Squat'] }),
+    );
+    expect(option).toEqual({
+      publicId: '019826b4-0000-7000-8000-00000000e001',
+      owner: 'catalog',
+      name: 'Back Squat',
+      trackingType: TRACKING_TYPE.weight_reps,
+      unitDefault: LB,
+      isBodyweight: false,
+      group: 'legs',
+      aliases: ['Squat'],
+    });
+  });
+
   it('🔴 the slug stops at the DAL: a listed option carries exactly these keys', () => {
     expect(Object.keys(pickerOptionOf(builtIn({}))!).sort()).toEqual(CATALOG_KEYS);
     expect(Object.keys(pickerOptionOf(own)!).sort()).toEqual([
@@ -158,16 +174,26 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
 
 /**
  * Type pins (CAT-3 P11-i; lane P's owed line on `MovementOption` and `MovementOptionDTO`): a
- * household row IS an option as it stands; a built-in is one only with the library's taxonomy, and
- * never without it.
+ * household row IS an option as it stands; a built-in is one with the library's whole taxonomy,
+ * or, until the fresh start, with none of it; never with part of it.
  */
 export const pins = {
   own: (x: Extract<MovementOption, { owner: 'household' }>): MovementOptionDTO => x,
   withTaxonomy: (
     x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & CatalogOptionTaxonomy,
   ): MovementOptionDTO => x,
-  // @ts-expect-error a built-in without the library's taxonomy is not a library option
+  // ⏳ Until the fresh start, a built-in with no library entry is an option with NO taxonomy.
   withoutTaxonomy: (
     x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'>,
   ): MovementOptionDTO => x,
+  halfFilled,
 };
+/** Equipment without the rest of the taxonomy: neither a library option nor a bare built-in. */
+type HalfFilled = Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & {
+  equipment: CatalogOptionTaxonomy['equipment'];
+};
+function halfFilled(x: HalfFilled): MovementOptionDTO {
+  // Justified: a NEGATIVE type pin. The test IS that this does not compile; if it ever does, tsc fails here.
+  // @ts-expect-error never a HALF-filled taxonomy
+  return x;
+}

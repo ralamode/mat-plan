@@ -202,6 +202,11 @@ path and **creating** the deliberate one.
       it is found by search, carries no group tag, and is left out of the legacy browse groups
       (invariant 11) until B3's tree. ⚠️ A read that has not got the equipment set must not build a
       library option: `equipment: []` MEANS "No equipment" and passes that filter.
+    - ⏳ **Until the catalog's fresh start (CAT-3 chunk R), an old built-in with no library entry is
+      `BuiltInWithoutLibrary`** (FAM-1 7a-ii; maintainer, 2026-11-17: "Show all 35 until reset"): a
+      catalog row with NO taxonomy field at all, never a placeholder. `hasLibraryData` tells the two
+      catalog shapes apart: such a row's second line is its tracking label alone (no equipment is
+      claimed), no filter passes it, and it has no "How to". The arm goes at chunk R.
     - **The supervision label** ("Learn with a coach present") is its own line between the name
       and the second line, at full contrast in every row state, and never replaced by a tag.
     - **The row's accessible name reads its parts apart** ("Pull-Up, Learn with a coach present,

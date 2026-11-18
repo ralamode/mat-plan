@@ -17,10 +17,12 @@ import { quietDbErrors } from '../quiet-db-errors';
  * caller's household, from lane P's `movementOptions` (6a-iii-a).
  *
  * - **The household's own items, every one** (made, used or not), as they are.
- * - **An old built-in only when the movement library has an entry on its slug** _(maintainer,
- *   2026-11-17: "Only ones with library data")_. Today that is 4 of the 35 picker rows; the rest
- *   come back with the library's seed (A2). `newItem` still answers a name of a hidden row with that
- *   row (`existed: true`), whether or not it is listed here.
+ * - ⏳ **Every old built-in, until the catalog's fresh start** _(maintainer, 2026-11-17: "Show all
+ *   35 until reset", which suspends "only ones with library data")_: hiding the 31 the library has
+ *   no entry for made search say a movement did not exist that `newItem` then selected. A built-in
+ *   without an entry is `BuiltInWithoutLibrary`: no taxonomy, no "How to", passes no filter.
+ *   TODO(CAT-3 chunk R, the fresh start): the library replaces the old catalog; list only rows the
+ *   library has, and drop that arm.
  * - **A listed built-in is the library's taxonomy on the DATABASE ROW's identity**
  *   (`pickerOptionOf`): its name, tracking type, unit and bodyweight flag are the row's, because the
  *   row is what a save, a log and `newItem` use; the screen must never promise a type the save then
@@ -51,14 +53,14 @@ function joinAliases(...lists: readonly (readonly string[])[]): string[] {
 }
 
 /**
- * One row as the picker's option, or `null` for a built-in the library has no entry for. Built
+ * One row as the picker's option. Built
  * field by field, so a field `catalogOptionOf` or the read gains later does not reach the client
  * by accident.
  */
 export function pickerOptionOf(
   row: MovementOption,
   library: ReadonlyMap<string, CatalogMovement> = LIBRARY,
-): MovementOptionDTO | null {
+): MovementOptionDTO {
   const identity = {
     publicId: row.publicId,
     name: row.name,
@@ -68,7 +70,8 @@ export function pickerOptionOf(
   };
   if (row.owner === 'household') return { ...identity, owner: 'household' };
   const entry = library.get(row.slug);
-  if (!entry) return null;
+  // ⏳ Until the fresh start: the row as it is, with no taxonomy (never a placeholder one).
+  if (!entry) return { ...identity, owner: 'catalog', group: row.group, aliases: [...row.aliases] };
   const fromLibrary = catalogOptionOf(entry, row.publicId);
   return {
     ...identity,
@@ -94,11 +97,6 @@ export const getItemPickerData = cache(
     if (!scope) return null;
     // Through `quietDbErrors`, as the writes are: a failed query's parameters stay out of the logs.
     const rows = await quietDbErrors('movementOptions', () => movementOptions(db, scope));
-    return {
-      options: rows.flatMap((row) => {
-        const option = pickerOptionOf(row);
-        return option ? [option] : [];
-      }),
-    };
+    return { options: rows.map((row) => pickerOptionOf(row)) };
   },
 );

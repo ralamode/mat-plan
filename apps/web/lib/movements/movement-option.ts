@@ -1,4 +1,10 @@
-import type { CatalogOption, MovementPickerGroup, TrackingType, Unit } from '@mat-plan/shared';
+import type {
+  CatalogOption,
+  CatalogOptionTaxonomy,
+  MovementPickerGroup,
+  TrackingType,
+  Unit,
+} from '@mat-plan/shared';
 
 /**
  * The DTOs the movement picker renders (PICK-1 Decision 5).
@@ -56,8 +62,33 @@ export type MovementOptionDTO = { readonly publicId: string; readonly name: stri
          */
         readonly group?: MovementPickerGroup;
       })
+    | BuiltInWithoutLibrary
     | { readonly owner: 'household' }
   );
+
+/**
+ * ⏳ **An old built-in the movement library has no entry for yet: shown until the catalog's fresh
+ * start** _(maintainer, 2026-11-17: "Show all 35 until reset")_. It is a catalog row, so search,
+ * "already listed" and the server's `newItem` agree on it, but it has NO taxonomy: every
+ * `CatalogOptionTaxonomy` field is absent, never filled with a placeholder. So its row shows only how
+ * it is logged, no filter passes it, and it has no "How to".
+ *
+ * TODO(CAT-3 chunk R, the fresh start): the library replaces the old catalog, every built-in has an
+ * entry, and this arm goes with the DAL's interim branch (`lib/dal/program/picker.ts`). CAT-3 spec
+ * P11-i ("no third, taxonomy-less shape of option") holds again from then.
+ */
+export type BuiltInWithoutLibrary = {
+  readonly owner: 'catalog';
+  readonly aliases: readonly string[];
+  readonly group?: MovementPickerGroup;
+} & { readonly [K in keyof CatalogOptionTaxonomy]?: undefined };
+
+/** Whether an option carries the library's taxonomy: a library entry, never a custom item. */
+export function hasLibraryData(
+  option: MovementOptionDTO,
+): option is Extract<MovementOptionDTO, CatalogOption> {
+  return option.owner === 'catalog' && option.equipment !== undefined;
+}
 
 /**
  * Everything the picker needs to render its lists, as **separate props** rather than one pre-joined

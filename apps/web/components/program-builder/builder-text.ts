@@ -432,6 +432,14 @@ export const createdText = (name: string) => `${name} created and selected.`;
 /** True for a name that already existed, and for a retry whose first try landed. */
 export const existedText = (name: string, type: string) =>
   `${name} is in the list (${type}). Selected.`;
+/**
+ * The server answered an item the screen's list did not have (`existed`, not listed): another
+ * parent made it first, or, until the catalog's fresh start, a built-in the list was given no row
+ * for. "Is in the list" would be false, and the type the person chose was not used, so this says
+ * what happened (7a-ii trust lens; maintainer, 2026-11-17).
+ */
+export const existedUnlistedText = (name: string, type: string) =>
+  `${name} already exists (${type}), so nothing new was made. Selected.`;
 export const addedText = (n: number) => `${itemCountText(n)} added.`;
 
 /** A row ticked from the search's Enter, where no row has focus to say so. */

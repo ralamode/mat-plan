@@ -31,6 +31,7 @@ import {
   cleanName,
   createdText,
   existedText,
+  existedUnlistedText,
   ITEM_PICKER_COPY as COPY,
   newItemLabel,
   newItemRefusal,
@@ -273,7 +274,12 @@ export function ItemPicker({
     }
     const option = known ?? made(result);
     if (!known) onCreated(option);
-    setNotice(said(select(option), option, result.existed));
+    const ticked = select(option);
+    setNotice(
+      ticked && result.existed && !known
+        ? existedUnlistedText(option.name, TRACKING_TYPE_LABELS[option.trackingType])
+        : said(ticked, option, result.existed),
+    );
     closeForm(at, option.publicId);
   }
 
