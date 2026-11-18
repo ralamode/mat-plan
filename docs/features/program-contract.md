@@ -208,7 +208,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    in `apps/web` outside `apps/web/app/design/program/` imports the fakes, `picker-options` or the
    fixtures subpath, and nothing outside it names the route: `fakes.test.ts` and
    `preview-registry.test.ts` scan `apps/web` for both. The data lanes' proofs in
-   `packages/db/scripts/verify/` do import the fixtures subpath: that is invariant 3.
+   `packages/db/scripts/verify/` do import the fixtures subpath: that is invariant 3. So may a
+   test: the unit tests are not in the scan, and the end-to-end tests under `apps/web/e2e/` are
+   left out of the fakes-and-fixtures scan by directory, so a spec reads a fixture's names and
+   never re-types them. In return nothing in the app may import from `e2e/` or from `scripts/` (the
+   same test file checks it), or a helper there could carry a fixture into a route.
 5. **A fake follows the prototype's rules and each rule has a test** (`fakes.test.ts`; plan §8,
    "Behaviour"). A fake and a real action parse an input with the same schema, so a screen sees the
    same refusal on the preview route and in production.
@@ -569,7 +573,10 @@ under its own CAT-3 heading).
     move to `custom`, one section after the filtered matches (a custom item that is a hit stays
     first in `matches`), and `passesMovementFilters` answering `false` for one is never a reason
     to hide it; (c) **what the filters removed is counted** in `outsideFilters`, and the screen
-    never falls back to the whole list. With no filter on (`movementFiltersOn` is zero, which
+    never falls back to the whole list. ⏳ Until the catalog's fresh start `outsideWithoutData` says how
+    many of those have no taxonomy at all (the old built-ins with no library entry, spec K22),
+    so the screen can tell "needs something else" from "nothing is known"; after the fresh start
+    it is always zero and the field goes. With no filter on (`movementFiltersOn` is zero, which
     includes "chosen" with nothing ticked) the result is the unfiltered one and a custom item
     sits among `matches`.
 16. **Equipment is one choice of three, and changing it clears nothing.** `any`, `none` (the set
