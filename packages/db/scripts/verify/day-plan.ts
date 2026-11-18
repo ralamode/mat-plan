@@ -41,7 +41,11 @@ import {
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
-import { resolveDayPlan, type ResolvedDayPlan } from '../../src/queries/day/day-plan';
+import {
+  currentPrograms,
+  resolveDayPlan,
+  type ResolvedDayPlan,
+} from '../../src/queries/day/day-plan';
 import { prescriptionLiveIn } from '../../src/queries/day/prescription-live-in';
 import type { HouseholdScope } from '../../src/scope';
 import { logRow, untickRow } from '../../src/writers/day/log-row';
@@ -605,6 +609,27 @@ async function plantSession(
 }
 
 async function verifyRules(): Promise<void> {
+  // R7, a tie on `idx` (lane P's #588 review): a put-on compacts the open rows and can leave one at
+  // the number a row closing today still holds. The program that stays goes first, whatever the ids.
+  {
+    const row = (id: number, blockId: number, activeTo: string | null) => ({
+      id,
+      blockId,
+      programPublicId: `program-${blockId}`,
+      programName: `Program ${blockId}`,
+      idx: 0,
+      activeFrom: '2026-11-01',
+      activeTo,
+      current: true,
+    });
+    assert.deepEqual(
+      currentPrograms([row(1, 10, FIXTURE_TODAY), row(2, 11, null)], FIXTURE_TODAY).map(
+        (p) => p.blockId,
+      ),
+      [11, 10],
+      'FAM-1 12a R7: on a tied idx, the program that stays comes before one that ends today',
+    );
+  }
   await rolledBack(async (tx) => {
     const activityTypeId = await workoutItemTypeId(tx);
     // H: the prototype's household (the seeded world). F: another household, on the every-type

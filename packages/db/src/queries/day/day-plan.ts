@@ -269,8 +269,11 @@ export function currentPrograms(
     // `assignments` is in `(idx, id)` order, so the first row of a rank is its lowest.
     if (!held || rank(a) < rank(held)) placing.set(a.blockId, a);
   }
+  // ⚠️ `idx` can TIE: a put-on compacts the OPEN rows' order (`writers/program/assign.ts`) and leaves a
+  // row closing today where it was, so the two can share a number (lane P's #588 review). The tie
+  // goes to the program that stays, then to the row id, so an unrelated put-on never swaps them.
   return [...placing.values()]
-    .sort((x, y) => x.idx - y.idx || x.id - y.id)
+    .sort((x, y) => x.idx - y.idx || rank(x) - rank(y) || x.id - y.id)
     .map((a) => ({ blockId: a.blockId, programPublicId: a.programPublicId, name: a.programName }));
 }
 
