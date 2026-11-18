@@ -314,11 +314,15 @@ flowchart LR
       DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
       editor reads it as a stale page.
     - ⏳ **A sixth refusal, `limit_reached` (contract C35, the per-household caps), has no words of
-      its own yet.** Until 7b gives it per-screen copy, all four refusal helpers in
-      `builder-text.ts` (`nameRefusal`, `saveRefusal`, `weekRefusal`, `newItemRefusal`) fall to
-      their default ("Couldn’t save. Try again."), which is the wrong advice for a cap; no screen
-      reaches a real cap before 7b. `saveWeekAction` answers a day past `MAX_DAY_SLOTS` as
-      `limit_reached`, after `once_per_day` and before `invalid`, as the preview's fake does.
+      its own yet.** Until 7b gives it per-screen copy, each surface falls to its own generic
+      failure line, which is the wrong advice for a cap: `nameRefusal` and `saveRefusal` say
+      "Couldn’t save. Try again.", `weekRefusal` says `WEEK_COPY.failed` ("…The week is back as it
+      was. Try again."), `newItemRefusal` says `ITEM_PICKER_COPY.failed` ("Couldn’t create it. Try
+      again."), and **the copy dialog reads it as stale** (`COPY_COPY.stale`, "This program changed
+      somewhere else…") and refreshes. No screen reaches a real cap before 7b. The week editor does
+      not stop at `MAX_DAY_SLOTS` either; 7b owes that. `saveWeekAction` answers a day past
+      `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`, as the
+      preview's fake does.
     - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
       helper): a week's program, then each workout it names (distinct, at most
       `WEEK_PROBE_LIMIT`); a copy's TARGET program, then its source workout by id alone
