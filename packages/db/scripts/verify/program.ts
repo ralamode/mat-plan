@@ -3158,6 +3158,11 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       new Set(p1Workouts.slice(1)),
       'FAM-1 6c-ii: …without a removed workout',
     );
+    assert.equal(
+      (await view('p1'))?.workouts.some((w) => w.workoutPublicId === p1Workouts[0]),
+      false,
+      'FAM-1 6c-ii: a removed workout is not on the program page',
+    );
     for (const [what, scopeOf, id] of [
       ['another household’s program', B_SCOPE, ids.get(fixtureIds.program('p1'))!],
       ['a removed program', scope, gone],
