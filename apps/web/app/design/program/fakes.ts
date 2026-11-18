@@ -6,6 +6,8 @@ import {
   createProgramSchema,
   foldName,
   hasStarted,
+  MAX_HOUSEHOLD_ITEMS,
+  MAX_PROGRAM_WORKOUTS,
   MONDAY_FIRST,
   existingItem,
   fillRowValues,
@@ -24,6 +26,7 @@ import {
   takeOffSchema,
   hasSetRows,
   weekDraftSchema,
+  weekExceedsDaySlots,
   weekRepeatsAWorkout,
   type DayActions,
   type DayItem,
@@ -388,6 +391,10 @@ const sameName = (a: string, b: string) => foldName(a) === foldName(b);
  * - A replayed create, save or copy (the same client id) answers as the first call did and adds
  *   nothing.
  * - A week names a workout at most once a day: `once_per_day`.
+ * - A household's own items, a program's workouts and a weekday's workouts each have a cap
+ *   (`MAX_HOUSEHOLD_ITEMS`, `MAX_PROGRAM_WORKOUTS`, `MAX_DAY_SLOTS`): a write that would pass one
+ *   is `limit_reached` (C35). An edit, a replay and a new item that names an existing one are
+ *   never capped, and for a create the cap is judged before the name.
  * - A copy made inside one program is renamed `… (copy)` within the name's limit; where it came
  *   from is the program's name on the day of the copy, frozen.
  * - A new item whose name matches an existing one (folded, likewise) selects that item, with its
@@ -475,6 +482,10 @@ export function createFakeProgramActions(
         const known = saved.workoutPublicId ?? minted.get(saved.workoutClientId) ?? null;
         const existing = view?.workouts.find((w) => w.workoutPublicId === known);
         if (view && saved.workoutPublicId && !existing) return refuse(PROGRAM_REFUSAL.not_found);
+        // A NEW workout in a full program (C35). An edit and a replay have `existing`.
+        if (view && !existing && view.workouts.length >= MAX_PROGRAM_WORKOUTS) {
+          return refuse(PROGRAM_REFUSAL.limit_reached);
+        }
         if (view?.workouts.some((w) => w !== existing && sameName(w.name, saved.name))) {
           return refuse(PROGRAM_REFUSAL.name_taken);
         }
@@ -492,8 +503,10 @@ export function createFakeProgramActions(
         if (failed()) return refuse(PROGRAM_REFUSAL.retry);
         const parsed = weekDraftSchema.safeParse(draft);
         if (!parsed.success) {
+          // A repeat first, whatever else is wrong; then a weekday past its cap (C35).
+          if (weekRepeatsAWorkout(draft)) return refuse(PROGRAM_REFUSAL.once_per_day);
           return refuse(
-            weekRepeatsAWorkout(draft) ? PROGRAM_REFUSAL.once_per_day : PROGRAM_REFUSAL.invalid,
+            weekExceedsDaySlots(draft) ? PROGRAM_REFUSAL.limit_reached : PROGRAM_REFUSAL.invalid,
           );
         }
         const view = shown(parsed.data.programPublicId);
@@ -525,6 +538,11 @@ export function createFakeProgramActions(
         const workoutPublicId = newId();
         // A copy into another program lands on that program's page, which is not on screen.
         if (copy.toProgramPublicId === view.programPublicId) {
+          // A copy is a new workout: a full program refuses it, before its name is looked at (C35).
+          // (Another program's workouts are not in this fake's state, so only this one is counted.)
+          if (view.workouts.length >= MAX_PROGRAM_WORKOUTS) {
+            return refuse(PROGRAM_REFUSAL.limit_reached);
+          }
           const name = copy.name ?? copyName(source.name);
           if (view.workouts.some((w) => sameName(w.name, name))) {
             return refuse(PROGRAM_REFUSAL.name_taken);
@@ -571,6 +589,10 @@ export function createFakeProgramActions(
           const { publicId: itemPublicId, name: itsName, trackingType: itsType } = existing;
           return { ok: true, itemPublicId, name: itsName, trackingType: itsType, existed: true };
         }
+
+        // The household's own items only: the library's movements are not the household's to count.
+        const own = state.items.filter((item) => item.owner === 'household').length;
+        if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
 
         const itemPublicId = newId();
         state.items.push({

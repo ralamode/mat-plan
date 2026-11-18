@@ -448,6 +448,24 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     Refusing all five keeps each token to one spelling, and `rowRetickSchema` takes that rule whole
     (`shapes.test.ts` pins it, so a looser token schema fails the contract's own test). The
     real action refuses before anything is read, and the fake changes nothing.
+30. **A household's own items, a program's workouts and a weekday's workouts each have a cap, and
+    passing one is `limit_reached`** (contract change C35; maintainer, 2026-11-18: "Approve 500 /
+    50 / 30"). `MAX_HOUSEHOLD_ITEMS` (500: the items a household made, never the library's),
+    `MAX_PROGRAM_WORKOUTS` (50: a saved new workout and a copy alike) and `MAX_DAY_SLOTS` (30: one
+    weekday of one program's week), in `program-shapes.ts`. The refusal is its own word because
+    `invalid` reads as "something typed is wrong" and a screen marks a field for it.
+    - **Never capped:** an edit of a workout that exists; a replay of a create (the same client
+      id answers as the first call did); `newItem` for a name that already names an item, which
+      selects it (invariant 15).
+    - **For a create the cap is judged before the name**, so a full program says so and nobody
+      renames a workout only to be told the program is full.
+    - **The weekday cap is in `weekDaysSchema`**, so a week past it fails the parse.
+      `weekExceedsDaySlots(draft)` tells that from any other failure, as `weekRepeatsAWorkout`
+      does for a repeat, and **a repeat is asked first**: `once_per_day`, then `limit_reached`,
+      then `invalid`. The fake answers this way; lane P's writers and the real actions follow in
+      their own PRs, and until they do the real `saveWeek` answers `invalid` for a long day.
+    - **Not capped by the contract:** how many programs a household has, and the read shapes
+      (`ProgramView.workouts` has no `.max`, so a read never fails on a count).
 
 ## Traps
 
