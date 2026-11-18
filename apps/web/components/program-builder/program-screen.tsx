@@ -32,9 +32,17 @@ import { BuilderLink } from './route-link';
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
  * hides its control (plan §6). `takeOff` arrives that way, at step 15.
  */
-export type ProgramScreenProps = { program: ProgramView; actions: ProgramActions };
+export type ProgramScreenProps = {
+  program: ProgramView;
+  actions: ProgramActions;
+  /**
+   * Whether the workout pages exist (FAM-1 7b-ii). The real page passes `false` in 7b-i, so no
+   * workout row or "+ New workout" links to a 404; the preview keeps the default, `true`.
+   */
+  workoutPagesWired?: boolean;
+};
 
-export function ProgramScreen({ program, actions }: ProgramScreenProps) {
+export function ProgramScreen({ program, actions, workoutPagesWired = true }: ProgramScreenProps) {
   const { status, report } = useStatusLine();
   const barRef = useRef<HTMLDivElement>(null);
   return (
@@ -65,6 +73,7 @@ export function ProgramScreen({ program, actions }: ProgramScreenProps) {
         program={program}
         copyWorkout={actions.copyWorkout}
         putOnWired={!!actions.putOn}
+        workoutPagesWired={workoutPagesWired}
         onStatus={report}
       />
       <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />

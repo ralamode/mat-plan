@@ -81,9 +81,12 @@ function page(view: ProgramView, extra: Partial<ProgramActions> = {}) {
     newItem: vi.fn(),
     ...extra,
   };
-  render(<ProgramScreen program={view} actions={all} />);
+  const { rerender } = render(<ProgramScreen program={view} actions={all} />);
+  // The page brings a newer week (another parent's save, a refresh) while a form is open.
+  update = (next) => rerender(<ProgramScreen program={next} actions={all} />);
   return all;
 }
+let update: (next: ProgramView) => void = () => {};
 const status = () => screen.getByRole('status').textContent;
 const alerts = () =>
   screen
@@ -288,5 +291,74 @@ describe('"Who’s on it" until step 15', () => {
     cleanup();
     page(familyProgram, { putOn: vi.fn() });
     expect(screen.queryByText(BUILDER_COPY.putOnComing)).toBeNull();
+  });
+});
+
+describe('a day that fills while a form is open is not sent', () => {
+  it('the add form drops it from the days it sends', async () => {
+    const all = page(program({ extra: MAX_DAY_SLOTS + 1, onTuesday: MAX_DAY_SLOTS - 1 }));
+    fireEvent.click(screen.getByRole('button', { name: addOnLabel(WEDNESDAY) }));
+    const form = screen.getByRole('form', { name: addOnLabel(WEDNESDAY) });
+    fireEvent.change(within(form).getByLabelText(WEEK_COPY.workout), {
+      target: { value: uuid(MAX_DAY_SLOTS + 1) },
+    });
+    fireEvent.click(within(form).getByRole('checkbox', { name: weekdayName(TUESDAY) }));
+    update(program({ extra: MAX_DAY_SLOTS + 1, onTuesday: MAX_DAY_SLOTS }));
+    fireEvent.click(within(form).getByRole('button', { name: WEEK_COPY.addButton }));
+    await waitFor(() => expect(all.saveWeek).toHaveBeenCalledTimes(1));
+    const days = vi.mocked(all.saveWeek).mock.calls[0]![0].days;
+    expect(days[TUESDAY]).toHaveLength(MAX_DAY_SLOTS);
+    expect(days[WEDNESDAY].map((slot) => slot.workoutPublicId)).toContain(uuid(MAX_DAY_SLOTS + 1));
+  });
+
+  it('Copy into this program drops it from the weekdays it sends', async () => {
+    const all = page(program({ extra: MAX_DAY_SLOTS, onTuesday: MAX_DAY_SLOTS - 1 }));
+    fireEvent.click(screen.getByRole('button', { name: copyToLabel('Heavy A') }));
+    const dialog = screen.getByRole('dialog', { name: copyTitle('Heavy A') });
+    fireEvent.change(within(dialog).getByLabelText(COPY_COPY.to), {
+      target: { value: familyProgram.programPublicId },
+    });
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: weekdayName(TUESDAY) }));
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: weekdayName(WEDNESDAY) }));
+    update(program({ extra: MAX_DAY_SLOTS, onTuesday: MAX_DAY_SLOTS }));
+    fireEvent.click(within(dialog).getByRole('button', { name: COPY_COPY.copy }));
+    await waitFor(() => expect(all.copyWorkout).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(all.copyWorkout).mock.calls[0]![0].weekdays).toEqual([WEDNESDAY]);
+  });
+});
+
+describe('until 7b-ii the real program page links to no workout page', () => {
+  it('with workoutPagesWired false: no workout link and no "+ New workout"; Copy stays', () => {
+    const all = {
+      createProgram: vi.fn(),
+      renameProgram: vi.fn(),
+      saveWorkout: vi.fn(),
+      saveWeek: vi.fn(),
+      copyWorkout: vi.fn(),
+      newItem: vi.fn(),
+    } as ProgramActions;
+    render(<ProgramScreen program={familyProgram} actions={all} workoutPagesWired={false} />);
+    const workouts = within(screen.getByRole('region', { name: BUILDER_COPY.workouts }));
+    expect(workouts.queryAllByRole('link')).toEqual([]);
+    expect(workouts.queryByText(BUILDER_COPY.newWorkout)).toBeNull();
+    expect(workouts.getByText('Heavy A')).toBeTruthy();
+    expect(workouts.getByRole('button', { name: copyToLabel('Heavy A') })).toBeTruthy();
+    // At the cap, the hint goes with the control.
+    cleanup();
+    render(
+      <ProgramScreen
+        program={program({ extra: MAX_PROGRAM_WORKOUTS - familyProgram.workouts.length })}
+        actions={all}
+        workoutPagesWired={false}
+      />,
+    );
+    expect(screen.queryByText(programFullText)).toBeNull();
+  });
+
+  it('by default (the preview) the rows and "+ New workout" are links', () => {
+    page(familyProgram);
+    const workouts = within(screen.getByRole('region', { name: BUILDER_COPY.workouts }));
+    expect(workouts.getByRole('link', { name: BUILDER_COPY.newWorkout })).toBeTruthy();
+    expect(workouts.getByRole('link', { name: /Heavy A/ })).toBeTruthy();
   });
 });

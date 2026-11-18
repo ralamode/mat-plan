@@ -88,7 +88,7 @@ flowchart LR
 | `apps/web/components/program-builder/supersets.ts`                      | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                                                                                                                                                       |
 | `apps/web/components/program-builder/*.test.ts(x)`                      | Each screen's and module's tests, beside it.                                                                                                                                                                                                                            |
 | `apps/web/components/program-builder/owed.test.ts`                      | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                    |
-| `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. No page imports it until 7b.                                                                                                                          |
+| `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. Only a page under `app/programs/` imports it (since 7b-i).                                                                                            |
 | `apps/web/app/programs/actions.registry.ts`                             | Each action's refusal set and scope, read by the boundary matrices ([write-path.md](./write-path.md) invariant 1).                                                                                                                                                      |
 | `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                    |
 | `apps/web/app/programs/page.tsx`                                        | The Programs list (7b-i): `requireSession`, `getProgramList(today)`, `ProgramsListScreen` with `PROGRAM_ACTIONS`; no household goes Home.                                                                                                                               |
@@ -123,8 +123,10 @@ flowchart LR
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
    shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
 8. **A screen links by `routes.ts`, and 7b's pages live at those paths** _(maintainer, 2026-11-15)_.
-   The props carry only data and actions, so the screens build their own links; until 7b they
-   lead nowhere on the preview route.
+   The props carry only data and actions, so the screens build their own links; on the preview
+   route they lead nowhere. **Until 7b-ii the real program page passes `workoutPagesWired={false}`**:
+   a workout row is its name, not a link, and "+ New workout" is left out, so nothing taps or
+   prefetches into a 404.
 9. **"Used by … Changes apply to …" counts everyone in `athletes`**, someone whose last day is
    today included: they are on it through today, so an edit now still changes their day.
 10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's

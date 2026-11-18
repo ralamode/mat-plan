@@ -86,3 +86,23 @@ export async function expectTapTargets(
   }
   expect(undersized, `${context}: controls under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
 }
+
+/**
+ * Every link inside `<main>` is a 44px target too (FAM-1: the program screens, moved here from
+ * `program-builder.a11y.spec.ts` at 7b-i). `expectTapTargets` leaves links out (WCAG's exception for
+ * a link inline in a sentence); on these screens a link is a row or a way back, which a thumb aims
+ * at, so here they are all measured. ⚠️ `program-preview-a11y.spec.ts` still holds its own copy: that
+ * spec is the program contract's, so the swap goes through its owner.
+ */
+export async function expectLinkTargets(page: Page, context: string): Promise<void> {
+  const links = await page.getByRole('main').getByRole('link').all();
+  expect(links.length, `${context}: found no links, so the selector is wrong`).toBeGreaterThan(0);
+  const undersized: string[] = [];
+  for (const link of links) {
+    const height = (await link.boundingBox())?.height ?? 0;
+    if (height < MIN_TAP_TARGET_PX) {
+      undersized.push(`"${(await link.innerText()).trim()}" → ${Math.round(height)}px`);
+    }
+  }
+  expect(undersized, `${context}: links under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
+}

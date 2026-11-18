@@ -219,7 +219,8 @@ export function CopyWorkout({
       setLabelError(WEEK_COPY.labelInvalid);
       return focusField(document.getElementById(`${ids}-label`));
     }
-    const weekdays = MONDAY_FIRST.filter((d) => days.has(d));
+    // A day of this program that filled while the dialog was open is not sent.
+    const weekdays = MONDAY_FIRST.filter((d) => days.has(d) && !full.has(d));
     const mine = begin();
     setPending(true);
     setMessage('');

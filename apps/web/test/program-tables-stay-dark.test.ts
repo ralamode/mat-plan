@@ -329,17 +329,46 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     expect(PROGRAM_PAGE.test('apps/web/app/programs/actions.form.tsx')).toBe(false);
   });
 
+  /** The program DAL's directory, as a path from the repo root. */
+  const PROGRAM_DAL_DIR = 'apps/web/lib/dal/program';
+  /**
+   * Does a source at `file` import lane P's package (`@mat-plan/db`, or a subpath of it) or the
+   * program DAL, by the `@/` alias or a relative path, in any form `SPECIFIER` reads?
+   */
+  const readsLaneP = (file: string, source: string) =>
+    [...source.matchAll(SPECIFIER)].some(([, spec]) => {
+      if (spec === '@mat-plan/db' || spec!.startsWith('@mat-plan/db/')) return true;
+      const path = spec!.startsWith('@/')
+        ? `apps/web/${spec!.slice(2)}`
+        : spec!.startsWith('.')
+          ? relative(REPO, resolve(dirname(join(REPO, file)), spec!))
+          : null;
+      return !!path && (path === PROGRAM_DAL_DIR || path.startsWith(`${PROGRAM_DAL_DIR}/`));
+    });
+
   it("no client component imports lane P's reads or the program DAL", () => {
     const clients = files.filter(
       (f) => f.startsWith('apps/web/') && /^\s*['"]use client['"]/.test(code(join(REPO, f))),
     );
     // Non-vacuity: the builder's screens are client components.
     expect(clients).toContain('apps/web/components/program-builder/program-screen.tsx');
-    const readsDb = (src: string) =>
-      /from\s*['"]@mat-plan\/db['"]|from\s*['"]@\/lib\/dal\/program\//.test(src);
-    expect(clients.filter((f) => readsDb(code(join(REPO, f))))).toEqual([]);
-    expect(readsDb("import { getProgramView } from '@/lib/dal/program/reads';")).toBe(true);
-    expect(readsDb("import { readProgramView } from '@mat-plan/db';")).toBe(true);
+    expect(clients.filter((f) => readsLaneP(f, code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: every import form, by alias, by relative path and by package subpath.
+    const screen = 'apps/web/components/program-builder/x.tsx';
+    for (const form of [
+      "import { readProgramView } from '@mat-plan/db';",
+      "import { readProgramView } from '@mat-plan/db/queries/program';",
+      "import { getProgramView } from '@/lib/dal/program/reads';",
+      "import { getProgramView } from '@/lib/dal/program';",
+      "import { getProgramView } from '../../lib/dal/program/reads';",
+      "export { getProgramView } from '../../lib/dal/program/reads';",
+      "const m = await import('../../lib/dal/program/reads');",
+      "const m = require('@/lib/dal/program/reads');",
+    ])
+      expect(readsLaneP(screen, form), form).toBe(true);
+    expect(readsLaneP(screen, "import { x } from '@/lib/dal/programs-extra';")).toBe(false);
+    expect(readsLaneP(screen, "import { x } from '@mat-plan/dbx';")).toBe(false);
+    expect(readsLaneP(screen, "import { x } from '../../lib/dal/day/day';")).toBe(false);
   });
 
   it('the privacy docs no longer say the builder is coming (the list 7b-i owed)', () => {

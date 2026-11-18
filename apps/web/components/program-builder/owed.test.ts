@@ -22,6 +22,7 @@ describe('WorkoutDraft: owed by its consumers', () => {
   );
   // 7b-i proves the list and program pages (`e2e/program-builder.spec.ts`, `.a11y.spec.ts`).
   it.todo('7b-ii: add a workout on a phone (e2e); the two workout pages pass the a11y scan');
+  it.todo('7b-ii: the program page passes workoutPagesWired');
   it.todo('7b: every path in routes.ts has its page.tsx or route.ts under app/programs/');
 });
 

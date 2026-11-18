@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { BUILDER_COPY, copyTitle, copyToLabel } from '../components/program-builder/builder-text';
 import { PROGRAMS_PATH } from '../components/program-builder/routes';
-import { APP_HOME_PATH, MIN_TAP_TARGET_PX } from '../lib/constants';
-import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import { APP_HOME_PATH } from '../lib/constants';
+import { expectLinkTargets, expectNoAxeViolations, expectTapTargets } from './a11y-checks';
 import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
 /**
@@ -19,20 +19,6 @@ import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from '.
 test.use({ viewport: NARROW_VIEWPORT });
 
 const FIXTURE_PROGRAM = 'Family program';
-
-/** The preview walk's link check: every link in `<main>` is a thumb target. */
-async function expectLinkTargets(page: Page, context: string): Promise<void> {
-  const links = await page.getByRole('main').getByRole('link').all();
-  expect(links.length, `${context}: found no links, so the selector is wrong`).toBeGreaterThan(0);
-  const undersized: string[] = [];
-  for (const link of links) {
-    const height = (await link.boundingBox())?.height ?? 0;
-    if (height < MIN_TAP_TARGET_PX) {
-      undersized.push(`"${(await link.innerText()).trim()}" → ${Math.round(height)}px`);
-    }
-  }
-  expect(undersized, `${context}: links under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
-}
 
 async function expectTheBar(page: Page, context: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);

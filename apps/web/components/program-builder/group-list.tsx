@@ -16,6 +16,27 @@ export function GroupList({ children }: { children: ReactNode }) {
   return <ul className="divide-y overflow-hidden rounded-lg border">{children}</ul>;
 }
 
+/**
+ * A row with no destination yet (FAM-1 7b-i: a workout before its pages exist): the link's box and
+ * lines, without the link, its focus stop or its `›`.
+ */
+export function GroupRow({
+  title,
+  className,
+  children,
+}: {
+  title: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn('flex min-h-11 flex-col justify-center px-4 py-3', className)}>
+      <span className={`font-semibold ${NAME_WRAP_CLASS}`}>{title}</span>
+      {children}
+    </div>
+  );
+}
+
 export function GroupRowLink({
   href,
   title,

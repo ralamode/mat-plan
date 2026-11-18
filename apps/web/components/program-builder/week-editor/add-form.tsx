@@ -57,7 +57,8 @@ export function AddForm({
   // A full day can't be ticked (7b-i).
   const full = new Set(MONDAY_FIRST.filter((d) => dayIsFull(week[d].length)));
   // Every ticked day, the "has it" ones included: they are skipped and the message says so.
-  const ticked = [...new Set([...days, ...hasIt])];
+  // A day that filled while the form was open is not sent (its checkbox is inactive by now).
+  const ticked = [...new Set([...days, ...hasIt])].filter((d) => hasIt.has(d) || !full.has(d));
   const fresh = ticked.filter((d) => !hasIt.has(d));
   const prefix = addFormId(day);
   const workoutErrorId = `${addWorkoutId(day)}-error`;
