@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { AppShell } from '@/components/layout/app-shell';
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
+import { BUILDER_COPY } from '@/components/program-builder/builder-text';
+import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 
 import { AddAthleteTile } from './add-athlete-tile';
 import { ProfileTile } from '@/components/profiles/profile-tile';
@@ -143,15 +145,25 @@ export default async function ProfilePickerPage() {
       {noHousehold ? null : (
         <nav aria-label="Household">
           {/* `NAV_ROW_CLASS`: this row's classes and the rail's are the same row, and were the
-              same string written twice until `UI-5` named it. */}
-          <Link href={SETTINGS_PATH} className={NAV_ROW_CLASS}>
-            <span className="text-sm font-medium">{SETTINGS_COPY.navLink}</span>
-            {archivedCount > 0 ? (
-              <span className="text-muted-foreground text-sm">
-                {SETTINGS_COPY.archivedCount(archivedCount)}
-              </span>
-            ) : null}
-          </Link>
+              same string written twice until `UI-5` named it. FAM-1 7b-i: Programs first, the
+              page a parent opens most; stacked, as the tiles are. */}
+          <ul className="flex flex-col gap-2">
+            <li>
+              <Link href={PROGRAMS_PATH} className={NAV_ROW_CLASS}>
+                <span className="text-sm font-medium">{BUILDER_COPY.programsNavLink}</span>
+              </Link>
+            </li>
+            <li>
+              <Link href={SETTINGS_PATH} className={NAV_ROW_CLASS}>
+                <span className="text-sm font-medium">{SETTINGS_COPY.navLink}</span>
+                {archivedCount > 0 ? (
+                  <span className="text-muted-foreground text-sm">
+                    {SETTINGS_COPY.archivedCount(archivedCount)}
+                  </span>
+                ) : null}
+              </Link>
+            </li>
+          </ul>
         </nav>
       )}
 

@@ -12,6 +12,9 @@ import {
   COPY_COPY,
   copiedFromText,
   copyToLabel,
+  PENDING_CLASS,
+  programFullText,
+  programIsFull,
   workoutSummary,
 } from './builder-text';
 import { CopyWorkout } from './copy-dialog';
@@ -20,13 +23,17 @@ import { newWorkoutPath, workoutPath } from './routes';
 import { BuilderLink } from './route-link';
 
 const HEADING_ID = 'program-workouts';
+const FULL_ID = 'program-workouts-full';
 
 /**
  * A program's workouts, each a link to its editor (FAM-1 step 8a; the prototype's "Workouts").
  *
  * Each `<li>` is a row whose link takes the remaining width, and "Copy to…" (step 10b) sits beside
  * it, one dialog for every row. A copy names where it came from, frozen at the copy.
- * "+ New workout" is the section's main action while there are none, as in the prototype.
+ * "+ New workout" is the section's main action while there are none, as in the prototype. At
+ * `MAX_PROGRAM_WORKOUTS` it stops before the work (7b-i, plan §Caps): an `aria-disabled` button with
+ * the reason visible under it, which a tap also says, in place of a link to an editor that could
+ * only refuse the save.
  */
 export function WorkoutsList({
   program,
@@ -88,15 +95,33 @@ export function WorkoutsList({
       ) : (
         <p className="text-muted-foreground">{BUILDER_COPY.noWorkouts}</p>
       )}
-      <BuilderLink
-        href={newWorkoutPath(programPublicId)}
-        className={cn(
-          buttonVariants({ variant: workouts.length ? 'outline' : 'default' }),
-          CTA_CLASS,
-        )}
-      >
-        {BUILDER_COPY.newWorkout}
-      </BuilderLink>
+      {programIsFull(workouts.length) ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(CTA_CLASS, PENDING_CLASS)}
+            aria-disabled
+            aria-describedby={FULL_ID}
+            onClick={() => onStatus(programFullText)}
+          >
+            {BUILDER_COPY.newWorkout}
+          </Button>
+          <p id={FULL_ID} className="text-muted-foreground text-sm">
+            {programFullText}
+          </p>
+        </>
+      ) : (
+        <BuilderLink
+          href={newWorkoutPath(programPublicId)}
+          className={cn(
+            buttonVariants({ variant: workouts.length ? 'outline' : 'default' }),
+            CTA_CLASS,
+          )}
+        >
+          {BUILDER_COPY.newWorkout}
+        </BuilderLink>
+      )}
       {copyWorkout ? (
         <CopyWorkout
           program={program}

@@ -1,4 +1,12 @@
-import { MONDAY_FIRST, PROGRAM_REFUSALS } from '@mat-plan/shared';
+import {
+  emptyWeek,
+  MAX_DAY_SLOTS,
+  MAX_PROGRAM_WORKOUTS,
+  MONDAY_FIRST,
+  PROGRAM_REFUSAL,
+  PROGRAM_REFUSALS,
+  WEEKDAYS,
+} from '@mat-plan/shared';
 import { familyProgram, familyProgramAfterTakeOff } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
@@ -6,12 +14,19 @@ import {
   athleteHint,
   cleanName,
   copiedFromText,
+  copyRefusal,
+  dayFullLabel,
+  dayFullText,
+  dayIsFull,
   nameRefusal,
+  programFullText,
+  programIsFull,
   supersetLetterOf,
   supersetSpoken,
   takenOffText,
   usedByText,
   weekdayName,
+  weekRefusal,
   workoutSummary,
 } from './builder-text';
 
@@ -87,5 +102,52 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
     expect(supersetLetterOf('A2')).toBe('A');
     expect(supersetLetterOf('AA12')).toBe('AA');
     expect(supersetSpoken('AA2')).toBe('Superset AA, item 2');
+  });
+});
+
+describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N", from the consts', () => {
+  const [SUNDAY, MONDAY, TUESDAY] = WEEKDAYS;
+  it('a program stops at MAX_PROGRAM_WORKOUTS, a day at MAX_DAY_SLOTS, not one before', () => {
+    expect(programIsFull(MAX_PROGRAM_WORKOUTS - 1)).toBe(false);
+    expect(programIsFull(MAX_PROGRAM_WORKOUTS)).toBe(true);
+    expect(dayIsFull(MAX_DAY_SLOTS - 1)).toBe(false);
+    expect(dayIsFull(MAX_DAY_SLOTS)).toBe(true);
+  });
+
+  it('each stop’s words', () => {
+    expect(programFullText).toBe(
+      'This program is full: a program holds at most 50 workouts. To add one, change a workout that’s not on any day, or create another program.',
+    );
+    expect(dayFullText(TUESDAY)).toBe('Tuesday is full: a day holds at most 30 workouts.');
+    expect(dayFullLabel(TUESDAY)).toBe('Tuesday, full');
+  });
+
+  it('a week refused limit_reached names the full days of the week it sent, Monday first', () => {
+    const slots = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ workoutPublicId: `w${i}`, label: null }));
+    const week = {
+      ...emptyWeek(),
+      [SUNDAY]: slots(MAX_DAY_SLOTS + 1),
+      [TUESDAY]: slots(MAX_DAY_SLOTS + 1),
+      [MONDAY]: slots(MAX_DAY_SLOTS),
+    };
+    expect(weekRefusal(PROGRAM_REFUSAL.limit_reached, week)).toBe(
+      'Tuesday and Sunday are full: a day holds at most 30 workouts. Nothing was added; the week is back as it was.',
+    );
+    expect(weekRefusal(PROGRAM_REFUSAL.limit_reached, { ...week, [SUNDAY]: [] })).toMatch(
+      /^Tuesday is full: /,
+    );
+  });
+
+  it('a copy refused limit_reached names both causes, unless only the program can be full', () => {
+    const { limit_reached } = PROGRAM_REFUSAL;
+    const either =
+      'This program can’t take another workout, or one of those days is full (50 workouts in a program, 30 on a day).';
+    expect(copyRefusal(limit_reached, { sameProgram: false, dayPicked: false })).toBe(either);
+    expect(copyRefusal(limit_reached, { sameProgram: false, dayPicked: true })).toBe(either);
+    expect(copyRefusal(limit_reached, { sameProgram: true, dayPicked: true })).toBe(either);
+    expect(copyRefusal(limit_reached, { sameProgram: true, dayPicked: false })).toBe(
+      'This program is full: a program holds at most 50 workouts. Nothing was copied. Create another program to copy it into.',
+    );
   });
 });

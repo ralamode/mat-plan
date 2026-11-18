@@ -1,12 +1,19 @@
 'use client';
 
-import { slotLabelSchema, type ProgramView, type Weekday } from '@mat-plan/shared';
+import { MONDAY_FIRST, slotLabelSchema, type ProgramView, type Weekday } from '@mat-plan/shared';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { INPUT_CLASS } from '@/lib/constants';
 
-import { addOnLabel, alreadyOnText, BUILDER_COPY, PENDING_CLASS, WEEK_COPY } from '../builder-text';
+import {
+  addOnLabel,
+  alreadyOnText,
+  BUILDER_COPY,
+  dayIsFull,
+  PENDING_CLASS,
+  WEEK_COPY,
+} from '../builder-text';
 import { FieldLabel } from '../field-label';
 import { focusField } from '../use-attempt';
 import { DaysLabelFields } from './days-label-fields';
@@ -47,8 +54,10 @@ export function AddForm({
   const [workoutError, setWorkoutError] = useState<string | null>(null);
   const [labelError, setLabelError] = useState<string | null>(null);
   const hasIt = workout ? daysWith(week, workout) : new Set<Weekday>();
+  // A full day can't be ticked (7b-i); one ticked before it filled is dropped, not sent.
+  const full = new Set(MONDAY_FIRST.filter((d) => dayIsFull(week[d].length)));
   // Every ticked day, the "has it" ones included: they are skipped and the message says so.
-  const ticked = [...new Set([...days, ...hasIt])];
+  const ticked = [...new Set([...days, ...hasIt])].filter((d) => hasIt.has(d) || !full.has(d));
   const fresh = ticked.filter((d) => !hasIt.has(d));
   const prefix = addFormId(day);
   const workoutErrorId = `${addWorkoutId(day)}-error`;
@@ -122,6 +131,7 @@ export function AddForm({
           setError(null);
         }}
         hasIt={hasIt}
+        full={full}
         daysError={error}
       />
       <div className="flex justify-end gap-2">

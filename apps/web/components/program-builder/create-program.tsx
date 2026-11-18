@@ -94,6 +94,7 @@ export function CreateProgram({
         placeholder={BUILDER_COPY.programNamePlaceholder}
         value={draft}
         max={PROGRAM_NAME_MAX}
+        hint={BUILDER_COPY.createHint}
         onChange={onChange}
         error={error}
       />

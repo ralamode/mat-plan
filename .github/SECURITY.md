@@ -175,7 +175,7 @@ what _reaches_ a sink, never whether the string appears.
 `SameSite=Lax + httpOnly + secure in prod (app/gate/actions.ts)` and claim three layers. All of that
 described the gate's cookie, which is deleted. What is true now:
 
-- **This app sets exactly one cookie: `tz`** (`app/p/[profileId]/tz-sync.tsx`), as
+- **This app sets exactly one cookie: `tz`** (`components/layout/tz-sync.tsx`), as
   `path=/; max-age=…; SameSite=Lax` — deliberately **neither `httpOnly` nor `secure`**, because a
   CLIENT writes it. It carries a timezone string and no credential.
 - **The session cookies are Clerk's**, and `SameSite` is what the row's own argument rests on —

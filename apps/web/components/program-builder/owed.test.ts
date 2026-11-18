@@ -20,7 +20,8 @@ describe('WorkoutDraft: owed by its consumers', () => {
   it.todo(
     '7b: the workout pages pass program; the editor names it and says who a change applies to',
   );
-  it.todo('7b: build a program on a phone (e2e); the builder’s pages pass the a11y scan');
+  // 7b-i proves the list and program pages (`e2e/program-builder.spec.ts`, `.a11y.spec.ts`).
+  it.todo('7b-ii: add a workout on a phone (e2e); the two workout pages pass the a11y scan');
   it.todo('7b: every path in routes.ts has its page.tsx or route.ts under app/programs/');
 });
 
@@ -35,7 +36,9 @@ describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo(
     '7b: the e2e hears "n items added." only after the item picker has closed (jsdom closes the sheet before a frame, so no unit test can)',
   );
+  // The Copy half is `e2e/program-builder.spec.ts` (7b-i).
+  it.todo('15: the e2e opens the Put-on dialog at 360px and runs axe, tap targets and overflow');
   it.todo(
-    '7b: the e2e opens the Copy and Put-on dialogs at 360px and runs axe, tap targets and overflow',
+    '15: "Putting someone on a program comes in the next update." (BUILDER_COPY.putOnComing) is deleted once Put on is wired',
   );
 });
