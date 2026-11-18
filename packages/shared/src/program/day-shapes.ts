@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { supervisionSchema } from '../catalog/vocabulary';
 import { isoDaySchema } from '../date';
 import { keyBySelf } from '../enums';
 import { hiddenAtSchema } from '../hide';
@@ -77,6 +78,15 @@ const dayItemSchema = z.object({
   itemPublicId: lowerCaseUuidSchema,
   name: movementLabelSchema,
   trackingType: trackingTypeSchema,
+  /**
+   * The library's label for a movement to learn with a coach (contract change C32, plan D40).
+   * **Present exactly when the item is a library movement whose library entry carries the label;
+   * absent otherwise, never `null`.** A library movement is one no household owns: a household's
+   * own item never carries a label, whatever its name. The label follows the movement, so an item
+   * whose prescription was removed (logged rows only) carries what a live item of that movement
+   * would. The day page shows it on the item's row from `SUPERVISION_LABELS`, as the picker does.
+   */
+  supervision: supervisionSchema.optional(),
   /**
    * For display. The numbers a screen works with are `target`. The live prescription's text where
    * the live item shows; **where only logged rows show, what the item's first-logged row was

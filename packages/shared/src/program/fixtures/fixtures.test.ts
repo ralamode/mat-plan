@@ -20,6 +20,7 @@ import {
   archivedAthleteToday,
   closedDayNothingLogged,
   closedDayProgramSinceLeft,
+  coachLabelProgramEndingToday,
   DAY_PLAN_FIXTURE_SOURCES,
   DAY_PLAN_FIXTURES,
   everyTypeOnce,
@@ -121,6 +122,8 @@ describe('every fixture round-trips through its own schema', () => {
       'archived-athlete-nothing-logged',
       'future-preview',
       'every-type-once',
+      // C32 and C37, not a prototype state: the library's coach label, and a program ending today.
+      'coach-label-program-ending-today',
     ]);
     expect(Object.keys(WORKOUT_DRAFT_FIXTURES)).toEqual(['heavy-a-draft', 'new-workout-empty']);
     expect(Object.keys(PROGRAM_LIST_FIXTURES)).toEqual([
@@ -910,6 +913,7 @@ describe('where a DayPlan fixture comes from (C17)', () => {
       'closed-day-program-since-left',
       'archived-athlete-today',
       'archived-athlete-nothing-logged',
+      'coach-label-program-ending-today',
     ]);
   });
 
@@ -1128,6 +1132,81 @@ describe('the two days with no program', () => {
       programs: [],
       workouts: [],
     });
+  });
+});
+
+describe('coach-label-program-ending-today (C32, C37)', () => {
+  const plan = coachLabelProgramEndingToday;
+  const [barbellDay, campLifts] = plan.workouts;
+  const labels = (workout: typeof barbellDay) =>
+    workout?.items.map((item) => [item.name, item.supervision]);
+
+  it('🔴 labels the library movement the library labels, and no other item', () => {
+    expect(plan.workouts.map((workout) => workout.name)).toEqual(['Barbell day', 'Camp lifts']);
+    expect(labels(barbellDay)).toEqual([
+      ['Hang power clean', 'coach'],
+      ['Goblet squat', undefined],
+      ['Push-ups', undefined],
+    ]);
+    // Absent, never `null`: a library movement with no label and a household's own item alike.
+    for (const item of barbellDay?.items.slice(1) ?? []) expect('supervision' in item).toBe(false);
+  });
+
+  it('🔴 keeps the label on an item whose prescription was removed: it follows the movement', () => {
+    const removed = campLifts?.items.filter((item) => item.prescriptionPublicId === null);
+    expect(removed?.map((item) => [item.name, item.supervision, item.rows.length])).toEqual([
+      ['Hang power clean', 'coach', 1],
+    ]);
+  });
+
+  it('is the only fixture with a label, so every other day is unchanged', () => {
+    for (const [name, other] of Object.entries(DAY_PLAN_FIXTURES)) {
+      const labelled = other.workouts.flatMap((w) => w.items).filter((i) => 'supervision' in i);
+      expect(labelled.length > 0, name).toBe(name === 'coach-label-program-ending-today');
+    }
+  });
+
+  it('🔴 lists the program ending today last, flagged, though it is first in the athlete’s order', () => {
+    const { world, athlete } = DAY_PLAN_FIXTURE_SOURCES['coach-label-program-ending-today'];
+    expect(world.assign[athlete]?.map((a) => a.prog)).toEqual(['p911', 'p910']);
+    expect(plan.currentPrograms.map((p) => [p.name, p.endsToday])).toEqual([
+      ['Barbell club', undefined],
+      ['Camp week', true],
+    ]);
+    expect('endsToday' in plan.currentPrograms[0]!).toBe(false);
+    // The day's programs and workouts follow the same order.
+    expect(plan.programs.map((p) => [p.name, p.order])).toEqual([
+      ['Barbell club', 0],
+      ['Camp week', 1],
+    ]);
+  });
+
+  it('in every fixture, a program ending today is after every program that stays', () => {
+    let flagged = 0;
+    for (const other of Object.values(DAY_PLAN_FIXTURES)) {
+      const ends = other.currentPrograms.map((p) => p.endsToday === true);
+      expect(ends).toEqual([...ends].sort((a, b) => Number(a) - Number(b)));
+      flagged += ends.filter(Boolean).length;
+    }
+    expect(flagged).toBe(1);
+  });
+
+  it('🔴 the shape refuses a null label and a false flag: both are absent or set', () => {
+    const [item] = barbellDay!.items;
+    const withItem = (change: object) => ({
+      ...plan,
+      workouts: [{ ...barbellDay!, items: [{ ...item!, ...change }] }],
+    });
+    expect(dayPlanSchema.safeParse(plan).success).toBe(true);
+    expect(dayPlanSchema.safeParse(withItem({ supervision: null })).success).toBe(false);
+    expect(dayPlanSchema.safeParse(withItem({ supervision: 'parent' })).success).toBe(false);
+    const withFlag = (endsToday: unknown) => ({
+      ...plan,
+      currentPrograms: plan.currentPrograms.map((p) => ({ ...p, endsToday })),
+    });
+    expect(dayPlanSchema.safeParse(withFlag(true)).success).toBe(true);
+    expect(dayPlanSchema.safeParse(withFlag(false)).success).toBe(false);
+    expect(dayPlanSchema.safeParse(withFlag(null)).success).toBe(false);
   });
 });
 

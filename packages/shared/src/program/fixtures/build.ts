@@ -7,6 +7,8 @@ import {
   WEEKDAYS,
   weekdaySchema,
 } from '../../day';
+import { CATALOG_FIXTURE } from '../../catalog/fixture';
+import type { Supervision } from '../../catalog/vocabulary';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
 import { showsOnlyLogged, type DayItem, type DayPlan, type DayWorkout } from '../day-shapes';
@@ -110,6 +112,21 @@ function rowValues(world: ProtoWorld, item: ProtoItem, v: ProtoValues): RowValue
         ? []
         : [{ slot: fields.slot, unit, value }],
   };
+}
+
+/**
+ * The library's coach label for an item, as a key to spread: `{ supervision }` for a library
+ * movement whose entry carries one, `{}` otherwise (`DayItem.supervision` is absent, never `null`).
+ * A world item that names a library entry must be that entry, by name and tracking type.
+ */
+function supervisionOf(world: ProtoWorld, key: FixtureItemKey): { supervision?: Supervision } {
+  const { library, name, type } = world.catalog[key];
+  if (library === undefined) return {};
+  const entry = CATALOG_FIXTURE.find((movement) => movement.slug === library);
+  if (!entry || entry.name !== name || entry.trackingType !== type) {
+    throw new Error(`fixture world: ${key} is not the test library's ${library}`);
+  }
+  return entry.supervision === undefined ? {} : { supervision: entry.supervision };
 }
 
 function draftItem(world: ProtoWorld, workout: ProtoWorkout, item: ProtoItem): WorkoutDraftItem {
@@ -287,6 +304,7 @@ function dayWorkout(
       itemPublicId: draft.itemPublicId,
       name: draft.itemName,
       trackingType: draft.trackingType,
+      ...supervisionOf(world, item.iid),
       prescribedText: heading,
       target: prescribedTarget(draft.targetReps, draft.quantities),
       notes: draft.notes,
@@ -310,6 +328,8 @@ function dayWorkout(
       itemPublicId: fixtureIds.item(key),
       name: first.name,
       trackingType: world.catalog[key].type,
+      // The label follows the movement, not the prescription that is gone.
+      ...supervisionOf(world, key),
       prescribedText: first.text,
       target: { reps: null, quantities: [] },
       notes: null,

@@ -22,6 +22,7 @@ import {
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
+  coachLabelProgramEndingToday,
   everyTypeOnce,
   familyProgram,
   familyProgramAfterTakeOff,
@@ -838,6 +839,22 @@ describe('the fake DayActions: the switch and the program order', () => {
     });
     expect(result).toEqual({ ok: true });
     expect(plan()).toEqual(todayStretchingFirst);
+  });
+
+  it('🔴 keeps a program ending today last, whatever order is asked for (C37)', async () => {
+    const before = coachLabelProgramEndingToday;
+    const ids = before.currentPrograms.map((p) => p.programPublicId);
+    expect(before.currentPrograms.map((p) => p.endsToday)).toEqual([undefined, true]);
+    const { actions, plan } = day(before);
+    // Camp week, which ends today, is asked for first.
+    const result = await actions.reorderPrograms({
+      profilePublicId: before.profilePublicId,
+      programPublicIds: [...ids].reverse(),
+    });
+    expect(result).toEqual({ ok: true });
+    expect(plan().currentPrograms).toEqual(before.currentPrograms);
+    expect(plan().programs).toEqual(before.programs);
+    expect(plan().workouts.map((w) => w.name)).toEqual(['Barbell day', 'Camp lifts']);
   });
 
   it('refuses an order that is not the athlete’s full list', async () => {
