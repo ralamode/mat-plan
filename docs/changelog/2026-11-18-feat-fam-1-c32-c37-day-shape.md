@@ -8,5 +8,4 @@
   day page shows the label and the dialog change in their own PRs.
   The day's reader fills both: it reads each library movement's label from the library it is handed
   (the real one in the app), only for library movements and never a household's own item, and marks
-  a program ending today with the same rule that sorts it last (`programEndsToday`, which lane P's
-  reorder writer will import). Mutations 373 to 375.
+  a program ending today with the same rule that sorts it last (`programEndsToday`). Mutations 373 to 375.

@@ -222,7 +222,7 @@ flowchart LR
       label follows the movement). A household's own item never carries one, whatever its slug.
       Mutations 373 and 374.
     - `currentPrograms[].endsToday` is present only for a program `programEndsToday` ranks last
-      (ADR 0007 Amendment 5; mutation 375). Lane P's reorder writer imports the same function.
+      (ADR 0007 Amendment 5; mutation 375), the same rule `currentPrograms` sorts by.
 
 ## Fake parity
 

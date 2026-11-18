@@ -286,9 +286,9 @@ export type CurrentProgram = ProgramOnDay & { activeFrom: string; activeTo: stri
 /**
  * **A program ends today** (ADR 0007 Amendment 5; C37): its placing row has a last day and has
  * started. The one rule for `currentPrograms`' rank (such programs sort after every one that stays)
- * and for `DayPlan.currentPrograms[].endsToday`. Lane P's reorder writer (6d-ii) imports it too.
+ * and for `DayPlan.currentPrograms[].endsToday`, so the two can never disagree.
  */
-export function programEndsToday(
+function programEndsToday(
   row: { activeFrom: string; activeTo: string | null },
   today: string,
 ): boolean {
