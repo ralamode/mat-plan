@@ -33,6 +33,7 @@ path and **creating** the deliberate one.
   three-width screenshots.
 - **CAT-3 B1** — the list reads the library's search (short forms, similar names); invariant 13.
 - **CAT-3 B2-i** — every row's second line, the supervision label and "How to"; invariant 14.
+- **CAT-3 B2-ii** — the filters (equipment, main muscle) and the list under them; invariant 15.
 
 ## The map
 
@@ -159,9 +160,10 @@ path and **creating** the deliberate one.
       an exact alias, or what the text's short forms spell (`bb curl` is Barbell Curls). Any of the
       three withholds "use as typed", gives the status its "Already in the list as …", and is what
       Enter picks.
-    - **Enter otherwise picks only a sole match found by its own name**: never one found through
-      part of another name (P17), a similar name or a some-words row (P5). With nothing to pick it
-      puts a touch screen's keyboard away so the rows show.
+    - **Enter picks the search's `enterTarget`** (since B2-ii): a hit, whatever the filters, or a
+      sole match found by its own name; never one found through part of another name (P17), a
+      similar name or a some-words row (P5). With nothing to pick and rows on screen it puts a touch
+      screen's keyboard away so the rows show.
     - **"Also called" reads the search's `foundByAlias`**: an exact alias, part of one, or a near
       miss of one. The component never re-derives which alias matched.
     - **The dedupe is the component's**, not the contract's: a row in `near` is dropped from
@@ -227,6 +229,35 @@ path and **creating** the deliberate one.
       own option read, and calls `catalogHowToOf`. That is a READ, so the page owes a choice the
       repo's rule makes visible (Route Handlers for reads): a Route Handler, or an action recorded
       as the exception, with an adapter turning a refusal into a rejection.
+
+15. **Filters narrow the library; they never make a name new** (CAT-3 B2-ii;
+    [spec](../specs/cat-3-movement-library.md) P7 to P10, P15). What lives between files:
+    - **The state is the picker's**, so it lasts while the caller keeps the picker mounted (the
+      builder's item picker does, for the editor's life) and goes when it unmounts: "kept while
+      adding to the same workout" (P7). A reopen opens on the list, never the panel, and says once
+      that filters are still on, after the sheet's region has mounted (Announcer's rule 1).
+    - **The panel (`movement-filter-panel.tsx`) replaces the body and footer**, as the new-item
+      form does; the search and the Filters button are hidden, not unmounted. **Escape closes the
+      panel only**, through the sheet's `onEscapeKeyDown` (the consumer calls `preventDefault`); the
+      back gesture and ✕ still close the sheet. Focus goes to the panel's heading on open and to
+      Filters on close, through a ref the next render reads, since neither exists until it draws.
+    - **One region**: while the panel is open the sheet's status is the panel's last change
+      ("Lats on. 2 movements."), and the panel's visible count is plain text.
+    - **Counts are `movementFilterCounts`'**, computed only while the panel is open. A choice whose
+      count is 0 is disabled unless it is ticked, so whatever is on can always be undone. A ticked
+      equipment item beyond the first ten stays listed after it is unticked, until the panel closes.
+    - **The list under a filter reads the filtered search** (`searchPickerOptions(…, filters)`):
+      an exact hit first with no heading, tagged "not in your filters" when outside them (P8);
+      "More matches" after a hit; the household's items apart, "Your custom items (not filtered)"
+      (P9); then the near misses and some-words; then how many more are outside (P10). With nothing
+      passing, the list beneath is the filtered browse, never the whole list. Browsing with a
+      filter shows no Recent and no Today's program.
+    - 🔴 **The create button and its hint read the UNFILTERED search** (panel row 9): loud only
+      when nothing at all matches, and a near miss the filters hide is still named ("… is listed
+      but is not in your filters."). A filter that hid a match and turned the button loud would
+      invite the permanent duplicate invariant 4 exists to prevent.
+    - **The filtered browse is interim**: one "Movements that fit your filters" section in the
+      legacy groups' order, each row tagged with its group, until B3's tree (P12).
 
 ## Traps
 
