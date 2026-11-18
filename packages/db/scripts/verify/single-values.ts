@@ -1566,9 +1566,9 @@ async function verifyClearDayProgramRows(): Promise<void> {
 }
 
 // ── A day-taken insert whose holder is cleared in the same instant (tech-debt row, 2026-11-16) ─────────
-const RACE_HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0a0';
-const RACE_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0a1';
-const RACE_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0a2';
+const RACE_HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b0';
+const RACE_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b1';
+const RACE_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b2';
 const RACE_DAY = '2026-11-16';
 
 /**

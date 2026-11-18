@@ -560,7 +560,8 @@ The shapes those lanes agree on, the fakes and the preview route are
      fixed order, proved in `verify/single-values.ts`, with a mutation patch on each pin and on the order: **replay** (this
      profile's live row holds the id, same metric and day) → **`day_taken`** (a practice, and a live
      practice holds `practiceSlot`) → **`own_hidden`** (this profile's hidden row holds the id; the day
-     is free) → **`conflict`** (any other holder) → the throw. The day decides before `own_hidden`, as
+     is free) → **`conflict`** (any other holder) → one retry of the items nothing explains (a holder
+     cleared mid-write) → the throw. The day decides before `own_hidden`, as
      bodyweight's slot does. The bodyweight and strength inserts cannot hit this index (their metric
      is never `practice_minutes`). Since 3b-life-b, `logLifeActivitiesAction` (typed minutes, practice only)
      refuses `day_taken`, `conflict` and `own_hidden`, each with its own copy, and the form mints a new
