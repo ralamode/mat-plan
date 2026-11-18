@@ -107,7 +107,10 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
 
   await test.step('an exact hit outside the filters', async () => {
     await search(page).fill('chin-up');
-    await expect(page.getByText(COPY.tagNotInFilters)).toBeVisible();
+    // The hit's own row carries the tag (the "1 more…" line says the words too).
+    await expect(page.getByRole('checkbox', { name: /^Chin-up\b/ })).toContainText(
+      COPY.tagNotInFilters,
+    );
     await check(page, 'exact hit outside the filters');
   });
 
