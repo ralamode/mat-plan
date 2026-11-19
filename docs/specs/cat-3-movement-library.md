@@ -541,7 +541,8 @@ Steps 3 to 7 are done in one sitting.
 0. **Before the go: the export.** The household takes each athlete's in-app export and is offered
    the full copy, hidden rows included (the in-app export is partial). Each is taken, or the go
    records that the household declined it (K15, R5). Nothing below runs until one or the other
-   is written down.
+   is written down. (The runbook's step 0 holds two more checks: the fresh-start plan's
+   D4.)
 1. Freeze merges. The newest `migrate.yml` run is green on `main`'s head with nothing queued.
 2. Cut a restore branch inside the production project, attached to nothing, readable by the
    project's members only. Record its name and expiry (7 days) in the ledger. It is deleted on

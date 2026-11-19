@@ -515,7 +515,8 @@ Ticked but not crossed off above, verified 2026-11-13: `TEN-1` ✅ · `AUTH-1` �
   the athlete command and the program removal are planned in detail
   ([`priv-3-guarded-deletion.md`](../plans/priv-3-guarded-deletion.md)) and follow the fresh start. The purge window is after Beta 0
   (the maintainer, 2026-11-19).
-- **Rows 9 to 12** are still to do, and each is the maintainer's own step.
+- **Rows 9 to 12** are still to do. Rows 9, 11 and 12 are the maintainer's own steps; row 10, the PII
+  scan over every ref, is one small PR with no owner yet.
 - **Not in this table, and now the larger part of Beta 0:** [`FAM-1`](./fam-1-family-program.md),
   whose milestone says which of its steps are not planned in detail, and
   [`CAT-3`](../specs/cat-3-movement-library.md), the movement library, with the fresh start.
