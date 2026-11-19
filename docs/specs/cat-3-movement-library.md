@@ -601,14 +601,14 @@ with taxonomy and read back, before any real entry exists. Every later chunk wid
 
 **The launch gate:** the household's list is covered (§ The review sheet) **and every batch still
 planned is on `main`** _(maintainer, 2026-11-19: "All before")_. The library is meant to be extensive
-(K16): the target was about 500 entries. On 2026-11-19, 326 are on `main` in six batches, and 239 more are drafted and waiting for the maintainer's review in six (08 to 13: 50, 53, 46, 35, 31 and 24 entries), with one small gap-fill batch to follow the private gap check: about 563 in all (the catalog data's owner holds the list and re-cut it that day against its pass over the names; the first count that day was about 174 in four). **So the batches, and the maintainer's
+(K16): the target was about 500 entries. On 2026-11-19, 326 are on `main` in six batches, and 239 more are drafted and waiting for the maintainer's review in six (08 to 13: 50, 53, 46, 35, 31 and 24 entries), with one small gap-fill batch to follow the private gap check: 565 before that check, and about 563 expected after it (the catalog data's owner holds the list and re-cut it that day against its pass over the names; the first count that day was about 174 in four). **So the batches, and the maintainer's
 row-by-row review of each, are on the fresh start's critical path**; until that day this gate read
 "as many by the fresh start as review allows, and batches continue after it". A batch added later
 for something the library turns out to lack is still possible; it is not part of this gate.
 
 **Size:** 31 to 39 PRs: this spec, the prototype, five contract PRs (C0a, the vocabulary fix C29,
 C0b-1, C30, C0b-2), A1, A2 as one or two, about 500 entries in batches of about 50 (ten batch PRs,
-up to fifteen if batches run smaller; on 2026-11-19 the count is about 563 in thirteen batches, six of them merged and six drafted), P11 as three (P11-i, P11-ii-a, P11-ii-b), lane B's three chunks in four PRs (B2 is two),
+up to fifteen if batches run smaller; on 2026-11-19 the count is 565 before the gap check, in thirteen batches: six merged, six drafted and a gap fill), P11 as three (P11-i, P11-ii-a, P11-ii-b), lane B's three chunks in four PRs (B2 is two),
 RC, R0 as one or two, R1, A3, F1 as one or two. (Earlier counts of "28 to 35" miscounted the contract PRs by one
 and predate the splits.)
 
