@@ -2695,8 +2695,8 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const L3 = await mustCreate(tx, A_SCOPE, 'Put-on L3');
     const L4 = await mustCreate(tx, A_SCOPE, 'Put-on L4');
     const H = await mustCreate(tx, A_SCOPE, 'Put-on H');
-    // A rename rewrites L1's row, so the rows' stored order is no longer id order: the writer must
-    // read the Programs list in its own order.
+    // A rename rewrites L1's row, so its stored place moves; the Programs list is read in id order
+    // whatever the storage (mutation 582 is caught first by 6c-ii's world, which depends on it too).
     assert.deepEqual(
       await renameProgram(exec, A_SCOPE, { programPublicId: L1, name: 'Put-on L1 renamed' }),
       { ok: true },

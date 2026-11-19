@@ -6,8 +6,9 @@ athlete's order. Nothing in the app calls it yet; step 15 wires it.
 - A new program goes before the first program the athlete keeps that comes later in the household's
   Programs list, or last. A hidden program is never "later".
 - A Put on that undoes a same-day Take off goes back to its old place (or last, if fewer programs
-  remain). If a program earlier in the list was put on in between, it takes its old number instead;
-  the athlete can fix that with the reorder (the maintainer, 2026-11-18).
-- Mutation patches 407 (`put-on-leaves-the-gap`) and 410 (`seed-fixtures-reverses-the-order`) are
-  retired. One writer now numbers every open row, so "leaves the gap" has no separate fault. The
-  seed's order comes from Put on's rule, not its loop, so a reversed loop cannot fail.
+  remain). If a program earlier in the list was put on in between, or the athlete had reordered, it
+  takes its old number instead; the athlete can fix that with the reorder (the maintainer,
+  2026-11-18).
+- Take off counts a row as logged only when its session is the athlete's too.
+- Mutation patch 410 (`seed-fixtures-reverses-the-order`) is retired: the seed's order comes from
+  Put on's rule, not its loop, so a reversed loop cannot fail.

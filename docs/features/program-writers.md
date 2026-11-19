@@ -218,13 +218,18 @@ flowchart TD
     list (`programBlocks.id` among live templates; a program outside the list, a hidden one, is never
     later), or last; a reopen goes back to its old place, `min(old idx, the count of the others)`,
     which is where it was unless a program earlier in the list was put on in between or the athlete
-    reordered (accepted by the maintainer, 2026-11-18; the preview fake keeps it where it was). A new
+    reordered (accepted by the maintainer, 2026-11-18; the preview fake keeps it where it was). A
+    second known difference from the fake, accepted by the contract owner (2026-11-19): "later" is
+    read among OPEN rows, so a program ending today is not counted, where the fake's list still holds
+    it. A new
     or reopened row waits at `PARK_IDX` and is placed by `placeAssignments`; it writes all
     seven weekday rows; `from` is today or tomorrow of the `today` the caller passes, and an
     archived athlete is `not_found` (mutations `put-on-takes-any-start-day`,
     `put-on-takes-an-archived-athlete`, `put-on-athletes-unscoped`, `put-on-takes-a-legacy-block`,
     `put-on-never-reopens`, `put-on-six-weekdays`, `put-on-after-the-last-earlier-one`,
     `put-on-ranks-a-hidden-program-later`, `put-on-reopens-last`, `put-on-adds-last`,
+    `put-on-leaves-the-gap`, `put-on-inserts-without-parking`, `put-on-reopens-by-the-list`,
+    `put-on-reads-the-list-unordered`,
     `put-on-reopens-an-ended-stretch`, `put-on-reopens-before-closing-the-gap`,
     `put-on-takes-a-removed-athlete`, `put-on-takes-a-removed-program`,
     `put-on-reopens-only-a-start-today`). ⚠️ **A reopen writes no
