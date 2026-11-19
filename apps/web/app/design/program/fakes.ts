@@ -6,7 +6,7 @@ import {
   createProgramSchema,
   foldName,
   hasStarted,
-  MAX_HOUSEHOLD_ITEMS,
+  householdItemsFull,
   MAX_DAY_SLOTS,
   MAX_PROGRAM_WORKOUTS,
   MONDAY_FIRST,
@@ -604,9 +604,8 @@ export function createFakeProgramActions(
           return { ok: true, itemPublicId, name: itsName, trackingType: itsType, existed: true };
         }
 
-        // The household's own items only: the library's movements are not the household's to count.
-        const own = state.items.filter((item) => item.owner === 'household').length;
-        if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+        // The household's own items only, by the contract's one count (invariant 30).
+        if (householdItemsFull(state.items)) return refuse(PROGRAM_REFUSAL.limit_reached);
 
         const itemPublicId = newId();
         state.items.push({
