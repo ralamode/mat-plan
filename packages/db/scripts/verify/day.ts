@@ -870,6 +870,19 @@ async function verifyExport(): Promise<void> {
         day: YESTERDAY,
         kind: ENTRY_KIND.bodyweight,
       });
+      // Planted: a weigh-in naming a movement and no metric, which the schema's at-most-one check
+      // allows. The strength log's join takes it, so the bodyweight file must not.
+      await tx.insert(schema.entries).values({
+        publicId: newId(),
+        clientId: newId(),
+        profileId: f.athlete.id,
+        activityDate: YESTERDAY,
+        unit: 'lb',
+        valueNum: '81',
+        activityTypeId: await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn),
+        movementId: f.moves.reps,
+        status: ENTRY_STATUS.done,
+      });
 
       // Planted at both edges of the month, so a dropped month bound copies one into the file.
       const month = DAY.slice(0, 7);

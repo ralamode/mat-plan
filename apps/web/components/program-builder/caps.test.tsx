@@ -285,17 +285,6 @@ describe('Copy and the caps', () => {
   });
 });
 
-describe('"Who’s on it" until step 15', () => {
-  it('says Put on is not in the app yet while the route wires no putOn, and not once it does', () => {
-    expect(BUILDER_COPY.putOnComing).toBe('Putting someone on a program isn’t in the app yet.');
-    page(familyProgram);
-    expect(screen.getByText(BUILDER_COPY.putOnComing)).toBeTruthy();
-    cleanup();
-    page(familyProgram, { putOn: vi.fn() });
-    expect(screen.queryByText(BUILDER_COPY.putOnComing)).toBeNull();
-  });
-});
-
 describe('a day that fills while a form is open is not sent', () => {
   it('the add form drops it from the days it sends', async () => {
     const all = page(program({ extra: MAX_DAY_SLOTS + 1, onTuesday: MAX_DAY_SLOTS - 1 }));

@@ -34,7 +34,8 @@ and an athlete on no program gets a link to Programs from their day page. Nothin
 
 Row 15, verbatim (`fam-1-family-program.md:606`): **Put on and Take off, wired**: the two actions
 join `ProgramActions`, and the dialog and the button, hidden until now, appear. Take off's message
-follows its answer (`lastDay`: "comes off after today", or `null`: "won't start"), not the start date
+follows its answer (`lastDay`: "comes off after today", or `null`: "{name} is off {program}.", the wording the
+roadmap thread set on 2026-11-19 in place of row 15's "won't start"), not the start date
 (C15). **The add-athlete form stops promising a program** … the form shows v12's line, "New athletes
 start with no program. Put them on one or more from Programs.", and the page stops calling
 `householdProgramsAnything` … **Home's tiles name each athlete's programs** … read with the

@@ -28,6 +28,12 @@ import { athletesOnPrograms } from './athletes';
  *   yesterday is not. Athletes are listed earliest made first; an archived athlete is not listed.
  * - The answer is parsed with `programListSchema` before it is returned.
  */
+/**
+ * The household's Programs list order: its live template programs, oldest first. ONE rule, read by
+ * the Programs list and by Put on, which places a new program by it (D41, ADR 0007 A2 §7).
+ */
+export const programListOrder = () => asc(schema.programBlocks.id);
+
 export async function readProgramList(
   exec: Executor,
   scope: HouseholdScope,
@@ -44,7 +50,7 @@ export async function readProgramList(
     })
     .from(schema.programBlocks)
     .where(liveTemplateBlockIn(scope))
-    .orderBy(asc(schema.programBlocks.id));
+    .orderBy(programListOrder());
 
   const on = new Map<number, string[]>();
   for (const athlete of await athletesOnPrograms(exec, scope, today)) {

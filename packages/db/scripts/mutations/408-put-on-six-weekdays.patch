@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 3ff52570..7729468a 100644
+index 240dbb23..f041f990 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -152,7 +152,7 @@ export async function putOn(
+@@ -238,7 +238,7 @@ export async function putOn(
          .returning({ id: a.id });
        await tx
          .insert(schema.programAssignmentWeekdays)
 -        .values(WEEKDAYS.map((weekday) => ({ assignmentId: made!.id, weekday })));
 +        .values(WEEKDAYS.slice(1).map((weekday) => ({ assignmentId: made!.id, weekday })));
+       await placeAssignments(tx, athlete.id, [...order.slice(0, at), block.id, ...order.slice(at)]);
      }
  
-     return { ok: true as const };

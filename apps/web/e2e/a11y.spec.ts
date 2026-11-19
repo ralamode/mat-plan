@@ -41,6 +41,7 @@ import {
   NARROW_VIEWPORT,
   navRail,
 } from './contexts';
+import { expectNoOverflowWithin } from './a11y-checks';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -603,8 +604,7 @@ test.describe('U0 — the sheet, open', () => {
     // `documentElement.scrollWidth` to its `clientWidth`, and a `position: fixed` box contributes
     // nothing to that — `RemoveScroll` also sets `body { overflow: hidden }` while the sheet is
     // open. An overflowing sheet would sail through the helper every other screen uses.
-    const overflows = await dialog.evaluate((d) => d.scrollWidth > d.clientWidth);
-    expect(overflows, 'the open sheet must not scroll sideways at 360px').toBe(false);
+    await expectNoOverflowWithin(dialog, 'the open sheet at 360px');
 
     for (const name of ['Close', 'Use as typed', 'Toggle the status message']) {
       const box = await dialog.getByRole('button', { name }).first().boundingBox();
@@ -680,8 +680,7 @@ test.describe('U0 — the sheet, open', () => {
       await page.setViewportSize(viewport);
       const dialog = await openSheet(page);
       await expectNoAxeViolations(page, `sheet (compact ${viewport.width}×${viewport.height})`);
-      const overflows = await dialog.evaluate((d) => d.scrollWidth > d.clientWidth);
-      expect(overflows, 'the compact sheet must not scroll sideways').toBe(false);
+      await expectNoOverflowWithin(dialog, 'the compact sheet');
       const action = dialog.getByRole('button', { name: 'Use as typed' });
       await action.scrollIntoViewIfNeeded();
       await expect(action).toBeInViewport();

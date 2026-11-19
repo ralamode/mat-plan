@@ -1,4 +1,4 @@
-import { addDays, isoDaySchema, localWeekday } from '@mat-plan/shared';
+import { addDays, isMinuteOfDay, isoDaySchema, localWeekday } from '@mat-plan/shared';
 
 /**
  * Date helpers for the "declared date" of an entry (activity_date is a plain DATE,
@@ -59,6 +59,14 @@ export function localDayIso(timeZone: string, now: Date = new Date()): string {
 }
 
 /**
+ * Today on this device, in the browser's own zone: for a client that must name a day as it is NOW,
+ * not as it was when the page rendered (a page left open past midnight).
+ */
+export function deviceToday(now: Date = new Date()): string {
+  return localDayIso(Intl.DateTimeFormat().resolvedOptions().timeZone, now);
+}
+
+/**
  * Whole minutes since LOCAL midnight of `now` in `timeZone` (0–1439). The wall-clock projection
  * `wake` stores in `value_num` (V1-7) so the clock renders tz-free at read time. `hourCycle:'h23'`
  * (via `localDateParts`) makes 00:00 → 0 and 23:59 → 1439 — a 12-hour hour part would map midnight
@@ -74,8 +82,11 @@ export function localMinutesSinceMidnight(timeZone: string, now: Date = new Date
  * Format minutes-since-midnight (0–1439) as a local 12-hour clock string ("6:52 AM"). tz-FREE by
  * design: the minutes are anchored at UTC epoch and formatted in UTC, so no zone re-enters (the same
  * discipline as `formatDayLong`) — the caller already projected the local wall time into the number.
+ * A number that is not a minute of one day (`isMinuteOfDay`) comes back as itself, never a wrapped
+ * clock: 1440 would otherwise read `12:00 AM`.
  */
 export function minutesToClock(minutes: number): string {
+  if (!isMinuteOfDay(minutes)) return String(minutes);
   return (
     new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',

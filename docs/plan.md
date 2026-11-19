@@ -217,6 +217,13 @@ and panelled; the milestones order them.
   **Pillar:** Logging & Measurement. **Needs a spec section or plan** before code; PROG-1, Beta 1.
   ⚠️ _2026-11-14:_ **moves to Beta 0 in part**, as [FAM-1](./milestones/fam-1-family-program.md) step 3 (the type and the menu) and its
   d2 spec section. The activity convergence (`ACT-1`) stays Beta 1.
+  **After Beta 0, an eighth type: reps and distance** _(maintainer, 2026-11-19: "I think ultimately we
+  want reps + distance, but we can punt this for after beta 0 and just go distance for now")_. A
+  broad jump is prescribed as a number of jumps ("× 5") with a distance. Until then such a movement
+  is a **Distance** item.
+  ⚠️ **A type is set once**, so the plan for this type must say how an item, and a library entry,
+  that was made as Distance moves to it, and what happens to what was logged against it. No row of
+  its own yet; it is not Beta 0 work.
 
 <a id="superset-1"></a>
 
@@ -1753,7 +1760,10 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   Planned and approved 2026-11-17 (five lenses). ✅ **1a shipped:** a push runs typecheck plus only the
   tests the change reaches (`pnpm test:changed`), and AGENTS.md has one rule for when to run locally. ✅ **1b (the guard) shipped; the slot follows after #554:** a hook denies
   `pkill`, `killall`, `fuser -k` and the broad `kill` forms in every directory
-  (`.claude/hooks/guard-process-kill.mjs`).
+  (`.claude/hooks/guard-process-kill.mjs`). 🚧 **2 in review:** the mutation proof runs in CI as
+  eight shards plus a total check, every push to `main` runs all of them, and
+  `.github/scripts/changed-scopes.mjs` decides which heavy steps a pull request needs. `pnpm verify`
+  becomes optional before a PR.
 
 - **DX-18b — per-pillar test projects.** _(Deferred by DX-18, D9.)_ `pnpm test:pillar <name>`, and CI
   running only the affected pillars' vitest files. **Trigger:** CI's Test step passes 3 minutes (53s

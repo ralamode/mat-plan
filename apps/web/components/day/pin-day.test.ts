@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { localDayIso } from '@/lib/date';
+import { deviceToday } from '@/lib/date';
 
 import { pinDayBeforeWrite } from './day-screen';
 
@@ -10,7 +10,6 @@ import { pinDayBeforeWrite } from './day-screen';
  * 12c), so a ✓ just after midnight re-renders the day it was logged on, not the new today.
  */
 
-const deviceToday = () => localDayIso(Intl.DateTimeFormat().resolvedOptions().timeZone);
 const at = (path: string) => window.history.replaceState(null, '', path);
 // A page rendered long ago: the device's day is past its today.
 const STALE = { day: '2000-01-01', today: '2000-01-01' };
