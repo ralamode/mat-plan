@@ -166,7 +166,7 @@ Time:   lib/dal + writers get day + tz as args; only routes/actions (and their p
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
-Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
+Rate limit: @upstash/ratelimit (sliding window) on mutations and the zip export; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
         enableLogs + structured context: NOT wired (ADR 0001).
 ```
@@ -226,6 +226,19 @@ Deletion: [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone
   ([review-pr](./.claude/skills/review-pr/SKILL.md) has the exceptions).
 - **Merge = squash.** PR title is a Conventional Commit → one commit per PR on `main`. Delete the
   branch on merge.
+- **Every PR is tagged when it is opened** _(maintainer, 2026-11-19)_, so the PR list can be read
+  by release and by feature:
+  - **its release, as the GitHub milestone:** `Beta 0` or `Beta 1` (`gh pr create --milestone "Beta 0"`).
+    The GitHub milestone is the release, not a milestone doc under `docs/milestones/`; that doc's
+    id (`FAM-1`) is the feature label;
+  - **its feature, as a label named by the backlog id** (`FAM-1`, `CAT-3`, `PRIV-3`), **or
+    `tech-debt`** when it belongs to no feature. A PR that serves two features takes both. A
+    feature with no label yet gets one of the same shape:
+    `gh label create "<ID>" --color 1d76db --description "Feature: <what it is>"`;
+  - **`bug-fix` as well** (not GitHub's default `bug`) when it fixes a defect.
+  - A plan or docs PR takes the tags of the work it plans. Dependabot's PRs are left as they come.
+  - The tags are read by people, not by CI: adding one does not re-run a check, and they are
+    separate from the skip labels below.
 - **A stacked PR is retargeted to `main` BEFORE its parent merges** — a child merged after its
   parent squashed lands on a dead branch and reports `MERGED` with nothing on `main`. `gh pr edit
 <child> --base main` first, then parent, then child, and **verify the content on `main`** (`git grep
@@ -416,7 +429,7 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   2 re-verify authZ / resource ownership (IDOR guard).  3 zod-validate ALL input first.
   4 return a minimal DTO, never a raw row.  5 db+auth via the server-only DAL; keep 'use server' thin.
   6 idempotent: body clientId + UNIQUE; replay → one effect, same result.
-  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: export limit; correlation ids.
+  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: correlation ids.
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.

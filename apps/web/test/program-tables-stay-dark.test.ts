@@ -321,11 +321,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     );
     const importing = web.filter(importsActions);
     expect(importing.filter((f) => !PROGRAM_PAGE.test(f))).toEqual([]);
-    // Non-vacuity: the two 7b-i pages do import it.
+    // Non-vacuity: the four pages (7b-i, 7b-ii) do import it.
     expect(importing).toEqual(
       expect.arrayContaining([
         'apps/web/app/programs/page.tsx',
         'apps/web/app/programs/[programId]/page.tsx',
+        'apps/web/app/programs/[programId]/workouts/[workoutId]/page.tsx',
+        'apps/web/app/programs/[programId]/workouts/new/page.tsx',
       ]),
     );
     expect(PROGRAM_PAGE.test('apps/web/app/programs/[programId]/workouts/new/page.tsx')).toBe(true);

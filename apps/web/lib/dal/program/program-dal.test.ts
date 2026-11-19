@@ -45,7 +45,7 @@ import { emptyWeek, TRACKING_TYPE } from '@mat-plan/shared';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
-import { getProgramList, getProgramView, getWorkoutDraft } from './reads';
+import { getProgramEntry, getProgramList, getProgramView, getWorkoutDraft } from './reads';
 import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
 import {
   copyHouseholdWorkout,
@@ -339,5 +339,39 @@ describe('the program DAL (FAM-1 7b-i): the Programs list and a program’s page
       expect(thrown).toBeInstanceOf(DbWriteError);
       expect(String(thrown)).not.toContain('knee sore');
     }
+  });
+});
+
+describe('the program DAL (FAM-1 7b-ii): a workout page’s program entry', () => {
+  const TODAY = '2026-11-19';
+  const ENTRY = { programPublicId: PROGRAM_ID, name: 'Strength', athletes: [] };
+
+  it('is the list’s entry, found by the id lower-cased (the URL may spell it in capitals)', async () => {
+    vi.mocked(readProgramList).mockResolvedValueOnce([ENTRY]);
+    expect(await getProgramEntry(PROGRAM_ID.toUpperCase(), TODAY)).toBe(ENTRY);
+    expect(vi.mocked(readProgramList).mock.calls).toEqual([[db, SCOPE, TODAY]]);
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('a program not in the list is null and reported once, with the caller’s scope', async () => {
+    vi.mocked(readProgramList).mockResolvedValueOnce([ENTRY]);
+    const other = '019826b4-0000-7000-8000-0000000000a2';
+    expect(await getProgramEntry(other, TODAY)).toBeNull();
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([[SCOPE, { programPublicId: other }]]);
+  });
+
+  it('no household is null, with no query, and one no_scope report', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await getProgramEntry(PROGRAM_ID, TODAY)).toBeNull();
+    expect(readProgramList).not.toHaveBeenCalled();
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [null, { programPublicId: PROGRAM_ID }],
+    ]);
+  });
+
+  it('a non-uuid id is null, with no query and no report', async () => {
+    expect(await getProgramEntry('new', TODAY)).toBeNull();
+    expect(readProgramList).not.toHaveBeenCalled();
+    expect(reportProgramMiss).not.toHaveBeenCalled();
   });
 });

@@ -75,11 +75,8 @@ export function WeekEditor({
   saveWeek,
   onStatus,
   barRef,
-  workoutPagesWired = true,
 }: {
   program: ProgramView;
-  /** `false` until the workout pages exist (7b-i): "make a workout first" could not be done. */
-  workoutPagesWired?: boolean;
   saveWeek: ProgramActions['saveWeek'];
   onStatus: (message: string, tone?: StatusTone) => void;
   /** The page's status bar: a moved control is kept clear of it. */
@@ -296,9 +293,7 @@ export function WeekEditor({
       </h2>
       <p className="text-muted-foreground text-sm">{WEEK_COPY.intro}</p>
       {program.workouts.length ? null : (
-        <p className="text-muted-foreground text-sm">
-          {workoutPagesWired ? WEEK_COPY.noWorkouts : WEEK_COPY.noWorkoutsCopyOnly}
-        </p>
+        <p className="text-muted-foreground text-sm">{WEEK_COPY.noWorkouts}</p>
       )}
       {/* Capped on a wide screen, so ↑ ↓ ✕ stay beside the name they act on. */}
       <div className="flex max-w-2xl flex-col divide-y">

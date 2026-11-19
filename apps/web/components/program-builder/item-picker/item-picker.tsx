@@ -32,6 +32,7 @@ import {
   createdText,
   existedText,
   existedUnlistedText,
+  householdIsFull,
   ITEM_PICKER_COPY as COPY,
   newItemLabel,
   newItemRefusal,
@@ -54,6 +55,7 @@ const TYPE_HINT_ID = 'new-item-type-hint';
 const WARNING_ID = 'new-item-warning';
 const EXISTING_ID = 'new-item-existing';
 const SUMMARY_ID = 'item-picker-picked';
+const HOUSEHOLD_FULL_ID = 'new-item-household-full';
 
 /**
  * The workout editor's item picker (FAM-1 step 9; plan §8 "Item picker"; the prototype's `vPicker2`):
@@ -156,6 +158,19 @@ export function ItemPicker({
     return option ? [option.name] : [];
   });
   const full = selected.length >= room;
+  /**
+   * The household has `MAX_HOUSEHOLD_ITEMS` of its own (7b-ii, plan §Caps): said before any typing,
+   * and Create stays only for a name that selects an existing item (never capped, invariant 30).
+   * Counted from the options, which hold every item the household made, those made here included.
+   */
+  const householdFull = householdIsFull(options);
+  /** The household-full line, unless the footer is saying it already. */
+  const householdFullShown = householdFull && notice !== COPY.householdFull;
+  const householdFullLine = householdFullShown ? (
+    <p id={HOUSEHOLD_FULL_ID} className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+      {COPY.householdFull}
+    </p>
+  ) : null;
 
   const toggle = (option: MovementOptionDTO, via?: 'tap' | 'enter') => {
     if (!selected.includes(option.publicId) && full) {
@@ -188,7 +203,10 @@ export function ItemPicker({
           (newItemSchema.shape.name.safeParse(cleaned).error?.issues[0]?.message ?? null)
         : null;
   const canCreate =
-    !!form && !form.pending && !!cleaned && (existing ? true : !nameIssue && !!form.type);
+    !!form &&
+    !form.pending &&
+    !!cleaned &&
+    (existing ? true : !householdFull && !nameIssue && !!form.type);
 
   const openForm = (typed: string) => {
     setNotice('');
@@ -243,6 +261,8 @@ export function ItemPicker({
   /** `at` is the Create tap's `event.timeStamp`. */
   async function create(at: number) {
     if (!form || form.pending) return;
+    // Full: nothing is missing, and nothing new can be made. Focus stays on Create.
+    if (!canCreate && householdFull && cleaned && !existing) return setNotice(COPY.householdFull);
     if (!canCreate) return showMissing();
     if (existing) {
       setNotice(said(select(existing), existing, true));
@@ -406,6 +426,7 @@ export function ItemPicker({
           <div className="flex flex-col gap-2">
             {/* Seen, not only heard: a failure to reach the server leaves the form as it was. */}
             {notice ? <p className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>{notice}</p> : null}
+            {existing ? null : householdFullLine}
             <Button
               ref={createRef}
               type="submit"
@@ -414,7 +435,15 @@ export function ItemPicker({
               className={`h-auto w-full text-base whitespace-normal ${NAME_WRAP_CLASS} ${PENDING_CLASS}`}
               aria-disabled={!canCreate || undefined}
               aria-describedby={
-                existing ? EXISTING_ID : form.type ? WARNING_ID : `${TYPE_HINT_ID} ${WARNING_ID}`
+                existing
+                  ? EXISTING_ID
+                  : [
+                      householdFullShown ? HOUSEHOLD_FULL_ID : null,
+                      form.type ? null : TYPE_HINT_ID,
+                      WARNING_ID,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
               }
             >
               {form.pending
@@ -456,7 +485,9 @@ export function ItemPicker({
         onToggle: toggle,
         onCreate: openForm,
         createLabel: newItemLabel,
-        noMatchHint: COPY.noMatch,
+        // At the cap, "make it a new item" is not an offer the form can keep (7b-ii).
+        noMatchHint: householdFull ? COPY.noMatchAtCap : COPY.noMatch,
+        createDescribedBy: householdFullShown ? HOUSEHOLD_FULL_ID : undefined,
         notice,
         onQueryChange: () => setNoticeNow(''),
         searchLabel: COPY.searchLabel,
@@ -472,6 +503,7 @@ export function ItemPicker({
                 {pickedText(pickedNames)}
               </p>
             ) : null}
+            {householdFullLine}
             {full && notice !== capText(MAX_WORKOUT_ITEMS) ? (
               <p className="text-muted-foreground text-sm">{capText(MAX_WORKOUT_ITEMS)}</p>
             ) : null}

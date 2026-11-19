@@ -354,8 +354,10 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     day another of the athlete's programs, later in the household's list, was taken off: the
     writer places it among the programs that stay, the fake still counts the one ending today
     (the contract owner, 2026-11-19: the real order is the writer's, and the fake cannot know
-    without a contract change). Whether a third is accepted (two of an athlete's programs taken
-    off the same day and both put back) depends on the reopen rule the maintainer picks for #641.
+    without a contract change). There is no third: two of an athlete's programs taken off the
+    same day and both put back come back where they were, because a reopened program goes after
+    the programs that were ahead of it and are still on (plan D41; the maintainer, 2026-11-19:
+    "A: after the ones still ahead").
 
 22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
     The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
@@ -480,6 +482,12 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       until that form is retired (step 12f) or the library's fresh start: refusing a set
       mid-workout over an item count would cost more than it protects (decided overnight,
       2026-11-18; an accepted gap).
+    - **One function counts a household's items: `householdItemsFull(options)`**
+      (`program-shapes.ts`), from the picker's options: an option whose `owner` is `household`
+      counts, a library movement never does. The fake asks it. `newItem` (lane P) and the
+      picker's "full" line (lane B's `householdIsFull` in `builder-text.ts`, 7b-ii) each still count for themselves, and agree with it
+      today; each moves to it in a PR of its own, so the three cannot drift when the library's
+      fresh start changes which rows are listed.
     - **Never capped:** an edit of a workout that exists; a replay of a create (the same client
       id answers as the first call did); `newItem` for a name that already names an item, which
       selects it (invariant 15).
@@ -715,7 +723,7 @@ under its own CAT-3 heading).
     primary muscle. Kinds in `BROWSE_KINDS`' order; families biggest first, then by label;
     movements by name; nothing empty is listed. A new muscle code does not compile without a
     body area, and a new lift pattern not without a label. **A kind in `BROWSE_FLAT_KINDS`
-    (Conditioning) has no family level** (spec K27): `browseTree` gives it one family whose
+    (Conditioning, and Skill since 2026-11-19) has no family level** (spec K27, K30): `browseTree` gives it one family whose
     `family` and `label` are `null`, its movements by name, and a screen lists them straight
     under the kind. `BROWSE_OPEN_AT_MOST` applies with a filter on or not (K26).
 
