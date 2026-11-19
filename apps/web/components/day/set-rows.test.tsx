@@ -23,9 +23,18 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { itemCountText } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
-import { card, isTick, lb, makeMount, press, status, workout } from './day-test-utils';
+import {
+  card,
+  describedTexts,
+  isTick,
+  lb,
+  makeMount,
+  press,
+  status,
+  workout,
+} from './day-test-utils';
 import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
-import { formatRowValues, unitSpoken, unitSuffix, valueParts } from './row-values';
+import { formatRowValues, spokenValues, unitSpoken, unitSuffix, valueParts } from './row-values';
 
 const { mount, show } = makeMount(createFakeDayActions);
 
@@ -510,15 +519,35 @@ describe('after the program was edited (D7)', () => {
     await press(setTick(el(), 'DB bench press', 1));
     // The field is in kg: the lb number is not put in it.
     expect(setField(el(), 'DB bench press', 1, unitSpoken('kg')).value).toBe('');
+    // 12d-iii: the row's line survives the un-tick and says what it held, in words, and that the ✓
+    // puts it back. It asks for no conversion (plan U1.2). The ✓ and the load field point at it.
+    const line = (canPutBack: boolean) =>
+      DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+        noun: DAY_COPY.otherUnitNoun.load,
+        unticked: { was: spokenValues({ quantities: [lb(27.5)] }), canPutBack },
+      });
+    expect(line(true)).not.toMatch(/enter/i);
+    expect(describedTexts(setTick(el(), 'DB bench press', 1))).toContain(line(true));
+    expect(describedTexts(setField(el(), 'DB bench press', 1, unitSpoken('kg')))).toContain(
+      line(true),
+    );
     // Only the reps fixed, the load left blank: before H9 (12d-ii) this ✓ sent no load and the
     // writer stored the prescription's 30 kg for a lift logged in lb. Now nothing is sent, and the
     // row asks for the weight.
     fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
+    // Typed over, the ✓ no longer puts it back: the line stops offering it.
+    expect(describedTexts(setTick(el(), 'DB bench press', 1))).toContain(line(false));
     await press(setTick(el(), 'DB bench press', 1));
     expect(control.actions.logRow).not.toHaveBeenCalled();
+    // The refusal names both units; the line steps aside rather than stack a second message.
+    expect(describedTexts(setTick(el(), 'DB bench press', 1))).not.toContain(line(false));
     // Both units named, so the old unit's number is not typed into the new unit's field.
     const load = setField(el(), 'DB bench press', 1, unitSpoken('kg'));
-    expect(within(el()).getByText(DAY_COPY.retypeLoad('27.5 lb', 'kg'))).toBeTruthy();
+    expect(
+      within(el()).getByText(
+        DAY_COPY.retypeLoad(spokenValues({ quantities: [lb(27.5)] }), unitSpoken('kg')),
+      ),
+    ).toBeTruthy();
     expect(load.getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(load);
     // No prescription shows in the field: an empty ✓ here is refused, not filled.
@@ -531,6 +560,12 @@ describe('after the program was edited (D7)', () => {
     const sent = control.actions.logRow.mock.calls[0]![0].values;
     expect(sent.quantities).toEqual([{ ...lb(12.5), unit: 'kg' }]);
     expect(sent.reps).toBe(7);
+    // Logged in kg now: set 1 has no other-unit line any more.
+    expect(
+      describedTexts(setTick(el(), 'DB bench press', 1)).some((t) =>
+        t.includes(DAY_COPY.otherUnitNoun.load),
+      ),
+    ).toBe(false);
   });
 
   it('H9 ends once the row is logged again: a later un-tick, now in the item’s unit, fills as D13 says', async () => {
@@ -614,11 +649,14 @@ describe('after the program was edited (D7)', () => {
     bench.unit = 'kg';
     show(changed);
     const logged = bench.rows[0]!.logged!.values.quantities[0]!;
-    expect(
-      within(bodyRows(card('Heavy A', 'DB bench press'))[0]!).getByText(
-        quantityText(logged.value, logged.unit),
-      ),
-    ).toBeTruthy();
+    const row = bodyRows(card('Heavy A', 'DB bench press'))[0]!;
+    // The eye reads the code (`27.5 lb`); a screen reader hears the word (12d-iii, plan U2.5).
+    const code = within(row).getByText(unitSuffix(logged.unit));
+    expect(code.getAttribute('aria-hidden')).toBe('true');
+    const cell = code.parentElement!.cloneNode(true) as HTMLElement;
+    cell.querySelectorAll('.sr-only').forEach((el) => el.remove());
+    expect(cell.textContent).toBe(quantityText(logged.value, logged.unit));
+    expect(within(row).getByText(unitSpoken(logged.unit)).className).toContain('sr-only');
   });
 });
 

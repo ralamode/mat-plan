@@ -1,6 +1,6 @@
 'use client';
 
-import { SUPERVISION_LABELS, type DayItem } from '@mat-plan/shared';
+import { SUPERVISION_LABELS, TRACKING_TYPE, type DayItem, type RowValues } from '@mat-plan/shared';
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,14 @@ import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
 import { DAY_COPY } from './day-copy';
-import { placeholderOf, unitSpoken, unitSuffix, type RowField } from './row-values';
+import {
+  fieldsOf,
+  otherUnitOf,
+  placeholderOf,
+  unitSpoken,
+  unitSuffix,
+  type RowField,
+} from './row-values';
 import type { RowChange } from './use-change';
 import { useRow } from './use-row';
 
@@ -162,7 +169,11 @@ export function Tick({
         // "Saving…" is the ✓'s DESCRIPTION while it is sent: its name stays "Log …", which
         // `aria-label` sets and content cannot change (12c review).
         aria-describedby={
-          [described ? errorId : null, r.pending ? `${errorId}-saving` : null]
+          [
+            described ? errorId : null,
+            r.pending ? `${errorId}-saving` : null,
+            r.otherUnit ? otherUnitLineId(errorId) : null,
+          ]
             .filter(Boolean)
             .join(' ') || undefined
         }
@@ -320,7 +331,11 @@ export function RowInput({
       placeholder={field === 'quantity' && r.mustTypeLoad ? undefined : placeholderOf(item, field)}
       aria-label={DAY_COPY.fieldLabel(name, spoken)}
       aria-invalid={invalid || undefined}
-      aria-describedby={r.error ? errorId : undefined}
+      aria-describedby={
+        [r.error ? errorId : null, r.otherUnit ? otherUnitLineId(errorId) : null]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
       className={cn(INPUT_CLASS, className)}
     />
   );
@@ -330,4 +345,67 @@ export function fieldHeader(item: DayItem, field: RowField): string {
   if (field === 'reps' || !item.unit) return DAY_COPY.reps;
   if (item.unit === 'sec') return DAY_COPY.secHeader;
   return item.unit === 'min' ? DAY_COPY.minHeader : unitSuffix(item.unit);
+}
+
+/** The id of a row's other-unit line, from the row's message id (`OtherUnitLine`). */
+export const otherUnitLineId = (errorId: string) => `${errorId}-unit`;
+
+/**
+ * 12d-iii (D44): why a row's load is text, on a row whose quantity was logged in another unit than
+ * the item's now. Not a live region: it is there on arrival, and the ✓ and the reps field point at
+ * it (`aria-describedby`) only while it shows. On the tint it takes the tint's secondary text.
+ */
+export function OtherUnitLine({
+  r,
+  item,
+  errorId,
+  onTint,
+}: {
+  r: ReturnType<typeof useRow>;
+  item: DayItem;
+  errorId: string;
+  onTint: boolean;
+}) {
+  if (!r.otherUnit) return null;
+  const { from, to, unticked } = r.otherUnit;
+  return (
+    <p id={otherUnitLineId(errorId)} className={cn('text-sm', secondaryText(onTint))}>
+      {DAY_COPY.otherUnit(unitSpoken(from), unitSpoken(to), { noun: fixNoun(item), unticked })}
+    </p>
+  );
+}
+
+/** What the other-unit line asks to have fixed: the load of a weight × reps row, else by its type. */
+function fixNoun(item: DayItem): string {
+  if (fieldsOf(item).includes('reps')) return DAY_COPY.otherUnitNoun.load;
+  return item.trackingType === TRACKING_TYPE.distance
+    ? DAY_COPY.otherUnitNoun.distance
+    : DAY_COPY.otherUnitNoun.number;
+}
+
+/**
+ * A quantity cell's text (12d-iii; plan U2.5): a load logged in another unit than its column's
+ * shows its unit's code to the eye and says the unit's word to a screen reader, so "27.5 lb" under
+ * a kg header is heard as "27.5 pounds". Any other cell is the bare text.
+ */
+export function QuantityCellText({
+  item,
+  values,
+  text,
+}: {
+  item: DayItem;
+  values: RowValues;
+  text: string;
+}) {
+  const unit = otherUnitOf(item, values);
+  const space = text.lastIndexOf(' ');
+  // A plain count has no code to hide (`quantityText` writes the bare number).
+  if (!unit || space < 0) return <>{text}</>;
+  const quantity = text.slice(0, space);
+  return (
+    <>
+      {quantity} <span aria-hidden="true">{unitSuffix(unit)}</span>
+      <span className="sr-only">{unitSpoken(unit)}</span>
+    </>
+  );
 }

@@ -24,6 +24,8 @@ import {
   LOGGED_CARD_CLASS,
   ON_TINT_BUTTON_FOCUS_CLASS,
   RowInput,
+  OtherUnitLine,
+  QuantityCellText,
   secondaryText,
   Tick,
   TINT_CLASS,
@@ -240,6 +242,9 @@ function SetRow({
     return () => onMessage(set, false);
   }, [hasMessage, onMessage, set]);
   const shownValues = r.logged ?? r.kept;
+  // The second line: Change's or a message (`status`), then the other-unit line when the row has one.
+  const unitLine = r.otherUnit !== null;
+  const changeFields = change.fields;
   const previous = row.previous ? valueParts(row.previous) : null;
 
   return (
@@ -268,7 +273,7 @@ function SetRow({
         ) : null}
         {fields.map((field, index) => (
           <td key={field} className="px-0.5 py-1 text-center">
-            {change.editable ? (
+            {changeFields.includes(field) ? (
               <ChangeInput
                 change={change}
                 item={item}
@@ -276,11 +281,12 @@ function SetRow({
                 name={name}
                 lineId={errorId}
                 described={status}
+                unitLine={unitLine}
                 tickRef={tickRef}
                 inputRef={(el) => {
                   inputs.current[field] = el;
                 }}
-                last={index === fields.length - 1}
+                last={field === changeFields[changeFields.length - 1]}
                 className="w-full px-0.5 text-center tabular-nums"
               />
             ) : shownValues || !r.hasField ? (
@@ -290,7 +296,17 @@ function SetRow({
                   r.logged ? 'text-base font-medium' : secondaryText(onTint),
                 )}
               >
-                {shownValues ? fieldText(item, shownValues, field) : ''}
+                {shownValues && field === 'quantity' ? (
+                  <QuantityCellText
+                    item={item}
+                    values={shownValues}
+                    text={fieldText(item, shownValues, field)}
+                  />
+                ) : shownValues ? (
+                  fieldText(item, shownValues, field)
+                ) : (
+                  ''
+                )}
               </span>
             ) : (
               <RowInput
@@ -324,7 +340,7 @@ function SetRow({
           </div>
         </td>
       </tr>
-      {status ? (
+      {status || unitLine ? (
         <tr {...changeRowProps(rowId, change)}>
           <td
             colSpan={fields.length + (showPrevious ? 3 : 2)}
@@ -332,13 +348,17 @@ function SetRow({
             // tap that lands low does not reach the next set's ✓ (which would send this change).
             className={change.dirty ? 'pb-3' : 'pb-1'}
           >
-            <RowStatus
-              r={r}
-              change={change}
-              lineId={errorId}
-              tickRef={tickRef}
-              underTickClassName={UNDER_TICK_CLASS}
-            />
+            {/* The status first, so Change's ✕ stays directly under the ✓ (maintainer, 2026-11-17). */}
+            {status ? (
+              <RowStatus
+                r={r}
+                change={change}
+                lineId={errorId}
+                tickRef={tickRef}
+                underTickClassName={UNDER_TICK_CLASS}
+              />
+            ) : null}
+            <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
           </td>
         </tr>
       ) : null}
