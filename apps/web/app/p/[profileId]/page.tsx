@@ -219,7 +219,7 @@ export default async function TodayPage({
       ) : null}
 
       {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
-          program yet", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
+          program.", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
       <ProgramLine plan={plan} actions={dayActions} />
       <NotOnAProgram
         plan={plan}

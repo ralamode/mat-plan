@@ -144,6 +144,20 @@ describe('NotOnAProgram', () => {
     render(<NotOnAProgram plan={notOnAProgramThatDay} />);
     expect(screen.getByText(PROGRAM_COPY.notThisDay)).toBeTruthy();
     cleanup();
+    // Today, with a program from tomorrow (D46): it says so, in place of "on this day".
+    render(
+      <NotOnAProgram
+        plan={{
+          ...notOnAProgramThatDay,
+          day: notOnAProgramThatDay.today,
+          writable: true,
+          canGoForward: true,
+        }}
+      />,
+    );
+    expect(screen.getByText(PROGRAM_COPY.startsTomorrow)).toBeTruthy();
+    expect(screen.queryByText(PROGRAM_COPY.notThisDay)).toBeNull();
+    cleanup();
     const { container } = render(<NotOnAProgram plan={todayTwoPrograms} />);
     expect(container.textContent).toBe('');
   });

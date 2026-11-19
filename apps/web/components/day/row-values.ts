@@ -2,6 +2,7 @@ import {
   fillRowValues,
   isPlainDecimal,
   isWholeNumber,
+  loggedRowUnit,
   quantityCeiling,
   quantityText,
   repsSchema,
@@ -75,13 +76,19 @@ export type TypedProblem = NumberProblem | 'other_unit';
  * unit was edited after the row was logged). `textOf` leaves such a quantity out of the field.
  */
 export function loggedInOtherUnit(item: DayItem, values: RowValues): boolean {
-  return otherUnitLoad(item, values) !== null;
+  return otherUnitOf(item, values) !== null;
+}
+
+/** The unit that quantity was logged in, or `null` when it is in the item's unit (or absent). */
+export function otherUnitOf(item: DayItem, values: RowValues): Unit | null {
+  const quantity = slotQuantity(item, values.quantities);
+  return quantity && quantity.unit !== item.unit ? quantity.unit : null;
 }
 
 /** That quantity as the row writes it ("25 lb"), or `null` when it is in the item's unit. */
 export function otherUnitLoad(item: DayItem, values: RowValues): string | null {
   const quantity = slotQuantity(item, values.quantities);
-  return quantity && quantity.unit !== item.unit
+  return quantity && otherUnitOf(item, values) !== null
     ? quantityText(quantity.value, quantity.unit)
     : null;
 }
@@ -166,7 +173,7 @@ export function sameValues(a: RowValues, b: RowValues): boolean {
 export function textOf(item: DayItem, values: RowValues): RowText {
   const quantity = slotQuantity(item, values.quantities);
   return {
-    quantity: quantity && quantity.unit === item.unit ? String(quantity.value) : '',
+    quantity: quantity && !loggedInOtherUnit(item, values) ? String(quantity.value) : '',
     reps: values.reps === undefined ? '' : String(values.reps),
   };
 }
@@ -180,9 +187,7 @@ export function fieldText(item: DayItem, values: RowValues, field: RowField): st
   if (field === 'reps') return values.reps === undefined ? '' : String(values.reps);
   const quantity = slotQuantity(item, values.quantities);
   if (!quantity) return '';
-  return quantity.unit === item.unit
-    ? String(quantity.value)
-    : quantityText(quantity.value, quantity.unit);
+  return otherUnitLoad(item, values) ?? String(quantity.value);
 }
 
 /**
@@ -243,20 +248,32 @@ function readNumber(
 }
 
 /**
- * Whether a logged row's numbers can be changed in place: 🔴 **never when its quantity was logged in
- * another unit than the item's** (13b-ii). The writer judges a Change in the unit the row was LOGGED
- * in (`loggedRowUnit`, contract change C28), but this screen's field shows and sends the item's
- * current unit, so a `27.5 lb` row on an item now in kg would go out as 27.5 kg; even a reps-only
- * change has to send the quantity. So the screen is stricter than the writer (contract invariant
- * 27): the row stays text, and un-tick then a new ✓ is the way to change it. Offering Change in the
- * logged unit is a follow-up (FAM-1 12d plan, decided 2026-11-18).
+ * The fields of a logged row that a Change may edit in place (13b-ii; 12d-iii, Form 1): **all of
+ * them**, or **the reps only** for a weight × reps row whose load was logged in another unit than
+ * the item's, or **none**.
+ *
+ * 🔴 **A load logged in another unit is never a field** (D44, Form 1; maintainer, 2026-11-18). The
+ * field would show and send the item's current unit, so `27.5 lb` on an item now in kg would go out
+ * as 27.5 kg. The load stays text in its own unit (`fieldText`) and is sent back unchanged; only the
+ * reps can be typed. The writer judges a Change in the unit the row was LOGGED in (`loggedRowUnit`,
+ * contract change C28), and so does `readAmend`.
+ *
+ * Otherwise the amend writer's own rule (`fillRowValues` with no target, C10): the row holds exactly
+ * the numbers the item's type has, in its unit and under its ceiling. A row logged as another type,
+ * without a number the type now has, or over a ceiling lowered since, stays text, and a distance or
+ * count row logged in another unit has no reps to offer, so it stays text too.
  */
-export function canChangeValues(item: DayItem, logged: RowValues): boolean {
-  // The amend writer's own rule (`fillRowValues` with no target, C10): the row holds exactly the
-  // numbers the item's type has, in its unit and under its ceiling. A row logged in another unit, as
-  // another type, without a number the type now has, or over a ceiling lowered since, stays text:
-  // stricter than the writer, which judges only what is sent; un-tick then a new ✓ changes it.
-  return fieldsOf(item).length > 0 && fillRowValues(item, logged, null) !== null;
+export function changeableFields(item: DayItem, logged: RowValues): RowField[] {
+  const fields = fieldsOf(item);
+  if (fields.length === 0) return [];
+  if (fillRowValues(item, logged, null) !== null) return fields;
+  if (!loggedInOtherUnit(item, logged) || !fields.includes('reps')) return [];
+  return fillRowValues(inLoggedUnit(item, logged), logged, null) !== null ? ['reps'] : [];
+}
+
+/** The item as the amend writer judges this row: in the unit the row was logged in (C28). */
+function inLoggedUnit(item: DayItem, logged: RowValues): DayItem {
+  return { ...item, unit: loggedRowUnit(item.trackingType, logged) ?? item.unit };
 }
 
 /**
@@ -265,18 +282,21 @@ export function canChangeValues(item: DayItem, logged: RowValues): boolean {
  * number or, when that is blank, not a number or out of range, **its own logged number**, and the
  * other fields are still sent. `send` is `null` when no number differs from the logged row.
  *
- * Every other quantity the row holds is sent unchanged, so a Change touches only the fields shown.
+ * Every other quantity the row holds is sent unchanged, so a Change touches only the fields shown
+ * (`fields`, from `changeableFields`): a reps-only Change sends the load as it was logged, in its own
+ * unit, and is judged in that unit, as the writer judges it (C28).
  */
 export function readAmend(
   item: DayItem,
   text: RowText,
   logged: RowValues,
+  fields: readonly RowField[] = fieldsOf(item),
 ): { send: RowValues | null; kept: KeptField[] } {
   const kept: KeptField[] = [];
   const { slot } = TRACKING_TYPE_FIELDS[item.trackingType];
   let quantities = logged.quantities;
   let reps = logged.reps;
-  for (const field of fieldsOf(item)) {
+  for (const field of fields) {
     const typed = text[field].trim();
     const read = readNumber(item, field, typed);
     if (!read.ok) {
@@ -297,8 +317,10 @@ export function readAmend(
   if (sameValues(values, logged) || !rowValuesSchema.safeParse(values).success) {
     return { send: null, kept };
   }
-  // Checked by the amend writer's rule before it is sent, so the screen never sends what it refuses.
-  const send = fillRowValues(item, values, null);
+  // Checked by the amend writer's rule before it is sent, so the screen never sends what it refuses:
+  // in the item's unit when the load is a field, in the logged unit when it is not.
+  const judged = fields.includes('quantity') ? item : inLoggedUnit(item, logged);
+  const send = fillRowValues(judged, values, null);
   return { send, kept };
 }
 
