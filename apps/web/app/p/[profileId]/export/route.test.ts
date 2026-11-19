@@ -4,14 +4,15 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/dal/session', () => ({ sessionUserOrNull: vi.fn() }));
 vi.mock('@/lib/dal/profiles', () => ({ getProfileByPublicId: vi.fn() }));
 vi.mock('@/lib/dal/export', () => ({ buildExportZip: vi.fn() }));
-vi.mock('@/lib/rate-limit', () => ({ checkExportLimit: vi.fn() }));
-vi.mock('@sentry/nextjs', () => ({ addBreadcrumb: vi.fn() }));
+vi.mock('@/lib/rate-limit', () => ({
+  checkExportLimit: vi.fn(),
+  reportLimiterUnavailable: vi.fn(),
+}));
 
 import { buildExportZip } from '@/lib/dal/export';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { sessionUserOrNull } from '@/lib/dal/session';
-import { checkExportLimit } from '@/lib/rate-limit';
-import * as Sentry from '@sentry/nextjs';
+import { checkExportLimit, reportLimiterUnavailable } from '@/lib/rate-limit';
 
 import { GET } from './route';
 
@@ -43,7 +44,7 @@ describe('GET /p/[profileId]/export', () => {
     // Counted once, on the principal, never on the URL's id.
     expect(checkExportLimit).toHaveBeenCalledTimes(1);
     expect(checkExportLimit).toHaveBeenCalledWith('u');
-    expect(Sentry.addBreadcrumb).not.toHaveBeenCalled();
+    expect(reportLimiterUnavailable).not.toHaveBeenCalled();
   });
 
   it('🔴 signed out, an unknown id and another household’s id answer byte-identically (ADR 0006)', async () => {
@@ -76,17 +77,12 @@ describe('GET /p/[profileId]/export', () => {
     expect(buildExportZip).not.toHaveBeenCalled();
   });
 
-  it('a dead limiter fails open, and leaves its one id-free breadcrumb', async () => {
+  it('a dead limiter fails open, and reports it as the export limiter', async () => {
     vi.mocked(getProfileByPublicId).mockResolvedValueOnce({ id: ID } as never);
     vi.mocked(checkExportLimit).mockResolvedValueOnce({ allowed: true, reason: 'limiter-error' });
     vi.mocked(buildExportZip).mockResolvedValueOnce(new Uint8Array([1]));
     expect((await call()).status).toBe(200);
-    expect(Sentry.addBreadcrumb).toHaveBeenCalledTimes(1);
-    // The exact object, so an id added to it fails here.
-    expect(Sentry.addBreadcrumb).toHaveBeenCalledWith({
-      category: 'rate-limit',
-      level: 'warning',
-      message: 'export limiter unavailable',
-    });
+    expect(reportLimiterUnavailable).toHaveBeenCalledTimes(1);
+    expect(reportLimiterUnavailable).toHaveBeenCalledWith('export');
   });
 });

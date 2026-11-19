@@ -8,11 +8,7 @@ import { enterMutation } from './mutation-entry';
 
 const sessionUserOrNull = vi.hoisted(() => vi.fn());
 const checkMutationLimit = vi.hoisted(() => vi.fn());
-const addBreadcrumb = vi.hoisted(() => vi.fn());
-
-// `household.test.ts`'s idiom, and not a preference: an ESM namespace is not configurable, so
-// spying on the export throws outright. This file reaches only `addBreadcrumb`.
-vi.mock('@sentry/nextjs', () => ({ addBreadcrumb }));
+const reportLimiterUnavailable = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/dal/session', () => ({ sessionUserOrNull }));
 // 🔴 A PARTIAL mock since FAM-1 step 0b: only the check is replaced. `enterMutation` now reads
@@ -21,6 +17,8 @@ vi.mock('@/lib/dal/session', () => ({ sessionUserOrNull }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   checkMutationLimit,
+  // The report itself (event once per process) is `rate-limit.test.ts`'s; here, that it is called.
+  reportLimiterUnavailable,
 }));
 
 const USER_ID = 'user_wellShapedButNotTheFixture00';
@@ -43,7 +41,7 @@ beforeEach(() => {
  * what disappeared is a check that never identified a caller.
  */
 describe('enterMutation — the branches the action suites cannot reach', () => {
-  it('🔴 a DEAD limiter lets the write through, and leaves a breadcrumb saying so', async () => {
+  it('🔴 a DEAD limiter lets the write through, and reports it', async () => {
     // Fail-open is the deliberate choice — a limiter outage must not stop a kid logging on the gym
     // floor — but a PERMANENTLY dead limiter is otherwise completely silent, which is how an
     // unprotected surface looks exactly like a protected one. Both halves are the claim.
@@ -52,21 +50,15 @@ describe('enterMutation — the branches the action suites cannot reach', () => 
     const entry = await enterMutation(NO_PROFILE_LOG);
 
     expect(entry).toEqual({ ok: true, userId: USER_ID });
-    expect(addBreadcrumb).toHaveBeenCalledTimes(1);
-    expect(addBreadcrumb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      }),
-    );
+    expect(reportLimiterUnavailable).toHaveBeenCalledTimes(1);
+    expect(reportLimiterUnavailable).toHaveBeenCalledWith('mutation');
   });
 
-  it('a HEALTHY limiter leaves no breadcrumb — otherwise the signal is every request', async () => {
+  it('a HEALTHY limiter reports nothing — otherwise the signal is every request', async () => {
     // ⚠️ The return value as well: "no breadcrumb" alone is satisfied by ANY early refusal, so a
     // regression that never reached the limiter would pass this test silently.
     expect(await enterMutation(NO_PROFILE_LOG)).toEqual({ ok: true, userId: USER_ID });
-    expect(addBreadcrumb).not.toHaveBeenCalled();
+    expect(reportLimiterUnavailable).not.toHaveBeenCalled();
   });
 
   it('the limiter is keyed on the PRINCIPAL, never on anything the caller supplied', async () => {
@@ -170,10 +162,11 @@ describe('enterMutation — for an action that speaks the FAM-1 contract', () =>
     expect(checkMutationLimit.mock.calls[0]![1]).toBe(ROW_WRITE_RATE_LIMIT);
   });
 
-  it('a dead limiter still lets the write through and leaves its breadcrumb', async () => {
+  it('a dead limiter still lets the write through and reports it', async () => {
     checkMutationLimit.mockResolvedValue({ allowed: true, reason: 'limiter-error' });
     expect(await enterMutation(TRANSPORT_REFUSALS)).toEqual({ ok: true, userId: USER_ID });
-    expect(addBreadcrumb).toHaveBeenCalledTimes(1);
+    expect(reportLimiterUnavailable).toHaveBeenCalledTimes(1);
+    expect(reportLimiterUnavailable).toHaveBeenCalledWith('mutation');
   });
 
   it('the refusal is a `ProgramResult` and a `RowResult` as it stands, and carries no copy', async () => {

@@ -1,8 +1,7 @@
-import * as Sentry from '@sentry/nextjs';
 import { buildExportZip } from '@/lib/dal/export';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { sessionUserOrNull } from '@/lib/dal/session';
-import { checkExportLimit } from '@/lib/rate-limit';
+import { checkExportLimit, reportLimiterUnavailable } from '@/lib/rate-limit';
 import { NO_STORE, notFound } from '@/lib/route-miss';
 import { NextResponse } from 'next/server';
 
@@ -92,12 +91,8 @@ export async function GET(
     });
   }
   if (limit.reason === 'limiter-error') {
-    // The fail-open limiter's only signal, id-free, as `enterMutation` leaves for the ✓ budget.
-    Sentry.addBreadcrumb({
-      category: 'rate-limit',
-      level: 'warning',
-      message: 'export limiter unavailable',
-    });
+    // The fail-open limiter's only signal, id-free, once per process, as `enterMutation` does.
+    reportLimiterUnavailable('export');
   }
 
   const zip = await buildExportZip(profileId);
