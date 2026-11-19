@@ -22,6 +22,8 @@ import {
   addedOnText,
   addOnLabel,
   BUILDER_COPY,
+  dayFullText,
+  dayIsFull,
   EDITOR_COPY,
   isStaleWeek,
   labelSetText,
@@ -56,6 +58,7 @@ const HEADING_ID = 'program-week';
 /** A week's content, to tell the editor's own saves from another write's week. */
 const weekKey = (week: Week) => JSON.stringify(MONDAY_FIRST.map((day) => week[day]));
 const labelFieldId = (day: Weekday, workout: string) => `week-label-${day}-${workout}`;
+const dayFullId = (day: Weekday) => `week-full-${day}`;
 
 /** A slot's control, keyed by the day and the workout (a workout is on a day at most once). */
 type Control = MoveDirection | 'remove' | 'text' | 'undo';
@@ -72,8 +75,11 @@ export function WeekEditor({
   saveWeek,
   onStatus,
   barRef,
+  workoutPagesWired = true,
 }: {
   program: ProgramView;
+  /** `false` until the workout pages exist (7b-i): "make a workout first" could not be done. */
+  workoutPagesWired?: boolean;
   saveWeek: ProgramActions['saveWeek'];
   onStatus: (message: string, tone?: StatusTone) => void;
   /** The page's status bar: a moved control is kept clear of it. */
@@ -160,7 +166,7 @@ export function WeekEditor({
         if (lost && (!document.activeElement || document.activeElement === document.body)) {
           control(lost.day, lost.workout, 'text')?.focus();
         }
-        onStatus(weekRefusal(result.reason), 'alert');
+        onStatus(weekRefusal(result.reason, toSend), 'alert');
         // The page's week is the stale one: fetch the latest, as the message says.
         if (isStaleWeek(result.reason)) router.refresh();
         return;
@@ -242,6 +248,8 @@ export function WeekEditor({
   }
 
   function openAdd(day: Weekday) {
+    // A full day opens no form: the tap says why, and focus stays on "+ Add" (plan §Caps).
+    if (dayIsFull(week[day].length)) return onStatus(dayFullText(day));
     flushSync(() => setOpenDay(day));
     document.getElementById(addWorkoutId(day))?.focus();
   }
@@ -288,13 +296,16 @@ export function WeekEditor({
       </h2>
       <p className="text-muted-foreground text-sm">{WEEK_COPY.intro}</p>
       {program.workouts.length ? null : (
-        <p className="text-muted-foreground text-sm">{WEEK_COPY.noWorkouts}</p>
+        <p className="text-muted-foreground text-sm">
+          {workoutPagesWired ? WEEK_COPY.noWorkouts : WEEK_COPY.noWorkoutsCopyOnly}
+        </p>
       )}
       {/* Capped on a wide screen, so ↑ ↓ ✕ stay beside the name they act on. */}
       <div className="flex max-w-2xl flex-col divide-y">
         {MONDAY_FIRST.map((day) => {
           const slots = week[day];
           const pendingUndo = removed?.day === day ? removed : null;
+          const full = dayIsFull(slots.length);
           return (
             <div key={day} className="flex flex-col gap-2 py-3">
               <div className="flex items-center justify-between gap-2">
@@ -312,14 +323,22 @@ export function WeekEditor({
                     }}
                     type="button"
                     variant="ghost"
-                    className="min-w-11"
+                    className={`min-w-11 ${PENDING_CLASS}`}
                     aria-label={addOnLabel(day)}
+                    aria-disabled={full || undefined}
+                    aria-describedby={full ? dayFullId(day) : undefined}
                     onClick={() => openAdd(day)}
                   >
                     {WEEK_COPY.add}
                   </Button>
                 ) : null}
               </div>
+              {/* Under the header row, never in it: in the row it is ~429px against 328px at 360. */}
+              {full ? (
+                <p id={dayFullId(day)} className="text-muted-foreground text-sm">
+                  {dayFullText(day)}
+                </p>
+              ) : null}
               {slots.length || pendingUndo ? (
                 <ul className="flex flex-col gap-1">
                   {slots.map((slot, index) => {

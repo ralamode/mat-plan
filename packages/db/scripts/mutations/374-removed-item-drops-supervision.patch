@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 6fbbfe4b..489594bd 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -707,8 +707,6 @@ function dayWorkout(
+       itemPublicId: movement.publicId,
+       name: first.movementName ?? movement.name,
+       trackingType: movement.trackingType,
+-      // C32: it follows the MOVEMENT, so a removed prescription's item carries it too.
+-      ...supervisionOf(movement),
+       prescribedText: snapshotOf(first),
+       target: { reps: null, quantities: [] },
+       notes: null,

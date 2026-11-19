@@ -2,6 +2,7 @@
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { BUILDER_COPY, PENDING_CLASS } from './builder-text';
@@ -36,7 +37,8 @@ export function SheetFormFooter({
       <Announcer
         id={messageId}
         message={message}
-        className={cn('text-sm font-medium', message ? 'min-h-5' : 'h-0')}
+        // NAME_WRAP_CLASS: a message can name a program, up to its full length, at 360px.
+        className={cn('text-sm font-medium', NAME_WRAP_CLASS, message ? 'min-h-5' : 'h-0')}
       />
       <div className="grid grid-cols-2 gap-2">
         <Button

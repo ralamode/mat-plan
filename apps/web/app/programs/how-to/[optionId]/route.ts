@@ -4,6 +4,7 @@ import { catalogHowToSchema } from '@mat-plan/shared';
 
 import { getHowTo } from '@/lib/dal/program/picker';
 import { sessionUserOrNull } from '@/lib/dal/session';
+import { NO_STORE, notFound } from '@/lib/route-miss';
 
 /**
  * "How to" for one picker option (FAM-1 7b; CAT-3 P16): the movement's name, its steps and its
@@ -19,11 +20,6 @@ import { sessionUserOrNull } from '@/lib/dal/session';
  * The answer is built with the strict `catalogHowToSchema`, so no slug or id rides along.
  */
 export const dynamic = 'force-dynamic';
-
-const NO_STORE = { 'cache-control': 'no-store, private' } as const;
-
-/** The one miss answer. */
-const notFound = () => new NextResponse('Not found', { status: 404, headers: NO_STORE });
 
 export async function GET(
   _request: Request,

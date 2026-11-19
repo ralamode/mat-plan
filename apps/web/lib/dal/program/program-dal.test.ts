@@ -1,5 +1,5 @@
 import { PROGRAM_REFUSAL } from '@mat-plan/shared';
-import { heavyADraft } from '@mat-plan/shared/program/fixtures';
+import { familyProgram, heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -10,6 +10,8 @@ vi.mock('@mat-plan/db', () => ({
   renameProgram: vi.fn(async () => ({ ok: true })),
   saveWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
   readWorkoutDraft: vi.fn(async () => null),
+  readProgramList: vi.fn(async () => []),
+  readProgramView: vi.fn(async () => null),
   saveWeek: vi.fn(async () => ({ ok: true })),
   copyWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
   newItem: vi.fn(async () => ({
@@ -31,6 +33,8 @@ import {
   copyWorkout,
   createProgram,
   newItem,
+  readProgramList,
+  readProgramView,
   readWorkoutDraft,
   renameProgram,
   saveWeek,
@@ -41,7 +45,7 @@ import { emptyWeek, TRACKING_TYPE } from '@mat-plan/shared';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
-import { getWorkoutDraft } from './reads';
+import { getProgramList, getProgramView, getWorkoutDraft } from './reads';
 import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
 import {
   copyHouseholdWorkout,
@@ -269,5 +273,71 @@ describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
     }).catch((e: unknown) => e);
     expect(thrown).toBeInstanceOf(DbWriteError);
     expect(String((thrown as Error).message)).not.toContain('Bear crawl');
+  });
+});
+
+describe('the program DAL (FAM-1 7b-i): the Programs list and a program’s page', () => {
+  const TODAY = '2026-11-18';
+  const TZ = 'America/New_York';
+
+  it('the list reads through the scope, with the route’s today, and passes the DTO on', async () => {
+    const list = [{ programPublicId: PROGRAM_ID, name: 'Strength', athletes: [] }];
+    vi.mocked(readProgramList).mockResolvedValueOnce(list);
+    expect(await getProgramList(TODAY)).toBe(list);
+    expect(vi.mocked(readProgramList).mock.calls).toEqual([[db, SCOPE, TODAY]]);
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('the list with no household is null, with no query; no id names anything, so no report', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await getProgramList(TODAY)).toBeNull();
+    expect(readProgramList).not.toHaveBeenCalled();
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('a program’s page: a non-uuid id is null, with no scope, no query and no report', async () => {
+    expect(await getProgramView('not-a-uuid', TODAY, TZ)).toBeNull();
+    expect(getHouseholdScope).not.toHaveBeenCalled();
+    expect(readProgramView).not.toHaveBeenCalled();
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('a program’s page with no household is null, with no query, and one no_scope report', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await getProgramView(PROGRAM_ID, TODAY, TZ)).toBeNull();
+    expect(readProgramView).not.toHaveBeenCalled();
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [null, { programPublicId: PROGRAM_ID }],
+    ]);
+  });
+
+  it('a program the household does not have is null and reported once', async () => {
+    expect(await getProgramView(PROGRAM_ID, TODAY, TZ)).toBeNull();
+    expect(vi.mocked(readProgramView).mock.calls).toEqual([
+      [db, SCOPE, PROGRAM_ID, { today: TODAY, tz: TZ }],
+    ]);
+    expect(vi.mocked(reportProgramMiss).mock.calls).toEqual([
+      [SCOPE, { programPublicId: PROGRAM_ID }],
+    ]);
+  });
+
+  it('a program found is passed on as it is, and nothing is reported', async () => {
+    vi.mocked(readProgramView).mockResolvedValueOnce(familyProgram);
+    expect(await getProgramView(PROGRAM_ID, TODAY, TZ)).toBe(familyProgram);
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('🔴 a list or page read that throws is rethrown without its data', async () => {
+    const failed = () =>
+      Object.assign(new Error('Failed query: select …\nparams: knee sore'), { code: '57014' });
+    vi.mocked(readProgramList).mockRejectedValueOnce(failed());
+    vi.mocked(readProgramView).mockRejectedValueOnce(failed());
+    for (const thrown of [
+      await getProgramList(TODAY).catch((error: unknown) => error),
+      await getProgramView(PROGRAM_ID, TODAY, TZ).catch((error: unknown) => error),
+    ]) {
+      expect(thrown).toBeInstanceOf(DbWriteError);
+      expect(String(thrown)).not.toContain('knee sore');
+    }
   });
 });

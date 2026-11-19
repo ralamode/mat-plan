@@ -18,8 +18,8 @@ import { refuse } from './refuse';
  * - **not started** (`active_from` after today): the start is removed (soft delete), and the answer
  *   is `lastDay: null`: they were never on it;
  * - **started today, nothing logged under it**: removed too, `lastDay: null`. "Logged" is a live
- *   program row of this athlete today (`programRowOf`) whose session's workout is one of THIS
- *   program's workouts, live or removed. A row ticked and un-ticked is hidden, so it does not count;
+ *   program row of this athlete today (`programRowOf`), under a session that is this athlete's too,
+ *   whose workout is one of THIS program's workouts, live or removed. A row ticked and un-ticked is hidden, so it does not count;
  * - **otherwise**: `active_to = today`, and the answer is `lastDay: today`: they stay on it through
  *   today.
  *
@@ -107,7 +107,13 @@ export async function takeOff(
         .from(schema.entries)
         .innerJoin(
           schema.sessions,
-          and(eq(schema.sessions.id, schema.entries.sessionId), isNull(schema.sessions.deletedAt)),
+          and(
+            eq(schema.sessions.id, schema.entries.sessionId),
+            // The session is this athlete's too (defence in depth, as #589 and #601): a row whose
+            // session another athlete holds is a writer bug's shape, never "logged" for this one.
+            eq(schema.sessions.profileId, athlete.id),
+            isNull(schema.sessions.deletedAt),
+          ),
         )
         .innerJoin(schema.workouts, eq(schema.workouts.id, schema.sessions.workoutId))
         .where(

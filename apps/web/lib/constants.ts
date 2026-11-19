@@ -492,7 +492,7 @@ export const ROUTINE_COPY = {
 } as const;
 
 /** The `tz` cookie's lifetime (seconds) — 1 year. Two consumers, both writing that one cookie:
- *  `app/p/[profileId]/tz-sync.tsx` and `scripts/capture.ts`. ⚠️ Said "shared by the access-gate
+ *  `components/layout/tz-sync.tsx` and `scripts/capture.ts`. ⚠️ Said "shared by the access-gate
  *  cookie and the tz cookie" until AUTH-1 1d deleted the former. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 

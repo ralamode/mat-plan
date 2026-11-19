@@ -19,6 +19,7 @@ import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import {
   EMPTY_TEXT,
   fieldsOf,
+  otherUnitLoad,
   readTyped,
   sameText,
   sameValues,
@@ -26,6 +27,7 @@ import {
   type RowField,
   type RowText,
   type RowWriteKind,
+  unitSuffix,
 } from './row-values';
 
 /**
@@ -422,6 +424,12 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     fail(result.reason, 'untick');
   }
 
+  /**
+   * H9 (12d-ii): the load this visit un-ticked, when it was logged in another unit than the item's
+   * now ("25 lb"). Such a load is never filled from the prescription: it must be typed again.
+   */
+  const retypeFrom = !logged && unticked ? otherUnitLoad(item, unticked.values) : null;
+
   async function press() {
     if (pending || !canWrite) return;
     if (settled) return untick(settled);
@@ -436,10 +444,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       if (untouched || same) return retick(unticked, unticked.hiddenAt);
     }
     if (!canLog) return;
-    const read = readTyped(item, text);
+    // H9 (12d-ii): a row un-ticked this visit whose load was logged in another unit is never
+    // filled from the prescription: the load must be typed.
+    const read = readTyped(item, text, { fillQuantity: retypeFrom === null });
     if (!read.ok) {
       showError({
-        message: TYPED_PROBLEM_COPY[read.problem],
+        // Named with both units, so nobody types the old unit's number into the new unit's field.
+        message:
+          read.problem === 'other_unit' && retypeFrom !== null && item.unit
+            ? DAY_COPY.retypeLoad(retypeFrom, unitSuffix(item.unit))
+            : TYPED_PROBLEM_COPY[read.problem],
         reload: false,
         counts: false,
         invalid: true,
@@ -454,6 +468,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   return {
     text,
     setText,
+    /** The load must be typed (H9): its field shows no prescription to fill from. */
+    mustTypeLoad: retypeFrom !== null,
     error: shownError,
     logged,
     /** An un-ticked row with no field (a Check, a removed prescription) still shows what it held. */

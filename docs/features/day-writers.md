@@ -219,6 +219,14 @@ flowchart LR
     re-reads find no holder and no taken set (the holder was hidden between the statements),
     `logRow` re-runs the insert once; a second miss still throws. Proved with a statement-level
     `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`); mutation 372.
+27. **C32 and C37 in the reader** (contract invariants 32 and 33, `program-contract.md`):
+    - `resolveDayPlan` takes the movement library as an argument. The DAL passes `CATALOG_MOVEMENTS`;
+      the proofs pass the test library, re-slugged to the proof seeder's global rows.
+    - A GLOBAL movement whose entry has a label gives its item `supervision`, live or removed (the
+      label follows the movement). A household's own item never carries one, whatever its slug.
+      Mutations 373 and 374.
+    - `currentPrograms[].endsToday` is present only for a program `programEndsToday` ranks last
+      (ADR 0007 Amendment 5; mutation 375), the same rule `currentPrograms` sorts by.
 
 ## Fake parity
 

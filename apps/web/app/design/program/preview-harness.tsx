@@ -208,7 +208,7 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
         </p>
       ) : null}
       <ProgramLine plan={plan} actions={fake.actions} />
-      {/* No `programsHref`: the Programs page does not exist until step 7b. */}
+      {/* No `programsHref`: the day page passes none either until step 15 (invariant 11). */}
       <NotOnAProgram plan={plan} />
       <DayScreen plan={plan} actions={fake.actions} />
     </>

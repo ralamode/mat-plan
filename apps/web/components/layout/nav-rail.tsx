@@ -2,6 +2,8 @@ import Link from 'next/link';
 
 import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
 
+import { BUILDER_COPY } from '@/components/program-builder/builder-text';
+import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import type { ProfileDTO } from '@/lib/dal/profiles';
 import {
   NAME_WRAP_CLASS,
@@ -13,7 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * The open row's treatment. Two rows can wear it (an athlete, or Settings) — never both at once.
+ * The open row's treatment. One row wears it at a time: an athlete, Programs or Settings.
  *
  * 🔴 **Outlined, not filled, and that is a contrast finding rather than a taste one.** The first
  * version was `bg-accent font-medium`, which put the row's muted kind line on `--accent`: measured,
@@ -29,7 +31,7 @@ const CURRENT_ROW_CLASS = 'border-foreground font-medium';
 const ATHLETES_LABEL_ID = 'nav-rail-athletes';
 
 /** What the open page is, so the rail can mark it without reading the pathname. */
-export type NavRailCurrent = { athlete: string } | 'settings';
+export type NavRailCurrent = { athlete: string } | 'programs' | 'settings';
 
 /**
  * The nav rail (`UI-5`) — **the athlete switcher**, not a list of links.
@@ -52,7 +54,7 @@ export type NavRailCurrent = { athlete: string } | 'settings';
  *
  * ⚠️ **Archived athletes are absent** — the list comes from `listProfiles()`, which drops them
  * (`PROF-1` b criterion 5). Household settings is where an archived athlete is reachable, and that
- * is the row below.
+ * is the last row.
  */
 export function NavRail({
   athletes,
@@ -144,13 +146,29 @@ export function NavRail({
         })}
       </ul>
 
-      <Link
-        href={SETTINGS_PATH}
-        aria-current={current === 'settings' ? 'page' : undefined}
-        className={cn(NAV_ROW_CLASS, 'mt-2', current === 'settings' && CURRENT_ROW_CLASS)}
-      >
-        <span className="text-sm">{NAV_RAIL_COPY.settings}</span>
-      </Link>
+      {/* FAM-1 7b-i (a board-granted guest edit): Programs above Settings, as on Home. Its label is
+          the builder's own word, so the rail and the page's `<h1>` cannot drift. */}
+      {/* Two links, so a list, as Home's Household nav is. */}
+      <ul className="mt-2 flex flex-col gap-2">
+        <li>
+          <Link
+            href={PROGRAMS_PATH}
+            aria-current={current === 'programs' ? 'page' : undefined}
+            className={cn(NAV_ROW_CLASS, current === 'programs' && CURRENT_ROW_CLASS)}
+          >
+            <span className="text-sm">{BUILDER_COPY.programs}</span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href={SETTINGS_PATH}
+            aria-current={current === 'settings' ? 'page' : undefined}
+            className={cn(NAV_ROW_CLASS, current === 'settings' && CURRENT_ROW_CLASS)}
+          >
+            <span className="text-sm">{NAV_RAIL_COPY.settings}</span>
+          </Link>
+        </li>
+      </ul>
     </nav>
   );
 }

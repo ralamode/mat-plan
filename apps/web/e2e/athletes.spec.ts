@@ -595,8 +595,11 @@ test('the picker offers Add athlete, which creates one and lands on their day pa
   const name = uniqueName('create', testInfo.workerIndex);
 
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
-  // The tile is the LAST item in the athlete list, not a control floating beside it.
-  const items = page.locator('main ul > li');
+  // The tile is the LAST item in the athlete list, not a control floating beside it. The list by its
+  // name: Home's Household nav is a list too, below it (FAM-1 7b-i).
+  const items = page
+    .getByRole('list', { name: SETTINGS_COPY.athletes, exact: true })
+    .getByRole('listitem');
   await expect(
     items.last().getByRole('link', { name: new RegExp(ADD_ATHLETE_COPY.heading) }),
   ).toBeVisible();

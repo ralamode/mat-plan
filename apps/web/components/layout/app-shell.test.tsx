@@ -11,6 +11,9 @@ import { PROFILE_KIND, PROFILE_KIND_LABELS } from '@mat-plan/shared';
 import { MAIN_CONTENT_ID, NAV_RAIL_COPY, SETTINGS_COPY, athletePath } from '@/lib/constants';
 import type { ProfileDTO } from '@/lib/dal/profiles';
 
+import { BUILDER_COPY } from '@/components/program-builder/builder-text';
+import { PROGRAMS_PATH } from '@/components/program-builder/routes';
+
 import { AppShell } from './app-shell';
 
 /**
@@ -137,6 +140,23 @@ describe('AppShell — when the rail appears', () => {
     // another constant's value, so a literal here would quietly stop proving anything the day that
     // wording changes — the opposite of the contract-test exception, which pins a const's OWN value.
     expect(screen.queryByRole('link', { name: SETTINGS_COPY.heading })).toBeNull();
+  });
+
+  it('has a Programs row above Settings, marked on a program page (FAM-1 7b-i)', () => {
+    render(
+      <AppShell athletes={ATHLETES} current="programs">
+        body
+      </AppShell>,
+    );
+    const programs = screen.getByRole('link', { name: BUILDER_COPY.programs });
+    const settings = screen.getByRole('link', { name: NAV_RAIL_COPY.settings });
+    expect(programs.getAttribute('href')).toBe(PROGRAMS_PATH);
+    expect(programs.getAttribute('aria-current')).toBe('page');
+    expect(settings.getAttribute('aria-current')).toBeNull();
+    // Above Settings, in reading order.
+    expect(programs.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it('renders no rail with no athletes, and none when the page opts out', () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { supervisionSchema } from '../catalog/vocabulary';
 import { isoDaySchema } from '../date';
 import { keyBySelf } from '../enums';
 import { hiddenAtSchema } from '../hide';
@@ -77,6 +78,15 @@ const dayItemSchema = z.object({
   itemPublicId: lowerCaseUuidSchema,
   name: movementLabelSchema,
   trackingType: trackingTypeSchema,
+  /**
+   * The library's label for a movement to learn with a coach (contract change C32, plan D40).
+   * **Present exactly when the item is a library movement whose library entry carries the label;
+   * absent otherwise, never `null`.** A library movement is one no household owns: a household's
+   * own item never carries a label, whatever its name. The label follows the movement, so an item
+   * whose prescription was removed (logged rows only) carries what a live item of that movement
+   * would. The day page shows it on the item's row from `SUPERVISION_LABELS`, as the picker does.
+   */
+  supervision: supervisionSchema.optional(),
   /**
    * For display. The numbers a screen works with are `target`. The live prescription's text where
    * the live item shows; **where only logged rows show, what the item's first-logged row was
@@ -233,7 +243,17 @@ export const dayPlanSchema = z.object({
    * later, whatever the viewed day. This is the list the Program order dialog shows and
    * `ProgramOrder` must be a permutation of.
    */
-  currentPrograms: z.array(programRefSchema),
+  /**
+   * `endsToday` (contract change C37) is present, and `true`, exactly on a program whose last day
+   * is today: the athlete has started it and comes off it after today. Those are the ones ADR 0007
+   * Amendment 5 sorts after every program that stays, so they are last here. Absent on a program
+   * that stays, one that starts later included. The Reorder dialog lists such a program with no
+   * arrows, since no order can move it up.
+   *
+   * The day's read ranks a row "has an end and has started"; that is the same set, because Take
+   * off is the only writer of an end and it ends on today.
+   */
+  currentPrograms: z.array(programRefSchema.extend({ endsToday: z.literal(true).optional() })),
   /**
    * Live programs only, here and in `currentPrograms`: a hidden program is in neither (C21).
    *

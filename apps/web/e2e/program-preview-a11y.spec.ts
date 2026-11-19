@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
   previewEntries,
@@ -6,8 +6,7 @@ import {
   previewLabel,
   PROGRAM_PREVIEW_PATH,
 } from '../app/design/program/preview-registry';
-import { MIN_TAP_TARGET_PX } from '../lib/constants';
-import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import { expectLinkTargets, expectNoAxeViolations, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
 /**
@@ -46,24 +45,6 @@ const RENDERED = { timeout: 2_000 };
 
 /** What one state may take in the walk below: a page load, an axe run and two measurements. */
 const STATE_BUDGET_MS = 3_000;
-
-/**
- * Every link inside `<main>` is a 44px target too. `expectTapTargets` leaves links out (WCAG's
- * exception for a link inline in a sentence); on these screens a link is a row or a way back, which
- * a thumb aims at, so here they are all measured. Every state has at least the way back.
- */
-async function expectLinkTargets(page: Page, context: string): Promise<void> {
-  const links = await page.getByRole('main').getByRole('link').all();
-  expect(links.length, `${context}: found no links, so the selector is wrong`).toBeGreaterThan(0);
-  const undersized: string[] = [];
-  for (const link of links) {
-    const height = (await link.boundingBox())?.height ?? 0;
-    if (height < MIN_TAP_TARGET_PX) {
-      undersized.push(`"${(await link.innerText()).trim()}" → ${Math.round(height)}px`);
-    }
-  }
-  expect(undersized, `${context}: links under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
-}
 
 test('the program preview lists every screen × fixture, as tappable links', async ({ page }) => {
   await page.goto(PROGRAM_PREVIEW_PATH, { waitUntil: 'networkidle' });

@@ -192,7 +192,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
 2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
    `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
-   transcription to equal them. A fixture is changed by changing the prototype first. **Seven fixtures are not prototype states and say so**: `every-type-once`, `closed-day-program-since-left` (C17), `archived-athlete-today` (C18), `closed-day-nothing-logged` and `archived-athlete-nothing-logged` (C22), `family-program-archived-athlete` and `programs-list-archived-athlete` (C36). Each is the
+   transcription to equal them. A fixture is changed by changing the prototype first. **Nine fixtures are not prototype states and say so**: `every-type-once`, `closed-day-program-since-left` (C17), `archived-athlete-today` (C18), `closed-day-nothing-logged` and `archived-athlete-nothing-logged` (C22), `family-program-archived-athlete` and `programs-list-archived-athlete` (C36), `family-program-full-weekday` (C35) and `coach-label-program-ending-today` (C32, C37). Each is the
    prototype's data arranged to reach a rule no prototype state reaches. **And one field of one
    fixture differs from the prototype's own state, by the maintainer's decision** (2026-11-17):
    the workout that left the week in `workout-left-the-week` has no label, where v12 shows the
@@ -228,9 +228,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    (`preview-harness.test.tsx`) mocks the four screens and asserts only what the harness hands
    them, so filling a stub in changes no file here; a screen's own output is tested beside the
    screen. And each lane's list of owed tests is a file in its own directory:
-   `packages/db/src/writers/program/owed.test.ts` (P), `packages/db/src/writers/day/owed.test.ts`
+   `packages/db/src/writers/day/owed.test.ts`
    (E), `apps/web/components/program-builder/owed.test.ts` (B) and
-   `apps/web/components/day/owed.test.ts` (C). Lanes A and S have no guide, so their lines stay in
+   `apps/web/components/day/owed.test.ts` (C). Lane P's list is empty and its file is gone (6d-ii, #633). Lanes A and S have no guide, so their lines stay in
    `packages/shared/src/program/owed.test.ts` and are edited under the seam rule, one PR at a time.
 10. **Every text a person types is refused if it holds a control character** (a NUL reaches Postgres,
     which refuses it, and the action then throws instead of answering `invalid`).
@@ -240,7 +240,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 11. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
     `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
     `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
-    has no nav rail) and no `programsHref` until the Programs page exists (7b). The switcher's links
+    has no nav rail) and no `programsHref`: the Programs page exists since 7b-i, but the real day page passes
+    none until step 15, when an athlete can be put on a program, and the harness mounts what the
+    page does. The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
     The parts are lane C's; their props are a contract with the page and this harness.
 12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
@@ -324,6 +326,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     today. The answer's `lastDay` is today, or `null` for a removed start, and the screen words its
     message from that: a start dated today can be either, so `hasStarted` alone cannot say. ⚠️ The
     program fake holds no logged rows, so in the preview a start dated today is always removed.
+    **A repeat of a Take off that removed the start answers `{ ok: true, lastDay: null }` again**,
+    not `not_found` (a double tap, a retry: a replay answers as the first call did; plan review
+    log L51). It holds while the removed start's day is today or later; after that day the call
+    is `not_found`, as it is for an athlete who was never on the program. The fake remembers the
+    starts it removed, and its today never moves.
 20. **A copy may carry its own name, and no program ever holds two workouts with one name**
     (`CopyDraft.name`, optional; maintainer, 2026-11-16). Without a name, a copy into the workout's
     own program is named with " (copy)" and a copy into another program keeps the name. A name
@@ -336,6 +343,19 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
     athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
     to list them as available.
+    ⚠️ **Where a program lands in the athlete's order differs between the fake and the real
+    writer.** The fake places a program by the household's list in `candidates[].keeps`, a list
+    of names: it holds no end dates for an athlete's other programs, and it keeps a reopened
+    program where it was. **Until lane P's 6d-iii (#641) merges, the writer puts every new or
+    reopened program last**, so the two differ often. After it a few rare cases remain, each put
+    right by the athlete's Reorder. Two are accepted: (1) a program earlier in the household's list
+    is put on between a same-day Take off and its Put on: the writer reopens by its own rule, the
+    fake leaves the program in place (the maintainer, 2026-11-18); (2) a program is put on the
+    day another of the athlete's programs, later in the household's list, was taken off: the
+    writer places it among the programs that stay, the fake still counts the one ending today
+    (the contract owner, 2026-11-19: the real order is the writer's, and the fake cannot know
+    without a contract change). Whether a third is accepted (two of an athlete's programs taken
+    off the same day and both put back) depends on the reopen rule the maintainer picks for #641.
 
 22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
     The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
@@ -475,7 +495,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       fake, and a save for a program that is not on screen is not counted either. The real
       writers count the destination.
     - **A read of a week is held to the weekday cap too**, because `ProgramView.week` is
-      `weekDaysSchema`. That is safe because no real writer stores a longer day: `saveWeek` parses the draft, and **`copyWorkout`, which adds a slot to each weekday it names without parsing a week, refuses the whole copy with `limit_reached` when one of them is already full** (the destination program's week; judged with the workouts cap; lane P's writer, #605). ⚠️ The fake does not refuse it yet: that follows in the next contract PR. The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
+      `weekDaysSchema`. That is safe because no real writer stores a longer day: `saveWeek` parses the draft, and **`copyWorkout`, which adds a slot to each weekday it names without parsing a week, refuses the whole copy with `limit_reached` when one of them is already full** (the destination program's week; judged with the workouts cap; lane P's writer, #605). The fake refuses it the same way for the program on screen, and `family-program-full-weekday` is the Family program with Monday at the cap. The week's table is new with FAM-1, so no stored week is longer. No other read shape has a `.max` for these
       caps (`ProgramView.workouts` has none), and how many programs a household has is not
       capped.
 31. **An archived athlete is on no program page and no Programs list** (contract change C36;
@@ -499,6 +519,41 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       `DAY_PLAN_FIXTURE_SOURCES` does for the day's (invariant 3): `before` is the world the
       fixture changes from, or `null` when it is the seeded world itself. A proof seeds
       `before ?? world`, makes the change with the real writers, and deep-equals the fixture.
+32. **A day's item carries the library's coach label, and only a library movement can**
+    (contract change C32; plan D40, maintainer 2026-11-17: the label shows on the day page too).
+    `DayItem.supervision` is `'coach'` exactly when the item is a library movement whose library
+    entry carries the label.
+    - **Absent otherwise, never `null`.** The schema refuses `null`, so no fixture without a
+      labelled item changed, and a screen tests for the key.
+    - **A library movement is one no household owns.** A household's own item never carries a
+      label, whatever its name: a family that types "Hang power clean" has made its own item.
+    - **The label follows the movement, not the prescription.** An item whose prescription was
+      removed (logged rows only) carries what a live item of that movement would.
+    - **In a fixture world, `catalog[key].library` says an item IS a movement of the test
+      library** (`CATALOG_FIXTURE`), by its slug. The builder reads the label from that entry and
+      throws when the world's name or tracking type is not the entry's. A data lane's proof seeds
+      such an item as a library row (under a proof-only slug, with the library it hands the
+      resolver re-slugged to match, so a proof's rows never collide with the seeded library) and
+      resolves the label from the library it is handed, never from the world. The item's id is `fixtureIds.item(key)` like any other.
+    - `coach-label-program-ending-today` holds all four cases: a labelled library movement, an
+      unlabelled one, the household's own item, and a labelled movement whose prescription left.
+33. **A program the athlete comes off after today is last in `currentPrograms`, and says so**
+    (contract change C37; ADR 0007 Amendment 5, maintainer 2026-11-18). Each entry may carry
+    `endsToday: true`, present exactly on a program whose last day is today and absent on one
+    that stays; the schema refuses `false`. The day's read ranks a row "has an end and has
+    started", which is the same set: Take off is the only writer of an end and it ends on
+    today. A fixture world with a started program ending later is refused by the builder. Such a program sorts after every program that
+    stays, whatever the athlete's order says, and the day's `programs` and `workouts` follow.
+    - **The Reorder dialog cannot move it**, so it lists it with no arrows (plan §8 and review
+      log L49). ⚠️ Until lane C's dialog reads the flag, it still shows arrows there, and the
+      fake ignores that move as the real order would.
+    - **`reorderPrograms` still takes the full list**, the program ending today included, and the
+      fake puts it last whatever place it was given, as the day's read does.
+    - ⚠️ **A known gap in the fake:** it accepts a reorder for an archived athlete, where the real
+      writer answers `not_found`. `DayPlan` carries no `archived` field on purpose (invariant
+      24), so the fake cannot tell.
+    - `coach-label-program-ending-today` holds it: the program ending today is first in the
+      athlete's own order and reads back last.
 
 ## Traps
 

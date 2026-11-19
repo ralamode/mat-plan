@@ -77,7 +77,13 @@ export type ProtoWorld = {
   today: string;
   /** `archived` is not the prototype's: one fixture sets it, for a rule no prototype state reaches. */
   athletes: Array<{ id: string; name: string; archived?: boolean }>;
-  catalog: Record<FixtureItemKey, { name: string; type: TrackingType }>;
+  /**
+   * `library` is not the prototype's: it says the item IS a movement of the test library
+   * (`CATALOG_FIXTURE`), by its slug, and so a movement no household owns. Every other item is the
+   * household's own. Only a library movement can carry the library's coach label (C32); a data
+   * lane's proof seeds it as a library row with that slug.
+   */
+  catalog: Record<FixtureItemKey, { name: string; type: TrackingType; library?: string }>;
   programs: ProtoProgram[];
   /** Each person's programs, in their own order. `to` is the first day they are off it. */
   assign: Record<string, Array<{ prog: string; from: string; to?: string }>>;

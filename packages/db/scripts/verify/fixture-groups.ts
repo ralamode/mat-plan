@@ -34,4 +34,4 @@ export const REPLAY_FIXTURES: readonly FixtureName[] = NAMES.filter(
 );
 
 /** How many fixtures 12a-ii replays; the proof asserts it, so the filter cannot shrink silently. */
-export const REPLAY_FIXTURE_COUNT = 4;
+export const REPLAY_FIXTURE_COUNT = 5;
