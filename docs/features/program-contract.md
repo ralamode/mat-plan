@@ -485,7 +485,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     - **One function counts a household's items: `householdItemsFull(options)`**
       (`program-shapes.ts`), from the picker's options: an option whose `owner` is `household`
       counts, a library movement never does. The fake asks it. `newItem` (lane P) and the
-      picker's "full" line (lane B, 7b-ii) each still count for themselves, and agree with it
+      picker's "full" line (lane B's `householdIsFull` in `builder-text.ts`, 7b-ii) each still count for themselves, and agree with it
       today; each moves to it in a PR of its own, so the three cannot drift when the library's
       fresh start changes which rows are listed.
     - **Never capped:** an edit of a workout that exists; a replay of a create (the same client
