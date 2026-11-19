@@ -101,6 +101,11 @@ export async function GET(
   }
 
   const zip = await buildExportZip(profileId);
+  // 🔴 `null` is the DAL's refusal: a login that is not the household's owner (FAM-1 export
+  // follow-up, plan PR B), or a profile that went between the check above and the build. It answers
+  // the one miss, byte-identical to an unknown id: a member already sees the athlete in the app, so
+  // the 404 hides nothing new, and the route keeps one miss shape (#643).
+  if (zip === null) return notFound();
 
   return new NextResponse(zip as BodyInit, {
     headers: {
