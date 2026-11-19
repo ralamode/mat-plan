@@ -19,6 +19,7 @@ import { DAY_COPY, refusalCopy, TYPED_PROBLEM_COPY } from './day-copy';
 import {
   EMPTY_TEXT,
   fieldsOf,
+  loggedInOtherUnit,
   readTyped,
   sameText,
   sameValues,
@@ -436,7 +437,11 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       if (untouched || same) return retick(unticked, unticked.hiddenAt);
     }
     if (!canLog) return;
-    const read = readTyped(item, text);
+    // H9 (12d-ii): a row un-ticked this visit whose load was logged in another unit is never
+    // filled from the prescription: the load must be typed.
+    const read = readTyped(item, text, {
+      fillQuantity: !(unticked && loggedInOtherUnit(item, unticked.values)),
+    });
     if (!read.ok) {
       showError({
         message: TYPED_PROBLEM_COPY[read.problem],

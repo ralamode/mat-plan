@@ -147,6 +147,8 @@ export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
   not_a_number: 'Numbers only.',
   out_of_range: 'That number won’t work. Check it.',
   missing: 'Enter a number, then ✓.',
+  // H9 (12d-ii): the load was logged in another unit, so it is never filled from the plan.
+  other_unit: 'This was logged in another unit. Enter the weight you used, then ✓.',
 };
 
 /**

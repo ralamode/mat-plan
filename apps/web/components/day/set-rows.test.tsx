@@ -496,7 +496,7 @@ describe('after the program was edited (D7)', () => {
     expect(control.actions.logRow).not.toHaveBeenCalled();
   });
 
-  it('🔴 an un-ticked load logged in another unit never goes back out in the item’s unit', async () => {
+  it('🔴 an un-ticked load logged in another unit must be typed again: never the prescription’s (H9)', async () => {
     const changed = structuredClone(yesterdayHalfDone);
     const bench = changed.workouts
       .find((w) => w.name === 'Heavy A')!
@@ -508,6 +508,28 @@ describe('after the program was edited (D7)', () => {
     await press(setTick(el(), 'DB bench press', 1));
     // The field is in kg: the lb number is not put in it.
     expect(setField(el(), 'DB bench press', 1, unitSpoken('kg')).value).toBe('');
+    // Only the reps fixed, the load left blank: before H9 (12d-ii) this ✓ sent no load and the
+    // writer stored the prescription's 30 kg for a lift logged in lb. Now nothing is sent, and the
+    // row asks for the weight.
+    fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+    expect(within(el()).getByText(TYPED_PROBLEM_COPY.other_unit)).toBeTruthy();
+    // Typed, it is sent as typed, in the item's unit.
+    fireEvent.change(setField(el(), 'DB bench press', 1, unitSpoken('kg')), {
+      target: { value: '12.5' },
+    });
+    await press(setTick(el(), 'DB bench press', 1));
+    const sent = control.actions.logRow.mock.calls[0]![0].values;
+    expect(sent.quantities).toEqual([{ ...lb(12.5), unit: 'kg' }]);
+    expect(sent.reps).toBe(7);
+  });
+
+  it('a same-unit row still fills an empty load from the prescription after an un-tick (D13 unchanged)', async () => {
+    const control = mount(yesterdayHalfDone);
+    const el = () => card('Heavy A', 'DB bench press');
+    await press(setTick(el(), 'DB bench press', 1));
+    fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.lb), { target: { value: '' } });
     fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
     await press(setTick(el(), 'DB bench press', 1));
     const sent = control.actions.logRow.mock.calls[0]![0].values;

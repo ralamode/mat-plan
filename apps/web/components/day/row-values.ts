@@ -65,7 +65,19 @@ export function placeholderOf(item: DayItem, field: RowField): string | undefine
 }
 
 /** Why a typed value cannot be sent, before any write. */
-export type TypedProblem = 'not_a_number' | 'out_of_range' | 'missing';
+/** Why one typed number cannot be used (a ✓'s and a Change's alike). */
+export type NumberProblem = 'not_a_number' | 'out_of_range' | 'missing';
+/** Why a ✓'s typed row cannot be sent: a number's problem, or a load that must be typed (H9). */
+export type TypedProblem = NumberProblem | 'other_unit';
+
+/**
+ * Whether a row's stored quantity is in another unit than the item logs in now (its prescription's
+ * unit was edited after the row was logged). `textOf` leaves such a quantity out of the field.
+ */
+export function loggedInOtherUnit(item: DayItem, values: RowValues): boolean {
+  const quantity = slotQuantity(item, values.quantities);
+  return !!quantity && quantity.unit !== item.unit;
+}
 
 /**
  * What a ✓ sends, from the row's fields (plan D13).
@@ -77,10 +89,16 @@ export type TypedProblem = 'not_a_number' | 'out_of_range' | 'missing';
  * - A Check: always `{ quantities: [] }`.
  *
  * `empty` is true when nothing was typed in any field.
+ *
+ * 🔴 **`fillQuantity: false`: an empty load is `other_unit`, never the prescription's** (FAM-1
+ * 12d-ii; H9, maintainer, 2026-11-18). For a row un-ticked this visit whose load was logged in
+ * another unit: its field opens blank (`textOf`), and a ✓ with only the reps fixed would otherwise
+ * store the prescription's load, in the new unit, for what was lifted in the old one.
  */
 export function readTyped(
   item: DayItem,
   text: RowText,
+  { fillQuantity = true }: { fillQuantity?: boolean } = {},
 ):
   | { ok: true; values: RowValues; shown: RowValues; empty: boolean }
   | { ok: false; problem: TypedProblem; field: RowField } {
@@ -91,6 +109,7 @@ export function readTyped(
     if (typed === '') {
       // Named here, in field order, so the field marked is the one the prescription cannot fill
       // (a load of 25 lb with a range of reps asks for the reps, not the load).
+      if (field !== 'reps' && !fillQuantity) return { ok: false, problem: 'other_unit', field };
       const fillable = field === 'reps' ? item.target.reps !== null : targetQuantity(item) !== null;
       if (!fillable) return { ok: false, problem: 'missing', field };
       continue;
@@ -191,7 +210,7 @@ export function unitSpoken(unit: Unit): string {
 }
 
 /** Why a changed field kept its logged number (13b-ii): blank, not a number, or out of range. */
-export type KeptField = { field: RowField; problem: TypedProblem; typed: string };
+export type KeptField = { field: RowField; problem: NumberProblem; typed: string };
 
 /**
  * One typed number, for a ✓ (`readTyped`) and a Change (`readAmend`) alike: whole digits for reps
@@ -201,7 +220,7 @@ function readNumber(
   item: DayItem,
   field: RowField,
   typed: string,
-): { ok: true; value: number } | { ok: false; problem: TypedProblem } {
+): { ok: true; value: number } | { ok: false; problem: NumberProblem } {
   if (typed === '') return { ok: false, problem: 'missing' };
   if (field === 'reps') {
     if (!isWholeNumber(typed)) return { ok: false, problem: 'not_a_number' };
