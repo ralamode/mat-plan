@@ -1,12 +1,14 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index a98f3597..37b6a075 100644
+index 23f0a3d8..c1ff1710 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -388,7 +388,6 @@ export async function logRow(
+@@ -483,9 +483,6 @@ export async function logRow(
        // inserts on a second try.
-       // ⚠️ **11b-interim:** the retry inserts a NEW entry. 11c-ii's revive (D35) sends it back through
-       // R2/R3 instead, so the un-ticked entry is brought back (plan 11c, § Proofs 11b's rewrite).
--      [entry] = await insertEntry();
+       // The retry goes back through the revive (11c-ii, plan 11c § Proofs 11b's rewrite), so the
+       // un-ticked entry is brought back rather than a second one inserted beside it.
+-      placed = await place();
+-      if ('answer' in placed) return placed.answer;
+-      entry = placed.entry;
        if (!entry) {
          // A second miss is explained the same way (a duplicate request that won the retry, or a third
          // phone's ✓ in between) before anything throws.

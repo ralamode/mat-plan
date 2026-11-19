@@ -42,8 +42,9 @@ export * from './queries/household-scope';
 // The single-sourced strength-session write core (V1-8-2), run by both the app DAL and db:verify.
 export * from './writers/bodyweight';
 export * from './writers/checkin';
-// V1-9b B1-1b: the ONLY module that writes `entries.deleted_at`, and the only read that returns a
-// tombstone's values (ADR 0008 decisions 2 and 3.3).
+// V1-9b B1-1b: the ONLY module that HIDES an entry (the row writer's revive, private to
+// `writers/day/log-row.ts`, only clears `deleted_at`, through `UNHIDE`), and the only read that returns
+// a tombstone's values (ADR 0008 decisions 2 and 3.3).
 export * from './writers/hide';
 export * from './queries/hidden-entries';
 // V1-9b B1-2: a day's clear events for the banner. Only the read: its conjuncts stay in the package.
