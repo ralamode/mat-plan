@@ -166,7 +166,10 @@ describe('Put someone on (FAM-1 10b)', () => {
   });
 
   it('someone ticked back on gets no order hint: they go back where they were (invariant 19)', () => {
-    const off = familyProgramAfterTakeOff.candidates.find((c) => c.on)!;
+    const lastOff = familyProgramAfterTakeOff.athletes.find((a) => a.lastDay)!;
+    const off = familyProgramAfterTakeOff.candidates.find(
+      (c) => c.profilePublicId === lastOff.profilePublicId,
+    )!;
     const withKeeps: ProgramView = {
       ...familyProgramAfterTakeOff,
       candidates: familyProgramAfterTakeOff.candidates.map((c) =>
@@ -175,8 +178,9 @@ describe('Put someone on (FAM-1 10b)', () => {
     };
     page({ takeOff: vi.fn() }, withKeeps);
     openDialog();
-    const lastOff = withKeeps.athletes.find((a) => a.lastDay)!;
     fireEvent.click(box(lastOff.name));
+    // They keep another program, so the switch hint shows; the order hint does not.
+    expect(within(dialog()).getByText(switchHintText(['Stretching']))).toBeTruthy();
     expect(within(dialog()).queryByText(orderHintText(familyProgram.name))).toBeNull();
   });
 
