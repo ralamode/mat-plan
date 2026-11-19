@@ -35,14 +35,9 @@ import { BuilderLink } from './route-link';
 export type ProgramScreenProps = {
   program: ProgramView;
   actions: ProgramActions;
-  /**
-   * Whether the workout pages exist (FAM-1 7b-ii). The real page passes `false` in 7b-i, so no
-   * workout row or "+ New workout" links to a 404; the preview keeps the default, `true`.
-   */
-  workoutPagesWired?: boolean;
 };
 
-export function ProgramScreen({ program, actions, workoutPagesWired = true }: ProgramScreenProps) {
+export function ProgramScreen({ program, actions }: ProgramScreenProps) {
   const { status, report } = useStatusLine();
   const barRef = useRef<HTMLDivElement>(null);
   return (
@@ -73,16 +68,9 @@ export function ProgramScreen({ program, actions, workoutPagesWired = true }: Pr
         program={program}
         copyWorkout={actions.copyWorkout}
         putOnWired={!!actions.putOn}
-        workoutPagesWired={workoutPagesWired}
         onStatus={report}
       />
-      <WeekEditor
-        program={program}
-        saveWeek={actions.saveWeek}
-        onStatus={report}
-        barRef={barRef}
-        workoutPagesWired={workoutPagesWired}
-      />
+      <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />
       {/* The page's one status bar, in view wherever the change was made. */}
       <div
         ref={barRef}
