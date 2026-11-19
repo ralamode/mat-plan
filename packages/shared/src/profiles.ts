@@ -176,14 +176,11 @@ export const CHOOSE_KIND_MESSAGE = 'Choose Child or Adult.';
  * where a wrong row is permanent without the operator. Whichever chunk ships an in-app per-profile
  * delete (`A3` / `V1-9b`) changes that arithmetic and re-opens this number.
  *
- * ⚠️ **It is a count-then-insert, so a concurrent burst OVERSHOOTS it** — N requests that all read
- * `count < 25` before any commits all insert. Written down rather than locked: the rows are the
- * caller's own household, and 25 is not a correctness boundary the way a tenancy predicate is — it is
- * a brake on unbounded growth. **What it means for the claim above: the cap bounds the steady state,
- * not a single burst.** A `pg_advisory_xact_lock` per household inside `ownership.ts` (the one module
- * that may unwrap `scope.householdId`) would close it; it is filed in
- * [tech-debt.md](../../../docs/tech-debt.md) rather than fixed here, because it changes the
- * `Executor` contract on the write path and that belongs in its own reviewed chunk.
+ * ✅ **It holds under a concurrent burst.** `createProfile` counts and inserts under a per-household
+ * `pg_advisory_xact_lock` (`ADVISORY_LOCK.householdAthletes`, `packages/db/src/writers/locks.ts`), as
+ * `newItem` does for items, so N adds at once are serialized and the Nth past 25 is refused `full`.
+ * Until 2026-11-19 it was a count-then-insert that a burst overshot; the fix needed no `Executor`
+ * change after all (plan: docs/plans/td-athlete-cap-lock.md).
  *
  * 🔴 **An earlier draft of this paragraph said the burst "is bounded by the limiter", which the
  * paragraph above contradicts** — `checkMutationLimit` fails open, so with Upstash down there is no

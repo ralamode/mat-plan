@@ -7,6 +7,7 @@ import type { HouseholdScope, OwnerScope } from '../scope';
 import {
   countProfilesIn,
   findNameMatch,
+  householdRowIs,
   type NameMatch,
   insertProfileOwnedBy,
   isLiveProfile,
@@ -14,6 +15,7 @@ import {
   profileByClientId,
 } from './ownership';
 import type { Executor } from './executor';
+import { ADVISORY_LOCK } from './locks';
 
 /** What both archive writers return — the row's public id and the stored `archived_at`, or `null`. */
 type ArchivedRow = { publicId: string; archivedAt: Date | null };
@@ -302,14 +304,19 @@ export type CreateProfileResult =
  *
  * ## ⚠️ What the duplicate warning does NOT promise
  *
- * **It is advisory and best-effort, not an invariant.** Two requests with DIFFERENT keys and the same
- * name arriving together both pass step 2 and both insert — exactly the duplicate this feature exists
- * to discourage. A unique index on a folded name is impossible, because "Add another" is a *feature*:
- * two cousins really can both be Ada. The same count-then-insert race already applies to the quota
- * (`docs/tech-debt.md`). Nothing here should be described as preventing duplicates; it warns about
+ * **It is advisory, not an invariant.** Since the household lock (`createProfile`, below), two
+ * requests with DIFFERENT keys and the same name are serialized, so the second one IS warned; but the
+ * warning is still something a parent can acknowledge past, and nothing in the schema enforces it. A
+ * unique index on a folded name is impossible, because "Add another" is a *feature*: two cousins
+ * really can both be Ada. Nothing here should be described as preventing duplicates; it warns about
  * them.
+ *
+ * This body runs only under `createProfile`'s lock. It is kept as its own function, byte-for-byte as
+ * it was, so the mutation patches that target it still apply. ⚠️ So its inner comment on the
+ * `excludeClientId` race ("real against a pooled Neon") is now history: the lock serializes a
+ * same-key twin, which returns at step 1. The exclusion stays as defence in depth.
  */
-export async function createProfile(
+async function addProfile(
   exec: Executor,
   scope: HouseholdScope,
   input: {
@@ -354,4 +361,51 @@ export async function createProfile(
 
   const created = await profileByClientId(exec, scope, input.clientId);
   return created ? { ok: true, publicId: created.publicId } : { ok: false, reason: 'refused' };
+}
+
+/**
+ * Add an athlete, under the household's athletes lock (tech-debt: "The athlete cap is a
+ * count-then-insert"; plan: docs/plans/td-athlete-cap-lock.md).
+ *
+ * `addProfile` reads the count and then inserts. Unlocked, N adds at once from one household all read
+ * `count < MAX_HOUSEHOLD_ATHLETES` and all insert (the limiter fails open, so it never bounded that).
+ * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, exactly as `newItem`
+ * does for its items (#605), so a second add at the same moment waits, then counts the first add's
+ * committed row; a same-key twin finds its twin's row at the replay step. That is why the replay lookup
+ * runs AFTER the lock, not before it.
+ *
+ * ⚠️ **No `isolationLevel` option.** The default READ COMMITTED gives each read after the lock a fresh
+ * snapshot that includes the waited-on add. Under REPEATABLE READ the snapshot would predate the wait
+ * and the cap would be walked past again.
+ */
+export async function createProfile(
+  exec: Executor,
+  scope: HouseholdScope,
+  input: {
+    name: string;
+    kind: ProfileKind;
+    clientId: string;
+    /** The FOLDED name the caller was warned about, if they are re-confirming. */
+    acknowledgedDuplicate?: string;
+  },
+): Promise<CreateProfileResult> {
+  return exec.transaction(async (tx) => lockedCreate(tx, scope, input));
+}
+
+async function lockedCreate(
+  exec: Executor,
+  scope: HouseholdScope,
+  input: Parameters<typeof addProfile>[2],
+): Promise<CreateProfileResult> {
+  // Held until the transaction ends. Reached through the household row, so the tenant id is never
+  // unwrapped here. No row means the household is gone (an erasure mid-call): `refused`, so the
+  // count never runs without the lock.
+  const locked = await exec
+    .select({
+      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
+    })
+    .from(schema.households)
+    .where(householdRowIs(scope));
+  if (locked.length !== 1) return { ok: false, reason: 'refused' };
+  return addProfile(exec, scope, input);
 }

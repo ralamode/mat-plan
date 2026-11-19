@@ -10,8 +10,8 @@ export const ADVISORY_LOCK = {
   /** A household's own items: `newItem` counts and adds them one at a time (`writers/program/new-item.ts`). */
   householdItems: 600_001,
   /**
-   * RESERVED for the household's athletes cap (`MAX_HOUSEHOLD_ATHLETES`; `profile.ts`, tech-debt.md),
-   * when its count moves under a lock.
+   * A household's athletes: `createProfile` counts and adds them one at a time, against
+   * `MAX_HOUSEHOLD_ATHLETES` (`writers/profile.ts`).
    */
   householdAthletes: 600_002,
 } as const;
