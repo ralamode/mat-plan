@@ -666,28 +666,35 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
   // D5.7, owed from A1: the TEN-2d blocker count reads the CHECK's own predicate.
   const report = CORRECTIONS.find((c) => c.name === MOVEMENTS_OWNERSHIP_REPORT_NAME);
   assert.ok(report, 'CAT-3 A2-i: the movements-ownership report is in the registry');
-  const blockerLine = async (tx: VerifyTx) =>
-    ((await report.run(tx as unknown as Database, false)) as string[]).find((l) =>
-      l.startsWith('TEN-2d blocker'),
-    ) ?? '';
+  // The shared verify database already holds rows other proofs planted, so the proof is a DELTA.
+  const blockers = async (tx: VerifyTx) => {
+    const line =
+      ((await report.run(tx as unknown as Database, false)) as string[]).find((l) =>
+        l.startsWith('TEN-2d blocker'),
+      ) ?? '';
+    const n = /: (\d+)$/.exec(line)?.[1];
+    assert.ok(n !== undefined, `CAT-3 A2-i: the report has a TEN-2d blocker count (${line})`);
+    return Number(n);
+  };
   await rolledBack(async (tx) => {
+    const before = await blockers(tx);
     await tx
       .insert(schema.movements)
       .values(
         movementRow('cat3_a2_mobility_no_pattern', { modality: MODALITY.mobility, pattern: null }),
       );
-    assert.match(
-      await blockerLine(tx),
-      /: 0$/,
+    assert.equal(
+      await blockers(tx),
+      before,
       'CAT-3 A2-i: a global non-strength catalog row with no pattern is not a TEN-2d blocker',
     );
     await tx.execute(
       sql`ALTER TABLE movements DROP CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)}`,
     );
     await tx.insert(schema.movements).values(movementRow('cat3_a2_neither', { pattern: null }));
-    assert.match(
-      await blockerLine(tx),
-      /: 1$/,
+    assert.equal(
+      await blockers(tx),
+      before + 1,
       'CAT-3 A2-i: …and a global row with neither a pattern nor a modality is one',
     );
   });
