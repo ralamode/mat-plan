@@ -163,6 +163,14 @@ describe('minutesToClock (V1-7 — tz-free 12-hour clock)', () => {
   ])('formats %i minutes as %s (plain space before AM/PM)', (min, clock) => {
     expect(minutesToClock(min)).toBe(clock);
   });
+
+  it.each([
+    [1440, '1440'],
+    [412.5, '412.5'],
+    [-1, '-1'],
+  ])('returns %s as itself: not a minute of one day, so never a wrapped clock', (min, written) => {
+    expect(minutesToClock(min)).toBe(written);
+  });
 });
 
 describe('formatDayLong', () => {

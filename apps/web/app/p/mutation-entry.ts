@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { TRANSPORT_REFUSALS, type TransportRefusal } from '@mat-plan/shared';
-import * as Sentry from '@sentry/nextjs';
 
 import { RATE_LIMITED } from '@/lib/constants';
 import { sessionUserOrNull } from '@/lib/dal/session';
@@ -9,6 +8,7 @@ import {
   checkMutationLimit,
   MUTATION_RATE_LIMIT,
   type MutationLimitPolicy,
+  reportLimiterUnavailable,
 } from '@/lib/rate-limit';
 
 // ⚠️ `action-state.ts` did NOT move with this file (WP-1): it is imported by the route's form
@@ -123,12 +123,8 @@ export async function enterMutation(
       : { ok: false, reason: TRANSPORT_REFUSALS.rateLimited };
   }
   if (limit.reason === 'limiter-error') {
-    // A permanently-dead fail-open limiter is otherwise completely silent.
-    Sentry.addBreadcrumb({
-      category: 'rate-limit',
-      level: 'warning',
-      message: 'mutation limiter unavailable',
-    });
+    // A permanently-dead fail-open limiter is otherwise completely silent: one event per process.
+    reportLimiterUnavailable('mutation');
   }
 
   return { ok: true, userId: user.userId };

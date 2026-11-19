@@ -707,17 +707,12 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
 - **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
   rule is scoped to `/api/sync`, so there is no standing convention this violates.
 
-### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
-
-- **What & why:** `.github/scripts/check-status-touched.mjs` still accepts a `docs/status.md` touch
-  when `docs/changelog/README.md` is absent from the working tree, so branches cut before DX-2 aren't
-  failed for a rule that didn't exist when they were cut. Its self-test keeps the legacy cases.
-- **Impact:** low. It's dead code once no open branch predates DX-2, but it's a second rule to read.
-- **Proposed fix:** once `gh pr list` shows no open PR whose merge base predates #190, delete the
-  legacy branch of the guard and its test cases, and drop the "LEGACY" paragraph from the docblock.
-- **Severity:** low.
-
 ### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
+
+> ✅ **Closed by DX-18 PR 2:** `changed-scopes.mjs` treats an image as inert only under `docs/` or
+> `.github/`, so an image under `apps/web/` runs the smoke and the build
+> (`changed-scopes.test.sh` → "an image under apps/web/ is app content"). The entry is kept for its
+> history.
 
 - **What & why:** `.github/workflows/ci.yml`'s e2e auto-skip treats any
   `\.(png|jpe?g|gif|svg|webp|ico)$` file as provably inert. That was right while images were only PR

@@ -229,8 +229,9 @@ flowchart LR
       (ADR 0007 Amendment 5; mutation 375), the same rule `currentPrograms` sorts by.
 
 28. **The 14b partition proof** sits beside `verifyExport` in `verify/day.ts`: it logs every kind of entry
-    and plants a hidden check-in and a bodyweight metric under another activity, then asserts each live
-    entry is in exactly one export file (the read is `write-path.md`'s; mutations 368–371).
+    and plants a hidden check-in, a bodyweight metric under another activity and a weigh-in naming a
+    movement, then asserts each live entry is in exactly one export file (the read is `write-path.md`'s;
+    mutations 368–371, 376–379).
 
 ## Fake parity
 

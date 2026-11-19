@@ -76,6 +76,11 @@ erasure graph".
 
 ## Traps
 
+- **A proof of a session setting must reset it first.** The last migration and the seed leave the
+  session at `lock_timeout` 5s and `statement_timeout` 60s, the values `setLocalTimeouts` sets, and
+  PGlite has one session, so a check that reads them back passes whether or not the code set them.
+  `verifyTimeoutsHold` resets both, asserts each one was reset, and restores them afterwards;
+  mutation 335 is the case it would otherwise miss.
 - `movementIsAvailableTo` and `templateBlockIn` / `liveTemplateBlockIn` look like the right leaves
   and are not: the first adds `household_id IS NULL` (the global catalog, which must survive), the
   others miss legacy and hidden blocks.

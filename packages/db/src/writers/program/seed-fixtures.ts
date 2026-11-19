@@ -194,7 +194,8 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
       made.set(program.id, programPublicId);
     }
 
-    // Each athlete's programs in their own order, so the order `putOn` gives them is the world's.
+    // Each athlete's programs, in the world's order. `putOn` places each by the Programs list
+    // (D41), and the world lists them in that order, so the seeded order is the world's.
     // Only onto programs made in this run: a program seeded before keeps the athletes it has now.
     for (const [athlete, assigned] of Object.entries(FIXTURE_WORLD.assign)) {
       const profilePublicId = SEED_FIXTURE_ATHLETES[athlete];

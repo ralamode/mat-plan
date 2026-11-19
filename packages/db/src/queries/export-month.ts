@@ -286,11 +286,19 @@ export function foldStrengthMonth(rows: readonly StrengthMonthRow[]): FoldedStre
  * key on the metric alone: the two agree on every row today, since every weigh-in carries the metric
  * (migration 0002's backfill). The export takes the wider test on purpose, so a weigh-in that ever
  * lost its metric still leaves in the bodyweight file and never in check-ins (plan, review B10).
+ *
+ * A row with a movement is never a bodyweight reading: the schema's check allows a weigh-in with a
+ * `movement_id` and no metric, and the strength log's join already takes that row, so without the
+ * `movement_id IS NULL` it would leave in two files. ⚠️ The strength log writes set values, so such a
+ * row's own `value_num` is not exported: accepted, because no writer makes one.
  */
 export function bodyweightEntry() {
-  return or(
-    eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.weighIn),
-    sql`${schema.entries.metricKey} is not distinct from ${SEED_METRIC_KEYS.bodyweight}`,
+  return and(
+    isNull(schema.entries.movementId),
+    or(
+      eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.weighIn),
+      sql`${schema.entries.metricKey} is not distinct from ${SEED_METRIC_KEYS.bodyweight}`,
+    ),
   )!;
 }
 
