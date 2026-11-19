@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  householdItemsFull,
   MAX_WORKOUT_ITEMS,
   MOVEMENT_NAME_MAX,
   newItemSchema,
@@ -32,7 +33,6 @@ import {
   createdText,
   existedText,
   existedUnlistedText,
-  householdIsFull,
   ITEM_PICKER_COPY as COPY,
   newItemLabel,
   newItemRefusal,
@@ -163,7 +163,7 @@ export function ItemPicker({
    * and Create stays only for a name that selects an existing item (never capped, invariant 30).
    * Counted from the options, which hold every item the household made, those made here included.
    */
-  const householdFull = householdIsFull(options);
+  const householdFull = householdItemsFull(options);
   /** The household-full line, unless the footer is saying it already. */
   const householdFullShown = householdFull && notice !== COPY.householdFull;
   const householdFullLine = householdFullShown ? (

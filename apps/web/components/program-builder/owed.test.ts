@@ -21,18 +21,15 @@ import { describe, it } from 'vitest';
 // (`e2e/program-builder.spec.ts`), the four pages' a11y walk (`.a11y.spec.ts`), and a page or route
 // per path (`routes.test.ts`).
 
-describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
-  it.todo('15: a parent puts a test athlete on a program and they log it (e2e)');
-});
+// Step 15's lines are proved (15 PR 1): a parent puts a new athlete on a program and they log it,
+// then off and back on (`e2e/program-builder.spec.ts`); putOn and takeOff in `PROGRAM_ACTIONS` with
+// their controls (`app/programs/actions.test.ts`, `put-on-dialog.test.tsx`); the Put-on dialog at
+// 360px with axe, tap targets and in-sheet overflow (`.a11y.spec.ts`); `putOnComing` deleted.
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
-  it.todo('15: putOn and takeOff join ProgramActions, and their controls appear');
+  // Every screen step still to come owes these two (15 PR 2 and PR 3 among them).
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');
   // "n items added." only after the item picker has closed: `e2e/program-builder.spec.ts` (7b-ii).
   // The Copy half is `e2e/program-builder.spec.ts` (7b-i).
-  it.todo('15: the e2e opens the Put-on dialog at 360px and runs axe, tap targets and overflow');
-  it.todo(
-    '15: the interim line under "Who’s on it" (BUILDER_COPY.putOnComing) is deleted once Put on is wired',
-  );
 });
