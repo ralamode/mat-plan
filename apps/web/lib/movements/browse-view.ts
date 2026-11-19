@@ -5,6 +5,7 @@ import {
   byFoldedName,
   filterMovementOptions,
   movementFamilyOf,
+  movementFiltersOn,
   type BrowseKind,
   type Modality,
   type MovementFamily,
@@ -39,7 +40,10 @@ export type BrowseKey = string;
 
 export const BROWSE_KEY = {
   custom: 'custom',
+  /** "All movements", and "Movements that fit your filters" under a filter: one group, one key. */
   all: 'all',
+  /** "Today's program", which a caller passes; never under a filter. */
+  program: 'program',
   /** ⏳ K24's section. TODO(CAT-3 chunk R): goes with `BuiltInWithoutLibrary`. */
   notSorted: 'not-sorted',
 } as const;
@@ -68,6 +72,17 @@ export type BrowseView = {
    * tree alone, so the custom items and K24's rows never keep a short tree shut.
    */
   readonly auto: boolean;
+  /**
+   * A filter is on: the tree is "Movements that fit your filters" and "Your custom items" starts
+   * folded, however few they are (P9, K25).
+   */
+  readonly filtered: boolean;
+};
+
+/** What a group's default reads: the view's, and whether every one of Today's program is on a card. */
+export type BrowseDefaults = Pick<BrowseView, 'auto' | 'custom' | 'filtered'> & {
+  /** Today's program starts folded once every prescribed movement is on a card. */
+  readonly programAllOnForm?: boolean;
 };
 
 /**
@@ -91,20 +106,26 @@ export function browseView(
     bare: bare.sort(byFoldedName),
     total: library.length + bare.length,
     auto: library.length <= BROWSE_OPEN_AT_MOST,
+    filtered: movementFiltersOn(filters) > 0,
   };
 }
 
 /**
  * The groups that hold an option, outermost first: what must be open for its row to be on screen.
  * A household item sits in "Your custom items"; a library row in All movements, its kind and (when
- * its kind has families) its family; a built-in with no library data in K24's section.
+ * its kind has families) its family; a built-in with no library data in K24's section. A row in
+ * Today's program (`programIds`) is in that section too.
  */
-export function browseAncestors(option: MovementOptionDTO): readonly BrowseKey[] {
-  if (option.owner === 'household') return [BROWSE_KEY.custom];
-  if (!hasLibraryData(option)) return [BROWSE_KEY.all, BROWSE_KEY.notSorted];
+export function browseAncestors(
+  option: MovementOptionDTO,
+  programIds: ReadonlySet<string> = new Set(),
+): readonly BrowseKey[] {
+  const program = programIds.has(option.publicId) ? [BROWSE_KEY.program] : [];
+  if (option.owner === 'household') return [BROWSE_KEY.custom, ...program];
+  if (!hasLibraryData(option)) return [BROWSE_KEY.all, BROWSE_KEY.notSorted, ...program];
   const kind = option.modality;
-  if (BROWSE_FLAT_KINDS.includes(kind)) return [BROWSE_KEY.all, kindKey(kind)];
-  return [BROWSE_KEY.all, kindKey(kind), familyKey(kind, movementFamilyOf(option))];
+  if (BROWSE_FLAT_KINDS.includes(kind)) return [BROWSE_KEY.all, kindKey(kind), ...program];
+  return [BROWSE_KEY.all, kindKey(kind), familyKey(kind, movementFamilyOf(option)), ...program];
 }
 
 /**
@@ -123,15 +144,16 @@ export type BrowseOpenState = {
 export const CLOSED_BROWSE: BrowseOpenState = { userChoice: new Map(), seeded: new Set() };
 
 /**
- * Whether a group is open: the person's tap, else seeded, else its default. All movements starts
- * open; "Your custom items" while it holds `CUSTOM_OPEN_AT_MOST` or fewer; a kind, a family and
- * K24's "Not sorted yet" when the tree opens itself (`auto`). Never the custom items by `auto`:
+ * Whether a group is open: the person's tap, else seeded, else its default. All movements (or what
+ * fits the filters) starts open; "Your custom items" while it holds `CUSTOM_OPEN_AT_MOST` or fewer
+ * and no filter is on (P9); Today's program while any of it is not yet on a card; a kind, a family
+ * and K24's "Not sorted yet" when the tree opens itself (`auto`). Never the custom items by `auto`:
  * twenty-four of them would bury a short tree.
  */
 export function isBrowseOpen(
   key: BrowseKey,
   state: BrowseOpenState,
-  view: Pick<BrowseView, 'auto' | 'custom'>,
+  view: BrowseDefaults,
 ): boolean {
   const chosen = state.userChoice.get(key);
   if (chosen !== undefined) return chosen;
@@ -140,7 +162,9 @@ export function isBrowseOpen(
     case BROWSE_KEY.all:
       return true;
     case BROWSE_KEY.custom:
-      return view.custom.length <= CUSTOM_OPEN_AT_MOST;
+      return !view.filtered && view.custom.length <= CUSTOM_OPEN_AT_MOST;
+    case BROWSE_KEY.program:
+      return !view.programAllOnForm;
     default:
       // A kind, a family, and ⏳ K24's "Not sorted yet": folded on a long tree (K24), open with a
       // short one _(maintainer, 2026-11-19: "Open it while the tree is small")_, since before the
@@ -166,8 +190,9 @@ export function toggleBrowse(
 export function seedBrowse(
   state: BrowseOpenState,
   options: readonly MovementOptionDTO[],
+  programIds?: ReadonlySet<string>,
 ): BrowseOpenState {
-  const keys = options.flatMap(browseAncestors);
+  const keys = options.flatMap((option) => browseAncestors(option, programIds));
   if (keys.length === 0) return state;
   const userChoice = new Map(state.userChoice);
   for (const key of keys) userChoice.delete(key);

@@ -126,8 +126,8 @@ describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
       />,
     );
     open();
-    // 🔴 **Today's program IS in this list**: its `h3` sits inside its `summary`, so a screen-reader
-    // user skimming by heading reaches the day's actual program.
+    // 🔴 **Today's program IS in this list**: its `h3` holds its disclosure button, so a
+    // screen-reader user skimming by heading reaches the day's actual program.
     const expected = [
       screen.getByRole('heading', { level: 3, name: COPY.choiceName(COPY.household, 1) }),
       screen.getByRole('heading', { level: 3, name: COPY.recent }),
@@ -567,14 +567,21 @@ describe("Today's program", () => {
     );
     open();
   };
-  const details = () => document.querySelector('details');
+  /** Its disclosure: no count, as before it moved onto the picker's one `Group` (CAT-3 B3-ii). */
+  const program = (name: string = COPY.todaysProgram) => screen.queryByRole('button', { name });
+  const rows = () => {
+    const button = program() ?? program(COPY.todaysProgramAllOnForm);
+    return button?.closest('section')?.querySelectorAll('li').length ?? 0;
+  };
 
   it('is OPEN while a prescribed movement is not yet on a card', () => {
     renderProgram({
       ids: [prescribed.publicId, other.publicId],
       onFormIds: new Set([other.publicId]),
     });
-    expect(details()?.open).toBe(true);
+    expect(program()?.getAttribute('aria-expanded')).toBe('true');
+    expect(program()?.parentElement?.tagName).toBe('H3');
+    expect(rows()).toBe(2);
   });
 
   it('is CLOSED, and says so, once every prescribed movement is on a card', () => {
@@ -582,17 +589,18 @@ describe("Today's program", () => {
       ids: [prescribed.publicId, other.publicId],
       onFormIds: new Set([prescribed.publicId, other.publicId]),
     });
-    expect(details()?.open).toBe(false);
-    expect(document.querySelector('summary')?.textContent).toBe(COPY.todaysProgramAllOnForm);
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('false');
+    expect(rows()).toBe(0);
   });
 
-  it('still lists EVERY prescribed row when closed — a second card stays one tap away', () => {
+  it('still lists EVERY prescribed row when closed — a second card is one tap away', () => {
     renderProgram({
       ids: [prescribed.publicId, other.publicId],
       onFormIds: new Set([prescribed.publicId, other.publicId]),
     });
-    const inDetails = details()?.querySelectorAll('li').length;
-    expect(inDetails).toBe(2);
+    act(() => void fireEvent.click(program(COPY.todaysProgramAllOnForm)!));
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
+    expect(rows()).toBe(2);
   });
 
   it('is absent with `alreadyIn` — D2 edits a workout and has no "today"', () => {
@@ -600,14 +608,66 @@ describe("Today's program", () => {
       { ids: [prescribed.publicId], onFormIds: new Set() },
       { alreadyIn: { ids: new Set(), label: 'Strength A' } },
     );
-    expect(details()).toBeNull();
+    expect(program()).toBeNull();
   });
 
   it('🔴 drops a prescribed id with no matching option, before deciding open/closed', () => {
-    // Otherwise the `<details>` opens over a row it cannot render. Reachable when a prescription
+    // Otherwise the section opens over a row it cannot render. Reachable when a prescription
     // names a movement outside the picker map, or a household row that fell off Decision 5's list.
     renderProgram({ ids: ['no-such-option-id'], onFormIds: new Set() });
-    expect(details()).toBeNull();
+    expect(program()).toBeNull();
+  });
+
+  /** Multi mode, the caller's toggle putting each ticked row on a card, as the item picker does. */
+  function ProgramHarness() {
+    const [isOpen, setOpen] = useState(false);
+    const [selected, setSelected] = useState<string[]>([]);
+    const ref = useRef<HTMLButtonElement>(null);
+    return (
+      <main>
+        <button ref={ref} type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        <MovementPicker
+          open={isOpen}
+          onOpenChange={setOpen}
+          title="Add items"
+          data={{ options: ALL_CATALOG }}
+          todaysProgram={{ ids: [prescribed.publicId], onFormIds: new Set(selected) }}
+          returnFocusTo={ref}
+          multiple={{
+            selected,
+            onToggle: (option) =>
+              setSelected((all) =>
+                all.includes(option.publicId)
+                  ? all.filter((id) => id !== option.publicId)
+                  : [...all, option.publicId],
+              ),
+            onCreate: vi.fn(),
+            createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+            noMatchHint: 'No item matches.',
+            searchLabel: 'Search items',
+            searchPlaceholder: 'Search items',
+            footerAction: <button type="button">Add</button>,
+          }}
+        />
+      </main>
+    );
+  }
+
+  it('🔴 a tick in it keeps it open though every row is now on a card, and so does the untick', () => {
+    render(<ProgramHarness />);
+    open();
+    const box = () =>
+      within(
+        program()?.closest('section') ?? program(COPY.todaysProgramAllOnForm)!.closest('section')!,
+      ).queryByRole('checkbox', { name: /^Front Squat\b/ });
+    act(() => void fireEvent.click(box()!));
+    // The heading now says all of it is added, and the section stays open under the thumb.
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
+    act(() => void fireEvent.click(box()!));
+    expect(program()?.getAttribute('aria-expanded')).toBe('true');
+    expect(box()?.getAttribute('aria-checked')).toBe('false');
   });
 });
 
