@@ -297,6 +297,21 @@ its own vitest file. Its cases:
   - (B) The same timing, with the variable as A1.1 specifies.
   - Either way, K29's "Lane P builds it in P11-ii-a" becomes "in its own PR, with A2-ii".
 
+  **Spec owner's answer (2026-11-19): (A)**, now with the maintainer, since K29 records their "ok" on a
+  mechanism first described as a setting. Plan on (A). Nothing P11-ii-a builds depends on it. Its two
+  conditions bind the K29 PR:
+  1. The rule's proof names every database it admits (`embedded-pg`, CI's smoke, the preview) and
+     shows each one is seeded with fixtures. A test pins that a production target can never get the
+     fixture library.
+  2. The cost is said where a developer meets it. The app logs one line at start whenever the fixture
+     library is in effect, naming the rule (`isFixturesDatabase`, not production). There is no silent
+     fallback.
+
+  **Who writes it:** lane P, which owns A2-i by the maintainer's decision (2026-11-19), lands it just
+  before A2-ii or inside it. A2-ii's owner takes it as a gate. With (A), the variable, the wiring, the
+  constants, the containment test and `preview:check` from A1.1 fall away. The shared rule, the
+  production pin, the DAL module and the tests that can fail all stay.
+
 ### Approval
 
 **Approved by the maintainer** _(orchestrator's chat, 2026-11-19, relayed by the board)_, asked
