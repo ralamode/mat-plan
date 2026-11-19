@@ -21,6 +21,13 @@ only way a notice about minors' health data is worth anything.
 > stored; three retention sentences gain it. **Then (Q12):** a typed item's name can be replaced on the
 > item and on every one of the household's logs of it, after consent: the one path that rewrites stored
 > log text (`entries.movement_name`).
+> **§1a / §5 / §9 re-read 2026-11-19 for FAM-1's e2e athlete** ([plan](../plans/fam-1-e2e-change-athlete.md)):
+> the fixture seed writes a fourth synthetic profile, Athlete Four (a role name, `SEED_PROFILE_4_PUBLIC_ID`,
+> in `SEED_PUBLIC_IDS`), and one test program on it. Test and preview databases only; no seed has ever
+> written it to production. §5: as a seed id, it is refused by both removal procedures and leaves a test
+> database by the preview reset. §9: one more deliberately committed zero-entropy id. No new column,
+> processor, reader, export or retention. `notice.md`: no change (production never holds it).
+>
 > 🔴 **§1a / §2 re-read 2026-11-06** for `PROF-1` a-0 ([plan](../plans/prof-1-athletes.md)): `profiles`
 > gains **`client_id`** and **`archived_at`**, so **at a-0** this entry recorded two columns that
 > existed and held nothing; both have since woken, each on its own dated line below. `client_id` is a
