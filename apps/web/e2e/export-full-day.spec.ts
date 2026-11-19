@@ -4,15 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
+import { ACTIVITY_TYPE_KEYS, METRIC_KEYS, PRACTICE_UNIT } from '@mat-plan/shared';
 import {
   BODYWEIGHT_HEADER,
   bodyweightPath,
   CHECKINS_HEADER,
   checkinsPath,
+  csvToken,
 } from '@mat-plan/shared/csv';
 import { expect, type Page, test } from '@playwright/test';
 
-import { isoDaysAgo, logBodyweight, logPractice, SEED_PROFILE_ROUTE } from './steps';
+import {
+  isoDaysAgo,
+  logBodyweight,
+  logPractice,
+  PRACTICE_MINUTES,
+  SEED_PROFILE_ROUTE,
+} from './steps';
 
 /**
  * **V1-14b — the full-day round trip.** Log a day through the real UI, download the real export,
@@ -43,8 +51,7 @@ import { isoDaysAgo, logBodyweight, logPractice, SEED_PROFILE_ROUTE } from './st
  * bodyweight file legitimately carries other specs' rows. Asserting the whole file would make this
  * test fail whenever a sibling spec logged first — flake that teaches people to rerun rather than
  * read. So: this spec owns Athlete One's yesterday, and every assertion is "this exact row is
- * present", except the two that are genuinely global (the header, and the header-only check-ins
- * file, which no spec can write to).
+ * present" or "this day's rows are unchanged", except the headers, which are genuinely global.
  */
 
 /**
@@ -121,8 +128,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // ── 2. Practice ───────────────────────────────────────────────────────────────
   // V1-24 3b-page: the strength form left the page (its export is proved in Vitest and `db:verify`
   // until FAM-1 13b brings an e2e back). Practice is logged here so the day holds both of the page's
-  // write paths; ⚠️ practice minutes are not in the CSV (the check-ins file carries none), so the
-  // bytes below prove the bodyweight path only.
+  // write paths; since FAM-1 14b its minutes are a row of the check-ins file (step 6).
   await logPractice(page);
 
   // ── 3. Export ─────────────────────────────────────────────────────────────────
@@ -154,11 +160,19 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // trailing empty fields are WRITTEN, per the contract.
   expect(bw.lines).toContain(`${day},${PROBE_BODYWEIGHT},,`);
 
-  // ── 6. Check-ins is header-only, ALWAYS ───────────────────────────────────────
-  // Surprising enough to pin: the real files have never carried a row, and a MISSING file and an
-  // EMPTY file are different inputs to the workflow. This one CAN be asserted whole — no spec can
-  // add a row to it.
-  expect(parse(files, checkinPath).raw).toBe(`${CHECKINS_HEADER.join(',')}\n`);
+  // ── 6. Check-ins carry this day's practice (FAM-1 14b) ────────────────────────
+  // Containment, like bodyweight: a sibling spec logs practice on Athlete One's other days.
+  const checkins = parse(files, checkinPath);
+  expect(checkins.header).toBe(CHECKINS_HEADER.join(','));
+  const practiceRow = [
+    day,
+    csvToken(ACTIVITY_TYPE_KEYS.wrestling_practice),
+    csvToken(METRIC_KEYS.practice_minutes),
+    String(PRACTICE_MINUTES),
+    PRACTICE_UNIT,
+    '',
+  ].join(',');
+  expect(checkins.lines).toContain(practiceRow);
 
   // ── 7. Determinism ────────────────────────────────────────────────────────────
   // `buildZip` zeroes the DOS date/time fields specifically so this holds; a re-introduced `mtime`
@@ -166,15 +180,16 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   //
   // ⚠️ Scoped to a file no sibling can change. Comparing the whole archive would be a race: under
   // `fullyParallel` a sibling spec can append a bodyweight row between the two downloads, and the
-  // test would fail for a reason that has nothing to do with determinism. `checkins` is header-only
-  // by construction, and this spec's own bodyweight row (Athlete One's yesterday) has no other
-  // writer, so those are what the assertion compares.
+  // test would fail for a reason that has nothing to do with determinism. This spec's own rows
+  // (Athlete One's yesterday) have no other writer, so each file's rows for that day are what the
+  // assertion compares.
   const again = await downloadExport(page);
-  expect(again.get(checkinPath), `${checkinPath} differed between two exports`).toBe(
-    files.get(checkinPath),
-  );
   const ownDay = (csv: string | undefined) =>
     (csv ?? '').split('\n').filter((l) => l.startsWith(`${day},`));
+  expect(
+    ownDay(again.get(checkinPath)),
+    'this day’s check-in rows differed between two exports',
+  ).toEqual(ownDay(files.get(checkinPath)));
   expect(
     ownDay(again.get(bwPath)),
     'this day’s bodyweight rows differed between two exports',
