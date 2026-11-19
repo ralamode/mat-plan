@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 import { AppShell } from '@/components/layout/app-shell';
 import { AthleteList } from '@/app/settings/athlete-list';
-import { NoHouseholdState } from '@/components/onboarding/no-household-state';
-import { SETTINGS_COPY } from '@/lib/constants';
+import { NoHouseholdPage } from '@/components/onboarding/no-household-page';
+import { APP_HOME_PATH, HOME_LINK, NAV_LINK_CLASS, SETTINGS_COPY } from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
 import { listHouseholdAthletes, listProfiles } from '@/lib/dal/profiles';
 import { requireSession } from '@/lib/dal/session';
@@ -42,7 +43,7 @@ export default async function SettingsPage() {
   if (state === HOUSEHOLD_STATE.none) {
     return (
       <AppShell athletes={await listProfiles()} current={'settings'}>
-        <NoHouseholdState />
+        <NoHouseholdPage />
       </AppShell>
     );
   }
@@ -51,7 +52,14 @@ export default async function SettingsPage() {
 
   return (
     <AppShell athletes={await listProfiles()} current={'settings'}>
-      <h1 className="text-3xl font-semibold tracking-tight">{SETTINGS_COPY.heading}</h1>
+      {/* Visible at every width, as the day page's way back is (its comment says why): the rail never
+          lists `/p`, the only home of sign out, the theme toggle and Add an athlete. */}
+      <header className="flex flex-col gap-2">
+        <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
+          {HOME_LINK}
+        </Link>
+        <h1 className="text-3xl font-semibold tracking-tight">{SETTINGS_COPY.heading}</h1>
+      </header>
       <AthleteList athletes={athletes} canArchive={canArchiveAthletes} />
     </AppShell>
   );

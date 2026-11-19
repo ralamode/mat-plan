@@ -4,7 +4,7 @@
 > (`fam-1-family-program.md:631`), decision D38 (`:97`). Branch for this plan:
 > `docs/fam-1-12c-iii-collapse-plan`. Lane C builds it. Two code PRs, named **12c-iii PR 1 and PR 2**.
 >
-> **Plan only. No code until the maintainer approves it.** Drafted by the plan owner on 2026-11-19 at
+> **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes. Panel round 1 is applied; its log is at the end.
 
 ## Where this sits
@@ -347,7 +347,8 @@ chart in its description, and screenshots of both states at three widths.
   (the tick moves out, no visual change). In PR 2, the two sections, `single-value-amend.tsx` and
   `single-value-live.tsx` (one line each), their two test files, the three helpers in `e2e/steps.ts`
   and `bodyweight-receipt.spec.ts`. **Answered by the board (2026-11-19): lane C makes them as guest edits, and lane S reviews.**
-- **Q2, for the maintainer: six differences from the accepted prototype.** Recommended: yes to all.
+- **Q2, answered by the maintainer (2026-11-19): "Accept all six (Recommended)".** The six
+  differences from the accepted prototype are (a), (b), (c), (d), (f) and (g); FAM-1 plan decision D50.
   - (a) Opening or collapsing is not spoken as "Opened" or "Collapsed": a screen reader reads the
     button that takes focus, which says the same thing once.
   - (b) No visible change: the heading level of a workout's line matches the rest of the app.

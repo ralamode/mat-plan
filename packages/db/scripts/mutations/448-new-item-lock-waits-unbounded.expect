@@ -1,0 +1,1 @@
+TD lock timeout: newItem sets lock_timeout before it waits on the household-items lock
