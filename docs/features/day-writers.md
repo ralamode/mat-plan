@@ -71,7 +71,7 @@ writer's sequence diagram is [architecture.md §2i](../architecture.md), the day
    returns fixture id → the `public_id` each insert returned, the fixture is translated through it
    (an unknown UUID throws), and `assert.deepStrictEqual` compares after a JSON round trip. **Never
    through `normalize-fixture.ts`**, which relabels every UUID and would let a returned `client_id`
-   pass. 12a-i proves the eleven fixtures with no `before`, and the two whose only change is an archive (`archived-athlete-today`, `archived-athlete-nothing-logged`); 12a-ii the other four, **replayed** after logging, three through lane P's writers and the reorder by a direct `idx` update (Q6) (plan 12a § 12a-ii, and its Built notes). The shapes and fixtures are
+   pass. 12a-i proves the twelve fixtures with no `before`, and the two whose only change is an archive (`archived-athlete-today`, `archived-athlete-nothing-logged`); 12a-ii the other six, **replayed** after logging, through lane P's writers (`unit-edited-after-logging` is two `saveWorkout` calls) and the reorder by a direct `idx` update (Q6) (plan 12a § 12a-ii, and its Built notes). The shapes and fixtures are
    [the contract's](./program-contract.md); a shape that is wrong or short is a contract change,
    not an edit here.
 3. 🔴 **The prescribed text a row is frozen against comes from one renderer**,
@@ -221,7 +221,8 @@ flowchart LR
 26. **A ✓ that races an un-tick saves** (lane S's #578 pattern): when the insert skips and the
     re-reads find no holder and no taken set (the holder was hidden between the statements),
     `logRow` re-runs the insert once; a second miss still throws. Proved with a statement-level
-    `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`); mutation 372.
+    `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`), staged by the harness's
+    `stageHideDuringInsert`, which the check-in and bodyweight race shares; mutation 372.
 27. **C32 and C37 in the reader** (contract invariants 32 and 33, `program-contract.md`):
     - `resolveDayPlan` takes the movement library as an argument. The DAL passes `CATALOG_MOVEMENTS`;
       the proofs pass the test library, re-slugged to the proof seeder's global rows.

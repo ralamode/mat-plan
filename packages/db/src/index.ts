@@ -94,3 +94,6 @@ export {
 } from './seed';
 
 export type { CheckinMonthRow, StrengthMonthRow } from './queries/export-month';
+// The bound a request write puts on its advisory-lock wait, named so the app's order tests assert
+// the value the writers set rather than re-typing it.
+export { LOCK_TIMEOUT } from './writers/executor';

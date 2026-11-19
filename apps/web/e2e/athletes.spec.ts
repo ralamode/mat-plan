@@ -17,6 +17,7 @@ import {
   ATHLETE_FORM_COPY,
   athleteEditPath,
   athletePath,
+  HOME_LINK,
   MIN_TAP_TARGET_PX,
   NAME_ERROR_ID,
   SETTINGS_COPY,
@@ -862,4 +863,20 @@ test('the callout fits 360px with a 40-character name, and its choices clear the
     const box = await control.boundingBox();
     if (box) expect(box.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
   }
+});
+
+/**
+ * Household settings has a way back on a phone, where there is no rail (maintainer, 2026-11-19).
+ * `a11y.spec.ts`'s tap-target scan skips `<a>`, so this measures the link's height itself.
+ */
+test('household settings has a ← Home link that reaches the picker at 360px', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+  const home = page.getByRole('link', { name: HOME_LINK, exact: true });
+  const box = await home.boundingBox();
+  expect(box?.height ?? 0, 'a thumb target, not a line of text').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
+  await home.click();
+  await expect(page).toHaveURL(new RegExp(`${APP_HOME_PATH}$`));
 });

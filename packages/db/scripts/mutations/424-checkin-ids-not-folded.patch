@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index 4c9da40c..c4ba7163 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -134,7 +134,7 @@ export async function writeCheckinEntries(
+   const values = args.values.map((v) => {
+     const clientId = lowerCaseUuidSchema.safeParse(v.clientId);
+     if (!clientId.success) throw new Error('check-in client_id is not a hyphenated uuid');
+-    return { ...v, clientId: clientId.data };
++    return { ...v };
+   });
+   if (new Set(values.map((v) => v.clientId)).size !== values.length) {
+     throw new Error('check-in client_ids repeat within one submit');

@@ -11,7 +11,13 @@ import { CATALOG_FIXTURE } from '../../catalog/fixture';
 import type { Supervision } from '../../catalog/vocabulary';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
-import { showsOnlyLogged, type DayItem, type DayPlan, type DayWorkout } from '../day-shapes';
+import {
+  programsByStay,
+  showsOnlyLogged,
+  type DayItem,
+  type DayPlan,
+  type DayWorkout,
+} from '../day-shapes';
 import { prescribedTarget, TRACKING_TYPE_FIELDS, type RowValues } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import type { ProgramList, ProgramView, WorkoutDraft, WorkoutDraftItem } from '../program-shapes';
@@ -94,8 +100,10 @@ function unitOf(world: ProtoWorld, item: ProtoItem): Unit | null {
   const fields = TRACKING_TYPE_FIELDS[type];
   if (fields.slot === null) return null;
   if (fields.unit !== null) return fields.unit;
-  // The prototype's weights are all in pounds; a Count and a Distance name their own unit.
-  return type === TRACKING_TYPE.weight_reps ? 'lb' : unitSchema.parse(item.unit);
+  // The prototype's weights are all in pounds and name no unit; a Count and a Distance name their
+  // own. A weight names one only where a fixture moved it off pounds (`unit-edited-after-logging`).
+  const pounds = type === TRACKING_TYPE.weight_reps ? 'lb' : undefined;
+  return unitSchema.parse(item.unit ?? pounds);
 }
 
 /** A prototype value set as the contract's `RowValues`, for an item of this type and unit. */
@@ -198,8 +206,11 @@ function onPrograms(world: World, athlete: string, day: string) {
  * is how the day's read ranks a row, always means "ends today".
  */
 function currentPrograms(world: World, athlete: string) {
-  const current = (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
   const tomorrow = addDays(world.today, 1);
+  const current = (world.assign[athlete] ?? [])
+    .filter((a) => !a.to || a.to > world.today)
+    // Its last day is today: `to`, the first day off, is tomorrow, and it has started.
+    .map((a) => ({ ...a, endsToday: a.to === tomorrow && a.from <= world.today }));
   for (const a of current) {
     if (a.to !== undefined && a.to !== tomorrow && a.from <= world.today) {
       throw new Error(
@@ -207,18 +218,12 @@ function currentPrograms(world: World, athlete: string) {
       );
     }
   }
-  const ranked = [
-    ...current.filter((a) => !endsToday(world, a)),
-    ...current.filter((a) => endsToday(world, a)),
-  ];
+  // The shape's own split (`programsByStay`), so the builder ranks as the fake's reorder does.
+  const { staying, ending } = programsByStay(current);
+  const ranked = [...staying, ...ending];
   // Each program once, as the day's read places it: by its row that stays, else by the one ending
   // today (taken off today and put on again from tomorrow is one program, and it stays).
   return ranked.filter((a, i) => ranked.findIndex((b) => b.prog === a.prog) === i);
-}
-
-/** Its last day is today: `to`, the first day off, is tomorrow, and it has started. */
-function endsToday(world: World, a: { from: string; to?: string }): boolean {
-  return a.to === addDays(world.today, 1) && a.from <= world.today;
 }
 
 function programRef(world: World, programId: string) {
@@ -432,8 +437,8 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
     currentPrograms: current.map((a) => ({
       ...programRef(world, a.prog),
-      // `to` is the first day OFF the program, so a program ending today has `to` = tomorrow.
-      ...(endsToday(world, a) ? { endsToday: true as const } : {}),
+      // Present, and `true`, only on a program ending today; absent on one that stays (C37).
+      ...(a.endsToday ? { endsToday: true as const } : {}),
     })),
     programs: on.map((a) => {
       const order = orderOf(a);

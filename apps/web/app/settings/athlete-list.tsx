@@ -235,7 +235,7 @@ export function AthleteList({
           added after a-r's rename form shipped exactly that bug). */}
       <Announcer message={announcement} />
 
-      {/* Between the heading and the first section, so Undo is the second tab stop and on screen. */}
+      {/* Between the heading and the first section, so Undo is the first stop after the way back, and on screen. */}
       {error ? (
         <p role="alert" className="text-destructive text-sm">
           {error}
