@@ -191,7 +191,7 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
       'packages/db/src/scope.ts':
         'ownerScope() itself — the ONE narrowing, which is what every other site must route through',
       'packages/db/scripts/verify.ts':
-        'the ONE named forgery: proves a cast-past-the-narrowing writes 0 rows (PROF-1 b-s block)',
+        'named forgeries proving a cast past the narrowing reads or writes 0 rows (PROF-1 b-s, PROF-1 b, FAM-1 export)',
     };
     const offenders = [...DB_SOURCES, ...WEB_SOURCES].filter(
       // Both assertion syntaxes. `<OwnerScope>scope` is legal in a `.ts` file and no ESLint rule in

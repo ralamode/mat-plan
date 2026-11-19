@@ -202,6 +202,11 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     `beforeunload`, and switching athlete is an in-app navigation no prompt covers, so a write
     that fails after the screen has gone is not reported; the row reads un-ticked when the athlete
     is opened again.
+23. **The export control at the page's foot is the owner's** (FAM-1 export follow-up,
+    [plan](../plans/fam-1-export-owner-only.md) PR B). `components/profiles/export-control.tsx`
+    holds its three states for both surfaces (this page and a settings row): the link, the
+    no-history reason (decision N3), or nothing for a login that is not the household's owner. The
+    page reads `householdState().canExportAthletes`, a boolean, never the role.
 
 ## Recorded differences from the prototype (v12)
 

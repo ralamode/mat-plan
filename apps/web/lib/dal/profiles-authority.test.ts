@@ -83,6 +83,7 @@ const authorityEvents = () =>
 const scopeMissEvents = () =>
   captureMessage.mock.calls.filter(([m]) => String(m).startsWith('profile scope miss'));
 
+import { AUTHORITY_ACTION, reportAuthorityRefusal } from './household';
 import { archiveAthlete, restoreAthlete } from './profiles';
 
 const PROFILE = '019826b4-0000-7000-8000-000000000099';
@@ -190,5 +191,23 @@ describe('restoreAthlete — any member, and no authority branch to get wrong', 
       const res = await restoreAthlete(PROFILE);
       expect(res.ok ? 'ok' : res.reason).not.toBe('not_owner');
     }
+  });
+});
+
+/**
+ * FAM-1 export follow-up (PR B): the export's refusal shares the per-principal report cap with
+ * archive's. The action is part of the cap's key, so one owner-only act's event never swallows
+ * another's from the same login.
+ */
+describe('reportAuthorityRefusal — once per principal PER ACTION', () => {
+  it('🔴 an archive refusal, then an export refusal, from one login: two events', async () => {
+    await reportAuthorityRefusal(AUTHORITY_ACTION.archiveProfile);
+    await reportAuthorityRefusal(AUTHORITY_ACTION.exportProfile);
+    // …and a repeat of either is still capped.
+    await reportAuthorityRefusal(AUTHORITY_ACTION.exportProfile);
+    expect(authorityEvents().map(([, ctx]) => ctx.tags.authority_action)).toEqual([
+      AUTHORITY_ACTION.archiveProfile,
+      AUTHORITY_ACTION.exportProfile,
+    ]);
   });
 });

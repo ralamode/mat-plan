@@ -784,6 +784,11 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
     movement, AND the weigh-in activity OR the bodyweight metric), and `bodyweightMonthRows` uses the
     same conjunct, so each live entry lands in exactly one of the three files (`verify/day.ts`, the 14b
     proof; mutations 368–371, 376–379). A weigh-in naming a movement is the strength log's alone. Its `entryId` is for the proof only: `lib/dal/export.ts` maps fields one by one.
+    **The export is the household owner's** (FAM-1 export follow-up, [plan](../plans/fam-1-export-owner-only.md)
+    PR B): `buildExportEntries` narrows with `ownerScope()` and returns `null` (the route's one `404`)
+    for any other login, before a month is read, with one `export_profile` authority event. `isOwnerOf` on `loggedMonths` makes a scope cast past that narrowing read zero months (`db:verify` + mutation 610); it reads no column, so the authority stays the membership row's role. The three file reads are
+    deliberately not owner-gated: every member may see those rows in the app (Q2), and the DAL reads
+    files only for the months `loggedMonths` returned.
 
 ## Traps
 
