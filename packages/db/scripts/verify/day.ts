@@ -44,6 +44,7 @@ import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/
 import { clearDay, hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
+import { updateStrengthSetById } from '../../src/writers/strength-session';
 import { verifyDayPlan } from './day-plan';
 import { asDb, asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import {
@@ -105,6 +106,85 @@ export async function verifyDay(_ctx: VerifyContext): Promise<void> {
   await verifyRowRace();
   // 12a-i's proofs run after 11b's, so an 11b patch still fails on its own assertion first.
   await verifyDayPlan();
+  // Last: it ticks through this file's fixture and `logRow`, so a patch that breaks a tick fails on
+  // lane E's own assertion first.
+  await verifyFixASetRefusesProgramRows();
+}
+
+/**
+ * TD fix-a-set (the board, 2026-11-19): `updateStrengthSetById`, the old V1-9 path, never edits a
+ * program row; a program row's numbers are `amendRow`'s. A purged prescription leaves the row a
+ * program row. That an old strength-session set still edits is four of the twelve fix-a-set cases in
+ * `verify.ts` (the ones that assert an edit lands), which go red if the conjunct refused every row.
+ */
+async function verifyFixASetRefusesProgramRows(): Promise<void> {
+  await proof(
+    'fix-a-set: a program row is amendRow’s, never the old path’s',
+    async (f, tx) => {
+      const logged = expectOk(
+        await f.tick({
+          prescriptionPublicId: f.p.weightReps.publicId,
+          values: { reps: 8, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 30 }] },
+        }),
+        'TD fix-a-set: a weight \u00d7 reps row is logged',
+      );
+      const entryId = (await f.entryRow(logged.entryPublicId)).id;
+      const [set] = await tx
+        .select({ id: schema.entrySets.id, publicId: schema.entrySets.publicId })
+        .from(schema.entrySets)
+        .where(and(eq(schema.entrySets.entryId, entryId), isNull(schema.entrySets.deletedAt)));
+      assert.ok(set, 'TD fix-a-set: the row has a live set');
+      const edit = () =>
+        updateStrengthSetById(asTx(tx), {
+          profilePublicId: f.athlete.publicId,
+          setId: set.publicId,
+          reps: 3,
+          weight: 99,
+          scope: f.H_SCOPE,
+        });
+      const stored = async () => {
+        const [s] = await tx
+          .select({ reps: schema.entrySets.reps })
+          .from(schema.entrySets)
+          .where(eq(schema.entrySets.id, set.id));
+        const [q] = await tx
+          .select({ value: schema.entrySetQuantities.valueNum })
+          .from(schema.entrySetQuantities)
+          .where(
+            and(
+              eq(schema.entrySetQuantities.entrySetId, set.id),
+              eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.primary),
+            ),
+          );
+        return { reps: s?.reps, weight: Number(q?.value) };
+      };
+      assert.deepEqual(await stored(), { reps: 8, weight: 30 }, 'TD fix-a-set: the row as logged');
+
+      assert.equal(await edit(), null, 'TD fix-a-set: the old path refuses a program row');
+      assert.deepEqual(
+        await stored(),
+        { reps: 8, weight: 30 },
+        'TD fix-a-set: …and writes nothing',
+      );
+
+      // A purged prescription (`ON DELETE SET NULL`): the set stays, so it is still a program row.
+      await tx
+        .update(schema.entries)
+        .set({ prescriptionId: null })
+        .where(eq(schema.entries.id, entryId));
+      assert.equal(
+        await edit(),
+        null,
+        'TD fix-a-set: a program row whose prescription is purged is still refused',
+      );
+      assert.deepEqual(
+        await stored(),
+        { reps: 8, weight: 30 },
+        'TD fix-a-set: …and the purged row writes nothing',
+      );
+    },
+    'TD',
+  );
 }
 
 // ── FAM-1 11b — the row writer ──────────────────────────────────────────────────────────────────────
