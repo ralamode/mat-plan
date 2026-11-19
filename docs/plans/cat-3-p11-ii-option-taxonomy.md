@@ -141,15 +141,13 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
   the first PR in `apps/` to read the tables. P11-ii-b retires it with lane A's agreement (the test is
   theirs), and its PR body says what replaces that protection: this read's proofs. No allowlist
   grows.
-- **Q1, with the maintainer** (it edits CI workflows and needs a Vercel preview variable they set by
-  hand). The spec owner recommends (A): one server-only value in `lib/dal/env.ts` names the library
-  in effect, defaulting to `CATALOG_MOVEMENTS`, and set beside `SEED_FIXTURES` in `ci.yml`,
-  `migrate-preview.yml` and the preview's env. Its one addition: **the value may name the fixture
-  library only off production.** The DAL throws at start (no silent fallback) when the deployment or
-  the database target is production, with a test, so a mis-set variable can never annotate
-  production from the fixture. Rejected: disjoint slugs with a lookup in the union of both lists. It
-  renames 13 fixture slugs (and the contract's fixture world) and ships the fixture list to
-  production. **Nothing is built on Q1 until the maintainer answers.**
+- **Q1, decided (spec K29; maintainer, 2026-11-19: "Test databases - ok").** P11-ii-a builds one
+  server-only value in `lib/dal/env.ts` naming the library in effect. It defaults to
+  `CATALOG_MOVEMENTS`, and is set beside `SEED_FIXTURES` in `ci.yml` and `migrate-preview.yml`, and
+  in the preview deployment's settings (by the maintainer, by hand). Every reader takes it: this
+  read, `newItem` and "How to". **Production refuses any value but the default**: the app throws at
+  start when the deployment or the database target is production, with a test. Declined: disjoint
+  fixture slugs.
 - **Q2, with the maintainer.** The spec owner recommends (A): the vocabulary's order (`EQUIPMENT`,
   `MUSCLES`), in the read and in `catalogOptionOf`. Measured on main: 14 of 326 entries list
   equipment out of vocabulary order (so 14 rows would word "what it needs" differently), and 54
