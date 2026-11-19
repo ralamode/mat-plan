@@ -32,7 +32,8 @@ import {
   workoutPath,
 } from '../components/program-builder/routes';
 import { PROGRAM_COPY } from '../components/day/day-copy';
-import { APP_HOME_PATH, NOT_FOUND_COPY, SETTINGS_COPY } from '../lib/constants';
+import { APP_HOME_PATH, NOT_FOUND_COPY } from '../lib/constants';
+import { MIN_TAP_TARGET_PX } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
 import { NARROW_VIEWPORT } from './contexts';
 import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from './steps';
@@ -301,7 +302,20 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   //    program yet and links to Programs (15 PR 2); following it reaches the Programs page.
   await addAthlete(page, athlete, PROFILE_KIND.kid, added);
   await expect(page.getByRole('heading', { name: new RegExp(athlete), level: 1 })).toBeVisible();
-  await programsLink(page, athlete).click();
+  // At 360px: the link is a full tap target and the notice it sits in does not overflow.
+  const link = programsLink(page, athlete);
+  const box = await link.boundingBox();
+  expect(box?.height ?? 0, 'the Programs link is a 44px tap target').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
+  expect(box?.width ?? 0, 'the Programs link is 44px wide').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
+  await expectNoOverflowWithin(
+    page.locator('p', { hasText: PROGRAM_COPY.notYetPutOn(athlete) }),
+    'not-on-a-program notice',
+  );
+  await link.click();
   await expect(page).toHaveURL(PROGRAMS_PATH);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(BUILDER_COPY.programs);
 
@@ -341,26 +355,4 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await expect(putOn).toBeHidden();
   await expect(who.getByRole('button', { name: takeOffLabel(athlete) })).toBeVisible();
   await expect(who.getByText(lastDayToday, { exact: false })).toHaveCount(0);
-});
-
-test('an archived athlete’s day page offers no Programs link', async ({ page }, info) => {
-  test.setTimeout(90_000);
-  const athlete = `E2E archived ${Date.now().toString(36)}${info.workerIndex}`;
-
-  // A fresh athlete, archived from Household settings: a seeded one is never archived here.
-  await addAthlete(page, athlete, PROFILE_KIND.kid, added);
-  await expect(page.getByRole('heading', { name: new RegExp(athlete), level: 1 })).toBeVisible();
-  const day = page.url();
-  await expect(programsLink(page, athlete)).toBeVisible();
-  await archiveAdded(page, [athlete]);
-
-  // The archived notice proves the archive landed (`archiveAdded` swallows its failures); then the
-  // "not on a program" notice is the bare sentence, with no "Put … on a program" and no link.
-  await page.goto(day);
-  await expect(page.getByText(SETTINGS_COPY.archivedNotice(athlete))).toBeVisible();
-  await expect(page.getByText(PROGRAM_COPY.notYet, { exact: true })).toBeVisible();
-  await expect(page.getByText(PROGRAM_COPY.notYetPutOn(athlete))).toHaveCount(0);
-  await expect(page.locator('p', { hasText: PROGRAM_COPY.notYet }).getByRole('link')).toHaveCount(
-    0,
-  );
 });

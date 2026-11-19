@@ -228,10 +228,10 @@ export function AddAthleteForm({
    *
    * 🔴 **ONE COLUMN, not two.** The first version was `flex-wrap` with `min-w-32 flex-1`, which a UX
    * lens measured: at 360px two labels fit (128+8+128 = 264 < 328), so they never wrapped and `flex-1`
-   * grew them to 160px each — leaving a ~108px text column in which "trains on the household's
-   * program" breaks over four lines. The wrap only engaged at 200% text, so the responsive path was
-   * effectively dead code at the width that matters. A full-width row per option gives the
-   * decision-critical text the whole column.
+   * grew them to 160px each — leaving a ~108px text column in which a one-line hint broke over four
+   * lines. The wrap only engaged at 200% text, so the responsive path was effectively dead code at
+   * the width that matters. A full-width row per option keeps every label one tappable line, and
+   * the hints below the radios get the whole column.
    */
   const kindLabelClass =
     'border-input bg-background has-checked:border-foreground has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-3 flex min-h-11 w-full cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-base';

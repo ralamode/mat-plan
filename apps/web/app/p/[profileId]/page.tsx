@@ -6,8 +6,8 @@ import { PROGRAM_COPY } from '@/components/day/day-copy';
 import { DayScreen } from '@/components/day/day-screen';
 import { dayPageView, lookAheadFallsBack, offersProgramsLink } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
-import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { ProgramLine } from '@/components/day/program-line';
+import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
 
