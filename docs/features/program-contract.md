@@ -341,6 +341,16 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
     athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
     to list them as available.
+    ⚠️ **Where the program lands in the athlete's order can differ between the fake and the real
+    writer in two rare cases** (lane P's 6d-iii, plan D41). The fake places a program in
+    `candidates[].keeps`, a list of names: it holds no end dates for an athlete's other programs,
+    and it keeps a reopened program where it was. (1) A program earlier in the household's list is
+    put on between a same-day Take off and its Put on: the writer reopens by its own rule, the fake
+    leaves the program in place (accepted by the maintainer, 2026-11-18). (2) A program is put on
+    the day another of the athlete's programs, later in the household's list, was taken off: the
+    writer places it among the programs that stay, the fake still counts the one ending today
+    (accepted by the contract owner, 2026-11-19: the real order is the writer's, and the fake
+    cannot know without a contract change). In both the athlete's Reorder puts it right.
 
 22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
     The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
