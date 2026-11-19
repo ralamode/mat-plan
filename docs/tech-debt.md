@@ -612,7 +612,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   touches either file.
 - **Severity:** low.
 
-### The comment-stripping `code()` test helper has ONE copy left, in `packages/db` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
+### The comment-stripping `code()` test helper has TWO copies left, outside `apps/web` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
 
 - **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in
   **five** places. `AUTH-1` 1b-bis extracted it to **`apps/web/test/source-scan.ts`** and converted the
@@ -621,17 +621,21 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
 - **What is left, and why each is still standing:**
   - `apps/web/lib/household-synthetic-is-dark.test.ts` imports the shared helper since 2026-11-19, so
     every copy inside `apps/web` is gone.
+  - `packages/shared/src/test-support/source-graph.ts` exports its own `code` (the same two
+    regexes), lifted there from `quantity-text.test.ts` by #531 for the shared package's graph guards.
   - `packages/db/src/scope.test.ts` — ⚠️ **not a straight conversion**: it is in another package and
-    cannot import `apps/web/test/`. It needs either its own copy (which is the status quo) or a shared
-    home under `packages/shared`, which means shipping test support in a published package. **Decide
-    that when a third package wants it**, not before.
+    cannot import `apps/web/test/`. `packages/shared` is private and already has `src/test-support/`,
+    so that is the natural single home, but `packages/shared` publishes only `"."`, so the other two
+    packages would need a relative import or a new subpath export. **Decide that when it is next
+    touched**, not here.
   - `apps/web/app/design/tokens/token-sets.test.ts` carries the same block-comment regex inline, which
     is a near-miss rather than a copy.
 - **Impact:** these are the structural guards. A fix to the stripping (a `//` inside a string, a
   template literal) lands in one copy and not the others, so two guards can disagree about what is
-  code. **Narrowed from five to one, so the blast radius is one package boundary wide.**
-- **Proposed fix:** leave `packages/db` alone until a second consumer there justifies the shared
-  module.
+  code. **Narrowed from five to two, one per package outside `apps/web`, plus the app's shared one.**
+- **Proposed fix:** make `packages/shared/src/test-support/source-graph.ts`'s `code` the one copy,
+  with `apps/web/test/source-scan.ts` and `packages/db/src/scope.test.ts` importing it, once a subpath
+  export (or a sanctioned relative import) for test support is agreed.
 - **Severity:** low.
 
 ### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
