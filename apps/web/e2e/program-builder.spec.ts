@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { PROFILE_KIND_LABELS, WEEKDAYS } from '@mat-plan/shared';
-import { todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
+import { PROFILE_KIND, TRACKING_TYPE, WEEKDAYS } from '@mat-plan/shared';
+import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -15,9 +15,11 @@ import {
   EDITOR_COPY,
   ITEM_PICKER_COPY,
   keepLabel,
+  lastDayText,
   PUT_ON_COPY,
   putOnTitle,
   renameLabel,
+  startingNamesText,
   startLabel,
   takenOffText,
   takeOffLabel,
@@ -29,17 +31,10 @@ import {
   PROGRAMS_PATH,
   workoutPath,
 } from '../components/program-builder/routes';
-import {
-  ADD_ATHLETE_PATH,
-  APP_HOME_PATH,
-  ATHLETE_FORM_COPY,
-  NOT_FOUND_COPY,
-  SETTINGS_COPY,
-  SETTINGS_PATH,
-} from '../lib/constants';
+import { APP_HOME_PATH, NOT_FOUND_COPY } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
-import { FIXTURE_PROGRAM, NARROW_VIEWPORT } from './contexts';
-import { programRowTick, settled } from './steps';
+import { NARROW_VIEWPORT } from './contexts';
+import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from './steps';
 
 /**
  * FAM-1 7b-i and 7b-ii — the program builder's pages, end to end against the fixture world
@@ -103,8 +98,8 @@ test('a parent creates and renames a program, then copies a workout into it', as
   await page.getByRole('link', { name: BUILDER_COPY.backToPrograms }).click();
   await expect(page).toHaveURL(PROGRAMS_PATH);
   await expect(page.getByRole('link', { name: renamed })).toBeVisible();
-  await page.getByRole('link', { name: FIXTURE_PROGRAM }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(FIXTURE_PROGRAM);
+  await page.getByRole('link', { name: familyProgram.name }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
   await page.getByRole('button', { name: copyToLabel(FIXTURE_WORKOUT) }).click();
   const dialog = page.getByRole('dialog', { name: copyTitle(FIXTURE_WORKOUT) });
   await expect(dialog).toBeVisible();
@@ -211,7 +206,7 @@ test('a workout opened under another of the household’s programs is the builde
   page,
 }) => {
   await openPrograms(page);
-  await page.getByRole('link', { name: FIXTURE_PROGRAM }).click();
+  await page.getByRole('link', { name: familyProgram.name }).click();
   await page
     .getByRole('region', { name: BUILDER_COPY.workouts })
     .getByRole('link', { name: new RegExp(`^${FIXTURE_WORKOUT}`) })
@@ -250,31 +245,21 @@ test('a program id the household does not have is the builder’s 404, with the 
  * `day-page.spec.ts` finds its rows), never by position: a ✓ on a Check logs in one tap.
  */
 const familyProgramId = todayTwoPrograms.currentPrograms.find(
-  (p) => p.name === FIXTURE_PROGRAM,
+  (p) => p.name === familyProgram.name,
 )!.programPublicId;
 const CHECK_WORKOUT = todayTwoPrograms.workouts.find(
-  (w) => w.programPublicId === familyProgramId && w.items.some((i) => i.trackingType === 'check'),
+  (w) =>
+    w.programPublicId === familyProgramId &&
+    w.items.some((i) => i.trackingType === TRACKING_TYPE.check),
 )!;
-const CHECK_ITEM = CHECK_WORKOUT.items.find((i) => i.trackingType === 'check')!.name;
+const CHECK_ITEM = CHECK_WORKOUT.items.find((i) => i.trackingType === TRACKING_TYPE.check)!.name;
 
 /** This run's athletes, archived after each test so the picker does not fill with them. */
 const added: string[] = [];
 
 test.afterEach(async ({ page }) => {
   test.setTimeout(60_000);
-  // Best effort, as `athletes.spec.ts`'s: a test that failed before the add leaves nothing.
-  for (const name of added.splice(0)) {
-    try {
-      await page.goto(SETTINGS_PATH);
-      const archive = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
-      if (await archive.count()) {
-        await archive.click();
-        await expect(archive).toHaveCount(0, { timeout: 15_000 });
-      }
-    } catch {
-      // Cleanup never turns a green test red or hides a red one.
-    }
-  }
+  await archiveAdded(page, added.splice(0));
 });
 
 test('a parent puts a new athlete on a program, the athlete logs it, then off and back on', async ({
@@ -291,8 +276,8 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await createProgram(page, program);
   const mine = page.url();
   await page.goto(PROGRAMS_PATH);
-  await page.getByRole('link', { name: FIXTURE_PROGRAM }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(FIXTURE_PROGRAM);
+  await page.getByRole('link', { name: familyProgram.name }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
   await page.getByRole('button', { name: copyToLabel(CHECK_WORKOUT.name) }).click();
   const copy = page.getByRole('dialog', { name: copyTitle(CHECK_WORKOUT.name) });
   await copy.getByLabel(COPY_COPY.to, { exact: true }).selectOption({ label: program });
@@ -303,11 +288,7 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await expect(copy).toBeHidden();
 
   // 2. This run's athlete, added as a parent does. They land on their day page.
-  await page.goto(ADD_ATHLETE_PATH);
-  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
-  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(athlete);
-  added.push(athlete);
-  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  await addAthlete(page, athlete, PROFILE_KIND.kid, added);
   await expect(page.getByRole('heading', { name: new RegExp(athlete), level: 1 })).toBeVisible();
 
   // 3. Put them on from today. The dialog names who is starting.
@@ -315,7 +296,7 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
   const putOn = page.getByRole('dialog', { name: putOnTitle(program) });
   await putOn.getByRole('checkbox', { name: athlete, exact: true }).check();
-  await expect(putOn.getByText(`${PUT_ON_COPY.starting}: ${athlete}`)).toBeVisible();
+  await expect(putOn.getByText(startingNamesText([athlete]))).toBeVisible();
   await putOn.getByRole('button', { name: startLabel(1, program) }).click();
   await expect(putOn).toBeHidden();
 
@@ -334,6 +315,8 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await who.getByRole('button', { name: takeOffLabel(athlete) }).click();
   await expect(page.getByText(takenOffText(athlete, program, true))).toBeAttached();
   await expect(who.getByRole('button', { name: takeOffLabel(athlete) })).toHaveCount(0);
+  const lastDayToday = lastDayText(isoDaysAgo(0), isoDaysAgo(0));
+  await expect(who.getByText(lastDayToday, { exact: false })).toBeVisible();
 
   // 6. Put them back on before midnight: the same stretch, no last day, and Take off is back.
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
@@ -343,5 +326,5 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await putOn.getByRole('button', { name: keepLabel(1, program) }).click();
   await expect(putOn).toBeHidden();
   await expect(who.getByRole('button', { name: takeOffLabel(athlete) })).toBeVisible();
-  await expect(who.getByText(/last day/)).toHaveCount(0);
+  await expect(who.getByText(lastDayToday, { exact: false })).toHaveCount(0);
 });

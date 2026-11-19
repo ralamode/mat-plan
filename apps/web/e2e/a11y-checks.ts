@@ -108,10 +108,15 @@ export async function expectLinkTargets(page: Page, context: string): Promise<vo
 }
 
 /**
- * Nothing inside `container` is wider than its box (FAM-1 15): the container itself, every element
- * that scrolls, and every button. For a `position: fixed` sheet, which `expectNoHorizontalOverflow`
- * cannot see: a fixed box adds nothing to the document's scrollable width (`sheet.tsx`'s footer
- * note). A long unbroken name that runs out of a footer button or a hint line is caught here.
+ * **The in-sheet overflow check, once** (FAM-1 15). Nothing inside `container` is wider than its
+ * box: the container itself, every element that scrolls, and every button.
+ *
+ * Why it exists: `expectNoHorizontalOverflow` measures the document, and a `position: fixed` sheet
+ * adds nothing to the document's scrollable width (`RemoveScroll` also hides the body's overflow
+ * while it is open), so an overflowing sheet passes it. A long unbroken name that runs out of a
+ * footer button or a hint line is caught here. **1px of tolerance**: sub-pixel layout can round
+ * `scrollWidth` one past `clientWidth` with nothing visibly clipped. It replaced three copies
+ * (`movement-picker.a11y.spec.ts`'s `expectNoSheetOverflow` and two in `a11y.spec.ts`).
  */
 export async function expectNoOverflowWithin(container: Locator, context: string): Promise<void> {
   const overflowing = await container.evaluate((root) =>
@@ -121,7 +126,7 @@ export async function expectNoOverflowWithin(container: Locator, context: string
         const style = getComputedStyle(el);
         return /auto|scroll/.test(`${style.overflowX} ${style.overflowY}`);
       })
-      .filter((el) => el.scrollWidth > el.clientWidth)
+      .filter((el) => el.scrollWidth > el.clientWidth + 1)
       .map(
         (el) =>
           `<${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 40)}" ` +

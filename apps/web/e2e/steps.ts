@@ -1,14 +1,25 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import { addDays, DEFAULT_BODYWEIGHT_UNIT, PRACTICE_UNIT } from '@mat-plan/shared';
+import {
+  addDays,
+  DEFAULT_BODYWEIGHT_UNIT,
+  PRACTICE_UNIT,
+  PROFILE_KIND,
+  PROFILE_KIND_LABELS,
+  type ProfileKind,
+} from '@mat-plan/shared';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { DAY_COPY } from '../components/day/day-copy';
 import {
+  ADD_ATHLETE_PATH,
+  ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   changeLabel,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
+  SETTINGS_COPY,
+  SETTINGS_PATH,
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
@@ -228,4 +239,60 @@ export const programRowTick = (page: Page, workout: string, item: string) =>
 export async function settled(button: Locator, pressed: boolean) {
   await expect(button).toHaveAttribute('aria-pressed', String(pressed));
   await expect(button).not.toHaveAttribute('aria-busy', 'true');
+}
+
+/**
+ * Adds an athlete through `/p/new`, as a parent does (PROF-1 a-1u); they land on their day page.
+ * `track` collects the name BEFORE the add, so `archiveAdded` cleans up even if the add's answer
+ * is lost. Lifted from `athletes.spec.ts` at FAM-1 15, when the builder's spec became the second.
+ */
+export async function addAthlete(
+  page: Page,
+  name: string,
+  // `ProfileKind`, not a `'Child' | 'Adult'` union: the radio's label IS `PROFILE_KIND_LABELS`, so a
+  // second spelling of it here is a second place to update when the wording changes. The twin helper
+  // in `scripts/screenshot-ephemeral.ts` reads the same constant.
+  kind: ProfileKind = PROFILE_KIND.kid,
+  track?: string[],
+): Promise<void> {
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[kind]}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  track?.push(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+}
+
+/**
+ * Archives every athlete named, from Household settings: the specs' `afterEach` cleanup. Best
+ * effort: a test that failed before the add leaves nothing to clean, and a missing row must not mask
+ * the real failure. ⚠️ Archiving does not free a slot of `MAX_HOUSEHOLD_ATHLETES`.
+ */
+export async function archiveAdded(page: Page, names: readonly string[]): Promise<void> {
+  for (const name of names) {
+    try {
+      await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+      const archive = () => page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
+
+      // 🔴 **A LOOP, because a-1d made two athletes under ONE name a real fixture.** This was
+      // `if (await control.count()) await control.click()`, and on the duplicate tests — the only
+      // ones that create two rows with the same name — `count()` was 2, so `click()` threw
+      // Playwright's strict-mode violation straight into the `catch` below. Neither athlete was
+      // archived, on every run and every retry, and the swallow meant this cleanup reported nothing
+      // while doing nothing. A cleanup that cannot fail out loud has to be correct by construction.
+      //
+      // ⚠️ **Counting the controls DOWN is the wait, and the first fix got this wrong.** It waited on
+      // the Undo button, which is already visible from the PREVIOUS archive — so the loop re-queried
+      // while the row was still detaching, `click()` retried the stale handle for the whole 30s
+      // action timeout, and the passes burned the hook's budget instead. `toHaveCount` polls, so it
+      // is both the "the Server Action landed" signal the Undo assertion used to be and the loop's
+      // own termination condition.
+      for (let remaining = await archive().count(); remaining > 0; remaining -= 1) {
+        await archive().first().click();
+        await expect(archive()).toHaveCount(remaining - 1, { timeout: 15_000 });
+      }
+    } catch {
+      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one. ⚠️ Which
+      // is exactly why the loop above must not depend on it: see the comment there.
+    }
+  }
 }

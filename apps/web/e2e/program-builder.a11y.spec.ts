@@ -1,4 +1,5 @@
 import { PROGRAM_NAME_MAX } from '@mat-plan/shared';
+import { familyProgram } from '@mat-plan/shared/program/fixtures';
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -8,6 +9,8 @@ import {
   EDITOR_COPY,
   PUT_ON_COPY,
   putOnTitle,
+  sameTargetsText,
+  startingNamesText,
 } from '../components/program-builder/builder-text';
 import { PROGRAMS_PATH } from '../components/program-builder/routes';
 import { APP_HOME_PATH } from '../lib/constants';
@@ -17,12 +20,7 @@ import {
   expectNoOverflowWithin,
   expectTapTargets,
 } from './a11y-checks';
-import {
-  DESKTOP_VIEWPORT,
-  expectNoHorizontalOverflow,
-  FIXTURE_PROGRAM,
-  NARROW_VIEWPORT,
-} from './contexts';
+import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
 /**
  * FAM-1 7b-i and 7b-ii — the builder's four real pages (the Programs list, a program's page, a
@@ -55,8 +53,8 @@ async function reachProgram(page: Page): Promise<string> {
     .getByRole('link', { name: BUILDER_COPY.programsNavLink })
     .click();
   await expect(page).toHaveURL(PROGRAMS_PATH);
-  await page.getByRole('link', { name: FIXTURE_PROGRAM }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(FIXTURE_PROGRAM);
+  await page.getByRole('link', { name: familyProgram.name }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
   return page.url();
 }
 
@@ -116,8 +114,13 @@ test('the Put-on dialog meets the a11y bar at 360px, with the longest program na
   const dialog = page.getByRole('dialog', { name: putOnTitle(name) });
   await expect(dialog).toBeVisible();
   // Someone ticked: "Starting: …", the order hint naming the program, and Start naming it too.
-  await dialog.locator('input[type="checkbox"]:not([aria-disabled])').first().check();
-  await expect(dialog.getByText(/^Starting: /)).toBeVisible();
+  const box = dialog.locator('input[type="checkbox"]:not([aria-disabled])').first();
+  await box.check();
+  // Whoever was first: their name is the checkbox's label (`aria-labelledby`).
+  const who = await box.evaluate(
+    (el) => document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent ?? '',
+  );
+  await expect(dialog.getByText(startingNamesText([who]))).toBeVisible();
   await expectNoAxeViolations(page, 'Put-on dialog');
   await expectTapTargets(page, 'Put-on dialog');
   await expectNoOverflowWithin(dialog, 'Put-on dialog');
@@ -131,7 +134,7 @@ test('all four pages pass axe at desktop width, with the rail', async ({ page })
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(BUILDER_COPY.programs);
   await expectNoAxeViolations(page, 'Programs list, desktop');
   await page.goto(program);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(FIXTURE_PROGRAM);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
   await expectNoAxeViolations(page, 'program page, desktop');
   await page.goto(workout);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(EDITOR_COPY.editWorkout);
@@ -139,4 +142,19 @@ test('all four pages pass axe at desktop width, with the rail', async ({ page })
   await page.goto(newWorkout);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(EDITOR_COPY.newWorkout);
   await expectNoAxeViolations(page, 'new workout, desktop');
+});
+
+test('on a program others are on, the shared-targets line is in view with Start at 360×640', async ({
+  page,
+}) => {
+  // A short phone: the line must sit with Start in the pinned footer, not below the fold of the
+  // form, so a parent cannot tap Start without seeing it (UX P1-U1). Nothing is saved.
+  await page.setViewportSize({ width: 360, height: 640 });
+  await reachProgram(page);
+  await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
+  const dialog = page.getByRole('dialog', { name: putOnTitle(familyProgram.name) });
+  await expect(dialog).toBeVisible();
+  const newcomer = familyProgram.candidates.find((c) => !c.on)!;
+  await dialog.getByRole('checkbox', { name: newcomer.name, exact: true }).check();
+  await expect(dialog.getByText(sameTargetsText(familyProgram.name))).toBeInViewport();
 });
