@@ -896,6 +896,11 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     _as pages with seeded data_ — that mechanism (a validated `?tokens=<id>` on `app/p/`, plus
     `--tokens` on the capture script) is UI-3's first step, deliberately not built in UI-4 because it
     would have put candidate CSS on the hottest route in the app.
+    ⚠️ _2026-11-19:_ **FAM-1 12f PR 1 removes the preview's two demos**, "Strength set row" and
+    "Day card" ([plan](./plans/fam-1-12f-retire-old-forms.md)). They mounted the old set row and
+    the old day card (`SetRepsWeightFields`, `SetModeToggles`, `ProgramReference`), and 12f deletes
+    those components. From then the harness renders neither. **Rebuilding the two demos on the new
+    day components (`apps/web/components/day/`) is this row's work**, with its first step.
     **Two acceptance lines added by the UX panel:** (1) before choosing, open the preview on the
     phone the logging actually happens on, in gym light **and** daylight, in both themes, and record
     the device and lighting in the decision — three of the four rationales appeal to a physical
@@ -2174,6 +2179,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   longer catch-and-re-query, because a failed statement aborts the transaction (`25P02`) and would
   kill the whole session write. This PR owes a `SAVEPOINT` — the mechanic `verify.ts` already
   documents for `expectRejectedBy`. **Ordered BEFORE `TEN-2b-2`** (TEN-2a's correction rule (d)).
+  ⚠️ _2026-11-19 (maintainer):_ **overtaken.** [`LEGACY-1`](#legacy-1) retires this write path after
+  FAM-1 and closes this row. FAM-1 12f PR 3 leaves the path with no caller, so this row is not built
+  in the meantime.
 
 - **TEN-2b-2 — the orphan-row correction: a custom movement nothing references.** _(Beta 0; deferred
   from TEN-2b; runs AFTER `TEN-2b-1` per TEN-2a's rule (d), or it deletes rows the live app is still
@@ -2916,6 +2924,37 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   identical, but the client requires exactly one quantity (`set-display.ts`), and the SQL guard only
   requires a live primary mass quantity. A crafted POST can edit a set the UI shows as locked (it
   updates the primary only). A server fix plus a `db:verify` proof.
+
+<a id="legacy-1"></a>
+
+- <a id="legacy-1"></a>**LEGACY-1 — retire the legacy strength write path.** _(maintainer, 2026-11-19, on the FAM-1 12f
+  plan's Q4: "Yes, own row after FAM-1 (Recommended)"; FAM-1 plan decision D51. Tech debt, after
+  FAM-1. Not Beta 0. Not planned yet.)_ FAM-1 step 12f deletes the old strength form and its three
+  actions ([plan](./plans/fam-1-12f-retire-old-forms.md)). After 12f PR 3 nothing in the app can
+  write a legacy strength session. 12f leaves the path below the actions in place on purpose. This
+  row retires it.
+  - **Left with no caller in the app after 12f PR 3:** the two DAL functions, `logStrengthSession`
+    and `editStrengthSet` (`apps/web/lib/dal/entries.ts`), with their tests; their writers in
+    `packages/db`, `writeStrengthSession` and `updateStrengthSetById`
+    (`src/writers/strength-session.ts`), with their `db:verify` proofs; and the shared schemas they
+    parse, whose tests sit in the app's route folder (`strength-session-schema.test.ts`,
+    `strength-set-schema.test.ts`).
+  - **Other exports the 12f plan's debt list names**, each with no caller in the app once 12f is
+    done: `readsHouseholdProgram` (`packages/shared/src/programming.ts`), which mutation 12's patch
+    quotes as context; `STRENGTH_DAY_ROLES`; `loggableUnitsOf`; `ACTIVITY_INPUT_SHAPE` (after 12f
+    PR 5); and `weeklyAdherenceRows` in `packages/db` (after 12f PR 4), with the comments that still
+    say a page calls it. This row's plan says which go with the path and which stay.
+  - **Not this row's:** `lib/entries/entry-label.ts`, kept on purpose as the only app code that
+    words an old entry (FAM-1 plan D21), and the `wake` activity type, which the export needs.
+  - **It needs its own plan.** It touches `packages/db` proofs and many mutation patches. The plan
+    first shows, for each export, that nothing live reaches it. The 12f plan records
+    `writeStrengthSession` as reached only through the kept DAL function; that is re-checked then.
+  - **It closes `TEN-2b-1` as overtaken.** That row plans a change to `writeStrengthSession`'s
+    transaction, for a caller that will no longer exist. This row's plan says what becomes of the
+    ordering assertion in `entries.test.ts`, which `TEN-2b-1` says "must be changed deliberately,
+    never deleted", and what `TEN-2b-2`, ordered after `TEN-2b-1`, waits for in its place.
+  - `V1-36`, above, is a gap in the same path's edit guard. This row's plan says whether it closes
+    with the path.
 
 - **E2E-3 — `export-full-day`'s determinism check can race another spec's strength write.** 🟡 Filed
   2026-10-02 (V1-24 3a correctness lens). Its comment says no other spec submits the strength form;

@@ -449,8 +449,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     kg number would be stored on a row still labelled lb: a load in the wrong unit. So an amend
     passes `fillRowValues` the row's own unit (`{ trackingType, unit: loggedRowUnit(…) }`, with
     no target), in the fake as in the writer: the lb row is changed in lb and a kg number answers
-    `bad_value`. A new ✓ is not a Change and is still in the item's unit. The day screen is
-    stricter and offers no Change at all on a row logged in another unit than the item's.
+    `bad_value`. A new ✓ is not a Change and is still in the item's unit. The screen offers such a row's reps only (`changeableFields`, 12d-iii): the load stays text in the unit it was logged in and is sent back unchanged, and the Change is judged in that unit, as the writer judges it (C28). A distance or count row logged in another unit has no reps and stays text.
     **A row that does not hold what its type now logs has no unit to be changed in**
     (`loggedRowUnit` is `null`: no quantity in the type's slot, or one in a unit the type cannot
     be in), so a Change that sends a quantity for it is `bad_value`. No FAM-1 screen changes an
@@ -563,6 +562,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       fake ignores that move as the real order would.
     - **`reorderPrograms` still takes the full list**, the program ending today included, and the
       fake puts it last whatever place it was given, as the day's read does.
+    - **The list holds at most 50 ids** (`MAX_ORDER_PROGRAMS` in `program-shapes.ts`; maintainer,
+      2026-11-19: "cap at 50"): `programOrderSchema` refuses a longer one, so the action and the
+      fake answer `invalid` before any writer runs. It bounds the body and is not one of
+      invariant 30's caps: nothing limits how many programs an athlete is on, so an athlete on
+      more than 50 could not reorder, which is accepted as far above any real use.
     - ⚠️ **A known gap in the fake:** it accepts a reorder for an archived athlete, where the real
       writer answers `not_found`. `DayPlan` carries no `archived` field on purpose (invariant
       24), so the fake cannot tell.
