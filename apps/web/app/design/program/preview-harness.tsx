@@ -169,6 +169,13 @@ function ProgramsPreview({
   return children(state, fake.actions);
 }
 
+/** Where the day preview's Programs link goes: the preview's own Programs list. */
+const PREVIEW_PROGRAMS_HREF = previewHref({
+  screen: 'programs-list',
+  fixture: 'programs-list',
+  failNext: false,
+});
+
 /**
  * The day page, as far as the plan's lanes build it: the page's `<h1>`, then the three parts the
  * page places itself (FAM-1 plan D34), then the day screen. The order is the page's
@@ -178,13 +185,6 @@ function ProgramsPreview({
  * All four get the SAME `plan`, and the two that write get the same `actions`, so a reorder made in
  * `ProgramLine` shows in `DayScreen` as it will in production.
  */
-/** Where the day preview's Programs link goes: the preview's own Programs list. */
-const PREVIEW_PROGRAMS_HREF = previewHref({
-  screen: 'programs-list',
-  fixture: 'programs-list',
-  failNext: false,
-});
-
 function DayPreview({ selection }: { selection: PreviewSelection }) {
   const { fixture, failNext } = selection;
   const [plan, setPlan] = useState(() => named(DAY_PLAN_FIXTURES, fixture));
