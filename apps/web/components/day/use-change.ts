@@ -7,7 +7,7 @@ import {
   type RowRefusal,
   type RowValues,
 } from '@mat-plan/shared';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy } from './day-copy';
@@ -36,9 +36,11 @@ import { rowName, type useRow } from './use-row';
  * Escape, so while a number differs from the stored one the row says "Not saved. Was 30 lb." with
  * a ✕ (cancel) under the ✓.
  *
- * **When a Change is sent: when focus leaves the row from one of its fields** (for anywhere outside
- * both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so a load and reps changed together are one write. Never
- * when the window loses focus (a kid checking a timer would save the half-typed number).
+ * **When a Change is sent: when focus leaves the row from any of its controls** (for anywhere
+ * outside both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so
+ * a load and reps changed together are one write. Never when the window loses focus (a kid
+ * checking a timer would save the half-typed number). ⚠️ "Any of its controls" (13b-ii said "one of
+ * its fields") is pending the maintainer, with the ✕ press rule below (`noteCancel`).
  *
  * 🔴 **Safari does not focus a tapped button**, so a field's blur (with no `relatedTarget`) arrives
  * before the button's click. Two buttons in the row are pressed during an edit, and each notes its
@@ -65,6 +67,25 @@ type Row = ReturnType<typeof useRow>;
 /** The attribute that marks a row's elements (both table rows of a set), so focus can tell it left. */
 export const ROW_ID_ATTR = 'data-row-id';
 export const rowIdProps = (rowId: string) => ({ [ROW_ID_ATTR]: rowId });
+
+/**
+ * How long after a ✕ press is released the click that cancels may still arrive. iOS sends its click
+ * after the compat mouse events and decides itself whether the tap hit the ✕ (tap slop, touch
+ * adjustment), so the release point says nothing; only a click that does not come calls the press
+ * off. Long enough for that click on a phone, short next to a person's next tap.
+ */
+const CANCEL_CLICK_GRACE_MS = 400;
+
+/**
+ * A row's container props for Change: its id, and the row-level Escape and blur (`onRowKeyDown`,
+ * `onRowBlur`). One helper for a card's `<li>` and both `<tr>`s of a set row, which share the id.
+ */
+export function changeRowProps(
+  rowId: string,
+  change: Pick<RowChange, 'onRowKeyDown' | 'onRowBlur'>,
+) {
+  return { ...rowIdProps(rowId), onKeyDown: change.onRowKeyDown, onBlur: change.onRowBlur };
+}
 const inRow = (el: Element, rowId: string) => el.closest(`[${ROW_ID_ATTR}="${rowId}"]`) !== null;
 
 function keptText(item: DayItem, logged: RowValues, kept: KeptField[]): string | null {
@@ -79,7 +100,14 @@ function keptText(item: DayItem, logged: RowValues, kept: KeptField[]): string |
     .join(' ');
 }
 
-export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
+export function useChange(
+  r: Row,
+  item: DayItem,
+  row: DayRow,
+  rowId: string,
+  /** The row's ✓: where Escape from a button the revert removes sends focus. */
+  tickRef: React.RefObject<HTMLButtonElement | null>,
+) {
   const day = useDay();
   const entry = r.entry;
   const name = rowName(item, row);
@@ -99,6 +127,13 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
   const pressBeganInEdit = useRef(false);
   /** Whether the ✕'s press has begun, so the field's blur does not send what it cancels. */
   const cancelling = useRef(false);
+  /** Ends the ✕'s press watch (`noteCancel`): removes its two window listeners. */
+  const endPressWatch = useRef<(() => void) | null>(null);
+  function stopPressWatch() {
+    endPressWatch.current?.();
+    endPressWatch.current = null;
+  }
+  useEffect(() => stopPressWatch, []);
 
   // A different entry (an un-tick, a new ✓, a reload that changed the row) ends this visit's Change.
   const entryId = entry?.entryPublicId ?? null;
@@ -158,6 +193,8 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     // that still lands (the ✕ is invisible then, for the same reason).
     if (r.pending) return;
     cancelling.current = false;
+    // The ✕'s click (or Escape) is the cancel the press watch was waiting for.
+    stopPressWatch();
     const was = dirty;
     setDraft(null);
     clearChangeError();
@@ -252,6 +289,12 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     return shown.kept ? `${said}. ${shown.kept}` : said;
   }
 
+  // What the ✕'s press watch reads when the press ends, after this render's closures are stale.
+  const latest = useRef({ dirty, pending: r.pending, commit });
+  useEffect(() => {
+    latest.current = { dirty, pending: r.pending, commit };
+  });
+
   return {
     /** The row's name (`Bench press set 1`): the announcer's, and the ✕'s. */
     name,
@@ -281,13 +324,54 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
     noteKey() {
       pressBeganInEdit.current = false;
     },
-    /** A field took focus, or the ✕'s press was called off (a scroll): no cancel is under way. */
+    /** A field took focus: no cancel is under way. */
     noteFocus() {
       cancelling.current = false;
+      stopPressWatch();
     },
-    /** The ✕'s pointer-down: the blur that follows in Safari must not send what the ✕ discards. */
-    noteCancel() {
+    /**
+     * The ✕'s pointer-down: the blur that follows in Safari must not send what the ✕ discards. It
+     * also watches how this press ends, once, by its `pointerId`:
+     * - **released** (anywhere: where it lifts says nothing, since iOS targets its click itself):
+     *   the ✕'s click, if it comes, cancels and ends the watch (`revert`). If none comes within
+     *   `CANCEL_CLICK_GRACE_MS` (a press dragged off, a long press), the press is called off;
+     * - **ended by a scroll** (`pointercancel`): no click will come, so it is called off at once.
+     *
+     * Called off, the row is left as a tap outside would leave it: `cancelling` is cleared, so the
+     * next time focus leaves the row the Change is sent; and if focus has already left (Safari with
+     * a mouse blurs the field at pointer-down), it is sent now. ⚠️ Pending the maintainer: sending
+     * after a press that began on Cancel is a new save (FAM-1 plan
+     * `fam-1-change-escape-and-drag-off.md`, "A change to a recorded decision"); the alternative
+     * only clears `cancelling`.
+     */
+    noteCancel(event: React.PointerEvent<HTMLElement>) {
       cancelling.current = true;
+      stopPressWatch();
+      const pointerId = event.pointerId;
+      let grace: ReturnType<typeof setTimeout> | null = null;
+      const callOff = () => {
+        stopPressWatch();
+        cancelling.current = false;
+        const now = latest.current;
+        const active = document.activeElement;
+        if (!now.dirty || now.pending) return;
+        if (active instanceof Element && inRow(active, rowId)) return;
+        void now.commit();
+      };
+      const onEnd = (ended: PointerEvent) => {
+        if (ended.pointerId !== pointerId) return;
+        window.removeEventListener('pointerup', onEnd, true);
+        window.removeEventListener('pointercancel', onEnd, true);
+        if (ended.type === 'pointercancel') callOff();
+        else grace = setTimeout(callOff, CANCEL_CLICK_GRACE_MS);
+      };
+      window.addEventListener('pointerup', onEnd, true);
+      window.addEventListener('pointercancel', onEnd, true);
+      endPressWatch.current = () => {
+        window.removeEventListener('pointerup', onEnd, true);
+        window.removeEventListener('pointercancel', onEnd, true);
+        if (grace !== null) clearTimeout(grace);
+      };
     },
     /** The ✓: saves an open Change; un-ticks only when no edit was open. */
     pressTick() {
@@ -297,15 +381,42 @@ export function useChange(r: Row, item: DayItem, row: DayRow, rowId: string) {
       if (inEdit) return;
       return r.press();
     },
-    /** A field's blur: sends the Change once focus has left the row, never on a window blur. */
-    onFieldBlur(event: React.FocusEvent<HTMLInputElement>) {
+    /**
+     * Any control's blur, on the row's container (React's `onBlur` bubbles): sends the Change once
+     * focus has left the row, never on a window blur.
+     */
+    onRowBlur(event: React.FocusEvent<HTMLElement>) {
       if (!dirty || cancelling.current) return;
       const to = event.relatedTarget;
       if (to instanceof Element && inRow(to, rowId)) return;
-      // The window lost focus (another app, the lock screen): the field is still the page's active
-      // element, which a blur within the page never leaves it as.
-      if (document.activeElement === event.currentTarget) return;
+      // The window lost focus (another app, the lock screen): the control is still the page's
+      // active element, which a blur within the page never leaves it as. 🔴 `target`, not
+      // `currentTarget`: on the row's container that is the `<li>`/`<tr>`, which never has focus.
+      if (document.activeElement === event.target) return;
       void commit();
+    },
+    /**
+     * Escape anywhere in the row, on its container. While the row is changed and not saving, it
+     * reverts; from a button the revert removes (the ✕, Try again), focus moves to the ✓ first, as
+     * the ✕ does. On a clean row, Escape in a field still clears a kept number's line or an error,
+     * and from a button does nothing, so another control's Escape is never taken. An event from a
+     * portaled descendant (outside the row's own DOM) is ignored.
+     */
+    onRowKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+      if (event.key !== 'Escape') return;
+      const from = event.target;
+      if (!(from instanceof Node) || !event.currentTarget.contains(from)) return;
+      const fromField = from instanceof HTMLInputElement;
+      if (dirty) {
+        // Prevented even while saving, as the field's own Escape was: a sheet around the row must
+        // not close on it.
+        event.preventDefault();
+        if (r.pending) return;
+        if (!fromField) tickRef.current?.focus();
+        revert();
+      } else if (fromField) {
+        revert();
+      }
     },
   };
 }
