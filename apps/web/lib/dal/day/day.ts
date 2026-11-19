@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { amendRow, logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import {
   ACTIVITY_TYPE_KEYS,
   ROW_REFUSAL,
@@ -55,7 +56,8 @@ export async function getDayPlan(args: {
     return null;
   const scope = await getHouseholdScope();
   if (!scope) return null;
-  const plan = await resolveDayPlan(db, { scope, ...args });
+  // C32: the library a day item's coach label is read from, by slug, as the picker's DAL reads it.
+  const plan = await resolveDayPlan(db, { scope, ...args, catalog: CATALOG_MOVEMENTS });
   if (!plan) return null;
   const athletes = (await listProfiles()).map((a) => ({ profilePublicId: a.id, name: a.name }));
   return { ...plan, athletes };

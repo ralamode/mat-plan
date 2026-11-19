@@ -22,10 +22,12 @@ import {
 import {
   adultProgramWithCopy,
   closedDayLoggedOnly,
+  coachLabelProgramEndingToday,
   everyTypeOnce,
   familyProgram,
   familyProgramAfterTakeOff,
   familyProgramArchivedAthlete,
+  familyProgramFullWeekday,
   FIXTURE_TODAY,
   fixtureIds,
   futurePreview,
@@ -840,6 +842,22 @@ describe('the fake DayActions: the switch and the program order', () => {
     expect(plan()).toEqual(todayStretchingFirst);
   });
 
+  it('🔴 keeps a program ending today last, whatever order is asked for (C37)', async () => {
+    const before = coachLabelProgramEndingToday;
+    const ids = before.currentPrograms.map((p) => p.programPublicId);
+    expect(before.currentPrograms.map((p) => p.endsToday)).toEqual([undefined, true]);
+    const { actions, plan } = day(before);
+    // Camp week, which ends today, is asked for first.
+    const result = await actions.reorderPrograms({
+      profilePublicId: before.profilePublicId,
+      programPublicIds: [...ids].reverse(),
+    });
+    expect(result).toEqual({ ok: true });
+    expect(plan().currentPrograms).toEqual(before.currentPrograms);
+    expect(plan().programs).toEqual(before.programs);
+    expect(plan().workouts.map((w) => w.name)).toEqual(['Barbell day', 'Camp lifts']);
+  });
+
   it('refuses an order that is not the athlete’s full list', async () => {
     const { actions } = day(todayTwoPrograms);
     const { profilePublicId } = todayTwoPrograms;
@@ -1089,6 +1107,36 @@ describe('the fake ProgramActions: workouts and the week', () => {
       expect(await actions.copyWorkout(copy)).toEqual(copied);
       expect(await actions.copyWorkout(copyOf('One too many'))).toEqual(refusal('limit_reached'));
       expect(view().workouts).toHaveLength(MAX_PROGRAM_WORKOUTS);
+    });
+
+    it('🔴 a copy onto a full weekday is refused whole, before its name; a day with room takes it', async () => {
+      const { actions, view } = builder({ program: familyProgramFullWeekday });
+      const before = view();
+      expect(before.week[1]).toHaveLength(MAX_DAY_SLOTS);
+      const onto = (weekdays: Weekday[], name: string) => ({ ...copyOf(name), weekdays });
+      // Monday is full: the whole copy is refused, the Tuesday with room along with it.
+      expect(await actions.copyWorkout(onto([1], 'Onto Monday'))).toEqual(refusal('limit_reached'));
+      expect(await actions.copyWorkout(onto([2, 1], 'Onto both'))).toEqual(
+        refusal('limit_reached'),
+      );
+      // Judged before the name: a taken name onto a full day is still the cap.
+      expect(await actions.copyWorkout(onto([1], heavyA.name))).toEqual(refusal('limit_reached'));
+      expect(view()).toBe(before);
+      // A day with room takes it, and so does a copy that goes on no day.
+      expect((await actions.copyWorkout(onto([2], 'Onto Tuesday'))).ok).toBe(true);
+      expect((await actions.copyWorkout(onto([], 'On no day'))).ok).toBe(true);
+      expect(view().week[1]).toHaveLength(MAX_DAY_SLOTS);
+    });
+
+    it('a weekday one short of full takes exactly one more copy', async () => {
+      const program = structuredClone(familyProgramFullWeekday);
+      program.week[1] = program.week[1].slice(0, MAX_DAY_SLOTS - 1);
+      const { actions, view } = builder({ program });
+      const onto = (name: string) => ({ ...copyOf(name), weekdays: [1] as Weekday[] });
+      expect((await actions.copyWorkout(onto('The last on Monday'))).ok).toBe(true);
+      expect(view().week[1]).toHaveLength(MAX_DAY_SLOTS);
+      expect(await actions.copyWorkout(onto('One too many'))).toEqual(refusal('limit_reached'));
+      expect(view().week[1]).toHaveLength(MAX_DAY_SLOTS);
     });
 
     it('the cap is the program’s the copy lands in: a full program can still be copied FROM', async () => {
@@ -1452,6 +1500,27 @@ describe('the fake ProgramActions: items and athletes', () => {
     expect(
       state().programs.find((p) => p.programPublicId === programPublicId)?.athletes,
     ).not.toContain(off.name);
+  });
+
+  it('🔴 a repeat of a Take off that removed the start answers the same, and never-on is not_found', async () => {
+    const { actions, view } = builder();
+    const { programPublicId } = familyProgram;
+    const off = familyProgram.candidates.find((c) => !c.on)!;
+    const takeOff = () =>
+      actions.takeOff({ programPublicId, profilePublicId: off.profilePublicId });
+    // Never on it: there is nothing to take off.
+    expect(await takeOff()).toEqual(refusal('not_found'));
+
+    for (const from of [FIXTURE_TODAY, addDays(FIXTURE_TODAY, 1)]) {
+      await actions.putOn({ programPublicId, profilePublicIds: [off.profilePublicId], from });
+      expect(await takeOff()).toEqual({ ok: true, lastDay: null });
+      const after = view();
+      // The double tap, and a third: the start is gone, and the answer is the first one's.
+      expect(await takeOff()).toEqual({ ok: true, lastDay: null });
+      expect(await takeOff()).toEqual({ ok: true, lastDay: null });
+      expect(view()).toBe(after);
+      expect(view()).toEqual(familyProgram);
+    }
   });
 
   it('🔴 put on refuses an archived athlete, whoever else is named: not_found, nobody put on (C36)', async () => {

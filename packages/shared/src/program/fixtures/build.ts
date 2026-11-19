@@ -7,6 +7,8 @@ import {
   WEEKDAYS,
   weekdaySchema,
 } from '../../day';
+import { CATALOG_FIXTURE } from '../../catalog/fixture';
+import type { Supervision } from '../../catalog/vocabulary';
 import { TRACKING_TYPE, type TrackingType } from '../../movements';
 import { unitSchema, type Unit } from '../../units';
 import { showsOnlyLogged, type DayItem, type DayPlan, type DayWorkout } from '../day-shapes';
@@ -112,6 +114,21 @@ function rowValues(world: ProtoWorld, item: ProtoItem, v: ProtoValues): RowValue
   };
 }
 
+/**
+ * The library's coach label for an item, as a key to spread: `{ supervision }` for a library
+ * movement whose entry carries one, `{}` otherwise (`DayItem.supervision` is absent, never `null`).
+ * A world item that names a library entry must be that entry, by name and tracking type.
+ */
+function supervisionOf(world: ProtoWorld, key: FixtureItemKey): { supervision?: Supervision } {
+  const { library, name, type } = world.catalog[key];
+  if (library === undefined) return {};
+  const entry = CATALOG_FIXTURE.find((movement) => movement.slug === library);
+  if (!entry || entry.name !== name || entry.trackingType !== type) {
+    throw new Error(`fixture world: ${key} is not the test library's ${library}`);
+  }
+  return entry.supervision === undefined ? {} : { supervision: entry.supervision };
+}
+
 function draftItem(world: ProtoWorld, workout: ProtoWorkout, item: ProtoItem): WorkoutDraftItem {
   const { name, type } = world.catalog[item.iid];
   const fields = TRACKING_TYPE_FIELDS[type];
@@ -170,9 +187,38 @@ function onPrograms(world: World, athlete: string, day: string) {
   return (world.assign[athlete] ?? []).filter((a) => day >= a.from && (!a.to || day < a.to));
 }
 
-/** The athlete's current programs (on now, or starting later), in their own order. */
+/**
+ * The athlete's current programs (on now, or starting later), in their own order, **a program
+ * ending today after every one that stays** (ADR 0007 Amendment 5; contract change C37): the sort
+ * is stable, so each group keeps the athlete's order. `to` is the first day OFF the program, so a
+ * program ending today has `to` = tomorrow and has started.
+ *
+ * **A started program with a later end is not a state**: Take off is the only writer of an end, and
+ * it ends on today. A world that holds one is refused here, so "has an end and has started", which
+ * is how the day's read ranks a row, always means "ends today".
+ */
 function currentPrograms(world: World, athlete: string) {
-  return (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
+  const current = (world.assign[athlete] ?? []).filter((a) => !a.to || a.to > world.today);
+  const tomorrow = addDays(world.today, 1);
+  for (const a of current) {
+    if (a.to !== undefined && a.to !== tomorrow && a.from <= world.today) {
+      throw new Error(
+        `fixture world: ${a.prog} has started and ends after today, which no writer makes`,
+      );
+    }
+  }
+  const ranked = [
+    ...current.filter((a) => !endsToday(world, a)),
+    ...current.filter((a) => endsToday(world, a)),
+  ];
+  // Each program once, as the day's read places it: by its row that stays, else by the one ending
+  // today (taken off today and put on again from tomorrow is one program, and it stays).
+  return ranked.filter((a, i) => ranked.findIndex((b) => b.prog === a.prog) === i);
+}
+
+/** Its last day is today: `to`, the first day off, is tomorrow, and it has started. */
+function endsToday(world: World, a: { from: string; to?: string }): boolean {
+  return a.to === addDays(world.today, 1) && a.from <= world.today;
 }
 
 function programRef(world: World, programId: string) {
@@ -274,6 +320,7 @@ function dayWorkout(
       itemPublicId: draft.itemPublicId,
       name: draft.itemName,
       trackingType: draft.trackingType,
+      ...supervisionOf(world, item.iid),
       prescribedText: heading,
       target: prescribedTarget(draft.targetReps, draft.quantities),
       notes: draft.notes,
@@ -297,6 +344,8 @@ function dayWorkout(
       itemPublicId: fixtureIds.item(key),
       name: first.name,
       trackingType: world.catalog[key].type,
+      // The label follows the movement, not the prescription that is gone.
+      ...supervisionOf(world, key),
       prescribedText: first.text,
       target: { reps: null, quantities: [] },
       notes: null,
@@ -381,7 +430,11 @@ export function dayPlan(world: World, athlete: string, day: string): DayPlan {
     })),
     onProgram: on.length ? 'yes' : current.length ? 'not-this-day' : 'never',
     canGoForward: !(day >= world.today && onPrograms(world, athlete, addDays(day, 1)).length === 0),
-    currentPrograms: current.map((a) => programRef(world, a.prog)),
+    currentPrograms: current.map((a) => ({
+      ...programRef(world, a.prog),
+      // `to` is the first day OFF the program, so a program ending today has `to` = tomorrow.
+      ...(endsToday(world, a) ? { endsToday: true as const } : {}),
+    })),
     programs: on.map((a) => {
       const order = orderOf(a);
       return { ...programRef(world, a.prog), order: order < 0 ? null : order };
