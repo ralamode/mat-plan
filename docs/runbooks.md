@@ -2181,7 +2181,8 @@ principle that also binds any later in-app removal:
    numbers; only the link back to the removed program, workout or prescription is cleared, so those logs no
    longer count toward the program in a per-program report (step 3 tells the requester). **A removal
    that would delete or orphan another athlete's log rows is refused**: that is why a typed item a log
-   still names cannot be removed (STOP 2, Q10).
+   still names cannot be removed (STOP 2, Q10). The one exception: a typed item's name replaced on its logs on request
+   (Q12, below).
 
 ### Steps
 
@@ -2221,18 +2222,19 @@ Offer the export (step 1) to each athlete listed.
 
 Then offer, as the default, the change that touches nobody's data:
 
-| Target    | The alternative, offered first                                                                                                                                            |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A program | Rename it, or take every athlete off it (the app's take off): it stays, and so does who was on it                                                                         |
-| A workout | Rename it, or take it off the week: it stays in the program, and its logs keep their link                                                                                 |
-| An item   | Rename it. No correction does this yet; one is written when first asked for. A rename, like a refused removal, leaves the name as logged on every log and in every export |
+| Target    | The alternative, offered first                                                                                                                        |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A program | Rename it, or take every athlete off it (the app's take off): it stays, and so does who was on it                                                     |
+| A workout | Rename it, or take it off the week: it stays in the program, and its logs keep their link                                                             |
+| An item   | Rename it, and if a log names it, have the name replaced on those logs too (below, Q12): the logs, sets and numbers stay; only the typed text changes |
 
 **Remove only if the requester, told who, explicitly accepts changing those athletes' data.** If they
 pick the alternative, a stop refuses, or they withdraw, nothing is removed, and **the ledger entry is
-deleted then**. An **adult** athlete
+deleted then**. The one exception is a typed name replaced on its logs (Q12, below), whose entry is kept. An **adult** athlete
 among those affected is told first, on their own channel, and cannot cancel it (Q9). **Before the apply
 they are sent their own full copy**: their assignment rows and their targets on it, which the in-app
-export does not hold. There is no in-app archive for a program, a workout or an item yet; when one is
+export does not hold. **The apply waits until they confirm they have it, and at most 3 days after it was
+sent** (Q11; for a removal: a Q12 rename sends no copy, below); record the date sent and the date confirmed (or "not confirmed, 3 days") in the ledger. There is no in-app archive for a program, a workout or an item yet; when one is
 built it is offered first, the same way.
 
 **4. Apply** in one transaction; its **first statement after the `SET LOCAL`s locks the target** (below), so the app's
@@ -2385,8 +2387,8 @@ device that later saves the removed workout gets the writer's `not_found` refusa
 -- STOP 2 (must be 0): a LOG of this household names it. The item is the name those rows show, so it
 -- cannot go while they stay. Live and hidden are counted apart: a row hidden by "Clear this day" is
 -- kept hidden, not erased, and still names it. Tell the household which athletes, and that the item
--- stays; the routes that remove those rows are erasing the athlete or deleting the household. Never
--- delete or repoint the logs to make this pass.
+-- stays; if the text itself must go, offer to replace it on those logs (below, Q12). Never delete or
+-- repoint the logs to make this pass.
 SELECT e.profile_id, (e.deleted_at IS NOT NULL) AS hidden, count(*) FROM entries e
   JOIN profiles p ON p.id = e.profile_id
  WHERE e.movement_id = :M AND p.household_id = :H GROUP BY 1, 2;
@@ -2425,6 +2427,109 @@ WHERE id = :M AND household_id = :H`), never `:M` alone, so a mistyped id cannot
 Never answer an abort here by setting `household_id` to NULL: that would publish the household's text
 into the shared catalog (the household delete's step 11 says why).
 
+#### A typed item's name, replaced on its logs (Q12)
+
+When a log names the item (STOP 2 is not 0) and the household wants the **text** gone, for example a
+person's name typed as an exercise, its name can be replaced on the item and on every one of the
+household's own logs of it _(maintainer, 2026-11-18)_. The logs, sets and numbers stay; only the typed
+name changes. It is the one exception to precondition 4: those logs' `movement_name` is rewritten.
+
+**One item has many spellings.** A typed log keeps the text exactly as it was typed, and the item
+matches it by slug, which ignores case and spacing (`writers/movement-catalog.ts`, the typed path,
+`movementSlug` in `packages/shared/src/movements.ts`). So the replacement is keyed on the item, never on
+one spelling:
+
+- **Consent first:** step 3's list says whose logs change (STOP 2's athletes, live and hidden), and the
+  requester accepts. An adult athlete among them is told on their own channel (Q9). No copy is sent and
+  nothing waits for one: nothing of theirs is deleted, and a copy would carry the very text being
+  removed.
+- **The new name** is neutral, chosen by the requester, and never a person's name. Before the apply, run
+  these checks from a fresh `origin/main` with the `packages/shared` functions the app uses, never by hand:
+  - `typedMovementNameIssues(:new)` returns nothing, and `:new` equals its own trim;
+  - `:new_slug` is `movementSlug(:new)`;
+  - no near-twin: `existingItem` (`packages/shared/src/program/pieces.ts`, fed by `movementOptions` as
+    `writers/program/new-item.ts` does) finds no row other than `:M` among the household's items, the
+    catalog's names and its aliases ("Squats" next to "Squat" is refused, not only an exact slug).
+    **No command runs this yet: `PRIV-3` PR 3b scripts it.** Until then, type the new name into the app's
+    item picker for this household, without saving, and refuse any name it offers as an existing item.
+- **psql history:** `:old` is the text being removed. Run this session with `PSQL_HISTFILE=/dev/null`,
+  so it does not land in `~/.psql_history`.
+- **Cut the restore branch first**, held 3 days, as for a removal.
+
+**The stops (must be 0):** STOP 4 (another household's rows on it); the new slug already taken in this
+household or the shared catalog, which `existingItem` alone cannot see for a catalog row outside the
+picker (the second, slug-based step `newItem` takes for the same reason); and the same words in other
+free text on this household's logs, which this does not rewrite. They are compared case-insensitively against every
+spelling the item's logs hold:
+
+```sql
+SELECT count(*) FROM movements                                         -- must be 0
+ WHERE slug = :new_slug AND (household_id = :H OR household_id IS NULL) AND id <> :M;
+
+WITH spelling AS (
+  SELECT DISTINCT lower(e.movement_name) AS s FROM entries e JOIN profiles p ON p.id = e.profile_id
+   WHERE e.movement_id = :M AND p.household_id = :H
+  UNION SELECT lower(name) FROM movements WHERE id = :M
+)
+SELECT 'superset' k, count(*) FROM supersets ss
+  JOIN sessions s ON s.id = ss.session_id JOIN profiles p ON p.id = s.profile_id, spelling
+ WHERE p.household_id = :H
+   AND (strpos(lower(coalesce(ss.label, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(ss.note, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(ss.prescription_group, '')), spelling.s) > 0)
+UNION ALL SELECT 'session', count(*) FROM sessions s JOIN profiles p ON p.id = s.profile_id, spelling
+ WHERE p.household_id = :H
+   AND (strpos(lower(coalesce(s.workout_name, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(s.feel, '')), spelling.s) > 0)
+UNION ALL SELECT 'entry', count(*) FROM entries e JOIN profiles p ON p.id = e.profile_id, spelling
+ WHERE p.household_id = :H
+   AND (strpos(lower(coalesce(e.notes, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(e.context, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(e.scheme, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(e.value_text, '')), spelling.s) > 0)
+UNION ALL SELECT 'readiness', count(*) FROM day_readiness r JOIN profiles p ON p.id = r.profile_id,
+  spelling
+ WHERE p.household_id = :H AND strpos(lower(coalesce(r.note, '')), spelling.s) > 0;
+```
+
+A non-zero count here is a new question for the maintainer, never a hand edit: the household typed those
+words into a note or a label on a log itself. **Program text is not searched**: a program, workout or
+item's name, notes or labels are the household's own words, which it can edit in the app; tell the
+requester to check them.
+
+**Apply**, in one transaction:
+
+```sql
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+SELECT pg_advisory_xact_lock(600001, hashint8(:H));   -- ADVISORY_LOCK.householdItems, as newItem takes it
+SELECT id FROM movements WHERE id = :M AND household_id = :H FOR UPDATE;   -- exactly 1 row
+-- re-run STOP 2's total and the stops above; then:
+UPDATE movements SET name = :new, slug = :new_slug, updated_at = now()
+ WHERE id = :M AND household_id = :H;                                     -- exactly 1 row
+UPDATE entries e SET movement_name = :new, updated_at = now()
+  FROM profiles p
+ WHERE p.id = e.profile_id AND p.household_id = :H AND e.movement_id = :M; -- = STOP 2's total
+SELECT count(*) FROM entries e JOIN profiles p ON p.id = e.profile_id
+ WHERE p.household_id = :H AND e.movement_id = :M
+   AND e.movement_name IS DISTINCT FROM :new;                             -- must be 0
+COMMIT;
+```
+
+`ROLLBACK` on any count that differs. A `23505` means another row took the new name while this ran:
+pick another and start again. A `40P01` is re-run from the top. **After `COMMIT`, run the last `SELECT`
+again**: a log saved while the lock was held can land with the old spelling; if it is not 0, repeat the
+`UPDATE entries` and the check.
+
+**The ledger** keeps this entry (it is not deleted as an "alternative"): "name replaced: yes", **the new
+name** (neutral by construction, so `OPS-3`'s replay can write it again after a restore), the count of
+athletes whose logs changed, and the dates. **Never the old text.**
+
+**Tell the household** that exports already downloaded, and the restore branch until it is deleted,
+still hold the old name, and so does Neon's 6-hour point-in-time window (notice.md, "What remains
+afterwards"). The app's next export shows the new one.
+
 **5. Close out.** Ledger, the restore branch (deleted after 3 days), and tell the household it is done.
 
 ### The ledger, at item grain
@@ -2432,7 +2537,8 @@ into the shared catalog (the household delete's step 11 says why).
 One ledger with the household delete. An entry records the request date, **the `public_id`** of the
 program, workout or item (`OPS-3`'s replay re-applies the removal after a restore), the verifying
 channel, the household's keep-or-remove answer to report lines (3) and (4) **by the copy's or the
-item's `public_id`**, `alternative offered: yes/no`, `accepted: yes/no`, `adult athletes told: a count and the date`, the apply date and the restore-branch-deleted date. **Never who was on the program
+item's `public_id`**, `alternative offered: yes/no`, `accepted: yes/no`, `adult athletes told: a count and the date`, `copy sent` and `copy confirmed` dates (or "not
+confirmed, 3 days"), and for a Q12 rename `name replaced: yes`, the new name and a count, the apply date and the restore-branch-deleted date. **Never who was on the program
 or trained on it** (reports (1) and (2) are told, not answered): that is the record the removal deletes.
 No names, no `profile_id`, no Clerk ids.
 

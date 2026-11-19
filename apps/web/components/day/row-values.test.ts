@@ -7,6 +7,8 @@ import {
   changedText,
   fieldText,
   formatRowValues,
+  loggedInOtherUnit,
+  otherUnitLoad,
   readAmend,
   readTyped,
   sameValues,
@@ -282,5 +284,43 @@ describe('readAmend (Change, 13b-ii)', () => {
       from: '27.5 lb × 8',
       to: '30 lb × 6',
     });
+  });
+});
+
+describe('H9 (12d-ii): a load logged in another unit is typed again, never filled', () => {
+  const benchKg: DayItem = {
+    ...splits,
+    name: 'DB bench press',
+    trackingType: 'weight_reps',
+    unit: 'kg',
+    target: { reps: 8, quantities: [{ slot: primary, unit: 'kg', value: 30 }] },
+  };
+  const loggedLb = { quantities: [{ slot: primary, unit: 'lb' as const, value: 27.5 }], reps: 8 };
+  const loggedKg = { quantities: [{ slot: primary, unit: 'kg' as const, value: 12.5 }], reps: 8 };
+
+  it('names the other unit’s load, and nothing for one in the item’s unit', () => {
+    expect(otherUnitLoad(benchKg, loggedLb)).toBe('27.5 lb');
+    expect(loggedInOtherUnit(benchKg, loggedLb)).toBe(true);
+    expect(otherUnitLoad(benchKg, loggedKg)).toBeNull();
+    expect(loggedInOtherUnit(benchKg, { quantities: [], reps: 8 })).toBe(false);
+  });
+
+  it('with fillQuantity off, a blank load is other_unit on the load field', () => {
+    expect(readTyped(benchKg, { quantity: '', reps: '6' }, { fillQuantity: false })).toEqual({
+      ok: false,
+      problem: 'other_unit',
+      field: 'quantity',
+    });
+  });
+
+  it('with fillQuantity off, blank reps still fill from the prescription and a typed load is read', () => {
+    const read = readTyped(benchKg, { quantity: '12.5', reps: '' }, { fillQuantity: false });
+    expect(read.ok && read.values).toEqual({
+      quantities: [{ slot: primary, unit: 'kg', value: 12.5 }],
+    });
+  });
+
+  it('a Check is unaffected by the flag', () => {
+    expect(readTyped(grip, { quantity: '', reps: '' }, { fillQuantity: false }).ok).toBe(true);
   });
 });
