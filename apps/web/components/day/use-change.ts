@@ -39,8 +39,8 @@ import { rowName, type useRow } from './use-row';
  * **When a Change is sent: when focus leaves the row from any of its controls** (for anywhere
  * outside both of its table rows), on Enter in its last field, or on its ✓; one amend per row, so
  * a load and reps changed together are one write. Never when the window loses focus (a kid
- * checking a timer would save the half-typed number). ⚠️ "Any of its controls" (13b-ii said "one of
- * its fields") is pending the maintainer, with the ✕ press rule below (`noteCancel`).
+ * checking a timer would save the half-typed number). "Any of its controls" (13b-ii said "one of
+ * its fields") and the ✕ press rule below (`noteCancel`) are the maintainer's (FAM-1 D43, 2026-11-18).
  *
  * 🔴 **Safari does not focus a tapped button**, so a field's blur (with no `relatedTarget`) arrives
  * before the button's click. Two buttons in the row are pressed during an edit, and each notes its
@@ -339,10 +339,9 @@ export function useChange(
      *
      * Called off, the row is left as a tap outside would leave it: `cancelling` is cleared, so the
      * next time focus leaves the row the Change is sent; and if focus has already left (Safari with
-     * a mouse blurs the field at pointer-down), it is sent now. ⚠️ Pending the maintainer: sending
-     * after a press that began on Cancel is a new save (FAM-1 plan
-     * `fam-1-change-escape-and-drag-off.md`, "A change to a recorded decision"); the alternative
-     * only clears `cancelling`.
+     * a mouse blurs the field at pointer-down), it is sent now. Sending after a press that began on
+     * Cancel is a new save, which the maintainer chose ("Save it", FAM-1 D43, 2026-11-18) over only
+     * clearing `cancelling` (plan `fam-1-change-escape-and-drag-off.md`).
      */
     noteCancel(event: React.PointerEvent<HTMLElement>) {
       cancelling.current = true;
