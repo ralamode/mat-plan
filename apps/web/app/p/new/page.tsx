@@ -6,7 +6,7 @@ import { newId } from '@mat-plan/shared';
 import { AppShell } from '@/components/layout/app-shell';
 import { listProfiles } from '@/lib/dal/profiles';
 
-import { NoHouseholdState } from '@/components/onboarding/no-household-state';
+import { NoHouseholdPage } from '@/components/onboarding/no-household-page';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
 import { requireSession } from '@/lib/dal/session';
 import {
@@ -82,7 +82,7 @@ export default async function AddAthletePage() {
   if (state === HOUSEHOLD_STATE.none) {
     return (
       <AppShell athletes={await listProfiles()}>
-        <NoHouseholdState />
+        <NoHouseholdPage />
       </AppShell>
     );
   }
