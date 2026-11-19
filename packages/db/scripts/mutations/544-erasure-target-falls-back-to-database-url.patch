@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index feddd632..c9fc9d6a 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1086,7 +1086,7 @@ const eraseSeededHousehold: Correction = {
+   issue: 'PRIV-3 · CAT-3 R0',
+   async run(db, apply) {
+     try {
+-      const url = correctionTargetUrl({ kind: 'erasure' });
++      const url = correctionTargetUrl();
+       const before = seededHouseholdErasureIssue(url, null);
+       if (before) throw new CorrectionRefusal(before);
+ 
