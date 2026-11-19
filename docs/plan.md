@@ -1169,6 +1169,101 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   see a left/right difference. Needs a decision on whether a side is a property of the item, of the
   row, or two rows.
 
+- <a id="card-1"></a>**CARD-1 — a streak card an athlete can post.** _(maintainer, 2026-11-19, not
+  scoped. Recorded only: nothing here is built or prototyped before Beta 0 ships.)_ A branded image
+  of an athlete's streak, made for the phone's share sheet, so it can go on a social app and lead
+  people back to us through a short link or a QR code on the card. Likely the cheapest of the growth
+  ideas recorded: it is built only from data the household already has, and it shows nobody else's.
+  Needs `MOT-1` (the streak) first.
+  **Rules proposed by the plan owner, for the maintainer to confirm when it is scoped:** a first
+  name or a nickname only; never a bodyweight for anyone, which is stricter than
+  [`ID-1`](#id-1)'s rule; never a club, a place or a time of day; and **the link is the same on
+  every card**: it opens a public page about the app and carries no token for an athlete, a card or
+  a household, so nothing on that page or in that address is about the athlete.
+  **Open question (maintainer):** may a child share their own card once a parent approves, or do
+  only parents share? If only parents share, this row does not need `ID-1`. A child sharing with
+  approval is the tier `ID-1` owns (the athlete acts and a guardian approves) and waits for it.
+  **What a plan must say:** a posted card is out of our hands, so PRIV-1's defined deletion cannot
+  reach it; the card can only ever say what the family chose at that moment. `PUB-1` already
+  covers publishing a streak and calls it a behavioural signal about a child, so the two rows share
+  one answer. A card is "something made publicly visible", which is the privacy notice's own
+  trigger for a re-review. Gets the `privacy-reviewer` lens on every PR.
+
+- <a id="swap-1"></a>**SWAP-1 — adapt a day to the equipment at hand.** _(maintainer, 2026-11-19,
+  not scoped. Recorded only.)_ An athlete training somewhere else (a hotel, another gym, home) swaps
+  a movement for one they can do there.
+  ⚠️ **It reopens a closed decision, and the maintainer has not yet said so in those words.**
+  `ONB-1`'s PRD records "Ever suggest movements? No" (its Q11 and R5,
+  [PRD](./plans/onb-1-self-serve-onboarding-prd.md)). The half of R5 that followed from it, that
+  equipment is never modelled, is already overtaken by `CAT-3`. Listing candidates for a swap is
+  suggesting movements. The plan owner reads the 2026-11-19 request as reversing Q11 for this one
+  case (a person asks, the app lists, the person picks); **the maintainer confirms that before any
+  plan.**
+  **A framework first, not a model.** Once `CAT-3`'s library is in, every movement carries its
+  equipment, its muscles and its lift pattern, so "what can I do here instead" is a filter: the same
+  pattern and primary muscle, limited to the equipment at this place. It is deterministic, and it
+  can say why it offered each candidate.
+  **It never invents a load** ([principles](./principles.md): the model never authors loads, and
+  neither does a filter): a swapped-in movement starts with a blank load, or with the athlete's own
+  last one for that movement.
+  **What it needs:** a list of equipment per place (home, gym, travel), which is also what `CAT-3`'s
+  later "needs nothing beyond these" filter needs; and a record that a logged movement replaced a
+  prescribed one for that day only. A substitute can already be logged as an extra movement on the
+  day (`PICK-1`'s ad-hoc case); nothing says what it stood in for, and `CAT-3`'s spec lists
+  substitutions as out of scope.
+  A model could later rank or explain the candidates. That is a second step with its own row.
+
+- <a id="import-1"></a>**IMPORT-1 — draft a program from a photo, a screenshot or pasted text, then
+  review it.** _(maintainer, 2026-11-19, not scoped. Recorded only.)_ A parent brings the program
+  they already have: a printed workout sheet, a screenshot from another app, or text pasted from a
+  document or a spreadsheet. A model reads it and drafts the program, and a review screen lets the
+  parent check that we have the program right before anything is saved.
+
+  **Most of this is already scoped in `ONB-1`'s PRD** ([PRD](./plans/onb-1-self-serve-onboarding-prd.md)):
+  paste and CSV import is its phase 3 and photo import its phase 4, which it calls a separate, later
+  problem. What this row adds is the sources (a screenshot, a printed sheet) and **a review screen
+  that shows every line beside its source**, each matched to a library movement or flagged as
+  unmatched. `ONB-1`'s scope rule holds: a program, never a family's logged history.
+
+  ⚠️ **The review screen reopens two closed decisions, and the maintainer has not yet said so in
+  those words.** The PRD records "no bulk confirm screen": confirmation is deferred to first use
+  (R8a, its closed question 4). It also records that verification after import is loads-only, and
+  that nothing asks the coach to re-read the whole plan against the paper (R16a, its closed
+  question 5). A screen that shows every line beside its source before saving is that re-read. The
+  2026-11-19 request was for "a screen to review and ensure that we have their programs correct".
+  **It can be built two ways, and the maintainer chooses before any plan:**
+  - **Inside R8 (the plan owner's recommendation).** Every risky value the screen shows (which
+    movement a line is, a rep count, a distance) is still fixed source text beside an empty field,
+    filled one tap at a time; the screen is where those taps happen. Loads stay with R8a, at first
+    use. This reverses R8a and R16a for the non-load values only, and leaves R8 whole.
+  - **Reopening R8 as well.** The draft arrives with movements matched and rep counts filled in,
+    and the parent corrects what is wrong. That is a bulk confirm of values R8 calls risky, so it is
+    a third reversal.
+
+  **Still open in the PRD (its open question 5, not the closed one):** how long an uploaded image is
+  kept, and where. Proposed by the plan owner: processed and discarded, never kept and never used
+  for anything else, because a sheet can carry a child's name and numbers, and other children's.
+
+  **What it needs settled before any plan:** the two answers above (`privacy-reviewer` lens on
+  every PR); a test set of **synthetic** sheets in real formats (`SYNTH-1`), never a real family's
+  sheet, with the expected result for each, so accuracy is measured and not claimed; and what the
+  screen does with a line it cannot read. Depends on `CAT-3` (the matching) and on FAM-1's builder
+  (the draft is an ordinary program).
+
+  **Binding here from the PRD.** R7 is a requirement of the PRD; R7a, R8 and R8a are the
+  maintainer's decisions of 2026-08-20:
+  - **R7:** the extractor emits only what the source literally states. Anything else is empty,
+    never inferred.
+  - **R7a:** free-form prose is refused, that fragment only, and routed to a form. Text pasted from
+    a document falls under this.
+  - **R8:** a risky value (a load, a height, a distance, a rep count, which movement it is) is never
+    written by the model. The sheet's value is shown as fixed source text beside an **empty** field
+    and one tap fills it, one value at a time. There is no "fill all" and no bulk confirm, ever.
+  - **R8a:** an imported load is filled at the moment of use, the first day that movement comes up,
+    which is what makes R8's one tap safe. If the review screen is built, it is never where loads are
+    accepted, and it accepts any other risky value only one tap at a time unless the maintainer
+    reopens R8.
+
 - **LIFE-1 — the Wake button on a past day writes TODAY's wake, and can write a second one.**
   _(found by a UX panel during `V1-9b` B1-2, 2026-11-14; not scoped.)_ `logLifeActivitiesAction`
   derives Wake's `entryDay` from `new Date()` regardless of the day being viewed (Wake is a "now"
@@ -1318,6 +1413,12 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   follow, whether approval is required, and whether a notification reveals a schedule pattern
   (_"trained at 3pm every weekday"_ is a time-and-place pattern about a minor). Same privacy posture as
   `COACH-1`: the `privacy-reviewer` lens on every PR.
+  **A first step, recorded 2026-11-19 (not scoped).** The maintainer's idea: following sits behind
+  sign-in, so wanting to follow is a reason to join. Proposed by the plan owner, on top of that: the
+  request goes to the athlete's guardian, and the ways in are a shared program (`SHARE-1`) or the
+  app itself after sign-in. A streak card is not a way in: its link names no athlete
+  ([`CARD-1`](#card-1)). It still waits for [`ID-1`](#id-1): it is the adult-follows-child path
+  above, and a guardian has to be the one who answers.
 
 - **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
   club coach is granted access to outcomes for athletes in other households, and gets notified of
@@ -3818,7 +3919,8 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   moment of use** on the existing V1-10 card — **no bulk confirm screen** (theatre at 20+ rows on a
   phone) and **no "fill all", ever**. Provenance is marked for the **first workout after import** only,
   then clears. Verification is **loads-only**. Equipment is **cut permanently** (the app will never
-  suggest movements, so nothing would ever read it). **Suggested loads are an explicit goal** — from past
+  suggest movements, so nothing would ever read it; ⚠️ 2026-11-19: [`SWAP-1`](#swap-1) would reopen
+  that, and the maintainer has not confirmed it). **Suggested loads are an explicit goal** — from past
   logged performance via a published progressive-overload scheme, in **`packages/engine`**
   (deterministic, golden-vector tested, auditable), **never an LLM**. **Two blocking prerequisites:**
   `movements` must be **household-scoped** before any multi-tenant writing — `slug` is globally `UNIQUE`,
