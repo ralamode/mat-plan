@@ -296,19 +296,21 @@ movement picker.
   [the slot](./.github/scripts/heavy-slot.mjs). Run locally to write code (one file, one probe), debug a CI failure,
   `pnpm probe`, edit CI itself, during an Actions outage, for `pnpm dev`, and for production
   operations (corrections; never tests against production). **Everything else heavy runs on CI:
-  push, and let it gate.** Until DX-18 PR 2 puts the mutation proof in CI, a diff touching
-  `packages/db/**`, `packages/shared/**`, the lockfile or a manifest still runs `db:mutations`
-  locally. The filtered commands (one test, one package, one spec) are in
+  push, and let it gate.** That includes the mutation proof (CI's sharded `mutations` jobs; one
+  patch locally is `db:mutations --only 288`). The filtered commands (one test, one package, one spec) are in
   [debug-ci-failure](./.claude/skills/debug-ci-failure/SKILL.md) and
   [ship-pr](./.claude/skills/ship-pr/SKILL.md).
-- **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does **except
+- **`pnpm verify` — optional before a PR** (CI runs all of it, DX-18). Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it):
   `format:check` → `lint` → `typecheck` → `test` → `eval` → `db:verify` → `db:mutations` → `skills:check`
   (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist; each red flag cites its incident) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
-  test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
+  test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)). In CI it
+  is the `mutations` matrix plus `mutations-total`, skipped on a PR only when
+  [changed-scopes.mjs](./.github/scripts/changed-scopes.mjs) says no patch can be affected, and run in
+  full on every push to `main`.
   **This section is the one list of where each gate runs**; other docs point here rather than
   restating it. `skills:check`, `guards:test` (every guard self-test `package.json` lists) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
@@ -329,7 +331,7 @@ movement picker.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
   `next build` · gitleaks · (DB) drift check + `db:verify` · `audit:check` · `skills:check` ·
-  `guards:test` · `status:check` · **forward-only** + **Squawk** on new migrations · **action pins**
+  `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run
   replays the old event** ([lessons](./docs/lessons.md) → GitHub / PRs). The labels: `ci-skip-e2e`,
@@ -348,8 +350,9 @@ movement picker.
 - **`e2e` (Playwright smoke):** what earns one is the Speed budget in
   [definition-of-done.md](./docs/definition-of-done.md). Runs on every PR, **not yet required**
   (soaks until PR 28). It
-  **auto-skips the smoke, still reporting success, when every changed file is provably inert** (docs,
-  root markdown, `.claude/`, GitHub templates, images; default-to-run). Override with the
+  **auto-skips the smoke, still reporting success, when every changed file is provably inert**
+  (`INERT` in [changed-scopes.mjs](./.github/scripts/changed-scopes.mjs), which also skips `next
+build`; default-to-run). Override with the
   **`ci-skip-e2e` label, then push** — sparingly, a red `e2e` usually means a real bug — or an admin
   merge as last resort. The skip is step-level, never a job-level `if:`, so a required check never
   stalls "pending" ([plan](./docs/plans/ci-e2e-auto-skip.md)).
