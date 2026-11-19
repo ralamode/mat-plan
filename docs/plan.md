@@ -1897,14 +1897,16 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the test and preview seeds write it, behind `SEED_FIXTURES`. \"Keep `PROGRAM_SEED` reaching prod
   until V1-22\" above no longer holds.
   **Planned 2026-11-13, refreshed 2026-11-16 onto #432 and 2026-11-17 onto `CAT-3`** ([plan](./plans/ops-2-split-the-seed.md)),
-  approved 2026-11-18. **PR 1 in review** (lane A): `seedReference` / `seedFixtures`, the ramp expansion
+  approved 2026-11-18. **PR 1 is merged and applied** (#592, 2026-11-18; lane A): `seedReference` / `seedFixtures`, the ramp expansion
   deleted, the `units` lock fixed, and `migrate.yml` reading a renamed secret, `PROD_DATABASE_URL_UNPOOLED`. Two PRs: 1 moves the seed household and its three fixture profiles under #432's
   `fixtures` branch and takes the ramp expansion out of production, so production's `db:seed` writes
   reference data only, and replaces both runbook preconditions that wait on OPS-2 with a check run
   before each deletion; 2 soft-deletes the fixture athlete `PROF-1 b`'s seed put in production. Decided
   2026-11-16: no tombstones; the fixture athlete is soft-deleted; the ramp expansion is deleted.
   2026-11-17: for the seeded household, `CAT-3`'s fresh start (K7) replaces SEC-6's re-key, and PR 2
-  is unnecessary once it has run.
+  is unnecessary once it has run. **PR 2 is retired** _(2026-11-18,
+  [`priv-3-guarded-deletion.md`](./plans/priv-3-guarded-deletion.md))_: the fresh start runs before
+  anything else could use it, and after it the fixture athlete does not exist.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
@@ -2384,7 +2386,9 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   📐 **Planned 2026-11-13, refreshed 2026-11-17** ([plan](./plans/priv-3-guarded-deletion.md); a
   six-lens panel; plan only): one proved list of per-household tables, a delete core, and dry-run-first
   `erase-household` and `erase-athlete` corrections over it, with the purge window `N` a deferred
-  section (`N` = 30 days). ⚠️ **The target is read from the environment through a hidden prompt, not
+  section (`N` = 30 days). **The purge window is after Beta 0** _(maintainer, 2026-11-19: "After
+  Beta 0 (Recommended)")_, to be looked at again before any outside family's data is held: its gate,
+  `V1-9b` B1-3, was cut on 2026-11-15, so nothing had said which release it belongs to. ⚠️ **The target is read from the environment through a hidden prompt, not
   the `--household` flag above** _(maintainer, 2026-11-17, Q1)_; PR 2b re-words the paragraph above
   when it lands.
 
