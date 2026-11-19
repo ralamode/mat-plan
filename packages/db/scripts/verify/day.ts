@@ -38,7 +38,14 @@ import { hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
 import { verifyDayPlan } from './day-plan';
-import { asDb, asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import {
+  asDb,
+  asTx,
+  rolledBack,
+  stageHideDuringInsert,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import {
   entriesOnAnotherWorkoutsPrescriptions,
   entriesOnForeignPrescriptions,
@@ -720,20 +727,10 @@ async function verifyRowRace(): Promise<void> {
         await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
         'FAM-1 11b race: the holder ✓',
       );
-      await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
-      await tx.execute(sql`insert into race_target values (${holder.entryPublicId}::uuid)`);
-      await tx.execute(sql`create function verify_row_race_hide() returns trigger language plpgsql as $$
-        begin
-          update entries set deleted_at = now()
-            where public_id in (select public_id from race_target) and deleted_at is null;
-          return null;
-        end $$`);
-      await tx.execute(
-        sql`create trigger row_race_hide after insert on entries for each statement execute function verify_row_race_hide()`,
-      );
+      const hide = await stageHideDuringInsert(tx);
+      await hide.arm(holder.entryPublicId);
       const second = await f.tick({ prescriptionPublicId: f.p.reps.publicId });
-      await tx.execute(sql`drop trigger row_race_hide on entries`);
-      await tx.execute(sql`drop function verify_row_race_hide()`);
+      await hide.disarm();
       const saved = expectOk(second, 'FAM-1 11b race: a ✓ on a set un-ticked mid-insert saves');
       // ⚠️ 11b-interim: a NEW entry, the un-ticked one hidden. 11c-ii's revive flips this to "the same
       // entry, brought back" (plan 11c, § Proofs 11b's rewrite).

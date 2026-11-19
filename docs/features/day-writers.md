@@ -218,7 +218,8 @@ flowchart LR
 26. **A ✓ that races an un-tick saves** (lane S's #578 pattern): when the insert skips and the
     re-reads find no holder and no taken set (the holder was hidden between the statements),
     `logRow` re-runs the insert once; a second miss still throws. Proved with a statement-level
-    `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`); mutation 372.
+    `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`), staged by the harness's
+    `stageHideDuringInsert`, which the check-in and bodyweight race shares; mutation 372.
 27. **C32 and C37 in the reader** (contract invariants 32 and 33, `program-contract.md`):
     - `resolveDayPlan` takes the movement library as an argument. The DAL passes `CATALOG_MOVEMENTS`;
       the proofs pass the test library, re-slugged to the proof seeder's global rows.

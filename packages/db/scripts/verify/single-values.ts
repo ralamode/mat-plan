@@ -45,6 +45,7 @@ import {
   orFail,
   rolledBack,
   rowsOf,
+  stageHideDuringInsert,
   type VerifyContext,
   type VerifyTx,
 } from './harness';
@@ -486,41 +487,7 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       },
       '3b-0',
     );
-    const typeId = async (key: string) =>
-      (
-        await tx
-          .select({ id: schema.activityTypes.id })
-          .from(schema.activityTypes)
-          .where(eq(schema.activityTypes.key, key))
-      )[0]?.id;
-    const practiceTypeId = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
-    const habitTypeId = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
-    const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
-    assert.ok(
-      practiceTypeId && habitTypeId && weighInTypeId,
-      '3b-0: the activity types are seeded',
-    );
-
-    const practice = (day: string, clientId = newId()): CheckinInsertValue => ({
-      publicId: newId(),
-      clientId,
-      activityDate: day,
-      unit: PRACTICE_UNIT,
-      valueNum: '90',
-      activityTypeId: practiceTypeId,
-      metricKey: METRIC_KEYS.practice_minutes,
-      status: ENTRY_STATUS.done,
-    });
-    const habit = (day: string, clientId = newId()): CheckinInsertValue => ({
-      publicId: newId(),
-      clientId,
-      activityDate: day,
-      unit: 'count',
-      valueNum: '1',
-      activityTypeId: habitTypeId,
-      metricKey: null,
-      status: ENTRY_STATUS.done,
-    });
+    const { practice, habit, weighInTypeId } = await checkinBuilders(tx, '3b-0');
     // A writer or restore that THROWS fails the named proof, not the run: a mutation that brings back
     // a bare 23505 must go red on the assertion that names it (the mutation gate reads the first one).
     const outcomes = async (profileId: number, values: CheckinInsertValue[], what: string) =>
@@ -1601,6 +1568,50 @@ async function verifyClearDayProgramRows(): Promise<void> {
 }
 
 // ── A day-taken insert whose holder is cleared in the same instant (tech-debt row, 2026-11-16) ─────────
+/**
+ * The check-in value builders both the 3b-0 and the race sections write with: the three seeded
+ * activity types, and a practice or habit item for a day.
+ */
+async function checkinBuilders(tx: VerifyTx, label: string) {
+  const typeId = async (key: string) =>
+    (
+      await tx
+        .select({ id: schema.activityTypes.id })
+        .from(schema.activityTypes)
+        .where(eq(schema.activityTypes.key, key))
+    )[0]?.id;
+  const practiceTypeId = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
+  const habitTypeId = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
+  const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  assert.ok(
+    practiceTypeId && habitTypeId && weighInTypeId,
+    `${label}: the activity types are seeded`,
+  );
+  return {
+    weighInTypeId,
+    practice: (day: string, clientId = newId(), valueNum = '90'): CheckinInsertValue => ({
+      publicId: newId(),
+      clientId,
+      activityDate: day,
+      unit: PRACTICE_UNIT,
+      valueNum,
+      activityTypeId: practiceTypeId,
+      metricKey: METRIC_KEYS.practice_minutes,
+      status: ENTRY_STATUS.done,
+    }),
+    habit: (day: string, clientId = newId()): CheckinInsertValue => ({
+      publicId: newId(),
+      clientId,
+      activityDate: day,
+      unit: 'count',
+      valueNum: '1',
+      activityTypeId: habitTypeId,
+      metricKey: null,
+      status: ENTRY_STATUS.done,
+    }),
+  };
+}
+
 const RACE_HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b0';
 const RACE_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b1';
 const RACE_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b2';
@@ -1613,41 +1624,13 @@ async function raceFixture(tx: VerifyTx) {
     { hh: RACE_HH_PUBLIC_ID, athlete: RACE_ATHLETE_PUBLIC_ID, sibling: RACE_SIBLING_PUBLIC_ID },
     'race',
   );
-  const typeId = async (key: string) =>
-    (
-      await tx
-        .select({ id: schema.activityTypes.id })
-        .from(schema.activityTypes)
-        .where(eq(schema.activityTypes.key, key))
-    )[0]?.id;
-  const practiceTypeId = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
-  const habitTypeId = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
-  const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
-  assert.ok(practiceTypeId && habitTypeId && weighInTypeId, 'race: the activity types are seeded');
+  const b = await checkinBuilders(tx, 'race');
 
   return {
     exec: asTx(tx),
     athlete,
-    practice: (valueNum = '60'): CheckinInsertValue => ({
-      publicId: newId(),
-      clientId: newId(),
-      activityDate: RACE_DAY,
-      unit: PRACTICE_UNIT,
-      valueNum,
-      activityTypeId: practiceTypeId,
-      metricKey: METRIC_KEYS.practice_minutes,
-      status: ENTRY_STATUS.done,
-    }),
-    habit: (): CheckinInsertValue => ({
-      publicId: newId(),
-      clientId: newId(),
-      activityDate: RACE_DAY,
-      unit: 'count',
-      valueNum: '1',
-      activityTypeId: habitTypeId,
-      metricKey: null,
-      status: ENTRY_STATUS.done,
-    }),
+    practice: (valueNum = '60') => b.practice(RACE_DAY, newId(), valueNum),
+    habit: () => b.habit(RACE_DAY),
     weighIn: () => ({
       profileId: athlete.id,
       publicId: newId(),
@@ -1656,7 +1639,7 @@ async function raceFixture(tx: VerifyTx) {
       unit: 'lb',
       value: 112,
       notes: null,
-      activityTypeId: weighInTypeId,
+      activityTypeId: b.weighInTypeId,
       kind: ENTRY_KIND.bodyweight,
     }),
     /** The client ids of the day's live rows of one metric. */
@@ -1678,37 +1661,13 @@ async function raceFixture(tx: VerifyTx) {
 }
 
 /**
- * The second phone's clear, staged inside the insert: a statement-level `AFTER INSERT` trigger hides
- * the one live row named in `race_target`. Statement triggers fire on a statement that inserted
- * nothing, so the writer's re-reads find no insert, no holder and no taken day, exactly as a clear
- * landing between the statements would leave them. Idempotent, so later inserts pass through it.
- * Returns the arming call. It all rolls back with the section (DDL is transactional).
- */
-async function stageHideDuringInsert(tx: VerifyTx) {
-  await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
-  await tx.execute(sql`create function verify_race_hide() returns trigger language plpgsql as $$
-    begin
-      update entries set deleted_at = now()
-        where public_id in (select public_id from race_target) and deleted_at is null;
-      return null;
-    end $$`);
-  await tx.execute(
-    sql`create trigger race_hide after insert on entries for each statement execute function verify_race_hide()`,
-  );
-  return async (publicId: string) => {
-    await tx.execute(sql`delete from race_target`);
-    await tx.execute(sql`insert into race_target values (${publicId}::uuid)`);
-  };
-}
-
-/**
  * The race, staged on one connection. Before the retry each writer threw ("neither inserted nor
  * held"), which the person saw as `error.tsx`.
  */
 async function verifyDayTakenRace(): Promise<void> {
   await rolledBack(async (tx) => {
     const f = await raceFixture(tx);
-    const holdThenClear = await stageHideDuringInsert(tx);
+    const { arm: holdThenClear } = await stageHideDuringInsert(tx);
 
     // (a) A practice: the day's live practice skips the insert and is cleared inside it. The new one
     //     lands, and the answer keeps submit order with the retried item FIRST, so a writer that
@@ -1780,7 +1739,8 @@ async function verifyDayTakenRace(): Promise<void> {
 async function verifyRetryLandsOnTakenDay(): Promise<void> {
   await rolledBack(async (tx) => {
     const f = await raceFixture(tx);
-    const holdThenClear = await stageHideDuringInsert(tx);
+    // The un-hide's gate reads `race_target`, the harness rig's table.
+    const { arm: holdThenClear, disarm: disarmHide } = await stageHideDuringInsert(tx);
     await tx.execute(sql`create temp table race_unhide (public_id uuid not null)`);
     await tx.execute(sql`create temp table race_inserts (n int not null)`);
     await tx.execute(sql`insert into race_inserts values (0)`);
@@ -1806,7 +1766,7 @@ async function verifyRetryLandsOnTakenDay(): Promise<void> {
         .where(eq(schema.entries.publicId, publicId));
     /** Clears the targets, so the staging inserts that follow pass through both triggers. */
     const disarm = async () => {
-      await tx.execute(sql`delete from race_target`);
+      await disarmHide();
       await tx.execute(sql`delete from race_unhide`);
     };
     /** Names A to clear and C to re-hold the day, and zeroes the statement count. */

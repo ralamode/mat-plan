@@ -416,6 +416,9 @@ Nothing in Beta 0 should assume there will never be a consent table.
 PWA manifest+SW → Dexie append-outbox → TanStack Query offline reads → per-event-UUID `POST /api/sync`
 (LWW comparing client timestamp) → sync-status badge → **Clerk household login** (`pin_hash` column
 seeded, no PIN UI) → offline E2E (log a day offline, sync, assert no dupes across two devices). Each a PR.
+⚠️ **Owed by `/api/sync`:** `writeCheckinEntries` throws on a repeated or non-hyphenated `client_id`
+(a precondition, [plan](./plans/v1-9b-checkin-distinct-ids.md)), so the handler collapses identical
+replays and refuses different items sharing an id per item before calling it, with a test for each.
 
 ## v2 — Ray's PPL + progression engine (still all-TS)
 
