@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 20e9eff5..44659bba 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -500,7 +500,7 @@ export async function findNameMatch(
+   // its schema made it (`addAthleteSchema` keeps case). Compare in one case, or a crafted upper-case
+   // id is not excluded from its own row. Defence in depth: through `createProfile` the SQL replay
+   // lookup already ignores case and returns first.
+-  const exclude = options.excludeClientId?.toLowerCase();
++  const exclude = options.excludeClientId;
+   const matches = rows.filter(
+     (r) =>
+       foldName(r.name) === folded &&

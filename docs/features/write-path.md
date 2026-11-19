@@ -630,6 +630,11 @@ The shapes those lanes agree on, the fakes and the preview route are
     the scope** before inserting, checks the quota **after** that lookup and before the insert (so a
     replay at the cap still succeeds), inserts `ON CONFLICT (client_id) DO NOTHING`, then re-reads
     through **the same scoped lookup**.
+    🔒 **All of it runs under one per-household advisory lock** (`ADVISORY_LOCK.householdAthletes`,
+    taken first, through the household row), so concurrent adds are serialized and the quota holds
+    under a burst; a household that is gone answers `refused` before anything is counted. The lock
+    comes BEFORE the replay lookup on purpose: a same-key twin then finds its twin's row instead of
+    counting it ([plan](../plans/td-athlete-cap-lock.md)).
     ⚠️ **`uq_profiles_client_id` is GLOBAL and non-partial**, so a caller-chosen key collides across
     households by design — which makes `profileByClientId`'s `inHousehold` the only thing standing
     between household B and household A's row. **Without it, B's replay of A's key returns A's

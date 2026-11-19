@@ -496,11 +496,16 @@ export async function findNameMatch(
     // order moves after any UPDATE (archive and rename both rewrite rows). Oldest first.
     .orderBy(asc(schema.profiles.id));
 
+  // `client_id` is a Postgres `uuid`, read back lower-case, while a caller's id is only as lower-case as
+  // its schema made it (`addAthleteSchema` keeps case). Compare in one case, or a crafted upper-case
+  // id is not excluded from its own row. Defence in depth: through `createProfile` the SQL replay
+  // lookup already ignores case and returns first.
+  const exclude = options.excludeClientId?.toLowerCase();
   const matches = rows.filter(
     (r) =>
       foldName(r.name) === folded &&
       // `!=` on purpose: a NULL `client_id` must NOT be excluded. See the docblock.
-      (options.excludeClientId === undefined || r.clientId !== options.excludeClientId),
+      (exclude === undefined || r.clientId !== exclude),
   );
   if (matches.length === 0) return null;
 
