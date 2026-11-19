@@ -584,6 +584,15 @@ export const ADD_ATHLETE_COPY = {
 export const ALL_ATHLETES_LINK = '← All athletes';
 
 /**
+ * The way back to `/p` from a **household** page (Programs, Household settings), where
+ * `ALL_ATHLETES_LINK` is the way back from a page about ONE athlete. The rule, so the next page
+ * chooses on purpose: household pages say Home, one athlete's pages say All athletes. Settings lists
+ * archived athletes that `/p` does not, so "All athletes" would point away from the page that shows
+ * more of them. Both lead to `APP_HOME_PATH`; whether to settle on one label is the maintainer's call.
+ */
+export const HOME_LINK = '← Home';
+
+/**
  * UI-6 — the app's own 404 (`app/not-found.tsx`). One message for an unknown URL AND for an athlete
  * id the household can't see, so the page never confirms that another household's athlete exists.
  * No "check the address": every URL past `/p` is a UUIDv7, which nobody types.
