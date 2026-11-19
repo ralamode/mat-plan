@@ -230,7 +230,7 @@ number is typed over, the row says "Not saved. Was 30 lb." with a cancel, since 
 Escape key. **It is an icon-only ✕** (lane S's `InlineEditActions`, its ✕-alone form),
 at the right end of that line, directly under the row's ✓ _(maintainer, 2026-11-17, from three
 options captured at 360px)_; why there: `RowStatus` in `change-parts.tsx`. No trace of a Change shows after a reload; an "edited" marker is a contract question for
-later. Also different from v12: a Change is sent once per row, when focus leaves the row from one of its fields (v12 per field);
+later. Also different from v12: a Change is sent once per row, when focus leaves the row from any of its controls (v12: per field, from a field) _(maintainer, 2026-11-18, FAM-1 D43: "Save it"; #610): a ✕ press that gets no click (dragged off, a long press) or ends in a scroll is called off and leaves the row as a tap outside would: sent when focus leaves the row, at once if it already has (Safari with a mouse), never kept typed and unsent. Escape reverts from any control in the row, focus going to the ✓ when the revert removes the focused button)_;
 the ✓ during an edit saves it (v12 un-ticked); a number is checked as a ✓'s is (v12 took anything
 `+v` reads, such as `1e3`); and a row logged in another unit stays text.
 
@@ -268,3 +268,10 @@ contract's `quantityText` (C1, #436).
 Start from the step's row in the plan (§5) and its prototype states (§8). A screen step gets a UX
 panel before it is built ([AGENTS.md](../../AGENTS.md) → "UI PR rules"). Re-run `pnpm test`, and
 `pnpm e2e:local e2e/program-preview-a11y.spec.ts` for the screen on the preview route.
+
+A program row's ✓ in an e2e spec is `programRowTick(page, workout, item)` and its wait
+`settled(button, pressed)`, both in `e2e/steps.ts` (moved out of `e2e/day-page.spec.ts` at FAM-1
+15 PR 1, when the builder's spec became the second to tick a row): a change to a row's heading level
+or its ✓'s name changes them there, once.
+The device's today (`pinDayBeforeWrite`'s check) is `deviceToday()` from `lib/date.ts`, shared
+with the builder's Put-on dialog since FAM-1 15.

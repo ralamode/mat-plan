@@ -9,12 +9,12 @@ import { NAV_LINK_CLASS, NOT_FOUND_COPY } from '@/lib/constants';
 export const metadata: Metadata = { title: NOT_FOUND_COPY.heading };
 
 /**
- * A program (or, from 7b-ii, a workout) this household cannot see, or an id that is not one (FAM-1
+ * A program or a workout (7b-ii) this household cannot see, or an id that is not one (FAM-1
  * 7b-i): the app's own words for a 404, so existence never leaks, and the way back to Programs.
  *
- * ⚠️ **It mounts `AppShell` itself**: `notFound()` replaces the page, shell and all, and there is no
- * `app/programs/layout.tsx`, so this is the one `<main>` on the screen. `nav={false}`: a 404 awaits
- * no data, so there are no athletes for a rail.
+ * ⚠️ **It mounts `AppShell` itself**: `notFound()` replaces the page, shell and all, and
+ * `app/programs/layout.tsx` renders only `ClerkRoot` (#636), no shell, so this is the one `<main>` on
+ * the screen. `nav={false}`: a 404 awaits no data, so there are no athletes for a rail.
  */
 export default function ProgramNotFound() {
   return (

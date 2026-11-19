@@ -59,6 +59,14 @@ export function localDayIso(timeZone: string, now: Date = new Date()): string {
 }
 
 /**
+ * Today on this device, in the browser's own zone: for a client that must name a day as it is NOW,
+ * not as it was when the page rendered (a page left open past midnight).
+ */
+export function deviceToday(now: Date = new Date()): string {
+  return localDayIso(Intl.DateTimeFormat().resolvedOptions().timeZone, now);
+}
+
+/**
  * Whole minutes since LOCAL midnight of `now` in `timeZone` (0–1439). The wall-clock projection
  * `wake` stores in `value_num` (V1-7) so the clock renders tz-free at read time. `hourCycle:'h23'`
  * (via `localDateParts`) makes 00:00 → 0 and 23:59 → 1439 — a 12-hour hour part would map midnight

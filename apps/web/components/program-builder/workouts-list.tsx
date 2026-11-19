@@ -4,7 +4,7 @@ import type { ProgramActions, ProgramView } from '@mat-plan/shared';
 import { useRef, useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
-import { CTA_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { CTA_CLASS, FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import {
@@ -18,11 +18,12 @@ import {
   workoutSummary,
 } from './builder-text';
 import { CopyWorkout } from './copy-dialog';
-import { GroupList, GroupRow, GroupRowLink } from './group-list';
+import { GroupList, GroupRowLink } from './group-list';
 import { newWorkoutPath, workoutPath } from './routes';
 import { BuilderLink } from './route-link';
 
-const HEADING_ID = 'program-workouts';
+/** The section's heading: where focus lands on the program page after a workout's Save. */
+export const WORKOUTS_HEADING_ID = 'program-workouts';
 const FULL_ID = 'program-workouts-full';
 
 /**
@@ -39,46 +40,37 @@ export function WorkoutsList({
   program,
   copyWorkout,
   putOnWired = false,
-  workoutPagesWired = true,
   onStatus = () => {},
 }: {
   program: ProgramView;
   /** "Copy to…" on each row: shown only when the route supplies it. */
   copyWorkout?: ProgramActions['copyWorkout'];
   putOnWired?: boolean;
-  /**
-   * Whether the workout pages exist (7b-ii). `false` on the real program page in 7b-i: a row is its
-   * name and lines, not a link, and "+ New workout" (with its cap hint) is left out, so no tap or
-   * prefetch reaches a 404. The preview keeps the default.
-   */
-  workoutPagesWired?: boolean;
   onStatus?: (message: string) => void;
 }) {
   const { programPublicId, workouts } = program;
   const [copying, setCopying] = useState<ProgramView['workouts'][number] | null>(null);
   const copyFrom = useRef<HTMLElement | null>(null);
   return (
-    <section aria-labelledby={HEADING_ID} className="flex flex-col gap-3">
-      <h2 id={HEADING_ID} className="text-lg font-semibold">
+    <section aria-labelledby={WORKOUTS_HEADING_ID} className="flex flex-col gap-3">
+      <h2
+        id={WORKOUTS_HEADING_ID}
+        tabIndex={-1}
+        className={`rounded-sm text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
+      >
         {BUILDER_COPY.workouts}
       </h2>
       {workouts.length ? (
         <GroupList>
           {workouts.map((workout) => (
             <li key={workout.workoutPublicId} className="flex items-stretch">
-              {workoutPagesWired ? (
-                <GroupRowLink
-                  href={workoutPath(programPublicId, workout.workoutPublicId)}
-                  title={workout.name}
-                  className="min-w-0 flex-1"
-                >
-                  <WorkoutLines workout={workout} />
-                </GroupRowLink>
-              ) : (
-                <GroupRow title={workout.name} className="min-w-0 flex-1">
-                  <WorkoutLines workout={workout} />
-                </GroupRow>
-              )}
+              <GroupRowLink
+                href={workoutPath(programPublicId, workout.workoutPublicId)}
+                title={workout.name}
+                className="min-w-0 flex-1"
+              >
+                <WorkoutLines workout={workout} />
+              </GroupRowLink>
               {copyWorkout ? (
                 <Button
                   type="button"
@@ -101,7 +93,7 @@ export function WorkoutsList({
       ) : (
         <p className="text-muted-foreground">{BUILDER_COPY.noWorkouts}</p>
       )}
-      {!workoutPagesWired ? null : programIsFull(workouts.length) ? (
+      {programIsFull(workouts.length) ? (
         <>
           <Button
             type="button"

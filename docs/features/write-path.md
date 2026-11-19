@@ -209,7 +209,7 @@ The shapes those lanes agree on, the fakes and the preview route are
 
    🔴 **The caller may pick the limiter's POLICY, never its key (FAM-1 step 0b, D23).**
    `enterMutation(refusal, policy = MUTATION_RATE_LIMIT)` hands the policy to
-   `checkMutationLimit(user.userId, policy)`. `lib/rate-limit.ts` holds two: `MUTATION_RATE_LIMIT`
+   `checkMutationLimit(user.userId, policy)`. `lib/rate-limit.ts` holds two mutation policies: `MUTATION_RATE_LIMIT`
    (120 per 5 minutes, the default) and `ROW_WRITE_RATE_LIMIT` (600 per 5 minutes), for the day
    page's row writes, where a ✓ is one write and a parent logging two athletes' days passes 120
    ([plan](../plans/fam-1-family-program.md) D23). **The row actions pass the second one**
@@ -243,8 +243,10 @@ The shapes those lanes agree on, the fakes and the preview route are
    household's CSV served to another. The Route-Handler guard in `pages-need-a-session.test.ts` narrowed
    with each step and must stay a single named helper, never an alternation.
 
-   📌 **`lib/rate-limit.ts` holds TWO limiters since FAM-1 step 0b** (the policy note above); the
-   second, for row writes, has the row actions as its callers since FAM-1 step 12b; its docblock says so.
+   📌 **`lib/rate-limit.ts` holds THREE limiters**: the two mutation policies (the note above; the row
+   writes' callers are the row actions since FAM-1 step 12b) and, since the FAM-1 export follow-up, the
+   export's (`checkExportLimit`, `mat-plan:export`), which is not a `MutationLimitPolicy` and has the
+   export route as its one caller; its docblock says so.
    **Its MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
    V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since

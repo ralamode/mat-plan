@@ -12,12 +12,17 @@ import { heavyADraft, newWorkoutEmpty, programsList } from '@mat-plan/shared/pro
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Every way out of the editor REPLACES its history entry (7b-ii, U1-1); `push` is held so a test
+// can say it was never used.
+const replace = vi.fn();
 const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace }) }));
 
 import { SAVING_LABEL } from '@/lib/constants';
 
+import { takeArrival } from './arrival';
 import {
+  backToLabel,
   BUILDER_COPY,
   droppedText,
   EDITOR_COPY,
@@ -30,6 +35,7 @@ import {
   saveRefusal,
   undoneText,
   usedByText,
+  workoutSavedText,
 } from './builder-text';
 import { unitFieldId } from './editor-draft';
 import { programPath } from './routes';
@@ -37,7 +43,11 @@ import { tapClock } from './test-taps';
 import { WorkoutEditorScreen } from './workout-editor-screen';
 
 afterEach(cleanup);
-beforeEach(() => push.mockReset());
+beforeEach(() => {
+  push.mockReset();
+  replace.mockReset();
+});
+afterEach(() => expect(push).not.toHaveBeenCalled());
 
 function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
   return {
@@ -106,7 +116,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
         program={family}
       />,
     );
-    expect(screen.getByRole('link', { name: family.name })).toBeTruthy();
+    // Its name says where it goes; the words it shows are inside that name (WCAG 2.5.3).
+    const back = screen.getByRole('link', { name: backToLabel(family.name) });
+    expect(back.textContent).toBe(`← ${family.name}`);
     expect(screen.getByText(usedByText(family.athletes))).toBeTruthy();
   });
 
@@ -157,8 +169,26 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
   it('Save sends the draft as loaded and opens the program page', async () => {
     const all = editor();
     save();
-    await waitFor(() => expect(push).toHaveBeenCalledWith(BACK));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(BACK));
     expect(all.saveWorkout).toHaveBeenCalledWith(heavyADraft);
+  });
+
+  it('🔴 a Save leaves the program page its message, once, for that program only (focus after Save)', async () => {
+    editor();
+    save();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(BACK));
+    expect(takeArrival(heavyADraft.programPublicId)).toBe(workoutSavedText(heavyADraft.name));
+    expect(takeArrival(heavyADraft.programPublicId)).toBeNull();
+  });
+
+  it('a refused Save leaves no message for the program page', async () => {
+    takeArrival(heavyADraft.programPublicId); // whatever an earlier test's Save left
+    editor({
+      saveWorkout: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }),
+    });
+    save();
+    await waitFor(() => expect(screen.getByRole('alert').textContent).not.toBe(''));
+    expect(takeArrival(heavyADraft.programPublicId)).toBeNull();
   });
 
   it('a blank name is refused with no call, and the field takes focus', async () => {
@@ -194,7 +224,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     expect(field.getAttribute('aria-invalid')).toBe('true');
     expect(within(field.parentElement!).getByText(EDITOR_COPY.nameTaken)).toBeTruthy();
     await waitFor(() => expect(alerts()).toEqual([EDITOR_COPY.nameTaken]));
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: EDITOR_COPY.save })).toBeTruthy();
   });
 
@@ -204,7 +234,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       const all = editor({ saveWorkout: vi.fn().mockResolvedValue({ ok: false, reason }) });
       save();
       await waitFor(() => expect(alerts()).toEqual([saveRefusal(reason)]));
-      expect(push).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
       save();
       await waitFor(() => expect(all.saveWorkout).toHaveBeenCalledTimes(2));
       // A retry is the same attempt: the same workout and card ids.
@@ -226,7 +256,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     fireEvent.click(pending);
     expect(saveWorkout).toHaveBeenCalledTimes(1);
     answer({ ok: true, workoutPublicId: 'w' });
-    await waitFor(() => expect(push).toHaveBeenCalledWith(BACK));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(BACK));
   });
 
   it('Enter in a field does not save', () => {
@@ -253,7 +283,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     unmount();
     answer({ ok: true, workoutPublicId: 'w' });
     await frames();
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('↓ moves a card, keeps the superset well formed, and focus stays on the same button', async () => {
@@ -320,7 +350,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
   it('Cancel with no changes goes straight back', () => {
     editor();
     fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-    expect(push).toHaveBeenCalledWith(BACK);
+    expect(replace).toHaveBeenCalledWith(BACK);
   });
 
   it('Cancel or the back link with changes asks first; Keep editing returns to the link', () => {
@@ -329,7 +359,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       target: { value: 'Heavy B' },
     });
     fireEvent.click(screen.getByRole('link', { name: EDITOR_COPY.backToProgram }));
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     expect(screen.getByText(EDITOR_COPY.discardQuestion)).toBeTruthy();
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: EDITOR_COPY.keepEditing }),
@@ -340,7 +370,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
     fireEvent.click(screen.getByRole('button', { name: EDITOR_COPY.discard }));
-    expect(push).toHaveBeenCalledWith(BACK);
+    expect(replace).toHaveBeenCalledWith(BACK);
   });
 
   it('the bar’s alert clears once the last refused field is fixed', async () => {
@@ -389,7 +419,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     editor();
     fireEvent.click(screen.getByRole('button', { name: removeLabel('Hollow-body hold') }));
     fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     expect(screen.getByText(EDITOR_COPY.discardQuestion)).toBeTruthy();
   });
 
@@ -624,7 +654,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
       clock.tap(linkButton('Goblet squat'));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-      expect(push).toHaveBeenCalledWith(BACK);
+      expect(replace).toHaveBeenCalledWith(BACK);
     });
 
     it('Unlink straight after Join gives each superset back its own rest', async () => {
@@ -635,7 +665,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
       expect(restIn(cards()[3]!)).toBe('60 s after each round');
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-      expect(push).toHaveBeenCalledWith(BACK);
+      expect(replace).toHaveBeenCalledWith(BACK);
     });
 
     it('a pair unlinked and linked again gets its rest back, and nothing has changed', async () => {
@@ -645,7 +675,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       clock.tap(linkButton('Pull-up'));
       expect(restIn(cards()[1]!)).toBe('90 s after each round');
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-      expect(push).toHaveBeenCalledWith(BACK);
+      expect(replace).toHaveBeenCalledWith(BACK);
     });
 
     it('an unlink that leaves one item says who left', async () => {
@@ -675,7 +705,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       fireEvent.change(sets, { target: { value: String(bench!.sets) } });
       clock.tap(linkButton('Pull-up'));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-      expect(push).toHaveBeenCalledWith(BACK);
+      expect(replace).toHaveBeenCalledWith(BACK);
     });
 
     it('the next edit clears a status message', async () => {
@@ -703,7 +733,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       expect(restIn(cards()[3]!)).toBe('');
       await waitFor(() => expect(screen.getByRole('status').textContent).toBe(undoneText(false)));
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-      expect(push).toHaveBeenCalledWith(BACK);
+      expect(replace).toHaveBeenCalledWith(BACK);
     });
 
     it('an edit between two taps means the second is not an undo: a rest typed since stays', async () => {
@@ -784,7 +814,7 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
       fireEvent.change(field, { target: { value: 'a' } });
       fireEvent.change(field, { target: { value: '' } });
       fireEvent.click(screen.getByRole('button', { name: BUILDER_COPY.cancel }));
-      expect(push).toHaveBeenCalledWith(BACK);
+      expect(replace).toHaveBeenCalledWith(BACK);
     });
 
     it.each([

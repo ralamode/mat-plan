@@ -32,8 +32,18 @@ import { programRefSchema } from './program-shapes';
  */
 
 /**
- * Whether the athlete is on a program on the viewed day: `yes`; `not-this-day` (they are on one now,
- * but were not on this day: "Not on a program on this day"); `never` ("Not on a program yet").
+ * Whether the athlete is on a program on the viewed day: `yes`; `not-this-day` (they are on one now
+ * or start one later, but are not on one this day: "Not on a program on this day"); `never` (they
+ * have no current program: "Not on a program.").
+ *
+ * ⚠️ **`never` does not mean they never had one.** An athlete taken off their last program reads
+ * `never` from the next day, so the page's words for it say nothing about the past (maintainer,
+ * orchestrator's chat, 2026-11-19: "Not on a program."; it read "Not on a program yet").
+ *
+ * **Today, `not-this-day` with `canGoForward` means they start a program tomorrow**: on today
+ * `canGoForward` is exactly "on a program the next day". The page says "Starts on a program
+ * tomorrow." for it (same answer). The plan cannot tell a later start day, so on any other day,
+ * or with `canGoForward` false, the words stay "Not on a program on this day".
  * It reads `DayPlan.programs` and `currentPrograms`, which hold live programs only, so a hidden
  * program does not count: an athlete whose only program that day is hidden is not on one.
  */

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  MAX_HOUSEHOLD_ITEMS,
   MAX_WORKOUT_ITEMS,
   PROGRAM_REFUSAL,
   TRACKING_TYPE,
@@ -16,7 +17,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 
 import { householdPickerOptions, pickerOptions } from '@/app/design/program/picker-options';
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
@@ -38,7 +39,9 @@ import {
   pickedText,
   selectedText,
   selectExistingText,
+  PENDING_CLASS,
   TRACKING_TYPE_EXAMPLES,
+  workoutFullText,
 } from '../builder-text';
 import { tapAt, tapClock } from '../test-taps';
 import { SHEET_COPY } from '@/components/ui/sheet';
@@ -553,11 +556,15 @@ describe('the item picker (FAM-1 9)', () => {
         })),
       };
       editor({}, full);
+      // It looks stopped before the tap (7b-ii; it looked live: #460), and says why under it.
+      expect(opener().getAttribute('aria-disabled')).toBe('true');
+      expect(opener().className).toContain(PENDING_CLASS);
+      const hint = document.getElementById(opener().getAttribute('aria-describedby')!);
+      expect(hint?.textContent).toBe(workoutFullText);
+      expect(workoutFullText).toBe('This workout is full: a workout holds at most 30 items.');
       openPicker();
       expect(screen.queryByRole('dialog')).toBeNull();
-      await waitFor(() =>
-        expect(screen.getByRole('status').textContent).toBe(capText(MAX_WORKOUT_ITEMS)),
-      );
+      await waitFor(() => expect(screen.getByRole('status').textContent).toBe(workoutFullText));
     });
 
     it('an item made here is listed once, when the route’s own list has it too', async () => {
@@ -1021,5 +1028,115 @@ describe('the item picker (FAM-1 9)', () => {
       ).toBeTruthy();
       expect(shown()).toEqual([]);
     });
+  });
+});
+
+describe('the household’s item cap (FAM-1 7b-ii, plan §Caps)', () => {
+  /** The household's own items, topped up to `MAX_HOUSEHOLD_ITEMS` with synthetic ones. */
+  const atCap: readonly MovementOptionDTO[] = [
+    ...pickerOptions,
+    ...Array.from(
+      { length: MAX_HOUSEHOLD_ITEMS - householdPickerOptions.length },
+      (_, i): MovementOptionDTO => ({
+        publicId: `00000000-0000-7000-8000-${String(i).padStart(12, '0')}`,
+        name: `Made item ${i}`,
+        trackingType: TRACKING_TYPE.reps,
+        owner: 'household',
+        unitDefault: null,
+        isBodyweight: false,
+      }),
+    ),
+  ];
+  const create = () => within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.create });
+  const openForm = (typed: string) => {
+    openPicker();
+    fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+    fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.name), {
+      target: { value: typed },
+    });
+  };
+  /** The lines a person sees saying `text` (the sheet's status repeats it for a screen reader). */
+  const seen = (text: string) =>
+    within(sheet())
+      .queryAllByText(text)
+      .filter((node) => !node.closest('.sr-only'));
+
+  it('says the household is full before any typing; one item fewer, nothing', () => {
+    editor({}, newWorkoutEmpty, atCap);
+    openPicker();
+    expect(within(sheet()).getByText(ITEM_PICKER_COPY.householdFull)).toBeTruthy();
+    cleanup();
+    editor({}, newWorkoutEmpty, atCap.slice(0, -1));
+    openPicker();
+    expect(within(sheet()).queryByText(ITEM_PICKER_COPY.householdFull)).toBeNull();
+  });
+
+  it('"+ New item" is described by the full line, and a search with no match names the cap once, not a new item', () => {
+    editor({}, newWorkoutEmpty, atCap);
+    openPicker();
+    const describedBy = (button: HTMLElement) =>
+      (button.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .map((id) => document.getElementById(id)?.textContent);
+    const plain = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem });
+    expect(describedBy(plain)).toContain(ITEM_PICKER_COPY.householdFull);
+    search('zzzzz');
+    expect(within(sheet()).queryByText(ITEM_PICKER_COPY.noMatch)).toBeNull();
+    const typed = within(sheet()).getByRole('button', { name: newItemLabel('zzzzz') });
+    expect(describedBy(typed)).toEqual([
+      ITEM_PICKER_COPY.noMatchAtCap,
+      ITEM_PICKER_COPY.householdFull,
+    ]);
+    // One item under the cap: the usual words, and nothing extra on the button.
+    cleanup();
+    editor({}, newWorkoutEmpty, atCap.slice(0, -1));
+    openPicker();
+    search('zzzzz');
+    expect(within(sheet()).getByText(ITEM_PICKER_COPY.noMatch)).toBeTruthy();
+    expect(
+      describedBy(within(sheet()).getByRole('button', { name: newItemLabel('zzzzz') })),
+    ).toEqual([ITEM_PICKER_COPY.noMatch]);
+  });
+
+  it('🔴 a new name cannot be created: Create is inactive, a tap sends nothing and says why', async () => {
+    const all = editor({}, newWorkoutEmpty, atCap);
+    openForm('Bear crawl');
+    fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+      target: { value: TRACKING_TYPE.reps },
+    });
+    expect(create().getAttribute('aria-disabled')).toBe('true');
+    expect(seen(ITEM_PICKER_COPY.householdFull)).toHaveLength(1);
+    const focused = document.activeElement;
+    fireEvent.click(create());
+    expect(all.newItem).not.toHaveBeenCalled();
+    // Nothing is missing, so focus is not sent to a field.
+    expect(document.activeElement).toBe(focused);
+    // Seen in the form's footer, once (the standing line steps aside for the message).
+    await waitFor(() =>
+      expect(seen(ITEM_PICKER_COPY.householdFull).map((n) => n.id)).toEqual(['']),
+    );
+  });
+
+  it('a name that is already an item still selects it (never capped)', async () => {
+    editor({}, newWorkoutEmpty, atCap);
+    openForm('Push-ups');
+    const select = within(sheet()).getByRole('button', { name: selectExistingText('Push-ups') });
+    expect(select.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(select);
+    await waitFor(() => expect(row('Push-ups').getAttribute('aria-checked')).toBe('true'));
+  });
+
+  it('a create refused limit_reached (a race) says so in the form’s footer, with focus on Create', async () => {
+    editor({
+      newItem: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.limit_reached }),
+    });
+    openForm('Bear crawl');
+    fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
+      target: { value: TRACKING_TYPE.reps },
+    });
+    fireEvent.click(create());
+    await waitFor(() => expect(seen(ITEM_PICKER_COPY.full)).toHaveLength(1));
+    expect(within(sheet()).queryByText(ITEM_PICKER_COPY.failed)).toBeNull();
+    expect(document.activeElement).toBe(create());
   });
 });

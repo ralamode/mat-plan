@@ -3,13 +3,13 @@ import 'server-only';
 import {
   programIn,
   programWorkoutIds,
-  workoutIn,
   workoutInHousehold,
   type HouseholdScope,
 } from '@mat-plan/db';
 
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
+import { listHouseholdAthletes } from '../profiles';
 
 /**
  * Which id missed the caller's household, reported once (ADR 0006 obligation 3; contract change C11).
@@ -46,13 +46,14 @@ const workoutMiss = (workoutPublicId: string): ScopeMiss => ({
   resource: { kind: SCOPE_MISS_KIND.workout, publicId: workoutPublicId },
 });
 
-/** A workout of a program. */
-const workoutProbe = (
-  scope: HouseholdScope | null,
-  programPublicId: string,
-  workoutPublicId: string,
-): Probe => ({
-  found: async () => !!scope && (await workoutIn(db, scope, programPublicId, workoutPublicId)),
+/**
+ * A workout of a program, probed after its program was found: the household's whichever program
+ * it is in (`workoutInHousehold`). A workout of ANOTHER of the household's programs
+ * (`/programs/A/workouts/<B's>`) is still the caller's `not_found`, but it names nothing outside the
+ * household, so it is not a scope miss and nothing is reported (FAM-1 7b-ii; the 7b plan's Co-out).
+ */
+const workoutProbe = (scope: HouseholdScope | null, workoutPublicId: string): Probe => ({
+  found: async () => !!scope && (await workoutInHousehold(db, scope, workoutPublicId)),
   miss: workoutMiss(workoutPublicId),
 });
 
@@ -74,7 +75,7 @@ async function reportFirstMiss(
   }
 }
 
-/** A program, then (when the input names one) its workout. */
+/** A program, then (when the input names one) the workout, against the household as a whole. */
 export async function reportProgramMiss(
   scope: HouseholdScope | null,
   ids: { programPublicId: string; workoutPublicId?: string | null },
@@ -82,7 +83,7 @@ export async function reportProgramMiss(
   const { programPublicId, workoutPublicId } = ids;
   await reportFirstMiss(scope, [
     programProbe(scope, programPublicId),
-    ...(workoutPublicId ? [workoutProbe(scope, programPublicId, workoutPublicId)] : []),
+    ...(workoutPublicId ? [workoutProbe(scope, workoutPublicId)] : []),
   ]);
 }
 
@@ -124,9 +125,37 @@ export async function reportCopyMiss(
 ): Promise<void> {
   await reportFirstMiss(scope, [
     programProbe(scope, copy.toProgramPublicId),
-    {
-      found: async () => !!scope && (await workoutInHousehold(db, scope, copy.workoutPublicId)),
-      miss: workoutMiss(copy.workoutPublicId),
-    },
+    workoutProbe(scope, copy.workoutPublicId),
+  ]);
+}
+
+const profileMiss = (profilePublicId: string): ScopeMiss => ({
+  action: SCOPE_MISS_ACTION.resolveProfile,
+  resource: { kind: SCOPE_MISS_KIND.profile, publicId: profilePublicId },
+});
+
+/**
+ * A Put on or a Take off (FAM-1 step 15), in the writers' order: the program (`lockProgram`), then
+ * each athlete id in the input's order, until the first the household does not have.
+ *
+ * **One read for every athlete id, and no new query**: the household's athletes, archived ones
+ * included (`listHouseholdAthletes`, the request's cached read). An archived athlete of this
+ * household is found, so it is not reported: the writer's `not_found` for them names nothing outside
+ * the household. Nor is an athlete who is simply not on the program, for Take off.
+ */
+export async function reportAssignMiss(
+  scope: HouseholdScope | null,
+  assign: { programPublicId: string; profilePublicIds: readonly string[] },
+): Promise<void> {
+  let known: Promise<ReadonlySet<string>> | undefined;
+  // Read once, on the first athlete probe; with no scope, `found` is never called.
+  const athletes = () =>
+    (known ??= listHouseholdAthletes().then((rows) => new Set(rows.map((row) => row.id))));
+  await reportFirstMiss(scope, [
+    programProbe(scope, assign.programPublicId),
+    ...assign.profilePublicIds.map((id): Probe => ({
+      found: async () => !!scope && (await athletes()).has(id),
+      miss: profileMiss(id),
+    })),
   ]);
 }

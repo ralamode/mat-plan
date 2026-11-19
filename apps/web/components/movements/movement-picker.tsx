@@ -105,6 +105,11 @@ export type MultiPick = {
   /** Shown under the create button when nothing matches at all. */
   noMatchHint: string;
   /**
+   * The id of a line of the caller's that also describes the create button (the builder's
+   * household-full line, FAM-1 7b-ii), as a stopped control is tied to its reason elsewhere.
+   */
+  createDescribedBy?: string;
+  /**
    * The caller's action ("Add 3 items"), beside the picker's own Close: side by side, so the footer
    * is one button tall and the list keeps its room with a phone's keyboard up (maintainer,
    * 2026-11-16). Close stays the last child.
@@ -1154,7 +1159,11 @@ function CreateTop({
         variant={typed === '' || loud ? 'outline' : 'ghost'}
         size="lg"
         aria-disabled={issue !== null || undefined}
-        aria-describedby={hint ? TYPED_HINT_ID : undefined}
+        aria-describedby={
+          [hint ? TYPED_HINT_ID : null, multiple.createDescribedBy ?? null]
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         onClick={() => {
           if (issue) return;
           multiple.onCreate(typed);

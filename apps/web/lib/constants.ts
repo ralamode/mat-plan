@@ -373,8 +373,15 @@ export const NAV_LINK_CLASS =
 export const NAV_ROW_CLASS =
   'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3 focus-visible:ring-inset';
 
-export const QUIET_LINK_CLASS =
-  'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
+/**
+ * An underlined, tap-target-sized link with no colour or size of its own: `QUIET_LINK_CLASS` builds on
+ * it, and a link in a name or a sentence that keeps its text's colour uses it with a hover of its own
+ * (the program builder's athlete names and "Home", FAM-1 15).
+ */
+export const INLINE_LINK_CLASS =
+  'focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-3';
+
+export const QUIET_LINK_CLASS = `text-muted-foreground hover:text-foreground text-sm ${INLINE_LINK_CLASS}`;
 
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived

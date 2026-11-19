@@ -27,8 +27,9 @@ import type { useRow } from './use-row';
 
 /**
  * A logged number that can be changed. Focus selects all of it, so typing replaces the number rather
- * than appending to it ("30" then "35" must never become "3035"). Escape reverts; Enter in the row's
- * last field saves and moves focus to the ✓; leaving the row saves (`use-change.ts`). While a Change
+ * than appending to it ("30" then "35" must never become "3035"). Escape (handled by the row,
+ * `changeRowProps`) reverts; Enter in the row's last field saves and moves focus to the ✓; leaving
+ * the row saves (`use-change.ts`). While a Change
  * is in flight the field is read-only, so there is never a second write behind it.
  */
 export function ChangeInput({
@@ -78,13 +79,7 @@ export function ChangeInput({
           }
         }, 0);
       }}
-      onBlur={change.onFieldBlur}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          if (change.dirty) e.preventDefault();
-          change.revert();
-          return;
-        }
         if (e.key !== 'Enter') return;
         e.preventDefault();
         if (!last) {
@@ -174,9 +169,8 @@ export function RowStatus({
           }}
           cancelHandlers={{
             // Safari: the field's blur comes before this click and must not send what ✕ discards.
+            // How the press ends (a release elsewhere, a scroll) is watched by `noteCancel` itself.
             onPointerDown: change.noteCancel,
-            // A touch that becomes a scroll is called off: the next blur must still send.
-            onPointerCancel: change.noteFocus,
           }}
           pending={change.pending}
           describedBy={lineId}
