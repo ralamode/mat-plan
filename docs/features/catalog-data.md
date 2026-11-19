@@ -38,6 +38,7 @@ it is approved, one batch PR at a time.
 | 7     | Hinge: deadlifts, hip thrusts and bridges, swings, back extensions, hamstring curls  | 49      |
 | 8     | Squat and lunge: squats, split squats, lunges, step-ups and single-leg squats        | 50      |
 | 9     | Wrestling drills and mat skills: stance, shots, takedowns, escapes, rides, live      | 53      |
+| 10    | Jumps, hops and throws; calves, shins, hips and neck                                 | 46      |
 
 ## How a batch arrives
 
