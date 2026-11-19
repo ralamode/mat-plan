@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index 23f0a3d8..c1ff1710 100644
+index e4ab3b9c..dc602e6a 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -483,9 +483,6 @@ export async function logRow(
-       // inserts on a second try.
-       // The retry goes back through the revive (11c-ii, plan 11c § Proofs 11b's rewrite), so the
-       // un-ticked entry is brought back rather than a second one inserted beside it.
+@@ -485,9 +485,6 @@ export async function logRow(
+       // window is now an entry committed after the lock's snapshot, which the skipped insert met and
+       // which is hidden by the time it is read. The retry goes back through the revive (plan 11c §
+       // Proofs 11b's rewrite), so that entry is brought back rather than a second one inserted.
 -      placed = await place();
 -      if ('answer' in placed) return placed.answer;
 -      entry = placed.entry;
