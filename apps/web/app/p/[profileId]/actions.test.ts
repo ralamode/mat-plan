@@ -1166,7 +1166,7 @@ describe('logCheckinsAction — happy path + ownership', () => {
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
-  it('forwards an upper-case clientId folded, so the answer maps back to its field', async () => {
+  it('forwards an upper-case clientId folded', async () => {
     const clientId = newId();
     const res = await logCheckinsAction(
       initial,
@@ -1178,6 +1178,29 @@ describe('logCheckinsAction — happy path + ownership', () => {
     );
     expect(res.ok).toBe(true);
     expect(vi.mocked(logCheckinEntries).mock.calls[0]![0].items).toMatchObject([{ clientId }]);
+  });
+
+  it('maps an answer for the folded id back to the field sent in upper case', async () => {
+    const clientId = newId();
+    // The writer answers with the id it parsed, lower case, as Postgres prints it.
+    vi.mocked(logCheckinEntries).mockImplementationOnce(async ({ items }) =>
+      items.map((i) => ({
+        clientId: i.clientId.toLowerCase(),
+        id: null,
+        created: false,
+        outcome: 'own_hidden' as const,
+      })),
+    );
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1' },
+        clientIds: { [HABIT.key]: clientId.toUpperCase() },
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[HABIT.key]).toEqual([HIDE_COPY.loggedThenDeleted]);
   });
 
   it('writes a mixed batch: a habit, a bool metric, and a rated metric', async () => {

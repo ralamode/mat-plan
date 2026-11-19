@@ -124,8 +124,8 @@ type CheckinArgs = {
  * lower-case id per item and `logCheckinsAction` parses with the same schema and refuses a repeat as
  * a field error first, so both throws are preconditions, not answers. ⚠️ **A batch caller (the
  * unwired `/api/sync`) must collapse identical replays, and refuse different items sharing an id as
- * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages are for tests; `quietDbErrors` logs only the class. Answers
- * carry the parsed id.
+ * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages
+ * are for tests; `quietDbErrors` logs only the class. Answers carry the parsed id.
  */
 export async function writeCheckinEntries(
   exec: Executor,

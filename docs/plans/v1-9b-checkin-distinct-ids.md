@@ -173,3 +173,13 @@ board's slot) confirms every existing patch still applies over the shifted write
 | V7  | Reuse     | The docblock says `db:verify` reads the message; only tests do                          | **accepted** | Reworded                                                                                                                                                                  |
 | V8  | Reuse     | `verify/day.ts`'s hide rig and 3b-0's builders duplicate the hoisted helpers            | **accepted** | Asked the board; unanswered in 10 minutes, so fixed: `stageHideDuringInsert` moved to `harness.ts` (used by `day.ts` too), and `checkinBuilders` serves 3b-0 and the race |
 | O1  | Sec       | Strength's distinct-id checks use case-preserving `Set`s (found outside)                | **to board** | Routed; `packages/shared/src/strength-session.ts:154-174`, from #54 / #59                                                                                                 |
+
+### PR review (second pass, #651, 2026-11-19)
+
+> Models: correctness (opus). No P0 or P1.
+
+| #   | Lens | Critique (short)                                                                    | Verdict      | Resolution                                                                                         |
+| --- | ---- | ----------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| R1  | Corr | The upper-case action test's name says the answer maps to its field; nothing checks | **accepted** | A separate test: an `own_hidden` answer for the folded id marks the field sent in upper case       |
+| R2  | Corr | "Not a hyphenated uuid" undersells the parse: zod 4 also refuses non-RFC digits     | **deferred** | Board: fixed in the next lane S PR (`dayOpenFor`), where mutation 424 is re-cut around the message |
+| R3  | Corr | One docblock line in `checkin.ts` runs past 100 columns                             | **accepted** | Wrapped                                                                                            |
