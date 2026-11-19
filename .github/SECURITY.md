@@ -131,8 +131,15 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
 
 ## Sensitive data
 
-- Kid **bodyweight** is privileged: never returned outside the household operator, never logged,
-  never included in the LLM/MCP payload unless a scoped, explicit purpose requires it.
+- **Bodyweight** is privileged, for every profile (no rule here branches on age: `ID-1` keep-open
+  item 5): never logged, and never included in the LLM/MCP payload unless a scoped, explicit purpose
+  requires it. _(Reworded with the maintainer, 2026-11-19.)_
+  - **In the app**, anyone signed in to the household may see it.
+  - **The export** goes to the household's owner logins only (`buildExportEntries`, `loggedMonths` +
+    `isOwnerOf`, mutation 610). "Owner" is every login a correction bound as owner, not necessarily
+    one person. An adult athlete's access to their own is `ID-1`'s question.
+  - **Any future feed or sharing feature** never shows a child's bodyweight; an adult may choose to
+    publish their own.
 
 ## Input
 

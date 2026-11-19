@@ -1463,10 +1463,11 @@ forgotten you are left with orphan Clerk accounts — an email address and a Goo
 nothing in the database to find them by. Capture them now; the ledger is the recovery path.
 
 **1. The household exports its own data, in the app, while it still has access.**
-`/p/<profileId>/export` per athlete.
+`/p/<profileId>/export` per athlete, **downloaded by the household's owner** (only an owner login gets
+an export, since 2026-11-19); anyone else gets the full copy on request.
 
-⚠️ **That export is a partial copy** — no check-ins or life activities, no readiness colours, no "how
-it felt" notes, no per-athlete prescribed targets
+⚠️ **That export is a partial copy** — no readiness colours, no "how it felt" notes (check-ins are in
+it since FAM-1 14b), no per-athlete prescribed targets
 ([data-inventory.md](./privacy/data-inventory.md) §6). The notice promises a full copy on request, so
 **ask whether they want one**, and if they do, produce it by hand **before step 4**, **including
 hidden rows** (`deleted_at IS NOT NULL`: a cleared weigh-in is one, and it is in no export). Handing
@@ -1972,8 +1973,8 @@ adult athlete also asks for **their account** to go, delete their Clerk user as 
 step 6 does (record its id at the ledger first); their `household_members` row is hidden by removing
 the membership and keeps its `clerk_user_id` until the household goes.
 
-**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`), and the full copy on
-request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
+**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`, which only the
+household's owner can download), and the full copy on request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
 adult's own** for an adult athlete. Afterwards there is nothing to export.
 
 **2. Resolve the athlete by `public_id`** on the **production** database, and assert their household and
@@ -2194,7 +2195,8 @@ principle that also binds any later in-app removal:
 **0. Record the request** in the ledger (below).
 
 **1. The export is offered at step 3**, once its list says who trained on it: the in-app export
-(`/p/<profileId>/export`) for each of them, and the full copy on request. The in-app export holds no
+(`/p/<profileId>/export`, downloaded by the household's owner) for each of them, and the full copy on
+request. The in-app export holds no
 program, no targets and no record of who was on which program, which is what a removal deletes.
 
 **2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**

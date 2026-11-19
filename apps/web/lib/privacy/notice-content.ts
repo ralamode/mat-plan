@@ -616,7 +616,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           "children": [
             {
               "k": "text",
-              "text": "The adult owns the account, and is the one who can export the data or have it deleted."
+              "text": "The household owner, the adult who set the household up, is the one who can export the data or\nhave it deleted."
             }
           ]
         }
@@ -710,7 +710,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ", through the shared login."
+              "text": ": anyone signed in to it, each with their own sign-in, sees every athlete's\nhistory in the app, weigh-ins included. Only the household owner can download an athlete's export."
             }
           ]
         }
@@ -925,13 +925,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "Anyone signed in to your household can download any athlete's full history"
+                  "text": "Anyone signed in to your household can see any athlete's full history in the app"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this\nversion is that getting in takes "
+              "text": " — including\na child tapping a sibling's tile — "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "and only the household owner can download it."
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " Today every\nadult given a sign-in to a household is its owner, so anyone signed in can still download; the\nlimit applies once people can be invited as members. The tiles are a convenience, not a lock. What is new in this\nversion is that getting in takes "
             },
             {
               "k": "strong",
@@ -1838,7 +1851,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
+        "text": "If you set up the household, open an athlete's page and use the export. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Only the household owner\ncan download an export."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Today every adult given a sign-in to a household is its owner, so this\nchanges nothing for anyone yet; it applies once people can be invited as members, and until then\nanyone else who needs a copy can ask for one (below). Anyone signed in to the household still sees\nweigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
@@ -1900,7 +1926,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. Their export is on the "
+        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. The household owner finds their export on the "
       },
       {
         "k": "strong",
@@ -1913,7 +1939,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " screen, beside their\nname. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty\nfile — an empty zip looks exactly like a download that failed."
+        "text": "\nscreen, beside their name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty\nfile — an empty zip looks exactly like a download that failed."
       }
     ]
   },
@@ -1984,7 +2010,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " who has the link or who looks in Household settings, and their export still works. "
+        "text": " who has the link or who looks in Household settings, and the owner can still export them. "
       },
       {
         "k": "strong",
@@ -2389,6 +2415,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           ]
         }
       ]
+    ]
+  },
+  {
+    "k": "h2",
+    "children": [
+      {
+        "k": "text",
+        "text": "What changed on 19 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Only the household owner can download an athlete's export."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Any other sign-in is refused the\ndownload, and the export link is not shown to it. Everyone signed in to the household still sees\nevery athlete's history in the app, weigh-ins included. Today every adult given a sign-in to a\nhousehold is its owner, so nobody's access changes yet: this is a rule that now exists, for when\npeople can be invited as members. An adult member exporting their own data is planned for later.\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The export is also limited to 30 downloads per signed-in person in ten minutes"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", which is enough\nto export every athlete of a full household before deleting anything."
+      }
     ]
   },
   {
@@ -2817,7 +2883,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " against the retirement of the shared access code, which changed\nwho can get in, what Upstash is sent, and what a refused sign-up leaves behind.\n"
+        "text": " against the retirement of the shared access code, which changed\nwho can get in, what Upstash is sent, and what a refused sign-up leaves behind. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Re-reviewed\n2026-11-19"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " against the export becoming the household owner's and its rate limit.\n"
       },
       {
         "k": "strong",
