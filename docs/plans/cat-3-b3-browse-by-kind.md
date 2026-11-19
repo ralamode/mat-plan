@@ -3,7 +3,7 @@
 > Backlog: [plan.md](../plan.md) row `CAT-3`. Spec:
 > [cat-3-movement-library](../specs/cat-3-movement-library.md), criterion **P12**, with **K22 to
 > K24** and the B3 row of "Chunks, in order". Branch: `feat/cat-3-b3-browse-by-kind`. Lane B.
-> **Plan only:** no code until the maintainer approves it.
+> **Approved** _(maintainer, 2026-11-19)_.
 
 ## Where this sits
 
