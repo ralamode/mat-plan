@@ -218,7 +218,7 @@ export const MAX_DAY_SLOTS = 30;
 /**
  * **The longest list a reorder may send** (maintainer, 2026-11-19: "cap at 50"). A structural
  * bound, not one of the caps above: a longer `programOrderSchema.programPublicIds` fails the
- * parse, so a huge body is refused as `invalid` before any writer runs. Nothing answers
+ * parse, so a huge body is refused as `invalid` before anything is read or written. Nothing answers
  * `limit_reached` for it.
  *
  * ⚠️ **It is NOT a cap on how many programs an athlete may be on.** Put on has none. An athlete on

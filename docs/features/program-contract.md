@@ -564,7 +564,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       fake puts it last whatever place it was given, as the day's read does.
     - **The list holds at most 50 ids** (`MAX_ORDER_PROGRAMS` in `program-shapes.ts`; maintainer,
       2026-11-19: "cap at 50"): `programOrderSchema` refuses a longer one, so the action and the
-      fake answer `invalid` before any writer runs. It bounds the body and is not one of
+      fake answer `invalid` before anything is read or written. It bounds the body and is not one of
       invariant 30's caps: nothing limits how many programs an athlete is on, so an athlete on
       more than 50 could not reorder, which is accepted as far above any real use.
     - ⚠️ **A known gap in the fake:** it accepts a reorder for an archived athlete, where the real

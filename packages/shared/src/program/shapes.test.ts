@@ -414,7 +414,7 @@ describe('WeekDraft and ProgramView', () => {
     expect(weekRepeatsAWorkout(both)).toBe(true);
   });
 
-  it('names the caps the maintainer approved (C35): a change to one is a decision', () => {
+  it("names the caps and the order's bound the maintainer approved (C35, D49): a change to one is a decision", () => {
     expect({
       MAX_HOUSEHOLD_ITEMS,
       MAX_PROGRAM_WORKOUTS,

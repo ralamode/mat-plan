@@ -392,5 +392,7 @@ at 50". Two changes, set out in the Amendment section. Program names on the day 
 links, built in PR 1 behind an optional prop, passed by the page in PR 3 and by the preview in the
 contract owner's commit after PR 1; PR 1 is now ≈ 300 lines and PR 3 ≈ 250. The order's list is capped
 at 50 in the contract before PR 2. Both left Out-of-scope. No panel re-read: neither adds a PR or a
-file outside the PRs' tables. One choice here is the plan owner's and not the maintainer's: the
-line keeps 13d's commas between the links, where the prototype has a gap.
+file outside the PRs' tables. Two choices here are the plan owner's and not the maintainer's: the
+line keeps 13d's commas between the links, where the prototype has a gap, and the prototype's
+"Since" tooltip on a name is not built (the day's read carries no start date). Both are put to
+the maintainer.
