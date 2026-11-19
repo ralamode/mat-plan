@@ -2131,7 +2131,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   (measured). The symptom is **silence, not a duplicate**, so the guard is the only detector. It is
   **non-wedging** (detect → omit only the shadowed rows → seed everything else → throw last) because
   `migrate.yml` seeds production on every push; recovery is a new `runbooks.md` heading, and the
-  refusal names **seed slugs only** (a public const) because that log is world-readable.
+  refusal names **seed slugs only** (a public const) because that log is world-readable _(since
+  `CAT-3` A2-i, 2026-11-19, the report is counts only: a slug a household also holds says what they
+  typed)_.
   🔴 **NO BACKFILL — moved to TEN-2c, deliberately.** Six reasons, five measured: it is vacuous in
   production (zero app-authored rows); it **makes the 2b→2c window worse** (assigning a shared row to
   one household forces every other onto the fallback, manufacturing the cross-household references
