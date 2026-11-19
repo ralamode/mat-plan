@@ -23,7 +23,8 @@ export const MINUTES_PER_DAY = 1440;
  * **This number is a clock reading**: a whole minute of one day, `0..1439`. What `timing` stores is
  * local minutes since midnight, but the database only enforces `value_num >= 0`, so a reader that
  * renders a clock checks first and shows the raw number otherwise, never a wrapped time (1440 is
- * not `12:00 AM`). The day page (`minutesToClock`) and the export (`minutesToHhMm`) share it.
+ * not `12:00 AM`). The app's clock formatter (`minutesToClock`) and the export (`minutesToHhMm`)
+ * share it.
  */
 export function isMinuteOfDay(n: number): boolean {
   return Number.isInteger(n) && n >= 0 && n < MINUTES_PER_DAY;

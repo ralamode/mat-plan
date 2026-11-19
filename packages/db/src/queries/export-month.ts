@@ -288,7 +288,8 @@ export function foldStrengthMonth(rows: readonly StrengthMonthRow[]): FoldedStre
  *
  * A row with a movement is never a bodyweight reading: the schema's check allows a weigh-in with a
  * `movement_id` and no metric, and the strength log's join already takes that row, so without the
- * `movement_id IS NULL` it would leave in two files. No writer makes one.
+ * `movement_id IS NULL` it would leave in two files. ⚠️ The strength log writes set values, so such a
+ * row's own `value_num` is not exported: accepted, because no writer makes one.
  */
 export function bodyweightEntry() {
   return and(
