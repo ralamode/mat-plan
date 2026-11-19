@@ -1433,6 +1433,11 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
       feed.** An adult may choose to publish their own. No feed exists and none has a row yet;
       SOCIAL-1, PUB-1 and any row that adds a feed or a way to publish take this rule, and their
       plans say how they keep it.
+  - **Owed to the add-athlete form when `kind` gains an effect** (lane B, from FAM-1 15 PR 2,
+    2026-11-19). The form asks Child or Adult, says the answer is permanent, and since 15 PR 2
+    says nothing about what it changes, because today it changes nothing a person can see. The
+    first row that makes `kind` matter (the export rule above, bodyweight on a feed, anything
+    for children only) adds one neutral line to that form saying what the answer changes.
   - **Depends on** AUTH-1, and comes **before** COACH-1, SOCIAL-1 and PUB-1, which need the same
     relationship. Birthdate is the most sensitive field this app would start using, so the
     `privacy-reviewer` and `security-reviewer` lenses apply to every PR, plus a legal check before
