@@ -92,7 +92,9 @@ export const SENTRY_DATA_COLLECTION: Required<Omit<DataCollection, 'frameContext
 };
 
 /** Request headers that must never leave the server, lower-cased for comparison. */
-const DENIED_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authorization'];
+// `referer` since `Referrer-Policy: same-origin` (plan td-form-before-hydration): it now names the page
+// a request came from, an athlete's public id and day included, and header values are not masked.
+const DENIED_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authorization', 'referer'];
 
 /** The `extra` key prefix Sentry uses for Server Action form fields (`formData` option). */
 const FORM_DATA_EXTRA_PREFIX = 'server_action_form_data.';

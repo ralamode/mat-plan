@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy } from './day-copy';
 import {
-  canChangeValues,
+  changeableFields,
   changedText,
   EMPTY_TEXT,
   fieldValueText,
@@ -111,12 +111,15 @@ export function useChange(
   const day = useDay();
   const entry = r.entry;
   const name = rowName(item, row);
-  const editable =
+  /** The fields a Change may edit: all, the reps only (a load logged in another unit), or none. */
+  const fields =
     r.canWrite &&
     day.actions.amendRow !== undefined &&
     item.prescriptionPublicId !== null &&
-    entry !== null &&
-    canChangeValues(item, entry.values);
+    entry !== null
+      ? changeableFields(item, entry.values)
+      : [];
+  const editable = fields.length > 0;
 
   /** The fields typed in, and only those. */
   const [draft, setDraft] = useState<Partial<RowText> | null>(null);
@@ -144,8 +147,9 @@ export function useChange(
     setBaseline(null);
     setLine(null);
   }
-  // A row that stops being changeable (its item's unit changed, the day closed) drops what was typed.
-  if (!editable && draft !== null) {
+  // A row that stops being changeable (the day closed), or whose typed field stops being one (its
+  // item's unit changed under it, so the load is text now: 12d-iii), drops what was typed.
+  if (draft !== null && (Object.keys(draft) as RowField[]).some((f) => !fields.includes(f))) {
     setDraft(null);
     if (r.error?.write === 'amend') r.clearError();
   }
@@ -235,7 +239,7 @@ export function useChange(
   async function commit() {
     if (!dirty || !entry || r.pending) return;
     const from = entry.values;
-    const { send, kept } = readAmend(item, text, from);
+    const { send, kept } = readAmend(item, text, from, fields);
     const keptLine = keptText(item, from, kept);
     if (!send) {
       setDraft(null);
@@ -299,6 +303,8 @@ export function useChange(
     /** The row's name (`Bench press set 1`): the announcer's, and the ✕'s. */
     name,
     editable,
+    /** The fields shown as Change inputs; any other field stays text (12d-iii). */
+    fields,
     text,
     dirty,
     /** Whether this field holds a number other than the stored one: only it loses the logged look. */
