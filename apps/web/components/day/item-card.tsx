@@ -23,6 +23,7 @@ import {
   ItemHeading,
   LOGGED_CARD_CLASS,
   RowInput,
+  OtherUnitLine,
   secondaryText,
   Tick,
   TINT_CLASS,
@@ -174,6 +175,13 @@ function SingleItem({
       <div className="mt-2 empty:hidden">
         <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
       </div>
+      {/* 12d-iii: a sibling after the status slot, as in the set table, so a message never
+          replaces it and the status stays next to the row. */}
+      {r.otherUnit ? (
+        <div className="mt-2">
+          <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
+        </div>
+      ) : null}
     </li>
   );
 }

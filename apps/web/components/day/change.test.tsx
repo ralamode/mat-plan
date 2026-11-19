@@ -2,6 +2,7 @@
 import { ROW_REFUSAL, type DayPlan, type RowAmend, type RowResult } from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
+  everyTypeOnce,
   yesterdayEditedAfterLogging,
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
@@ -12,7 +13,7 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
-import { card, held, makeMount, press, status } from './day-test-utils';
+import { card, describedTexts, held, makeMount, press, status } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
 import { unitSpoken } from './row-values';
 
@@ -105,14 +106,48 @@ describe('Change: where it applies', () => {
     expect(within(pullUp).queryAllByRole('textbox')).toHaveLength(0);
   });
 
-  it('🔴 a set logged in another unit than the item is in stays text: no load in the wrong unit', () => {
+  it('🔴 a set logged in another unit offers its reps only: the load stays text in its own unit (12d-iii)', async () => {
     const kg: DayPlan = structuredClone(yesterdayHalfDone);
     const item = kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!;
     item.unit = 'kg';
-    mount(kg, { change: true });
+    const { actions } = mount(kg, { change: true });
     const rowOne = loggedRow();
-    expect(within(rowOne).queryAllByRole('textbox')).toHaveLength(0);
+    // One field, the reps; the load is text with its own unit, never a kg field.
+    expect(within(rowOne).getAllByRole('textbox')).toEqual([reps()]);
     expect(rowOne.textContent).toContain('27.5 lb');
+    // The line says why, asks for no conversion, and the ✓ and the reps field point at it.
+    // Every set logged in pounds has its own line; set 1's is the one its ✓ and field point at.
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.load,
+      unticked: null,
+    });
+    expect(within(bench()).getAllByText(said).length).toBeGreaterThan(1);
+    expect(describedTexts(benchTick())).toContain(said);
+    expect(describedTexts(reps())).toContain(said);
+    // The load cell says the unit's word, not its code, to a screen reader (plan U2.5).
+    const cell = within(rowOne).getByText(unitSpoken('lb'));
+    expect(cell.className).toContain('sr-only');
+
+    type(reps(), '6');
+    await leave(reps());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    // The load goes back exactly as it was logged, in pounds.
+    expect(actions.amendRow.mock.calls[0]![0].values).toEqual({
+      quantities: [{ slot: 'primary', unit: 'lb', value: 27.5 }],
+      reps: 6,
+    });
+    expect(within(bench()).getByText(DAY_COPY.change.changed('8', '6 reps'))).toBeTruthy();
+    expect(loggedRow().textContent).toContain('27.5 lb');
+  });
+
+  it('a set logged in the item’s unit has no other-unit line', () => {
+    mount(yesterdayHalfDone, { change: true });
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.load,
+      unticked: null,
+    });
+    expect(within(bench()).queryByText(said)).toBeNull();
+    expect(describedTexts(benchTick())).not.toContain(said);
   });
 });
 
@@ -1096,5 +1131,74 @@ describe('Change: Escape from any control, and a ✕ press that ends elsewhere',
     act(() => benchTick().focus());
     await act(async () => benchTick().blur());
     expect(actions.amendRow).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Change: a row logged in another unit (12d-iii)', () => {
+  /** `yesterdayHalfDone` with the bench now in kg: its logged sets are in lb. */
+  function inKg(from: DayPlan = yesterdayHalfDone): DayPlan {
+    const kg: DayPlan = structuredClone(from);
+    kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!.unit = 'kg';
+    return kg;
+  }
+
+  it('the line stays while an un-tick is in flight: nothing below the row moves', async () => {
+    const gate = held();
+    mount(inKg(), {
+      change: true,
+      wrap: (a) => ({ untickRow: (input) => gate.after(() => a.untickRow(input)) }),
+    });
+    const before = within(bench()).getAllByText(/before the workout changed/).length;
+    await act(async () => {
+      fireEvent.click(benchTick());
+    });
+    expect(within(bench()).getAllByText(/before the workout changed/)).toHaveLength(before);
+    expect(describedTexts(benchTick()).some((t) => t.includes('before the workout changed'))).toBe(
+      true,
+    );
+    await gate.resolve();
+  });
+
+  it('a load typed before the unit changed is dropped: no field, no "not saved", nothing sent', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    await act(async () => control.setPlan(inKg(control.plan)));
+    expect(within(loggedRow()).getAllByRole('textbox')).toEqual([reps()]);
+    expect(within(bench()).queryByText(DAY_COPY.change.notSaved('27.5 lb × 8'))).toBeNull();
+    await leave(reps());
+    expect(control.actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Undo after a reps-only Change sends the row back as logged, in lb', async () => {
+    const { actions } = mount(inKg(), { change: true });
+    type(reps(), '6');
+    await leave(reps());
+    await press(button(DAY_COPY.change.undo));
+    expect(actions.amendRow).toHaveBeenCalledTimes(2);
+    expect(actions.amendRow.mock.calls[1]![0].values).toEqual({
+      quantities: [{ slot: 'primary', unit: 'lb', value: 27.5 }],
+      reps: 8,
+    });
+  });
+
+  it('a count logged in another unit shows the line on its card and stays text', () => {
+    const plan: DayPlan = structuredClone(everyTypeOnce);
+    const vest = plan.workouts[0]!.items.find((i) => i.name === 'Vest weight')!;
+    vest.unit = 'kg';
+    vest.rows[0]!.logged = {
+      entryPublicId: ENTRY_3,
+      values: { quantities: [{ slot: 'primary', unit: 'lb', value: 10 }] },
+      prescribedText: vest.rows[0]!.logged?.prescribedText ?? '10 lb',
+    };
+    mount(plan, { change: true });
+    const item = card(plan.workouts[0]!.name, 'Vest weight');
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.number,
+      unticked: null,
+    });
+    expect(within(item).getByText(said)).toBeTruthy();
+    expect(within(item).queryAllByRole('textbox')).toHaveLength(0);
+    const tick = within(item).getByRole('button', { name: DAY_COPY.logLabel('Vest weight') });
+    expect(describedTexts(tick)).toContain(said);
   });
 });
