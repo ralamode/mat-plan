@@ -2927,7 +2927,7 @@ no filter"` → three, because a name became typeable), which is a real accuracy
 
 <a id="legacy-1"></a>
 
-- <a id="legacy-1"></a>**LEGACY-1 — retire the legacy strength write path.** _(maintainer, 2026-11-19, on the FAM-1 12f
+- **LEGACY-1 — retire the legacy strength write path.** _(maintainer, 2026-11-19, on the FAM-1 12f
   plan's Q4: "Yes, own row after FAM-1 (Recommended)"; FAM-1 plan decision D51. Tech debt, after
   FAM-1. Not Beta 0. Not planned yet.)_ FAM-1 step 12f deletes the old strength form and its three
   actions ([plan](./plans/fam-1-12f-retire-old-forms.md)). After 12f PR 3 nothing in the app can
