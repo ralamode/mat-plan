@@ -32,7 +32,7 @@ import {
   parseAccountList,
 } from './accounts';
 import { CorrectionRefusal, redactedFailure } from './redact';
-import { note, type CorrectionLine } from './summary';
+import { note, summaryLine, type CorrectionLine } from './summary';
 import {
   correctionTargetDatabaseIsUnnamed,
   correctionTargetIsPreview,
@@ -1047,6 +1047,8 @@ function preflightNotes(report: ErasureReport): CorrectionLine[] {
       ];
 }
 
+const tablesWithRows = (report: ErasureReport) => report.counts.filter((c) => c.rows > 0).length;
+
 /** Counts only: one CHANGE per table that has rows, then the total as a note. No id of any kind. */
 function erasureLines(report: ErasureReport, verb: 'would erase' | 'erased'): CorrectionLine[] {
   return [
@@ -1104,7 +1106,10 @@ const eraseSeededHousehold: Correction = {
           ...erasureLines(report, 'would erase'),
           ...preflightNotes(report),
           await seedMembersNote(db, scope),
-          note(`to apply, re-run with ${EXPECT_ERASED_ROWS}=${report.total} and --apply`),
+          summaryLine(
+            `${tablesWithRows(report)} table(s), ${report.total} row(s) would be erased. To apply, ` +
+              `re-run with ${EXPECT_ERASED_ROWS}=${report.total} and --apply.`,
+          ),
           others,
         ];
       }
@@ -1147,6 +1152,7 @@ const eraseSeededHousehold: Correction = {
               'account whose only membership was hidden is decided at the go and recorded in the ledger.',
           ),
           await otherHouseholdsNote(txDb),
+          summaryLine(`✓ erased ${tablesWithRows(report)} table(s), ${report.total} row(s).`),
         ];
       });
     } catch (err) {
