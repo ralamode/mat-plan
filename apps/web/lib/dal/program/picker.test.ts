@@ -158,18 +158,19 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
   });
 
   it('⏳ a built-in the library has no entry for: the row with NO taxonomy, never a placeholder one', () => {
+    // An old built-in whose slug no batch reuses (`calf_raises`; the library's is `calf_raise`).
     const option = pickerOptionOf(
-      builtIn({ slug: 'back_squat', name: 'Back Squat', aliases: ['Squat'] }),
+      builtIn({ slug: 'calf_raises', name: 'Calf Raises', aliases: ['Heel raise'] }),
     );
     expect(option).toEqual({
       publicId: '019826b4-0000-7000-8000-00000000e001',
       owner: 'catalog',
-      name: 'Back Squat',
+      name: 'Calf Raises',
       trackingType: TRACKING_TYPE.weight_reps,
       unitDefault: LB,
       isBodyweight: false,
       group: 'legs',
-      aliases: ['Squat'],
+      aliases: ['Heel raise'],
     });
   });
 

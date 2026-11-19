@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 1b443276..05460287 100644
+index 70491bca..35dc6a15 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -193,7 +193,7 @@ export async function putOn(
-       // Close any gap in the order, then take the last place. Rows already in place stay put.
-       const last = await placeAssignments(tx, athlete.id, []);
+@@ -207,7 +207,7 @@ export async function putOn(
+       const endsToday = current.find((row) => row.blockId === block.id);
  
+       const order = open.map((row) => row.blockId);
 -      if (endsToday) {
 +      if (endsToday && today === 'never') {
-         await tx
-           .update(a)
-           .set({ activeTo: null, idx: last, updatedAt: sql`now()` })
+         // D41 (the maintainer, 2026-11-18): back at its old place: after the open programs that were
+         // ahead of it (a lower `idx`), so another program taken off today too does not move it.
+         // Parked first, so clearing `active_to` meets no open row on the order index.
