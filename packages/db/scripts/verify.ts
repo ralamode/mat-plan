@@ -9332,7 +9332,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
   const b0Partial = await db.execute<{ indexname: string; indexdef: string }>(
     sql`select indexname, indexdef from pg_indexes
         where indexname in ('uq_entries_superset_order', 'uq_entry_sets_entry_idx',
-                            'uq_entry_set_quantities_set_slot', 'uq_entries_profile_day_bodyweight')`,
+                            'uq_entry_set_quantities_set_slot', ${schema.BODYWEIGHT_DAY_UNIQUE_INDEX})`,
   );
   const b0PartialRows = (
     b0Partial as unknown as { rows: { indexname: string; indexdef: string }[] }
