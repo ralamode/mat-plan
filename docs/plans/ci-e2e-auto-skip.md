@@ -28,6 +28,11 @@ required check "pending" once e2e is required at PR 28). Complements the manual 
 | `AGENTS.md`                      | EDIT   | Document the auto-skip + the conservative allowlist + the required-check-safe (step-level only) invariant, alongside the existing label/admin-merge overrides.                                                                                                                                                              |
 | `docs/plans/ci-e2e-auto-skip.md` | NEW    | This plan.                                                                                                                                                                                                                                                                                                                  |
 
+> **Superseded in part by DX-18 PR 2** ([plan](./dx-18-heavy-runs-to-ci.md), D7): the list now lives
+> in `.github/scripts/changed-scopes.mjs` (`INERT`), read from the git diff rather than
+> `pulls.listFiles`, and an image is inert only under `docs/` or `.github/`. The step-level skip and
+> the label are unchanged.
+
 **INERT allowlist** (skip only if every changed file matches): `docs/**`, root `*.md`, `.claude/**`,
 `.github/{ISSUE_TEMPLATE,PULL_REQUEST_TEMPLATE}`, `.github/SECURITY.md`, `LICENSE`, image extensions.
 
