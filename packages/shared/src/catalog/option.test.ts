@@ -16,8 +16,15 @@ import {
   movementFamilyOf,
 } from './families';
 import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS, CATALOG_FIXTURE_OPTIONS } from './fixture';
-import { catalogHowToOf, catalogHowToSchema, catalogOptionOf, type CatalogOption } from './option';
-import { MODALITIES, MUSCLES } from './vocabulary';
+import {
+  catalogHowToOf,
+  catalogHowToSchema,
+  catalogOptionOf,
+  equipmentInOrder,
+  musclesInOrder,
+  type CatalogOption,
+} from './option';
+import { EQUIPMENT, MODALITIES, MUSCLES } from './vocabulary';
 
 const entryWith = (slug: string): CatalogMovement => {
   const entry = CATALOG_FIXTURE.find((candidate) => candidate.slug === slug);
@@ -29,6 +36,11 @@ const some = (test: (entry: CatalogMovement) => boolean): CatalogMovement => {
   if (!entry) throw new Error('the test library has no such entry');
   return entry;
 };
+/** The vocabulary's order, worked out another way than the code under test does. */
+const byPlaceIn =
+  <T>(vocabulary: readonly T[]) =>
+  (values: readonly T[]): T[] =>
+    [...values].sort((a, b) => vocabulary.indexOf(a) - vocabulary.indexOf(b));
 const optionsOf = (entries: readonly CatalogMovement[]): CatalogOption[] =>
   entries.map((entry, index) => catalogOptionOf(entry, `id-${index}`));
 
@@ -46,9 +58,9 @@ describe('catalogOptionOf (P11)', () => {
         isBodyweight: entry.isBodyweight,
         modality: entry.modality,
         pattern: entry.pattern,
-        equipment: entry.equipment,
+        equipment: byPlaceIn(EQUIPMENT)(entry.equipment),
         primaryMuscle: entry.primaryMuscle,
-        secondaryMuscles: entry.secondaryMuscles,
+        secondaryMuscles: byPlaceIn(MUSCLES)(entry.secondaryMuscles),
         supervision: entry.supervision ?? null,
         hasInstructions: entry.instructions !== undefined,
       });
@@ -68,6 +80,46 @@ describe('catalogOptionOf (P11)', () => {
         'trackingType',
         'unitDefault',
       ]);
+    }
+  });
+
+  it('lists equipment and secondary muscles in the vocabulary’s order, whatever the entry’s (K31)', () => {
+    expect(equipmentInOrder(['bench', 'pull_up_bar', 'dumbbell', 'barbell'])).toEqual([
+      'barbell',
+      'dumbbell',
+      'bench',
+      'pull_up_bar',
+    ]);
+    expect(musclesInOrder(['calves', 'glutes', 'neck', 'lats'])).toEqual([
+      'neck',
+      'lats',
+      'glutes',
+      'calves',
+    ]);
+    expect(equipmentInOrder([])).toEqual([]);
+
+    // One entry written both ways is one option: the authored order carries no meaning.
+    const two = some((entry) => entry.equipment.length > 1 && entry.secondaryMuscles.length > 1);
+    const reversed: CatalogMovement = {
+      ...two,
+      equipment: [...two.equipment].reverse(),
+      secondaryMuscles: [...two.secondaryMuscles].reverse(),
+    };
+    expect(reversed.equipment).not.toEqual(two.equipment);
+    expect(catalogOptionOf(reversed, 'x')).toEqual(catalogOptionOf(two, 'x'));
+  });
+
+  it('keeps every item and adds none when it orders them, in a new array', () => {
+    for (const entry of [...CATALOG_FIXTURE, ...CATALOG_MOVEMENTS]) {
+      const option = catalogOptionOf(entry, 'an-id');
+      expect([...option.equipment].sort(), entry.slug).toEqual([...entry.equipment].sort());
+      expect([...option.secondaryMuscles].sort(), entry.slug).toEqual(
+        [...entry.secondaryMuscles].sort(),
+      );
+      expect(option.equipment, entry.slug).not.toBe(entry.equipment);
+      expect(option.secondaryMuscles, entry.slug).not.toBe(entry.secondaryMuscles);
+      // Aliases keep the entry's order.
+      expect(option.aliases, entry.slug).toEqual(entry.aliases);
     }
   });
 
