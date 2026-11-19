@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   bodyweightMonthRows,
+  checkinMonthRows,
   foldStrengthMonth,
   resolvePrescribed,
   rolesNeedingLiveMatch,
@@ -14,6 +15,7 @@ import { dayRoleSchema } from '@mat-plan/shared';
 import {
   bodyweightPath,
   type BodyweightRow,
+  type CheckinsRow,
   buildBodyweight,
   buildCheckins,
   buildStrengthLog,
@@ -117,12 +119,25 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
       notes: r.notes ?? '',
     }));
 
+    // FAM-1 14b: every logged check-in. Fields are mapped one by one, so the read's `entryId` (for the
+    // proof only) never reaches a row.
+    const checkinRows: CheckinsRow[] = (
+      await checkinMonthRows(db, { profilePublicId, month, scope })
+    ).map((r) => ({
+      date: r.date,
+      activity: r.activity,
+      metric: r.metric,
+      valueNum: r.valueNum,
+      valueText: r.valueText,
+      unit: r.unit,
+      notes: r.notes,
+    }));
+
     entries.push(
       { path: strengthLogPath(profilePublicId, month), content: buildStrengthLog(strengthRows) },
       { path: bodyweightPath(profilePublicId, month), content: buildBodyweight(bodyweightRows) },
-      // Header-only until FAM-1 14b writes the check-ins (plan `fam-1-14-export.md`). The file is
-      // still written, so every month's zip holds the same three files.
-      { path: checkinsPath(profilePublicId, month), content: buildCheckins([]) },
+      // A month with no check-ins still writes the header, so every month's zip holds the same files.
+      { path: checkinsPath(profilePublicId, month), content: buildCheckins(checkinRows) },
     );
   }
 

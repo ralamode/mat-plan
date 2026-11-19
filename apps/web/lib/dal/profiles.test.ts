@@ -164,7 +164,33 @@ describe('renameAthlete — the rename uses the SAME predicate as the read', () 
  * mistake neither can see: a scope resolved and then used in only SOME of the four queries, or an
  * INSERT that takes a tenant or a `public_id` from the caller.
  */
-describe("createAthlete — all THREE of the create's queries carry the resolved household", () => {
+describe("createAthlete — the lock and all three of the create's queries carry the resolved household", () => {
+  it('the household-athletes lock comes before every read and the insert, on the resolved household', async () => {
+    // The only proof of WHERE the lock sits: mutation 444 shows it exists, not that it precedes the
+    // count. Moved after the count, the cap would be walked past again.
+    await createAthlete(ADD_INPUT);
+    const at = (re: RegExp) => recording.queries.findIndex((q) => re.test(q.text));
+    const lock = at(/pg_advisory_xact_lock/);
+    expect(lock, 'no lock was taken').toBeGreaterThanOrEqual(0);
+    expect(recording.queries[lock]!.values).toContain(ONE_HOUSEHOLD_ID);
+    for (const later of [
+      /select "public_id" from "profiles"/i,
+      /select "id" from "profiles"/i,
+      /^insert into "profiles"/i,
+    ]) {
+      expect(at(later), `${later} ran before the lock`).toBeGreaterThan(lock);
+    }
+    // …and all of it inside ONE transaction. A transaction-scoped lock taken outside one releases as
+    // soon as its own statement returns, so dropping the `exec.transaction` wrapper would bring the
+    // race back while the order above stayed green (the db:verify case cannot see it either: it
+    // already runs inside `rolledBack`'s transaction).
+    const begin = at(/^begin/i);
+    expect(begin, 'no transaction was opened').toBeGreaterThanOrEqual(0);
+    expect(begin, 'the transaction opened after the lock').toBeLessThan(lock);
+    const commit = recording.queries.findIndex((q, i) => i > lock && /^commit/i.test(q.text));
+    expect(commit, 'no commit after the lock').toBeGreaterThan(at(/^insert into "profiles"/i));
+  });
+
   it('the client_id read is scoped, and bound to the household the resolver found', async () => {
     await createAthlete(ADD_INPUT);
     const read = queryMatching(recording, /select "public_id" from "profiles"/i);
@@ -224,9 +250,11 @@ describe("createAthlete — all THREE of the create's queries carry the resolved
     const rec = (await import('./recording-db')).createRecordingDb((sql) =>
       /from "household_members"/.test(sql)
         ? [[ONE_HOUSEHOLD_ID, 'owner']]
-        : /select "public_id" from "profiles"/i.test(sql)
-          ? [[PROFILE]]
-          : [],
+        : /pg_advisory_xact_lock/.test(sql)
+          ? [[null]]
+          : /select "public_id" from "profiles"/i.test(sql)
+            ? [[PROFILE]]
+            : [],
     );
     vi.doMock('./db', () => ({ db: rec.db }));
     vi.resetModules();

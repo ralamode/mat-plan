@@ -1,6 +1,7 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 
-import type { Executor } from '../writers/executor';
+import type { IdIn } from '../erasure/graph';
+import type { Executor, Reads } from '../writers/executor';
 
 /**
  * ## ONE definition of "a movement is REFERENCED", and one census of who references it
@@ -23,6 +24,10 @@ import type { Executor } from '../writers/executor';
  * [`plan.md`](../../../../docs/plan.md) → `TEN-2b-2` requires that this definition of _referenced_
  * be the one its orphan correction and `TEN-2c-1`'s split both use. A second copy of this join is a
  * defect, not a style nit: the two copies already disagreed about `prescriptions`.
+ *
+ * ⚠️ **Amended at `PRIV-3` PR 2a:** one household-relative view, `movementRefsIntoHousehold`, the
+ * erasure's pre-flight (d). It still takes no scope: the caller passes the set of movements
+ * (`IdIn`, built by the erasure graph from its own predicate), so the census joins stay unscoped.
  *
  * ## Why these are UNSCOPED, stated so the next reader does not "fix" it
  *
@@ -68,15 +73,8 @@ export async function crossHouseholdMovementRefs(
 ): Promise<CrossHouseholdMovementRefs> {
   const rows = (
     (await exec.execute(sql`
-      select
-        (select count(*)::int from entries e
-           join profiles p on p.id = e.profile_id
-           join movements m on m.id = e.movement_id
-          where m.household_id is not null and m.household_id <> p.household_id) as entry_refs,
-        (select count(*)::int from prescriptions pr
-           join program_blocks b on b.id = pr.block_id
-           join movements m on m.id = pr.movement_id
-          where m.household_id is not null and m.household_id <> b.household_id) as prescription_refs
+      select (${entryMovementRefs(sql`true`)}) as entry_refs,
+             (${prescriptionMovementRefs(sql`true`)}) as prescription_refs
     `)) as unknown as { rows: { entry_refs: number; prescription_refs: number }[] }
   ).rows[0];
   return {
@@ -84,6 +82,37 @@ export async function crossHouseholdMovementRefs(
     prescriptions: rows.prescription_refs,
     total: rows.entry_refs + rows.prescription_refs,
   };
+}
+
+// The two joins, written once. `about` narrows them by the referenced movement (`m.id`).
+const entryMovementRefs = (about: SQL) => sql`
+  select count(*)::int from entries e
+    join profiles p on p.id = e.profile_id
+    join movements m on m.id = e.movement_id
+   where m.household_id is not null and m.household_id <> p.household_id and ${about}`;
+const prescriptionMovementRefs = (about: SQL) => sql`
+  select count(*)::int from prescriptions pr
+    join program_blocks b on b.id = pr.block_id
+    join movements m on m.id = pr.movement_id
+   where m.household_id is not null and m.household_id <> b.household_id and ${about}`;
+
+/**
+ * Pre-flight (d), household-relative (`PRIV-3` PR 2a, `src/erasure/preflight.ts`): the `entries` and
+ * `prescriptions` of ANOTHER household that point at one of `movements` (the erased household's, as
+ * `householdIdsOf(schema.movements, scope)` in the graph builds it). Deleting those movements would
+ * abort `23503` on them. The census's own joins, narrowed, so this is not a second copy of the join.
+ *
+ * The other direction (the household's row on another household's movement) is not counted: the
+ * row is deleted with the household, and nothing aborts.
+ */
+export async function movementRefsIntoHousehold(exec: Reads, movements: IdIn): Promise<number> {
+  const about = movements(sql`m.id`);
+  const row = (
+    (await exec.execute(
+      sql`select (${entryMovementRefs(about)}) + (${prescriptionMovementRefs(about)}) as n`,
+    )) as { rows: { n: number }[] }
+  ).rows[0];
+  return row.n;
 }
 
 /** One `movements` row, with how many distinct households reference it. Ids only, never text. */

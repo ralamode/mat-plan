@@ -1,5 +1,6 @@
+import { SEED_ACTIVITY_TYPE_KEYS, SEED_METRIC_KEYS } from '@mat-plan/shared';
 import type { StrengthLogRow } from '@mat-plan/shared/csv';
-import { and, asc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, not, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from '../schema';
@@ -27,14 +28,14 @@ import {
  * bottom of a session it happened at the top of. What this DOES guarantee is that re-exporting the
  * same month twice is byte-identical, which is the property the workflow actually depends on.
  *
- * ## TEN-1 1c — all three reads are household-scoped
+ * ## TEN-1 1c — all four reads are household-scoped
  *
  * Each takes a required `HouseholdScope` and resolves ownership through the single-sourced
  * `isLiveProfile` (`writers/ownership.ts`) instead of a hand-written
  * `and(eq(publicId, …), isNull(deletedAt))`. `lib/dal/export.ts` already fails closed at
  * `getProfileByPublicId` before any of these runs, so this is depth behind the gate — which is exactly
  * what `docs/features/write-path.md` demands: *"a guard that exists only in the DAL is a guard no proof
- * covers."* `db:verify`'s TEN-1 read matrix drives all three in both directions.
+ * covers."* `db:verify`'s TEN-1 read matrix drives all four in both directions.
  */
 
 /** `YYYY-MM` → the half-open date range `[first, next month)`. */
@@ -273,6 +274,70 @@ export function foldStrengthMonth(rows: readonly StrengthMonthRow[]): FoldedStre
   });
 }
 
+/**
+ * **This entry is a bodyweight reading** (FAM-1 14b): the weigh-in activity OR the bodyweight metric,
+ * so a bodyweight metric under any other activity still lands in the bodyweight file, never in
+ * check-ins (the schema's own test is the metric, `BODYWEIGHT_DAY_UNIQUE_INDEX`). One conjunct for both
+ * reads; never NULL (`activity_types.key` is NOT NULL through the inner join, and the metric arm is
+ * `IS NOT DISTINCT FROM`), so the check-ins side is plain `not(bodyweightEntry())`.
+ *
+ * ⚠️ Wider than the app's other bodyweight reads (`last-bodyweight.ts`, the day page's totals), which
+ * key on the metric alone: the two agree on every row today, since every weigh-in carries the metric
+ * (migration 0002's backfill). The export takes the wider test on purpose, so a weigh-in that ever
+ * lost its metric still leaves in the bodyweight file and never in check-ins (plan, review B10).
+ */
+export function bodyweightEntry() {
+  return or(
+    eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.weighIn),
+    sql`${schema.entries.metricKey} is not distinct from ${SEED_METRIC_KEYS.bodyweight}`,
+  )!;
+}
+
+/**
+ * **Every logged check-in in one month** (FAM-1 14b): every live entry with no movement that is not a
+ * bodyweight reading, so with the strength log and the bodyweight file each live entry lands in exactly
+ * one file. `entryId` is for `db:verify`'s partition proof only and never becomes a column.
+ */
+export function checkinMonthRows(
+  db: NodePgDatabase<typeof schema>,
+  args: {
+    profilePublicId: string;
+    month: string;
+    /** TEN-1: the household this request is authorized for. */
+    scope: HouseholdScope;
+  },
+) {
+  const { from, to } = monthRange(args.month);
+  return db
+    .select({
+      entryId: schema.entries.id,
+      date: schema.entries.activityDate,
+      activity: schema.activityTypes.key,
+      metric: schema.entries.metricKey,
+      valueNum: schema.entries.valueNum,
+      valueText: schema.entries.valueText,
+      unit: schema.entries.unit,
+      notes: schema.entries.notes,
+    })
+    .from(schema.entries)
+    .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
+    .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
+    .where(
+      and(
+        isLiveProfile(args.profilePublicId, args.scope),
+        isNull(schema.entries.deletedAt),
+        isNull(schema.entries.movementId),
+        not(bodyweightEntry()),
+        gte(schema.entries.activityDate, from),
+        lt(schema.entries.activityDate, to),
+      ),
+    )
+    .orderBy(asc(schema.entries.activityDate), asc(schema.entries.id));
+}
+
+/** One row of `checkinMonthRows`, for tests that mock it (typed, so the shape cannot drift). */
+export type CheckinMonthRow = Awaited<ReturnType<typeof checkinMonthRows>>[number];
+
 /** Every bodyweight reading in one month. */
 export function bodyweightMonthRows(
   db: NodePgDatabase<typeof schema>,
@@ -286,6 +351,8 @@ export function bodyweightMonthRows(
   const { from, to } = monthRange(args.month);
   return db
     .select({
+      // For `db:verify`'s partition proof only; `BodyweightRow` never carries it.
+      entryId: schema.entries.id,
       date: schema.entries.activityDate,
       value: schema.entries.valueNum,
       // CSV-1: the unit rides the row so the builder can CONVERT a kg weight (Ray, 2026-10-02) —
@@ -301,7 +368,7 @@ export function bodyweightMonthRows(
       and(
         isLiveProfile(args.profilePublicId, args.scope),
         isNull(schema.entries.deletedAt),
-        eq(schema.activityTypes.key, 'weigh_in'),
+        bodyweightEntry(),
         gte(schema.entries.activityDate, from),
         lt(schema.entries.activityDate, to),
       ),

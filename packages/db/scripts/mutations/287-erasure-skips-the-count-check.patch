@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index 655adcd5..d2425dd6 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -295,9 +295,6 @@ export async function eraseHousehold(
+       if (owner && gone.some((r) => r.hh === null || Number(r.hh) !== Number(householdId))) {
+         throw new ErasureForeignRow(m.counts[i].table);
+       }
+-      if (gone.length !== m.counts[i].rows) {
+-        throw new ErasureCountMismatch(m.counts[i].table, m.counts[i].rows, gone.length);
+-      }
+       deleted.push({ table: m.counts[i].table, rows: gone.length });
+     }
+ 

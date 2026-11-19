@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index db52fe78..40e89c18 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -402,7 +402,7 @@ async function lockedCreate(
+   // count never runs without the lock.
+   const locked = await exec
+     .select({
+-      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
++      locked: sql`1`,
+     })
+     .from(schema.households)
+     .where(householdRowIs(scope));

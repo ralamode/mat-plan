@@ -36,6 +36,15 @@ export type Membership = {
   readonly role: HouseholdRole;
 };
 
+/**
+ * 🔴 **A LIVE membership: the member row AND its household both live.** The one definition, so the
+ * resolver below (the authority) and the erasure's "live in another household" mark
+ * (`src/erasure/erase.ts`) cannot disagree. Needs `households` joined to `household_members`.
+ */
+export function isLiveMembership() {
+  return and(isNull(schema.householdMembers.deletedAt), isNull(schema.households.deletedAt));
+}
+
 export async function membershipHousehold(
   exec: Executor,
   clerkUserId: string,
@@ -64,12 +73,12 @@ export async function membershipHousehold(
     .where(
       and(
         eq(schema.householdMembers.clerkUserId, clerkUserId),
-        isNull(schema.householdMembers.deletedAt),
-        // 🔴 AND SO IS THE HOUSEHOLD. Without this a member of a SOFT-DELETED household still
-        // resolves a working scope and can read its profiles — the exact thing TEN-1 extracted
-        // `liveHouseholdIds` to prevent, whose docblock calls `deleted_at IS NULL` "the load-bearing
-        // conjunct". The first version of this function lost it; `db:verify` now proves both halves.
-        isNull(schema.households.deletedAt),
+        // 🔴 The member row AND THE HOUSEHOLD live. Without the second, a member of a SOFT-DELETED
+        // household still resolves a working scope and can read its profiles — the exact thing TEN-1
+        // extracted `liveHouseholdIds` to prevent, whose docblock calls `deleted_at IS NULL` "the
+        // load-bearing conjunct". The first version of this function lost it; `db:verify` now proves
+        // both halves.
+        isLiveMembership(),
       ),
     )
     // An AMBIGUITY PROBE, not a pick, and deliberately no ORDER BY. `LIMIT 1` would silently choose

@@ -1,11 +1,13 @@
 diff --git a/packages/db/src/erasure/graph.ts b/packages/db/src/erasure/graph.ts
+index 2e4ce5a8..f03724ec 100644
 --- a/packages/db/src/erasure/graph.ts
 +++ b/packages/db/src/erasure/graph.ts
-@@ -212,6 +212,6 @@
+@@ -246,7 +246,7 @@ export const NON_ABORTING_EDGES = [
    { fk: 'entries_prescription_id_prescriptions_id_fk', guard: 'g' },
    { fk: 'entry_set_quantities_entry_set_id_entry_sets_id_fk', guard: 'cascade' },
    { fk: 'entry_sets_entry_id_entries_id_fk', guard: 'cascade' },
 -  { fk: 'sessions_workout_id_workouts_id_fk', guard: 'f' },
 +  { fk: 'sessions_workout_id_workouts_id_fk', guard: 'cascade' },
    { fk: 'workouts_copied_from_workout_id_workouts_id_fk', guard: 'e' },
- ] as const;
+ ] as const satisfies readonly {
+   fk: string;

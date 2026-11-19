@@ -207,19 +207,29 @@ date,weight_lb,context,notes
 `context` observed: `morning` only; README also allows `pre-practice` / `post-practice` / `random`.
 Gaps are normal — **not every day has a row; do not backfill.**
 
-## checkins (header-only in reality)
+## checkins — one row per logged check-in (FAM-1 14b)
 
 ```
-date,stance,ladder,bridge,mobility,pressure,reaction,shot,notes
-2026-05-04,3min,4,10,5,5,7/10,15,
-2026-05-06,,,,,,,,rest day
+date,activity,metric,value,unit,notes
+2026-11-16,wrestling-practice,practice-minutes,90,min,
+2026-11-16,calisthenics,pushups,25,count,
+2026-11-16,rice-bucket,,1,bool,
+2026-11-16,wake,,06:52,timing,
 ```
 
-Header verbatim from the real (empty) files; rows constructed from the `/routine-checkin` skill spec.
-**These are strings, not integers** — `stance` carries its unit (`3min`), `reaction` is `7/10`,
-`pressure` is bare. `shot` counts toward the 10K goal. One row per day.
+The maintainer chose this long format (Q2, 2026-11-17); it replaced the legacy nine-column header,
+whose real files never carried a row. One row per **live entry with no movement that is not a
+bodyweight reading**, so each live entry of a month lands in exactly one of the three files
+(`db:verify` proves it). The old check-in rows are included: their metrics are written by key.
 
-Rice-bucket, drill-your-moves, splits and Brain Rep have **no columns** — they ride in `notes` or nowhere.
+- **`activity`** is the activity's key and **`metric`** its metric's key, with `_` written as `-`;
+  `metric` is empty for a bare habit or Wake.
+- **`value`** is the stored number, else its text, else empty. A **`timing`** value (Wake, minutes after
+  local midnight) is written as `HH:MM` local time; one that is not a whole minute of one day is
+  written as its raw number.
+- **`unit`** is the stored unit code (`min`, `count`, `bool`, `timing`), never a load spelling. A done
+  habit is `1` with unit `bool`. A 1–10 rating (`pressure`, `reaction`) is its number with unit `count`.
+- Rows go in date order, then the order they were logged.
 
 ## calisthenics (proposed; the app defines it)
 
