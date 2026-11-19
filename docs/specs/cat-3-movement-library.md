@@ -617,11 +617,11 @@ none.
 
 ## Lanes
 
-| Lane              | Owns alone                                                                                                | Reads             | Exit                                               |
-| ----------------- | --------------------------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------- |
-| A, catalog schema | `packages/db/scripts/verify/catalog.ts`; a new guide `movement-catalog.md` (the tables, the seed's rules) | C0a               | S1 to S6, E1 to E6                                 |
-| N, catalog data   | `packages/shared/src/catalog/data/`, a new guide `catalog-data.md`                                        | C0a               | D1 to D4, the launch gate                          |
-| B, catalog picker | `apps/web/components/movements/`, `apps/web/lib/movements/`, `movement-picker.md`                         | C0b-1, C30, C0b-2 | P1 to P10, P12 to P17 on the preview, then the app |
+| Lane              | Owns alone                                                                                                | Reads             | Exit                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------- |
+| A, catalog schema | `packages/db/scripts/verify/catalog.ts`; a new guide `movement-catalog.md` (the tables, the seed's rules) | C0a               | S1 to S6, E1 to E6 (A2-i's part, E1 to E3 and E5, built by lane P since 2026-11-19) |
+| N, catalog data   | `packages/shared/src/catalog/data/`, a new guide `catalog-data.md`                                        | C0a               | D1 to D4, the launch gate                                                           |
+| B, catalog picker | `apps/web/components/movements/`, `apps/web/lib/movements/`, `movement-picker.md`                         | C0b-1, C30, C0b-2 | P1 to P10, P12 to P17 on the preview, then the app                                  |
 
 The seam files are in the frontmatter comment; the board orders them.
 
