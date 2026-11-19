@@ -30,7 +30,7 @@ import {
   type RowField,
   type RowText,
   type RowWriteKind,
-  unitSuffix,
+  unitSpoken,
 } from './row-values';
 
 /**
@@ -448,15 +448,17 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     (unticked ? unticked.values : pending?.write === 'untick' ? (settled?.values ?? null) : null);
   const heldUnit = held ? otherUnitOf(item, held) : null;
   const heldQuantity = held && heldUnit ? slotQuantity(item, held.quantities) : undefined;
+  /** What the row held, in words ("27.5 pounds"): the line's, and a refused ✓'s (H9). */
+  const heldWas = heldQuantity ? spokenValues({ quantities: [heldQuantity] }) : null;
   const otherUnit =
-    heldUnit !== null && heldQuantity && item.unit && !shownError?.invalid
+    heldUnit !== null && heldWas !== null && item.unit && !shownError?.invalid
       ? {
           from: heldUnit,
           to: item.unit,
           unticked:
             logged === null && unticked && hasField
               ? {
-                  was: spokenValues({ quantities: [heldQuantity] }),
+                  was: heldWas,
                   canPutBack: sameText(text, textOf(item, unticked.values)),
                 }
               : null,
@@ -484,8 +486,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       showError({
         // Named with both units, so nobody types the old unit's number into the new unit's field.
         message:
-          read.problem === 'other_unit' && retypeFrom !== null && item.unit
-            ? DAY_COPY.retypeLoad(retypeFrom, unitSuffix(item.unit))
+          read.problem === 'other_unit' && heldWas !== null && item.unit
+            ? DAY_COPY.retypeLoad(heldWas, unitSpoken(item.unit))
             : TYPED_PROBLEM_COPY[read.problem],
         reload: false,
         counts: false,

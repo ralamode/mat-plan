@@ -18,12 +18,14 @@ import type { RowWriteKind, TypedProblem } from './row-values';
 export const DAY_COPY = {
   heading: 'Workouts',
   /**
-   * H9 (12d-ii): an un-ticked load logged in another unit must be typed again. Both units are
-   * named, so the old unit's number is not typed into the new unit's field ("Logged as 25 lb").
-   * "It", not "the weight": a distance or a count can change unit too.
+   * H9 (12d-ii): a ✓ refused on an un-ticked row whose load was logged in another unit, after
+   * something was typed over it. 🔴 **It asks for no conversion** (plan U1.2): it names what was
+   * logged, in words, and the way back (maintainer, orchestrator's chat, 2026-11-19, replacing
+   * #644's "This now logs in kg: enter it in kg, then ✓."). `was` is the held value in words
+   * ("27.5 pounds"); `to` the item's unit as a word (`''` for a plain count).
    */
-  retypeLoad: (was: string, unit: string) =>
-    `Logged as ${was}. This now logs in ${unit}: enter it in ${unit}, then ✓.`,
+  retypeLoad: (was: string, to: string) =>
+    `Logged as ${was} before the workout changed to ${to || 'a plain number'}. Clear what you typed and tap ✓ to put it back.`,
   /**
    * 12d-iii (D44, Form 1; the logged line is the UX panel's, approved by the maintainer, 2026-11-18):
    * the line on a row whose quantity was logged in another unit than the item's now. 🔴 **No

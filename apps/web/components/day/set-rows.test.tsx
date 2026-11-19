@@ -541,7 +541,11 @@ describe('after the program was edited (D7)', () => {
     expect(describedTexts(setTick(el(), 'DB bench press', 1))).not.toContain(line(false));
     // Both units named, so the old unit's number is not typed into the new unit's field.
     const load = setField(el(), 'DB bench press', 1, unitSpoken('kg'));
-    expect(within(el()).getByText(DAY_COPY.retypeLoad('27.5 lb', 'kg'))).toBeTruthy();
+    expect(
+      within(el()).getByText(
+        DAY_COPY.retypeLoad(spokenValues({ quantities: [lb(27.5)] }), unitSpoken('kg')),
+      ),
+    ).toBeTruthy();
     expect(load.getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(load);
     // No prescription shows in the field: an empty ✓ here is refused, not filled.

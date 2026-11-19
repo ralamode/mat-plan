@@ -5,3 +5,6 @@
   row, logged or un-ticked, says why, and asks nobody to convert: "Logged in pounds before the
   workout changed to kilograms. Ask whoever changed it to fix the load." Distance and count rows get
   the line and stay read-only. Plan: [fam-1-change-logged-unit.md](../plans/fam-1-change-logged-unit.md).
+  A ✓ refused on such a row after something was typed over it now reads "Logged as 27.5 pounds
+  before the workout changed to kilograms. Clear what you typed and tap ✓ to put it back."
+  _(maintainer, 2026-11-19, replacing 12d-ii's "This now logs in kg: enter it in kg, then ✓.")_
