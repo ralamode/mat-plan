@@ -160,8 +160,10 @@ path and **creating** the deliberate one.
       counts are the filtered ones, an empty kind or family is not there, and "Not sorted yet" is
       empty (no bare row passes a filter). **It opens itself on the FILTERED tree's rows**, so a
       filter that leaves `BROWSE_OPEN_AT_MOST` or fewer opens every kind and family. "Your custom
-      items (not filtered)" comes first, **folded however few there are** (P9, K25); the same key as
-      with no filter, so a tap on it carries across. Nothing fits: `COPY.noneFit` with Clear filters.
+      items (not filtered)" comes first, **folded however few there are** (P9, K25), under a key of its
+      own (`customFiltered`), so opening the custom items with no filter does not carry two dozen
+      open rows above the filtered results; a household item names both keys, so a tick opens
+      whichever is drawn. Nothing fits: `COPY.noneFit` with Clear filters.
       With no match at all under a filter, the list beneath is this one, custom items included (P10).
     - **Every group is a button inside its heading** (the APG disclosure, `Group`, the picker's only
       one since B3-ii: Today's program and the custom items too), never `<details>`:
@@ -172,8 +174,10 @@ path and **creating** the deliberate one.
       everything; a `seeded` latch holds the groups above every row ticked or current. It survives
       the filter panel, the takeover, a no-match query and clearing the search, and resets only when
       the sheet opens. **Today's program is a group in the same model**: open while any of it is not
-      on a card, and a selection in it seeds it, so a tick that puts the last one on a card does not
-      fold it under the thumb (what `FoldedSection`'s latch did). **A new selection reopens the groups above it even if the person closed one**
+      on a card or while it holds a ticked row (read live, so ids that arrive after the tick still
+      open it), and a multi-mode tick in it seeds it, so unticking does not fold it under the thumb
+      (what `FoldedSection`'s latch did). The current row (single mode) and a `reveal` do not open
+      it: their card is already there. **A new selection reopens the groups above it even if the person closed one**
       (its taps are forgotten), adjusted during render, so the row a caller focuses after a create is
       in that commit; unticking closes nothing. **`reveal`** (`{ id, revision }`) does the same for
       a row whose selection does not change (Select on an item already ticked, a new item not
@@ -181,13 +185,20 @@ path and **creating** the deliberate one.
       closed. Keys and ids are kind-qualified (`strength/core`, `mobility/core`).
     - **360px:** only the disclosure buttons indent (a kind `pl-3`, a family `pl-6`). Rows step in
       `ml-3` only from 400px (`min-[400px]:ml-3`): at 360px the name column keeps 194px in multi
-      mode with "How to", and at 200% text (195 CSS px) an indent would leave it a few pixels. A long
-      family label wraps inside its tap target, its count in a `shrink-0` span. `e2e/movement-picker.a11y.spec.ts`
-      opens a kind (from the keyboard) and a family at 360px, checks the filtered tree's headings,
-      and an open family at 200% text (no overlapping parts, no sideways scroll);
-      `picker-browse-open` and `picker-filter-browse` are the captures. ⚠️ At 200% text the name
-      column of a multi row with "How to" is about 30px at 360px (the row's own paddings, box and
-      "How to" scale with the text): it wraps, it does not overlap.
+      mode with "How to", and every pixel of indent is taken from it. A long family label wraps
+      inside its tap target, its count in a `shrink-0` span (about 128px for the label at 200% text).
+    - 🔴 **Large text and zoom (WCAG 1.4.4): a row stacks "How to" under its name** when its list
+      is narrower than `@xs` (the list is an `@container`; the row `@max-xs:flex-col`, the empty
+      spacer `@max-xs:hidden`). Side by side at 200% text the paddings, box and "How to" all scale,
+      and the name column would be about 30px, a letter per line. Stacked it is about 174px at 200%
+      text on a 360px phone, and about 101px on a page zoomed to 195 CSS px; at 360px and 100% text
+      the list is 328px, so the row stays one line at 194px.
+    - **e2e** (`e2e/movement-picker.a11y.spec.ts`): a kind (from the keyboard) and a family at
+      360px; the filtered tree's headings; and the open Squats family at 200% text and at 195 CSS
+      px: no text-bearing span wider than its box, Goblet squat's name at least 120px (90 at 195),
+      "How to" under the name, the family's label ending before its count, nothing in the dialog
+      wider than its box. (Not `expectNoHorizontalOverflow`: the page under the fixed sheet cannot
+      scroll sideways.) `picker-browse-open` and `picker-filter-browse` are the captures.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
     union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
@@ -384,6 +395,8 @@ the footer's states and the source scans. They deliberately **do not** claim:
   directions: a regression that re-splits the query would not redden a single test;
 - `enterKeyHint="search"`, `maxLength` on paste, the browse tree's 360px and 200%-text width math
   and its disclosure buttons' 44px (`movement-picker.a11y.spec.ts`);
+- ⚠️ **Today's program's disclosure has no e2e step and no capture**: no caller passes
+  `todaysProgram` yet (the preview's item picker does not). Its first caller adds both;
 - Enter in the portaled input **not** submitting the form.
 
 A test plan that promised these would be claiming coverage it cannot deliver, which is the defect

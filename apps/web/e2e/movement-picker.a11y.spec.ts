@@ -1,5 +1,5 @@
 import { MODALITY_LABELS, MOVEMENT_FAMILY_LABELS } from '@mat-plan/shared';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { previewHref } from '../app/design/program/preview-registry';
 import { ITEM_PICKER_COPY, newItemLabel } from '../components/program-builder/builder-text';
@@ -42,38 +42,63 @@ const muscle = (page: Page, label: string) =>
 const group = (page: Page, label: string) =>
   page.getByRole('button', { name: new RegExp(`^${label}\\s*${COPY.choiceJoin.trim()}`) });
 
+/** The smallest name column a row may keep at 200 % text at 360px: about 174px stacked, 30 not. */
+const NAME_AT_LARGE_TEXT_MIN = 120;
+/** And on a page zoomed to 195 CSS px at 100 % text: about 101px stacked. */
+const NAME_AT_ZOOM_MIN = 90;
+
 /**
- * No two laid-out siblings of a flex or grid box overlap, anywhere under `container`: a group's
- * chevron, label and count, and a row's box, name and "How to". An `sr-only` span is absolutely
- * positioned, so it is out of the flow and not compared.
+ * An open family has room at large text or zoom (CAT-3 B3-ii; WCAG 1.4.4), checked on the Squats
+ * family and its Goblet squat row (which has "How to"):
+ *
+ * - no laid-out text-bearing span is wider than its box (an `sr-only` span is skipped);
+ * - the row's name keeps at least `minName` px: "How to" has dropped under it, not squeezed it;
+ * - the family's label ends before its count starts.
  */
-async function expectNoOverlapWithin(container: Locator, context: string) {
-  const overlaps = await container.evaluate((root) => {
-    const found: string[] = [];
-    for (const parent of [root, ...root.querySelectorAll('*')]) {
-      if (!/flex|grid/.test(getComputedStyle(parent).display)) continue;
-      const boxes = [...parent.children]
-        .filter((el) => !/absolute|fixed/.test(getComputedStyle(el).position))
-        .map((el) => ({ el, r: el.getBoundingClientRect() }))
-        .filter(({ r }) => r.width > 0 && r.height > 0);
-      for (const [i, a] of boxes.entries()) {
-        for (const b of boxes.slice(i + 1)) {
-          const apart =
-            a.r.right <= b.r.left + 1 ||
-            b.r.right <= a.r.left + 1 ||
-            a.r.bottom <= b.r.top + 1 ||
-            b.r.bottom <= a.r.top + 1;
-          if (!apart) {
-            const name = (el: Element) =>
-              `<${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 30)}"`;
-            found.push(`${name(a.el)} overlaps ${name(b.el)}`);
-          }
-        }
-      }
-    }
-    return found;
+async function expectRoomInFamily(page: Page, minName: number, context: string) {
+  const squats = page.getByRole('heading', { level: 5, name: MOVEMENT_FAMILY_LABELS.squat });
+  // The family's group: its heading and its rows.
+  const family = squats.locator('xpath=..');
+  await squats.scrollIntoViewIfNeeded();
+  const goblet = family.getByRole('checkbox', { name: /^Goblet squat\b/ });
+  await expect(goblet).toBeVisible();
+
+  const spilled = await family.evaluate((root) => {
+    const spans = [...root.querySelectorAll('span')].filter(
+      (el) =>
+        !el.classList.contains('sr-only') &&
+        (el.textContent ?? '').trim() !== '' &&
+        getComputedStyle(el).display !== 'inline',
+    );
+    return {
+      checked: spans.length,
+      wide: spans
+        .filter((el) => el.scrollWidth > el.clientWidth + 1)
+        .map(
+          (el) =>
+            `"${(el.textContent ?? '').trim().slice(0, 30)}" (${el.scrollWidth} > ${el.clientWidth})`,
+        ),
+    };
   });
-  expect(overlaps, `${context}: overlapping parts`).toEqual([]);
+  expect(spilled.wide, `${context}: text wider than its box`).toEqual([]);
+  // Non-vacuity: the family's label and count, and the rows' names and second lines.
+  expect(spilled.checked, `${context}: spans checked`).toBeGreaterThanOrEqual(4);
+
+  const name = await goblet.getByText('Goblet squat', { exact: true }).boundingBox();
+  expect(name?.width ?? 0, `${context}: the name column`).toBeGreaterThanOrEqual(minName);
+
+  // The family's button holds its chevron, its label, its count and an `sr-only` count.
+  const [label, count] = await squats.evaluate((heading) =>
+    [...heading.querySelectorAll('button > span:not(.sr-only)')].map((el) => {
+      const { left, right } = el.getBoundingClientRect();
+      return { left, right };
+    }),
+  );
+  expect(label && count, `${context}: the family's label and count`).toBeTruthy();
+  expect(label!.right, `${context}: the family's label runs into its count`).toBeLessThanOrEqual(
+    count!.left + 1,
+  );
+  await expectNoOverflowWithin(page.getByRole('dialog'), context);
 }
 
 test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ page }) => {
@@ -140,21 +165,27 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
     await check(page, 'browse with a filter');
   });
 
-  await test.step('an open family under a filter at 200 % text: no overlap, no sideways scroll', async () => {
+  await test.step('an open family under a filter at 200 % text, and at 195 CSS px', async () => {
+    // ⚠️ No `expectNoHorizontalOverflow` here: it measures the page under the fixed sheet, which
+    // cannot scroll sideways whatever the sheet holds (`sheet.tsx`, the 195 CSS px note).
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '200%';
     });
-    const squats = page.getByRole('heading', { level: 5, name: MOVEMENT_FAMILY_LABELS.squat });
-    // The family's group: its heading and its rows.
-    const family = squats.locator('xpath=..');
-    await squats.scrollIntoViewIfNeeded();
-    await expect(family.getByRole('checkbox', { name: /^Goblet squat\b/ })).toBeVisible();
-    await expectNoOverlapWithin(family, 'open family at 200 % text');
-    await expectNoOverflowWithin(page.getByRole('dialog'), 'open family at 200 % text');
-    await expectNoHorizontalOverflow(page, 'open family at 200 % text');
+    await expectRoomInFamily(page, NAME_AT_LARGE_TEXT_MIN, 'open family at 200 % text');
+    // "How to" sits under the name, not beside it.
+    const pick = page.getByRole('checkbox', { name: /^Goblet squat\b/ });
+    const howTo = page.getByRole('button', { name: COPY.howToFor('Goblet squat'), exact: true });
+    const [pickBox, howToBox] = [await pick.boundingBox(), await howTo.boundingBox()];
+    expect(howToBox!.y, '"How to" under the name at 200 % text').toBeGreaterThanOrEqual(
+      pickBox!.y + pickBox!.height - 1,
+    );
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '';
     });
+    // A page zoomed to 200 % on a 390px phone is 195 CSS px wide, at 100 % text.
+    await page.setViewportSize({ width: 195, height: NARROW_VIEWPORT.height });
+    await expectRoomInFamily(page, NAME_AT_ZOOM_MIN, 'open family at 195 CSS px');
+    await page.setViewportSize(NARROW_VIEWPORT);
   });
 
   await test.step('searching with a filter: custom items after the filtered matches', async () => {

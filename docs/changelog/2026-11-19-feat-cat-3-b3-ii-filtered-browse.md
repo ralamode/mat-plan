@@ -8,7 +8,8 @@
   the same filtered tree beneath it.
 
   Today's program and the custom items now use the picker's one disclosure (a button in its
-  heading), so the last `<details>` sections and their tick latch are gone; a tick that puts the
-  last prescribed movement on a card no longer folds Today's program under the thumb. The e2e spec
-  checks the filtered tree's headings and an open family at 200% text at 360px. No roadmap item
-  moved.
+  heading), so the last `<details>` sections and their tick latch are gone; a ticked row keeps
+  Today's program open. At large text or on a zoomed page, a row puts "How to" under the name
+  instead of squeezing the name to a letter per line (about 174px at 200% text on a phone). The e2e
+  spec checks the filtered tree's headings and an open family at 200% text and at 195 CSS px. No
+  roadmap item moved.
