@@ -521,8 +521,12 @@ export const WEEK_COPY = {
   addLabel: '+ Label',
   editLabel: 'Edit label',
   noWorkouts: 'Make a workout first, then add it to days.',
-  /** `noWorkouts` while the workout pages don't exist (7b-i): the one way to get a workout is Copy. */
-  noWorkoutsCopyOnly: 'Copy a workout in from another program; writing one isn’t in the app yet.',
+  /**
+   * `noWorkouts` while the workout pages don't exist (7b-i). True whether or not another program has a
+   * workout to copy: a household's first program has none.
+   */
+  noWorkoutsCopyOnly:
+    'Writing a workout isn’t in the app yet. To use one from another program, open that program and choose “Copy to…” on the workout.',
   stale:
     'This week was changed somewhere else. It now shows the latest; your last change wasn’t saved.',
   labelPlaceholder: 'e.g. Morning',

@@ -48,13 +48,10 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   For each exercise in a workout: its instructions and rest note, the name you give a group of
   exercises done together, and the targets you set (sets, reps, and a weight, time, distance or
   count). These belong to the household, so removing one athlete does not
-  remove them; deleting the household does. A movement name someone in your household types while
-  building a program is added to the list that anyone signed in to your household picks from, and it
+  remove them; deleting the household does. Once adding a movement of your own is in the app, a name someone in your household types there is added to the list that anyone signed in to your household picks from, and it
   stays in that list whether or not any program still uses it. It can't be renamed or removed in the
   app. Please type only the name of an exercise, never a person's name or anything about a child.
-  In the builder, an exercise you remove from a workout or swap for another, a target you clear, a
-  workout you save with nothing in it, and a workout taken off a day of the week or moved to another
-  day (with its label) are hidden, not erased, and they pile up: nothing in the app can show,
+  In the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so, once the workout screen is in the app, will be an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,
   restore, export or erase them, and they stay until the program or the household is removed.
   **Who is on which program**: which athlete is on it, from which day and through which day, and on
   which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
@@ -316,8 +313,7 @@ point is held for 3 days afterwards. If an adult athlete is affected, they are t
 cancel it. What athletes logged keeps its names: a workout's name as it was on the day, the movement
 names, the targets as they were prescribed and the name of a group of exercises stay on their logs,
 so a movement something logged still uses is not removed. The athletes' record of being on a removed
-program, and the targets set for them on it, are deleted with it, and their logs no longer count
-toward that program in a per-program report. How it is done is in the public
+program, and the targets set for them on it, are deleted with it, and their logs no longer count toward that program or workout in a per-program report. How it is done is in the public
 runbook, "Remove one program, workout or typed item on request".
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
