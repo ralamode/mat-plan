@@ -1229,9 +1229,9 @@ async function verifyHiddenHouseholdErased(): Promise<void> {
 
 // ── the guarded-write timeouts hold inside a transaction, and refuse to run outside one ───────────
 async function verifyTimeoutsHold(): Promise<void> {
-  // Every migration SETs lock_timeout and statement_timeout for the session, and PGlite has one
-  // session, so before this proof the session already holds the very values setLocalTimeouts sets.
-  // Without the reset below, a setLocalTimeouts that set nothing would still read them back and pass.
+  // The last migration and the seed leave the session at lock 5s and statement 60s, the very values
+  // setLocalTimeouts sets, and PGlite has one session. Without the reset below, a setLocalTimeouts
+  // that set nothing would still read them back and pass.
   const session = async (ex: Pick<typeof db, 'execute'>) =>
     rowsOf<{ lock: string; statement: string; held: boolean }>(
       await ex.execute(sql`
@@ -1246,10 +1246,11 @@ async function verifyTimeoutsHold(): Promise<void> {
   );
   try {
     await rolledBack(async (tx) => {
-      // The guard for this proof itself: it must start from settings setLocalTimeouts does not set.
-      assert.equal(
-        (await session(tx)).held,
-        false,
+      // The guard for this proof itself: EACH setting starts from a value setLocalTimeouts does not set.
+      const start = await session(tx);
+      assert.deepEqual(
+        [start.lock, start.statement],
+        ['0', '0'],
         'PRIV-3 2a: the timeouts proof starts from reset settings',
       );
       await assert.doesNotReject(
@@ -1262,11 +1263,12 @@ async function verifyTimeoutsHold(): Promise<void> {
         'PRIV-3 2a: inside the transaction both timeouts read back as set',
       );
     });
+    // The guard for the outside-transaction case: it, too, must start from reset settings.
     const after = await session(db);
     assert.deepEqual(
       [after.lock, after.statement],
       ['0', '0'],
-      'PRIV-3 2a: a rolled-back transaction leaves the session timeouts as they were',
+      'PRIV-3 2a: the outside-transaction case starts from reset settings',
     );
     await assert.rejects(
       setLocalTimeouts(db, '60s'),
