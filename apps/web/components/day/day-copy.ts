@@ -123,13 +123,22 @@ export const PROGRAM_COPY = {
   orderStale: `${STALE} Here are the programs now.`,
   done: DAY_COPY.done,
   switcher: 'Switch athlete',
-  notYet: 'Not on a program yet.',
+  /**
+   * No CURRENT program (`never`): "yet" was false for an athlete taken off their last program, and
+   * no fourth state is added for one word (D46; maintainer, 2026-11-19). The key keeps its name.
+   */
+  notYet: 'Not on a program.',
   /** `notYet`'s second sentence, only on a day that can be logged (maintainer, 2026-11-17). */
   notYetLogHere: 'Bodyweight and practice log here.',
   notYetPutOn: (athlete: string) => `Put ${athlete} on a program to see their workouts.`,
   /** The Programs page's own heading, so the link and the page it opens cannot drift. */
   programs: BUILDER_COPY.programs,
   notThisDay: 'Not on a program on this day.',
+  /**
+   * Today, for an athlete whose program starts tomorrow (`startsTomorrow`; D46, maintainer,
+   * 2026-11-19): after a parent chooses Tomorrow, "not on a program on this day" read as a failure.
+   */
+  startsTomorrow: 'Starts on a program tomorrow.',
   /**
    * A future day (look-ahead), placed by the page in place of the read-only notice: v12's words
    * (`index.html:2605`; maintainer, 2026-11-17). A day that has not happened is not a missed one.
