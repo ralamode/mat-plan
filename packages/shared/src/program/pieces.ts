@@ -64,8 +64,12 @@ import {
  *
  * It changes nothing for an id the app made: `newId`, `crypto.randomUUID` and Postgres all write
  * lower case.
+ *
+ * 🔴 **An alias, with no fold of its own.** The fold is on one line, in `../id.ts`. A second
+ * `.toLowerCase()` here would hide a mutation of that line, and that line would hide a mutation
+ * of this one (`db:mutations` patch 142 found it).
  */
-export const lowerCaseUuidSchema = uuidSchema.toLowerCase();
+export const lowerCaseUuidSchema = uuidSchema;
 
 const ONE_LINE = 'one line of text, with no control characters';
 /**
