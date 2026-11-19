@@ -17,6 +17,7 @@ import {
   type RowWrite,
   SEED_ACTIVITY_TYPE_KEYS,
   METRIC_KEYS,
+  PRACTICE_UNIT,
   SEED_METRIC_KEYS,
   SESSION_TYPE,
   TRACKING_TYPE,
@@ -27,7 +28,7 @@ import {
 } from '@mat-plan/shared';
 import { buildStrengthLog, STRENGTH_LOG_HEADER } from '@mat-plan/shared/csv';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import {
@@ -743,7 +744,7 @@ async function verifyExport(): Promise<void> {
       await checkin({
         activity: ACTIVITY_TYPE_KEYS.wrestling_practice,
         metric: METRIC_KEYS.practice_minutes,
-        unit: 'min',
+        unit: PRACTICE_UNIT,
         value: '90',
       });
       await checkin({
@@ -790,18 +791,38 @@ async function verifyExport(): Promise<void> {
         kind: ENTRY_KIND.bodyweight,
       });
 
-      const args = {
-        profilePublicId: f.athlete.publicId,
-        month: DAY.slice(0, 7),
-        scope: f.H_SCOPE,
-      };
+      // Planted at both edges of the month, so a dropped month bound copies one into the file.
+      const month = DAY.slice(0, 7);
+      assert.equal(month, '2026-11', 'FAM-1 14b: the edge plants assume DAY is in November 2026');
+      const edges = [
+        await checkin({
+          activity: ACTIVITY_TYPE_KEYS.rice_bucket,
+          unit: 'bool',
+          value: '1',
+          day: '2026-10-31',
+        }),
+        await checkin({
+          activity: ACTIVITY_TYPE_KEYS.rice_bucket,
+          unit: 'bool',
+          value: '1',
+          day: '2026-12-01',
+        }),
+      ];
+      const args = { profilePublicId: f.athlete.publicId, month, scope: f.H_SCOPE };
       const strength = new Set((await strengthMonthRows(asDb(tx), args)).map((r) => r.entryId));
       const bodyweight = await bodyweightMonthRows(asDb(tx), args);
       const checkins = await checkinMonthRows(asDb(tx), args);
       const live = await tx
         .select({ id: schema.entries.id })
         .from(schema.entries)
-        .where(and(eq(schema.entries.profileId, f.athlete.id), isNull(schema.entries.deletedAt)));
+        .where(
+          and(
+            eq(schema.entries.profileId, f.athlete.id),
+            isNull(schema.entries.deletedAt),
+            gte(schema.entries.activityDate, `${month}-01`),
+            lt(schema.entries.activityDate, '2026-12-01'),
+          ),
+        );
       const files = (id: number) =>
         [
           strength.has(id),
@@ -824,6 +845,11 @@ async function verifyExport(): Promise<void> {
         ],
         [[weighInId, planted.id].sort(), false, false],
         'FAM-1 14b: both bodyweight rows are in its file, none in check-ins, and a hidden one in none',
+      );
+      assert.deepEqual(
+        checkins.filter((r) => edges.some((e) => e.id === r.entryId)).map((r) => r.date),
+        [],
+        'FAM-1 14b: a check-in from the month before or after is not in this month’s file',
       );
     },
     '14b',

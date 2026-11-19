@@ -280,6 +280,11 @@ export function foldStrengthMonth(rows: readonly StrengthMonthRow[]): FoldedStre
  * check-ins (the schema's own test is the metric, `BODYWEIGHT_DAY_UNIQUE_INDEX`). One conjunct for both
  * reads; never NULL (`activity_types.key` is NOT NULL through the inner join, and the metric arm is
  * `IS NOT DISTINCT FROM`), so the check-ins side is plain `not(bodyweightEntry())`.
+ *
+ * ⚠️ Wider than the app's other bodyweight reads (`last-bodyweight.ts`, the day page's totals), which
+ * key on the metric alone: the two agree on every row today, since every weigh-in carries the metric
+ * (migration 0002's backfill). The export takes the wider test on purpose, so a weigh-in that ever
+ * lost its metric still leaves in the bodyweight file and never in check-ins (plan, review B10).
  */
 export function bodyweightEntry() {
   return or(
@@ -329,6 +334,9 @@ export function checkinMonthRows(
     )
     .orderBy(asc(schema.entries.activityDate), asc(schema.entries.id));
 }
+
+/** One row of `checkinMonthRows`, for tests that mock it (typed, so the shape cannot drift). */
+export type CheckinMonthRow = Awaited<ReturnType<typeof checkinMonthRows>>[number];
 
 /** Every bodyweight reading in one month. */
 export function bodyweightMonthRows(

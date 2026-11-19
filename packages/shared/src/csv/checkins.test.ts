@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
+import { ACTIVITY_TYPE_KEYS } from '../catalog-activity-types';
+import { METRIC_KEYS } from '../catalog-metrics';
+import { PRACTICE_UNIT } from '../practice-shapes';
 import { buildCheckins, CHECKINS_HEADER, type CheckinsRow, minutesToHhMm } from './checkins';
 
 const HEADER = `${CHECKINS_HEADER.join(',')}\n`;
 const row = (o: Partial<CheckinsRow> = {}): CheckinsRow => ({
   date: '2026-11-16',
-  activity: 'wrestling_practice',
-  metric: 'practice_minutes',
+  activity: ACTIVITY_TYPE_KEYS.wrestling_practice,
+  metric: METRIC_KEYS.practice_minutes,
   valueNum: '90',
   valueText: null,
-  unit: 'min',
+  unit: PRACTICE_UNIT,
   notes: null,
   ...o,
 });
@@ -27,22 +30,41 @@ describe('buildCheckins — one row per logged check-in (FAM-1 14b)', () => {
   it('tells calisthenics’ metrics apart', () => {
     expect(
       body([
-        row({ activity: 'calisthenics', metric: 'pushups', valueNum: '25', unit: 'count' }),
-        row({ activity: 'calisthenics', metric: 'pullups', valueNum: '6', unit: 'count' }),
+        row({
+          activity: ACTIVITY_TYPE_KEYS.calisthenics,
+          metric: METRIC_KEYS.pushups,
+          valueNum: '25',
+          unit: 'count',
+        }),
+        row({
+          activity: ACTIVITY_TYPE_KEYS.calisthenics,
+          metric: METRIC_KEYS.pullups,
+          valueNum: '6',
+          unit: 'count',
+        }),
       ]),
     ).toBe('2026-11-16,calisthenics,pushups,25,count,\n2026-11-16,calisthenics,pullups,6,count,\n');
   });
 
   it('writes a habit done as its stored 1 with unit bool, and a bare habit with no metric', () => {
     expect(
-      body([row({ activity: 'rice_bucket', metric: null, valueNum: '1', unit: 'bool' })]),
+      body([
+        row({
+          activity: ACTIVITY_TYPE_KEYS.rice_bucket,
+          metric: null,
+          valueNum: '1',
+          unit: 'bool',
+        }),
+      ]),
     ).toBe('2026-11-16,rice-bucket,,1,bool,\n');
   });
 
   it('writes Wake (timing, minutes since local midnight) as HH:MM', () => {
-    expect(body([row({ activity: 'wake', metric: null, valueNum: '412', unit: 'timing' })])).toBe(
-      '2026-11-16,wake,,06:52,timing,\n',
-    );
+    expect(
+      body([
+        row({ activity: ACTIVITY_TYPE_KEYS.wake, metric: null, valueNum: '412', unit: 'timing' }),
+      ]),
+    ).toBe('2026-11-16,wake,,06:52,timing,\n');
   });
 
   it('quotes a note the RFC 4180 way', () => {
@@ -63,6 +85,9 @@ describe('minutesToHhMm — a clock, or the raw number when it is not one', () =
   it.each([
     ['0', '00:00'],
     ['412', '06:52'],
+    // The shape Postgres returns for `numeric(8,3)`.
+    ['412.000', '06:52'],
+    ['1440.000', '1440'],
     ['1439', '23:59'],
     ['1440', '1440'],
     ['412.5', '412.5'],

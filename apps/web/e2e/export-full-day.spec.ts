@@ -173,6 +173,10 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
     '',
   ].join(',');
   expect(checkins.lines).toContain(practiceRow);
+  // …and this day's weigh-in is in the bodyweight file only, never here (bodyweight is privileged).
+  expect(
+    checkins.lines.filter((l) => l.startsWith(`${day},`) && l.includes(PROBE_BODYWEIGHT)),
+  ).toEqual([]);
 
   // ── 7. Determinism ────────────────────────────────────────────────────────────
   // `buildZip` zeroes the DOS date/time fields specifically so this holds; a re-introduced `mtime`

@@ -35,7 +35,8 @@ vi.mock('./profiles', () => ({
   getProfileByPublicId: async () => ({ publicId: 'p-1', name: 'A' }),
 }));
 
-import type { StrengthMonthRow } from '@mat-plan/db';
+import type { CheckinMonthRow, StrengthMonthRow } from '@mat-plan/db';
+import { ACTIVITY_TYPE_KEYS, METRIC_KEYS, PRACTICE_UNIT } from '@mat-plan/shared';
 import { readCsvLine } from '@mat-plan/shared/csv';
 
 const { buildExportEntries } = await import('./export');
@@ -142,23 +143,26 @@ describe('buildExportEntries — the frozen value wins over the live program', (
 describe('buildExportEntries — the check-ins file (FAM-1 14b)', () => {
   it('writes each logged check-in, and never the read’s entry id', async () => {
     strengthMonthRows.mockResolvedValue([]);
-    checkinMonthRows.mockResolvedValue([
-      {
-        entryId: 4242,
-        date: '2026-03-02',
-        activity: 'wrestling_practice',
-        metric: 'practice_minutes',
-        valueNum: '90',
-        valueText: null,
-        unit: 'min',
-        notes: null,
-      },
-    ]);
+    const row: CheckinMonthRow = {
+      entryId: 4242,
+      date: '2026-03-02',
+      activity: ACTIVITY_TYPE_KEYS.wrestling_practice,
+      metric: METRIC_KEYS.practice_minutes,
+      valueNum: '90.000',
+      valueText: null,
+      unit: PRACTICE_UNIT,
+      notes: null,
+    };
+    checkinMonthRows.mockResolvedValue([row]);
     const entries = await buildExportEntries('p-1');
     const file = entries.find((e) => e.path.includes('checkins'))!.content;
     expect(file).toBe(
       'date,activity,metric,value,unit,notes\n2026-03-02,wrestling-practice,practice-minutes,90,min,\n',
     );
     expect(file).not.toContain('4242');
+    expect(checkinMonthRows.mock.calls[0][1]).toMatchObject({
+      profilePublicId: 'p-1',
+      month: '2026-03',
+    });
   });
 });

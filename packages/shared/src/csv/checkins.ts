@@ -1,3 +1,5 @@
+import type { Unit } from '../units';
+
 import { csvToken } from './columns';
 import { csvFile, csvRow } from './row';
 import { formatNumeric } from './value';
@@ -37,9 +39,12 @@ export function minutesToHhMm(raw: string): string {
   return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 }
 
+/** The unit a clock reading is stored in (Wake). */
+const TIMING_UNIT = 'timing' satisfies Unit;
+
 function valueOf(row: CheckinsRow): string {
   if (row.valueNum !== null) {
-    return row.unit === 'timing' ? minutesToHhMm(row.valueNum) : formatNumeric(row.valueNum);
+    return row.unit === TIMING_UNIT ? minutesToHhMm(row.valueNum) : formatNumeric(row.valueNum);
   }
   return row.valueText ?? '';
 }

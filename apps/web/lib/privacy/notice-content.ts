@@ -1838,7 +1838,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, each habit marked done,\neach calisthenics or conditioning count, the older check-ins, and any wake-up time logged (as a\ntime of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
+        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",

@@ -22,6 +22,7 @@ import {
   METRIC_AGGREGATIONS,
   METRIC_DEFINITION_SEED_ROWS,
   METRIC_KEYS,
+  PRACTICE_UNIT,
   METRIC_VALUE_TYPES,
   MOVEMENT_PATTERNS,
   MOVEMENT_SEED_PUBLIC_IDS,
@@ -5216,23 +5217,16 @@ const aBwExportTarget = await insertBodyweightProbe({
 // (f) FAM-1 14b: a check-in for each household in that same March, so `checkinMonthRows` has a row to
 // wrongly find in both directions too.
 {
-  const [practice] = await db
-    .select({ id: schema.activityTypes.id })
-    .from(schema.activityTypes)
-    .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.wrestling_practice));
-  const [verifyProfile] = await db
-    .select({ id: schema.profiles.id })
-    .from(schema.profiles)
-    .where(eq(schema.profiles.publicId, VERIFY_PROFILE_PUBLIC_ID));
-  for (const profileId of [bwOwnerRow.id, verifyProfile.id]) {
+  const practiceId = await activityTypeIdByKey(ACTIVITY_TYPE_KEYS.wrestling_practice);
+  for (const profileId of [bwOwnerRow.id, verifyProfileRow.id]) {
     await db.insert(schema.entries).values({
       publicId: newId(),
       clientId: newId(),
       profileId,
       activityDate: '2026-03-05',
-      unit: 'min',
+      unit: PRACTICE_UNIT,
       valueNum: '60',
-      activityTypeId: practice.id,
+      activityTypeId: practiceId,
       metricKey: METRIC_KEYS.practice_minutes,
       status: ENTRY_STATUS.done,
     });
@@ -5300,7 +5294,7 @@ assert.equal(
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
 // `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
 // row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
-// adherence and programmed-day cards, and the three month reads behind the CSV export.
+// adherence and programmed-day cards, and the four month reads behind the CSV export.
 //
 // Each row names **its own pair of profiles**. The reads need different fixtures — adherence needs
 // ramp targets, the export reads need logged sessions, the program read needs a block — and one
