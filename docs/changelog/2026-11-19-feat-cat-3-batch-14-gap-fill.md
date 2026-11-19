@@ -7,8 +7,9 @@
   written in-house and approved by the maintainer row by row.
 
   The kip-up is "Learn with a coach present", and its steps name the coach. V-up gains the other
-  names "Jackknife sit-up" and "Jackknife" (an edit of a shipped entry, with its own approval line),
-  rather than a second entry for the same movement.
+  names "Jackknife sit-up" and "Jackknife", rather than a second entry for the same movement, and
+  Bench press gains "Barbell bench press" so a search for it finds the barbell lift first. Each is
+  an edit of a shipped entry, with its own approval line.
 
   This completes the library at 587 entries. The entries are in
   `packages/shared/src/catalog/data/batch-14.ts`, with their lines added to `shipped.json` and
