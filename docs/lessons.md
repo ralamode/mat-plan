@@ -396,6 +396,14 @@ access token`, which reads like a permissions problem with the repo. The cause w
   present or absent deterministically, pin the browser zone (`timezoneId`) so the local weekday is
   chosen, the same lever `screenshot --tz` uses. (V1-10)
 
+- **A role locator anchored on `"<name>,"` finds nothing: Chrome spaces out a row's stacked parts.**
+  → The picker row's accessible name joins its spans with an `sr-only` `", "`
+  (`movement-picker.tsx`), so jsdom and a read of the markup both give `"Box Jump, Reps"`. Chrome
+  builds the name with a space between flex children: `"Box Jump , Reps"`. `name: /^Box Jump,/`
+  passed review and timed out in CI (#652). → Anchor with `\s*` (`/^Box Jump\s*,/`), or locate by a
+  name that ends at a word boundary. Never trust a name derived from the markup for punctuation that
+  sits between block or flex children; check it in a browser. (FAM-1 7b-ii)
+
 - **`notFound()` route returns HTTP 200, not 404, so `expect(res.status()).toBe(404)` fails.** → The
   app is `force-dynamic` (nonce CSP), so Next **streams the 200 header before the RSC throws
   `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered
