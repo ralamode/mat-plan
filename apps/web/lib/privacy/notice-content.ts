@@ -1820,7 +1820,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.)"
+        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.) If a person's name was typed as a movement and your logs hold it, ask, and it is\nreplaced with a neutral name on that movement and on your household's logs; the logs themselves stay."
       }
     ]
   },
@@ -2059,7 +2059,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " First we tell you which athletes it affects, and offer a change that\ntouches nobody's data instead: a rename where one is possible; for a program, taking everyone off it; for a workout, taking\nit off the week. If you still want it removed, it is removed with no waiting period, and a restore\npoint is held for 3 days afterwards. If an adult athlete is affected, they are told first and can't\ncancel it. What athletes logged keeps its names: a workout's name as it was on the day, the movement\nnames, the targets as they were prescribed and the name of a group of exercises stay on their logs,\nso a movement something logged still uses is not removed. The athletes' record of being on a removed\nprogram, and the targets set for them on it, are deleted with it, and their logs no longer count toward that program or workout in a per-program report. How it is done is in the public\nrunbook, \"Remove one program, workout or typed item on request\"."
+        "text": " First we tell you which athletes it affects, and offer a change that\ntouches nobody's data instead: a rename where one is possible; for a program, taking everyone off it; for a workout, taking\nit off the week. If an adult athlete is affected, they are told first, can't cancel it, and are sent their own copy of their record of being on it and their targets; the removal waits until they confirm they have it, for at most 3 days. Otherwise it is removed with no waiting period. A restore point is held for 3 days afterwards. What athletes logged keeps its names: a workout's name as it was on the day, the movement\nnames, the targets as they were prescribed and the name of a group of exercises stay on their logs,\nso a movement something logged still uses is not removed. The athletes' record of being on a removed\nprogram, and the targets set for them on it, are deleted with it, and their logs no longer count toward that program or workout in a per-program report. How it is done is in the public\nrunbook, \"Remove one program, workout or typed item on request\"."
       }
     ]
   },

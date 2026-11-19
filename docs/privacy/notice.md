@@ -247,7 +247,8 @@ field, as above. Two things are worth saying plainly about every clear:
 
 There is still **no way to permanently remove one single logged item on demand**: the finest grain for
 removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
-on request.)
+on request.) If a person's name was typed as a movement and your logs hold it, ask, and it is
+replaced with a neutral name on that movement and on your household's logs; the logs themselves stay.
 
 ## Getting your data out
 
@@ -308,9 +309,7 @@ removed together, with the rest of the starting data, when the app is started fr
 **A program, a workout or a movement you typed can't be deleted in the app, but the household owner
 can ask and it is removed.** First we tell you which athletes it affects, and offer a change that
 touches nobody's data instead: a rename where one is possible; for a program, taking everyone off it; for a workout, taking
-it off the week. If you still want it removed, it is removed with no waiting period, and a restore
-point is held for 3 days afterwards. If an adult athlete is affected, they are told first and can't
-cancel it. What athletes logged keeps its names: a workout's name as it was on the day, the movement
+it off the week. If an adult athlete is affected, they are told first, can't cancel it, and are sent their own copy of their record of being on it and their targets; the removal waits until they confirm they have it, for at most 3 days. Otherwise it is removed with no waiting period. A restore point is held for 3 days afterwards. What athletes logged keeps its names: a workout's name as it was on the day, the movement
 names, the targets as they were prescribed and the name of a group of exercises stay on their logs,
 so a movement something logged still uses is not removed. The athletes' record of being on a removed
 program, and the targets set for them on it, are deleted with it, and their logs no longer count toward that program or workout in a per-program report. How it is done is in the public
