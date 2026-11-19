@@ -1259,6 +1259,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   behind Beta 0 and ideally SCHED-1.
 
 - **PUB-1 — a public household page, with per-field visibility.** _(captured 2026-10-07, not scoped.)_
+  ⚠️ **Bodyweight has a rule already** ([`ID-1`](#id-1), the maintainer, 2026-11-19): it never
+  appears on a child's feed, and an adult may choose to publish their own. This row's plan says
+  how it keeps that.
   Visit a household at a public, human-meaningful address and see only what it chose to publish —
   a streak, or the movements of a workout without the logged values, or more. Needs its **own
   deliberately-unauthenticated namespace** (`/h/<handle>`), not the private `/p/<profileId>` address;
@@ -1291,6 +1294,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   athletes in other households, get notified of their streaks, and optionally compete on them. The
   cross-household grant and the notification system are **the same mechanism `COACH-1` needs** (below)
   and should be designed once, not twice.
+  ⚠️ **Bodyweight has a rule already** ([`ID-1`](#id-1), the maintainer, 2026-11-19): it never
+  appears on a child's feed, and an adult may choose to publish their own. This row's plan says
+  how it keeps that.
   **What it needs settled before any plan:** a streak becomes **a scoreboard rule people can game** the
   moment it is comparable, which makes [ADR 0007](./decisions/0007-scheduling-model.md)'s nothing-due-day
   rule load-bearing — and that rule has to be settled before the first verdict row is written, because
@@ -1396,6 +1402,23 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
     A plan for AUTH-1 1c, or any later auth chunk, answers these six in its review-response log.
 
+  - **Two rules the maintainer has already set for this row** (2026-11-19, in the orchestrator's
+    chat, on FAM-1's export follow-up). Each is a requirement, not a design:
+    - **Who may export.** "They can only export their own data, if they are an adult, otherwise
+      refuse unless it's the owner". Once a login can be linked to its own athlete, an adult member
+      exports their own athlete's data and nothing else, any other login that is not the owner's
+      is refused, and the owner exports everything. **Until then only the household's owner
+      exports**, and every other login is refused (FAM-1's export follow-up, lane E).
+      ⚠️ "If they are an adult" is a permission that turns on age, which keep-open item 5 keeps
+      out of every auth chunk until this row. So the adult half arrives **with** this row's one
+      policy, never before it, and this row must say what makes a login an adult's and which
+      athlete is its own.
+    - **Bodyweight, feeds and sharing.** "Shouldn't any member of the household be ok to see it?
+      This shouldn't go on a child's feed but and adult could choose to publish." Inside the app,
+      any member of the household may see a weigh-in. **Bodyweight never appears on a child's
+      feed.** An adult may choose to publish their own. No feed exists and none has a row yet;
+      SOCIAL-1, PUB-1, COACH-1 and any row that adds a feed or shares an athlete's data take
+      this rule, and their plans say how they keep it.
   - **Depends on** AUTH-1, and comes **before** COACH-1, SOCIAL-1 and PUB-1, which need the same
     relationship. Birthdate is the most sensitive field this app would start using, so the
     `privacy-reviewer` and `security-reviewer` lenses apply to every PR, plus a legal check before
