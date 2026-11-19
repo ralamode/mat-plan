@@ -14,11 +14,12 @@ import {
   SESSION_TYPE,
   TRACKING_TYPE_FIELDS,
 } from '@mat-plan/shared';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../../client';
 import { schema } from '../../client';
+import { ENTRY_CLIENT_ID_UNIQUE_INDEX, ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX } from '../../schema';
 import { prescriptionTerms } from '../../queries/day/prescription-terms';
 import {
   programRowOf,
@@ -30,9 +31,10 @@ import { rowDayOpen } from '../../queries/day/day-window';
 import { isOnProgramThatDay, isScheduledOn } from '../../queries/day/scheduled';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
-import { hideEntries, restoreHidden } from '../hide';
+import { hideEntries, restoreHidden, UNHIDE } from '../hide';
 import { athleteTemplateBlockIn, workoutIsLive } from '../ownership';
 import { insertEntrySetRows } from '../session-rows';
+import { isUniqueViolationOn } from '../unique-violation';
 import {
   type ById,
   fitsItsType,
@@ -334,6 +336,17 @@ export async function logRow(
       ).id;
     }
 
+    // The columns frozen on the entry when it is logged (D7), the same on an insert and a revive (S2):
+    // the unit, the movement's name, the CURRENT group's superset row and the prescription as rendered.
+    // `''` is a real snapshot (a Check) and stays `''`.
+    const frozen = {
+      unit: entryUnitFor(trackingType, unit),
+      movementName: movement.name,
+      supersetId,
+      supersetOrder: supersetId === null ? null : prescription.supersetOrder,
+      prescribedSnapshot: text,
+    } satisfies Partial<typeof schema.entries.$inferInsert>;
+
     // The entry. Bare `ON CONFLICT DO NOTHING`: the `client_id` and the row arbiter
     // (`ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX`) both skip it, and the branch below asks which.
     const insertEntry = () =>
@@ -344,22 +357,107 @@ export async function logRow(
           clientId: write.clientId,
           profileId,
           activityDate: write.day,
-          unit: entryUnitFor(trackingType, unit),
-          movementName: movement.name,
           activityTypeId: args.activityTypeId,
           movementId: prescription.movementId,
           sessionId,
-          supersetId,
-          supersetOrder: supersetId === null ? null : prescription.supersetOrder,
           prescriptionId: prescription.id,
           prescriptionSet: write.set,
-          // What the row was logged against, frozen (D7). `''` is a real value (a Check) and stays
-          // `''`. The quantities are the target's, so a range renders as the day page shows it.
-          prescribedSnapshot: text,
+          ...frozen,
         })
         .onConflictDoNothing()
         .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
-    let [entry] = await insertEntry();
+
+    /**
+     * 🔴 **The revive (FAM-1 11c-ii, D35; plan 11c R1–R8).** A ✓ under a new `clientId` on a slot whose
+     * latest entry is this athlete's own HIDDEN one brings that entry back with this ✓'s numbers,
+     * instead of inserting a second entry beside it. Answers the revived entry, a `RowResult` the
+     * classifier gave, or `null` (no revive: insert as 11b does).
+     *
+     * - **R2, the lock, scoped to the athlete:** `programRowOf` (this profile, this day) AND the slot,
+     *   `FOR UPDATE`. A sibling's or another household's entry planted in this session (runbook state
+     *   (i)) is never seen, so never revived.
+     * - **R3, decided from the locked rows:** any live one means no revive (11b's insert and its
+     *   arbiter answer: `slot_taken`, or this `clientId`'s own row). Otherwise the most recently
+     *   hidden: `deleted_at` DESC, then `id` DESC, sorted HERE, after the lock (Postgres sorts a
+     *   locking query before it locks, so an `ORDER BY deleted_at` would sort on pre-lock values).
+     *   ⚠️ JS `Date` holds milliseconds and the column microseconds, so two hides under 1 ms apart tie
+     *   and fall to `id DESC`; unreachable in practice, since a ✓ must come between two un-ticks.
+     * - **R4, in a savepoint:** `UNHIDE` (which clears `hide_reason` in the same UPDATE, so a revive
+     *   after Clear day passes `entries_hide_reason_hidden_check`), this ✓'s `clientId`, the columns
+     *   frozen again, `updated_at`. The UPDATE repeats the profile conjunct (defence in depth; R2's is
+     *   the one mutation 342 proves). Its 0-row arm (someone restored it first, so insert) is
+     *   unreachable while R2's lock is held: defence that matters only if the lock is removed. A `23505` on
+     *   `uq_entries_client_id`: this `clientId` landed elsewhere meanwhile, so the classifier answers.
+     *   On the row arbiter: a live row now holds the set, so the insert answers. The entry's live set
+     *   is soft-deleted, and this ✓'s set is written below as for any ✓, so a unit change (lb → kg)
+     *   reaches the quantity row too.
+     * - **R8:** the un-hide stays here, module-private. `hide.ts` is the only module that HIDES; this
+     *   is the one other write of `entries.deleted_at`, and it only clears it, through `UNHIDE`.
+     */
+    const revive = async (): Promise<
+      { entry: { id: number; publicId: string } } | { answer: RowResult } | null
+    > => {
+      const slot = await tx
+        .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
+        .from(schema.entries)
+        .where(
+          and(
+            programRowOf(profileId, write.day),
+            programRowSlot(sessionId, prescription.id, write.set),
+          ),
+        )
+        .orderBy(asc(schema.entries.id))
+        .for('update', { of: schema.entries });
+      if (slot.some((row) => row.deletedAt === null)) return null;
+      const [pick] = slot
+        .filter((row): row is { id: number; deletedAt: Date } => row.deletedAt !== null)
+        .sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime() || b.id - a.id);
+      if (!pick) return null;
+      try {
+        const revived = await tx.transaction(async (sp) => {
+          const [row] = await sp
+            .update(schema.entries)
+            .set({ ...UNHIDE, clientId: write.clientId, ...frozen, updatedAt: sql`now()` })
+            .where(
+              and(
+                eq(schema.entries.id, pick.id),
+                isNotNull(schema.entries.deletedAt),
+                eq(schema.entries.profileId, profileId),
+              ),
+            )
+            .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
+          if (!row) return null;
+          await sp
+            .update(schema.entrySets)
+            .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+            .where(and(eq(schema.entrySets.entryId, row.id), isNull(schema.entrySets.deletedAt)));
+          return row;
+        });
+        return revived ? { entry: revived } : null;
+      } catch (error) {
+        if (isUniqueViolationOn(error, [ENTRY_CLIENT_ID_UNIQUE_INDEX])) {
+          const holder = await classifyRowHolder(tx, profileId, write);
+          if (holder.held) return { answer: await answerHolder(tx, holder) };
+          throw error;
+        }
+        if (isUniqueViolationOn(error, [ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX])) return null;
+        throw error;
+      }
+    };
+
+    /** Revive, else insert: one place for the first attempt and the retry. */
+    const place = async (): Promise<
+      { entry: { id: number; publicId: string } | undefined } | { answer: RowResult }
+    > => {
+      const revived = await revive();
+      if (revived) return revived;
+      const [inserted] = await insertEntry();
+      return { entry: inserted };
+    };
+
+    let placed = await place();
+    if ('answer' in placed) return placed.answer;
+    let entry = placed.entry;
 
     // Nothing inserted: the `client_id` is held (a concurrent first call), or the set is. Asked
     // after each miss, so a refusal is always answered, never thrown.
@@ -382,13 +480,14 @@ export async function logRow(
     if (!entry) {
       const answered = await explainMiss();
       if (answered) return answered;
-      // 🔴 **Neither held nor taken: retried ONCE** (lane S's #578 pattern). The insert and these
-      // reads are separate statements, so the entry that held the set can be un-ticked or cleared by
-      // another phone between them: nothing holds the set by the time it is read, and the same ✓
-      // inserts on a second try.
-      // ⚠️ **11b-interim:** the retry inserts a NEW entry. 11c-ii's revive (D35) sends it back through
-      // R2/R3 instead, so the un-ticked entry is brought back (plan 11c, § Proofs 11b's rewrite).
-      [entry] = await insertEntry();
+      // 🔴 **Neither held nor taken: retried ONCE** (lane S's #578 pattern). Since 11c-ii the revive's
+      // `FOR UPDATE` holds a live holder it read, so another phone's un-tick of THAT row waits; the
+      // window is now an entry committed after the lock's snapshot, which the skipped insert met and
+      // which is hidden by the time it is read. The retry goes back through the revive (plan 11c §
+      // Proofs 11b's rewrite), so that entry is brought back rather than a second one inserted.
+      placed = await place();
+      if ('answer' in placed) return placed.answer;
+      entry = placed.entry;
       if (!entry) {
         // A second miss is explained the same way (a duplicate request that won the retry, or a third
         // phone's ✓ in between) before anything throws.
