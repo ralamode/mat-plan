@@ -217,6 +217,13 @@ and panelled; the milestones order them.
   **Pillar:** Logging & Measurement. **Needs a spec section or plan** before code; PROG-1, Beta 1.
   ⚠️ _2026-11-14:_ **moves to Beta 0 in part**, as [FAM-1](./milestones/fam-1-family-program.md) step 3 (the type and the menu) and its
   d2 spec section. The activity convergence (`ACT-1`) stays Beta 1.
+  **After Beta 0, an eighth type: reps and distance** _(maintainer, 2026-11-19: "I think ultimately we
+  want reps + distance, but we can punt this for after beta 0 and just go distance for now")_. A
+  broad jump is prescribed as a number of jumps ("× 5") with a distance. Until then such a movement
+  is a **Distance** item.
+  ⚠️ **A type is set once**, so the plan for this type must say how an item, and a library entry,
+  that was made as Distance moves to it, and what happens to what was logged against it. No row of
+  its own yet; it is not Beta 0 work.
 
 <a id="superset-1"></a>
 

@@ -1,23 +1,23 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 1b443276..d94b4a6f 100644
+index 240dbb23..7bc05bad 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -102,7 +102,7 @@ export async function placeAssignments(
-     ...open.filter((row) => !rank.has(row.blockId)),
-   ];
-   const moved = placed.flatMap((row, idx) => (row.idx === idx ? [] : [{ id: row.id, idx }]));
--  if (moved.length > 0) {
-+  if (moved.length < 0) {
-     await shiftIntoBand(
-       tx,
-       a,
-@@ -191,7 +191,8 @@ export async function putOn(
-       const endsToday = current.find((row) => row.blockId === block.id);
+@@ -232,14 +232,16 @@ export async function putOn(
+           publicId: newId(),
+           blockId: block.id,
+           profileId: athlete.id,
+-          idx: PARK_IDX,
++          idx: open.length === 0 ? 0 : Math.max(...open.map((r) => r.idx)) + 1,
+           activeFrom: draft.from,
+         })
+         .returning({ id: a.id });
+       await tx
+         .insert(schema.programAssignmentWeekdays)
+         .values(WEEKDAYS.map((weekday) => ({ assignmentId: made!.id, weekday })));
+-      await placeAssignments(tx, athlete.id, [...order.slice(0, at), block.id, ...order.slice(at)]);
++      if (at < order.length) {
++        await placeAssignments(tx, athlete.id, [...order.slice(0, at), block.id, ...order.slice(at)]);
++      }
+     }
  
-       // Close any gap in the order, then take the last place. Rows already in place stay put.
--      const last = await placeAssignments(tx, athlete.id, []);
-+      await placeAssignments(tx, athlete.id, []);
-+      const last = open.length === 0 ? 0 : Math.max(...open.map((r) => r.idx)) + 1;
- 
-       if (endsToday) {
-         await tx
+     return { ok: true as const };

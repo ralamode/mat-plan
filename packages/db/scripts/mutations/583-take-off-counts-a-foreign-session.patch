@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/take-off.ts b/packages/db/src/writers/program/take-off.ts
+index c4edeb34..ba9397b4 100644
+--- a/packages/db/src/writers/program/take-off.ts
++++ b/packages/db/src/writers/program/take-off.ts
+@@ -111,7 +111,6 @@ export async function takeOff(
+             eq(schema.sessions.id, schema.entries.sessionId),
+             // The session is this athlete's too (defence in depth, as #589 and #601): a row whose
+             // session another athlete holds is a writer bug's shape, never "logged" for this one.
+-            eq(schema.sessions.profileId, athlete.id),
+             isNull(schema.sessions.deletedAt),
+           ),
+         )

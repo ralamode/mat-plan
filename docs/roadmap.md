@@ -183,6 +183,10 @@ rest of `PROG-1` stays in Beta 1; the draft lists what moves and proposes Beta 1
 `FUEL-1` (meal and water logging) is Beta 1 at the earliest, and only once its privacy questions are
 answered (its row).
 
+**Until Beta 0 ships, only Beta 0's items and P0 to P2 tech debt are worked on** _(maintainer,
+2026-11-19: "lets ensure all focus goes to that and p0-p2 tech debt until finished. Then we can
+kickoff beta 1 prototyping and planning")_. No Beta 1 or Insight work starts before then.
+
 **After Beta 0, the order** _(maintainer, 2026-11-19: "queue the Insight v1 spec after Beta 0 is
 complete, and BETA 1 planning is complete")_:
 
