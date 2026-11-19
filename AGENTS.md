@@ -228,17 +228,17 @@ Deletion: [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone
   branch on merge.
 - **Every PR is tagged when it is opened** _(maintainer, 2026-11-19)_, so the PR list can be read
   by release and by feature:
-  - **its release, as the GitHub milestone:** `Beta 0` or `Beta 1` (`gh pr create --milestone "Beta 0"`);
+  - **its release, as the GitHub milestone:** `Beta 0` or `Beta 1` (`gh pr create --milestone "Beta 0"`).
+    The GitHub milestone is the release, not a milestone doc under `docs/milestones/`; that doc's
+    id (`FAM-1`) is the feature label;
   - **its feature, as a label named by the backlog id** (`FAM-1`, `CAT-3`, `PRIV-3`), **or
     `tech-debt`** when it belongs to no feature. A PR that serves two features takes both. A
     feature with no label yet gets one of the same shape:
     `gh label create "<ID>" --color 1d76db --description "Feature: <what it is>"`;
-  - **`bug-fix` as well** when it fixes a defect.
-
-  A plan or docs PR takes the tags of the work it plans. Dependabot's PRs are left as they come.
-  The tags are read by people, not by CI: adding one does not re-run a check, and they are
-  separate from the skip labels below.
-
+  - **`bug-fix` as well** (not GitHub's default `bug`) when it fixes a defect.
+  - A plan or docs PR takes the tags of the work it plans. Dependabot's PRs are left as they come.
+  - The tags are read by people, not by CI: adding one does not re-run a check, and they are
+    separate from the skip labels below.
 - **A stacked PR is retargeted to `main` BEFORE its parent merges** — a child merged after its
   parent squashed lands on a dead branch and reports `MERGED` with nothing on `main`. `gh pr edit
 <child> --base main` first, then parent, then child, and **verify the content on `main`** (`git grep

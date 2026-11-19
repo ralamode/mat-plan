@@ -11,12 +11,12 @@
 ## Where this sits (milestone or multi-PR work)
 
 <!-- DELETE THIS WHOLE SECTION for a standalone PR — a dependency bump, a one-off bug, a typo, a
-     config one-liner. "Milestone: none" is noise, and a field that is empty half the time trains
+     config one-liner (the GitHub milestone is still set; see the comment above). "Milestone: none" is noise, and a field that is empty half the time trains
      reviewers to skip it. Keep it when you can name the milestone, spec or multi-PR track this
      advances — a plan or spec PR counts, even though it is `docs`. -->
 
 - **Pillar:** <!-- docs/roadmap.md → The pillars -->
-- **Milestone:** <!-- e.g. beta-1 §3b Authoring — link the milestone doc or its spec -->
+- **Milestone doc:** <!-- e.g. beta-1 §3b Authoring — link the milestone doc or its spec -->
 - **This PR:** <!-- e.g. chunk 1 of 6, the snapshot column -->
 - **Next:** <!-- what this unblocks, and what that is gated on -->
 
