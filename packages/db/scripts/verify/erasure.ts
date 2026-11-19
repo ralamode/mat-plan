@@ -9,12 +9,20 @@ import {
   MUSCLES,
   newId,
   QUANTITY_SLOT,
+  SEED_HOUSEHOLD_PUBLIC_ID,
   SESSION_TYPES,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
 import { eq, sql, type SQL } from 'drizzle-orm';
 
-import { schema } from '../../src/client';
+import { schema, type Database } from '../../src/client';
+import {
+  CORRECTIONS,
+  CREATE_HOUSEHOLD_NAME,
+  ERASE_SEEDED_HOUSEHOLD_NAME,
+} from '../corrections/registry';
+import { EXPECT_ERASED_ROWS } from '../corrections/erasure-gates';
+import { lineText } from '../corrections/summary';
 import {
   ErasureCountMismatch,
   ErasurePreflightRefused,
@@ -90,6 +98,7 @@ export async function verifyErasure(ctx: VerifyContext): Promise<void> {
   await verifyPreflightsRefuse();
   await verifyHiddenHouseholdErased();
   await verifyTimeoutsHold();
+  await verifyOneShotErasure();
 }
 
 const GRAPH_NAMES = HOUSEHOLD_GRAPH.map((g) => graphTableName(g.table));
@@ -1281,4 +1290,200 @@ async function verifyTimeoutsHold(): Promise<void> {
     );
   }
   console.log('✓ PRIV-3 2a: setLocalTimeouts holds inside a transaction and throws outside one');
+}
+
+// ── CAT-3 R0: the fresh start's one-shot erasure of the seeded household ─────────────────────────
+//
+// Inside `rolledBack`, so the seeded household is back for anything after this module. The target
+// is a remote-looking URL whose database is `postgres`, which is PGlite's `current_database()`, so
+// the in-transaction check passes; `…/mat_plan` is the name-mismatch case. This module carries its
+// own `withEnv` and console sink (verify.ts's are not exported; plan D1's file list).
+
+const ERASE_CONSOLE = ['log', 'info', 'warn', 'error'] as const;
+async function withEnv<T>(
+  vars: Readonly<Record<string, string | undefined>>,
+  fn: () => Promise<T>,
+  sink?: string[],
+): Promise<T> {
+  const before = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+  const consoleBefore = ERASE_CONSOLE.map((m) => console[m]);
+  for (const [k, v] of Object.entries(vars)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  if (sink) {
+    for (const m of ERASE_CONSOLE) {
+      console[m] = (...args: unknown[]) => {
+        sink.push(args.map(String).join(' '));
+      };
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    ERASE_CONSOLE.forEach((m, i) => {
+      console[m] = consoleBefore[i]!;
+    });
+    for (const [k, v] of Object.entries(before)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+const correctionNamed = (name: string) => {
+  const c = CORRECTIONS.find((x) => x.name === name);
+  assert.ok(c, `CAT-3 R0: the registry holds ${name}`);
+  return c;
+};
+
+/** Every graph table's row count: "unchanged" means every one is equal. */
+async function graphCounts(tx: VerifyTx): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const g of HOUSEHOLD_GRAPH) {
+    const [row] = rowsOf<{ n: number }>(
+      await tx.execute(sql`SELECT count(*)::int AS n FROM ${g.table}`),
+    );
+    out[graphTableName(g.table)] = row?.n ?? -1;
+  }
+  return out;
+}
+
+const REMOTE = 'postgres://u:p@ep-verify.invalid/postgres';
+const NO_ERASE_ENV = { DATABASE_URL: undefined, [EXPECT_ERASED_ROWS]: undefined } as const;
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+async function verifyOneShotErasure(): Promise<void> {
+  const erase = correctionNamed(ERASE_SEEDED_HOUSEHOLD_NAME);
+  await rolledBack(async (tx) => {
+    const asDb = tx as unknown as Database;
+    const run = (env: Record<string, string | undefined>, apply: boolean, sink?: string[]) =>
+      withEnv(
+        { ...NO_ERASE_ENV, DATABASE_URL_UNPOOLED: REMOTE, ...env },
+        () => erase.run(asDb, apply),
+        sink,
+      );
+
+    // Refusals before connecting: the entry's gate is wired (erasure-gates.test.ts drives each branch).
+    for (const [what, url, why] of [
+      ['the preview', 'postgres://u:p@ep-verify.invalid/mat_plan_preview', /preview database/],
+      ['a URL with no database name', 'postgres://u:p@ep-verify.invalid', /names no database/],
+      ['an unset direct string', undefined, /not set/],
+    ] as const) {
+      await assert.rejects(
+        run({ DATABASE_URL_UNPOOLED: url }, false),
+        why,
+        `CAT-3 R0: the one-shot erasure refuses ${what}`,
+      );
+    }
+
+    // A member in the seeded household, so "no account id is printed" has an account to leak: the
+    // core's report carries members' Clerk ids (for 2b), and this entry must print none of them.
+    const [seedRow] = await tx
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+    assert.ok(seedRow, 'CAT-3 R0: the seeded household is in the verify database');
+    await insertHouseholdMember(asTx(tx), householdScopeForScript(seedRow.id), {
+      publicId: newId(),
+      clerkUserId: 'user_verifyR0seedmember',
+      role: HOUSEHOLD_ROLE.owner,
+    });
+
+    // The dry run: counts only, the total to give back, and nothing written.
+    const before = await graphCounts(tx);
+    const dryOut: string[] = [];
+    const dry = (await run({}, false, dryOut)).map(lineText);
+    const totalLine = dry.find((l) => l.startsWith('total: '));
+    assert.ok(totalLine, 'CAT-3 R0: the dry run prints the total');
+    const total = Number(/total: (\d+)/.exec(totalLine)?.[1]);
+    assert.ok(total > 0, 'CAT-3 R0: the dry run finds the seeded household and its rows');
+    assert.ok(
+      dry.some((l) => /^households not in SEED_PUBLIC_IDS: live \d+, hidden \d+$/.test(l)),
+      'CAT-3 R0: the dry run prints the other households, live and hidden',
+    );
+    assert.deepEqual(await graphCounts(tx), before, 'CAT-3 R0: the dry run writes nothing');
+
+    // --apply without this sitting's total, or with another one, refuses; every table unchanged.
+    await assert.rejects(
+      run({}, true),
+      /needs EXPECT_ERASED_ROWS/,
+      'CAT-3 R0: a bare --apply refuses',
+    );
+    await assert.rejects(
+      run({ [EXPECT_ERASED_ROWS]: String(total + 1) }, true),
+      /rolled back, nothing erased/,
+      'CAT-3 R0: --apply with another total refuses',
+    );
+    assert.deepEqual(
+      await graphCounts(tx),
+      before,
+      'CAT-3 R0: after a mismatched --apply every graph table is unchanged (the compare ran before any commit)',
+    );
+
+    // A connection that is not the database the URL names refuses inside the transaction.
+    await assert.rejects(
+      run(
+        {
+          DATABASE_URL_UNPOOLED: 'postgres://u:p@ep-verify.invalid/mat_plan',
+          [EXPECT_ERASED_ROWS]: String(total),
+        },
+        true,
+      ),
+      /not the one the URL names/,
+      "CAT-3 R0: --apply refuses when current_database() is not the URL's database",
+    );
+
+    // The erasure: the seeded household is gone, and no line names an account or a public_id.
+    const appliedOut: string[] = [];
+    const applied = (await run({ [EXPECT_ERASED_ROWS]: String(total) }, true, appliedOut)).map(
+      lineText,
+    );
+    const [left] = rowsOf<{ n: number }>(
+      await tx.execute(
+        sql`SELECT count(*)::int AS n FROM households WHERE public_id = ${SEED_HOUSEHOLD_PUBLIC_ID}`,
+      ),
+    );
+    assert.equal(left?.n, 0, 'CAT-3 R0: --apply erases the seeded household, hidden or live');
+    assert.ok(
+      applied.some((l) => l.startsWith(`total: ${total} `)),
+      "CAT-3 R0: --apply erases exactly the dry run's total",
+    );
+    for (const line of [...dry, ...dryOut, ...applied, ...appliedOut]) {
+      assert.ok(
+        !/user_/.test(line) && !UUID.test(line),
+        `CAT-3 R0: no account id or public_id is printed: ${line.slice(0, 40)}`,
+      );
+    }
+
+    // Once the target is gone: a dry run notes it; --apply refuses.
+    const again = (await run({}, false)).map(lineText);
+    assert.ok(
+      again.some((l) => l.includes('the seeded household is not here')),
+      'CAT-3 R0: a dry run after the erasure says there is nothing to erase',
+    );
+    await assert.rejects(
+      run({ [EXPECT_ERASED_ROWS]: '0' }, true),
+      /not here/,
+      'CAT-3 R0: --apply after the erasure refuses',
+    );
+  });
+
+  // RC's half of the no-path gap: create-household refuses a URL that names no database.
+  await withEnv(
+    {
+      DATABASE_URL: undefined,
+      DATABASE_URL_UNPOOLED: 'postgres://u:p@ep-verify.invalid',
+      CREATE_HOUSEHOLD_CLERK_USER_IDS: 'user_verifyr0nopath',
+    },
+    () =>
+      assert.rejects(
+        correctionNamed(CREATE_HOUSEHOLD_NAME).run(db as unknown as Database, false),
+        /names no database/,
+        'CAT-3 R0: create-household refuses a target URL that names no database',
+      ),
+  );
+  console.log(
+    '✓ CAT-3 R0: the one-shot erasure runs against production only, once, tied to its dry run, and prints counts only',
+  );
 }
