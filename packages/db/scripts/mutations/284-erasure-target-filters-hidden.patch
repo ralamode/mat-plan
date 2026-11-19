@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index b07bbe11..c3d43a81 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -148,7 +148,13 @@ async function countRows(exec: Executor, t: GraphTable, where: SQL): Promise<num
+ 
+ /** Whether the household row is there. Hidden or live: a hidden household is still erased. */
+ async function householdExists(exec: Executor, scope: OwnerScope): Promise<boolean> {
+-  return (await countRows(exec, schema.households, householdRowsOf(schema.households, scope))) > 0;
++  return (
++    (await countRows(
++      exec,
++      schema.households,
++      sql`(${householdRowsOf(schema.households, scope)}) AND ${schema.households.deletedAt} IS NULL`,
++    )) > 0
++  );
+ }
+ 
+ async function globalMovements(exec: Executor): Promise<number> {

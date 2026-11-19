@@ -7425,52 +7425,9 @@ console.log(
     await asPg.delete(schema.households).where(eq(schema.households.id, tmpHh2!.id));
   }
 
-  // (5) 🔴 THE DELETION-ORDER PROOF — the one PRIV-3 predicted in writing.
-  //
-  // Isolated on its OWN household, deliberately: deleting the seeded household aborts on
-  // `profiles_household_id_households_id_fk` FIRST, so it proves the runbook aborts somewhere and
-  // says nothing about THIS table. A household whose only child is a membership names the FK that
-  // runbooks.md step 13 exists for, and nothing else.
-  const [lone] = await asPg
-    .insert(schema.households)
-    .values({ publicId: newId(), name: 'verify 1b deletion-order' })
-    .returning({ id: schema.households.id });
-  // Inserted DIRECTLY, not through `insertHouseholdMember`: the writer takes a `HouseholdScope`, and
-  // minting a third one here is precisely what `scope.test.ts`'s "exactly two named scopes" guard
-  // forbids — it caught this on the first run. The capability path is already proved at (2); what
-  // this proof needs is a row, and the FK does not care how it arrived.
-  await asPg.insert(schema.householdMembers).values({
-    publicId: newId(),
-    householdId: lone!.id,
-    clerkUserId: CLERK_B,
-    role: HOUSEHOLD_ROLE.member,
-  });
-
-  // Out of order: `households` before `household_members` → the NO ACTION FK aborts the transaction.
-  await expectRejectedBy('household_members_household_id_households_id_fk', async () =>
-    asPg.delete(schema.households).where(eq(schema.households.id, lone!.id)),
-  );
-  assert.equal(
-    (
-      await asPg
-        .select()
-        .from(schema.householdMembers)
-        .where(eq(schema.householdMembers.householdId, lone!.id))
-    ).length,
-    1,
-    'AUTH-1 1b: the aborted delete rolled back — the membership is still there',
-  );
-
-  // In the runbook's order (step 13 then 14): it commits, and leaves zero rows.
-  await asPg
-    .delete(schema.householdMembers)
-    .where(eq(schema.householdMembers.householdId, lone!.id));
-  await asPg.delete(schema.households).where(eq(schema.households.id, lone!.id));
-  assert.equal(
-    (await asPg.select().from(schema.households).where(eq(schema.households.id, lone!.id))).length,
-    0,
-    'AUTH-1 1b: in runbooks.md order the household deletion COMMITS and leaves nothing',
-  );
+  // (5) The deletion-order proof that stood here (memberships before the household row) is
+  // subsumed by `verify/erasure.ts` (PRIV-3 2a): P2 holds every FK into the graph child before
+  // parent against `pg_constraint`, and P3 runs the whole delete in that order.
 
   // (6) THE CLAIM CORRECTION, exercised rather than read. A correction nobody has run is a
   // correction nobody has tested, and this one performs the single write that 1c's whole resolver

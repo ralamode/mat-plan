@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/preflight.ts b/packages/db/src/erasure/preflight.ts
+index 27b29a24..32557a1e 100644
+--- a/packages/db/src/erasure/preflight.ts
++++ b/packages/db/src/erasure/preflight.ts
+@@ -166,7 +166,7 @@ export async function householdPreflights(
+     c: await countOf(exec, strayEntriesInSupersets(athletes)),
+     d: await movementRefsIntoHousehold(exec, scope),
+     e: await countOf(exec, workoutCopiesAcross(blocks)),
+-    f: await countOf(exec, sessionsOnForeign(blocks)),
++    f: await countOf(exec, sessionsOnForeign(() => sql`false`)),
+     g: await countOf(exec, entriesOnForeign(blocks)),
+     h: await countOf(exec, assignmentsAcross(eitherSide)),
+   };

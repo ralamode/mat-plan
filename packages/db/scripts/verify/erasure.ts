@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   EQUIPMENT,
@@ -15,6 +16,13 @@ import { eq, sql, type SQL } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import {
+  ErasurePreflightRefused,
+  ErasureTargetNotFound,
+  eraseHousehold,
+  LOCK_ORDER,
+  PARENT_TABLES,
+} from '../../src/erasure/erase';
+import {
   ATHLETE_GRAPH,
   ATHLETE_GRAPH_TABLES,
   graphTableName,
@@ -23,7 +31,10 @@ import {
   NON_ABORTING_EDGES,
   REFERENCE_TABLES,
 } from '../../src/erasure/graph';
-import type { HouseholdScope } from '../../src/scope';
+import { PREFLIGHT_CHECKS, type PreflightCheck } from '../../src/erasure/preflight';
+import { ownerScope, type HouseholdScope, type OwnerScope } from '../../src/scope';
+import type { Executor } from '../../src/writers/executor';
+import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import {
   householdMemberInHousehold,
   householdRowIs,
@@ -31,7 +42,16 @@ import {
   insertMovementOwnedBy,
   insertWorkoutOwnedBy,
 } from '../../src/writers/ownership';
-import { asTx, db, idsOf, rolledBack, rowsOf, type VerifyContext, type VerifyTx } from './harness';
+import {
+  asPg,
+  asTx,
+  db,
+  idsOf,
+  rolledBack,
+  rowsOf,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import { mkAssignment, mkKid, mkTemplateBlock } from './schema';
 
 /**
@@ -46,6 +66,16 @@ import { mkAssignment, mkKid, mkTemplateBlock } from './schema';
  *   neither (the `AND` rows);
  * - P8: at athlete grain, the household form and step 5's per-profile scopes select the same rows.
  *
+ * And the erasure core (`PRIV-3` PR 2a, `src/erasure/erase.ts`):
+ *
+ * - the lock set: `PARENT_TABLES` against `pg_constraint`; `LOCK_ORDER` and the lock mode pinned
+ *   from the source (PGlite has one connection, so no proof can show a wait);
+ * - P3: the core erases household H, hidden rows included, and leaves household K, the reference
+ *   tables and the global movements exactly as they were; inside a caller's transaction that then
+ *   throws, it erases nothing;
+ * - P4: each pre-flight (a)–(h), planted alone, refuses naming itself and changes nothing;
+ * - P5: a hidden household is erased (measured by raw id), on a committed run.
+ *
  * The database is not pristine (`./harness` → `VerifyContext`), so nothing here asserts over a whole
  * table: only over what A's and B's predicates match and the ids this module planted, all rolled back.
  */
@@ -53,6 +83,10 @@ export async function verifyErasure(ctx: VerifyContext): Promise<void> {
   await verifyPartition();
   await verifyCatalog();
   await verifyHouseholdPartition(ctx);
+  await verifyLocks();
+  await verifyCoreErases();
+  await verifyPreflightsRefuse();
+  await verifyHiddenHouseholdErased();
 }
 
 const GRAPH_NAMES = HOUSEHOLD_GRAPH.map((g) => graphTableName(g.table));
@@ -389,6 +423,36 @@ async function populateEveryGraphTable(
   return { householdId, planted };
 }
 
+/**
+ * Hide every planted row in each graph table that has a `deleted_at` column, except `skip`, and
+ * return the tables hidden.
+ */
+async function hidePlanted(
+  tx: VerifyTx,
+  planted: Map<string, number[]>,
+  skip: readonly string[] = [],
+): Promise<string[]> {
+  const withDeletedAt = rowsOf<{ t: string }>(
+    await tx.execute(sql`
+      SELECT table_name AS t FROM information_schema.columns
+       WHERE table_schema = 'public' AND column_name = 'deleted_at'`),
+  ).map((r) => r.t);
+  const hidden: string[] = [];
+  for (const g of HOUSEHOLD_GRAPH) {
+    const name = graphTableName(g.table);
+    if (!withDeletedAt.includes(name) || skip.includes(name)) continue;
+    const ids = sql.join(
+      planted.get(name)!.map((id) => sql`${id}`),
+      sql`, `,
+    );
+    await tx.execute(
+      sql`UPDATE ${g.table} SET ${sql.identifier('deleted_at')} = now() WHERE ${g.table.id} IN (${ids})`,
+    );
+    hidden.push(name);
+  }
+  return hidden;
+}
+
 async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const { householdId: bHousehold, planted } = await populateEveryGraphTable(
@@ -463,24 +527,7 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
       }
     };
     await assertPlantedMatchedByBAlone('live');
-    const withDeletedAt = rowsOf<{ t: string }>(
-      await tx.execute(sql`
-        SELECT table_name AS t FROM information_schema.columns
-         WHERE table_schema = 'public' AND column_name = 'deleted_at'`),
-    ).map((r) => r.t);
-    const hidden: string[] = [];
-    for (const g of HOUSEHOLD_GRAPH) {
-      const name = graphTableName(g.table);
-      if (!withDeletedAt.includes(name)) continue;
-      const ids = sql.join(
-        planted.get(name)!.map((id) => sql`${id}`),
-        sql`, `,
-      );
-      await tx.execute(
-        sql`UPDATE ${g.table} SET ${sql.identifier('deleted_at')} = now() WHERE ${g.table.id} IN (${ids})`,
-      );
-      hidden.push(name);
-    }
+    const hidden = await hidePlanted(tx, planted);
     assert.ok(
       hidden.length > 0,
       'PRIV-3 1: P7 the fixture hides its rows in the soft-delete tables',
@@ -565,4 +612,516 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
       `✓ PRIV-3 1: P8 for household B, each of the ${ATHLETE_GRAPH.length} athlete-grain tables selects the same ids by the household form as by step 5's per-athlete scopes`,
     );
   });
+}
+
+// ── PRIV-3 2a: the erasure core ─────────────────────────────────────────────────────────────────
+
+/** Thrown by a proof to roll back a savepoint it opened; never by the code under test. */
+class CallerRollback extends Error {}
+
+/** Run `fn` in a savepoint of `tx` that is always rolled back. */
+async function inSavepoint(tx: VerifyTx, fn: (sp: VerifyTx) => Promise<void>): Promise<void> {
+  try {
+    await tx.transaction(async (sp) => {
+      await fn(sp);
+      throw new CallerRollback();
+    });
+  } catch (e) {
+    if (!(e instanceof CallerRollback)) throw e;
+  }
+}
+
+async function newHousehold(tx: VerifyTx | typeof db, name: string): Promise<number> {
+  const [row] = await tx
+    .insert(schema.households)
+    .values({ publicId: newId(), name })
+    .returning({ id: schema.households.id });
+  return row.id;
+}
+
+function asOwner(scope: HouseholdScope, what: string): OwnerScope {
+  const owner = ownerScope(scope);
+  assert.ok(owner, `PRIV-3 2a: ${what}'s scope is an owner scope`);
+  return owner;
+}
+
+/** Each graph table's ids matched by `scope`'s predicate, by table name. */
+async function idsByTable(tx: VerifyTx, scope: HouseholdScope): Promise<Record<string, number[]>> {
+  const out: Record<string, number[]> = {};
+  for (const g of HOUSEHOLD_GRAPH) {
+    out[graphTableName(g.table)] = await idsMatching(tx, g, g.householdRows(scope));
+  }
+  return out;
+}
+
+/** Of the planted ids, those still present, by raw id (never through a predicate under test). */
+async function stillThere(tx: VerifyTx, planted: Map<string, number[]>): Promise<number> {
+  let n = 0;
+  for (const g of HOUSEHOLD_GRAPH) {
+    const ids = planted.get(graphTableName(g.table)) ?? [];
+    if (ids.length === 0) continue;
+    const list = sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    );
+    n += rowsOf<{ n: number }>(
+      await tx.execute(
+        sql`SELECT count(*)::int AS n FROM ${g.table} WHERE ${g.table.id} IN (${list})`,
+      ),
+    )[0].n;
+  }
+  return n;
+}
+
+/** The reference tables and the global movements, as one comparable value. */
+async function sharedRows(tx: VerifyTx): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const t of REFERENCE_TABLES) {
+    out[graphTableName(t)] = rowsOf<{ d: string }>(
+      await tx.execute(
+        sql`SELECT count(*)::text || ':' || md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) AS d FROM ${t} x`,
+      ),
+    )[0].d;
+  }
+  out['movements (global)'] = idsOf(
+    await tx.execute(
+      sql`SELECT ${schema.movements.id} AS id FROM ${schema.movements} WHERE ${schema.movements.householdId} IS NULL ORDER BY 1`,
+    ),
+  ).join(',');
+  return out;
+}
+
+const NO_PREFLIGHT = Object.fromEntries(PREFLIGHT_CHECKS.map((c) => [c, 0]));
+
+// ── The lock set and its order ───────────────────────────────────────────────────────────────────
+async function verifyLocks(): Promise<void> {
+  const parents = rowsOf<{ t: string }>(
+    await db.execute(sql`
+      SELECT DISTINCT confrelid::regclass::text AS t FROM pg_constraint
+       WHERE contype = 'f' AND connamespace = 'public'::regnamespace`),
+  )
+    .map((r) => r.t)
+    .filter((t) => GRAPH_NAMES.includes(t));
+  assert.deepEqual(
+    sorted(PARENT_TABLES.map(graphTableName)),
+    sorted(parents),
+    'PRIV-3 2a: PARENT_TABLES is exactly the graph tables some foreign key points into',
+  );
+  // The program writers lock `program_blocks`, then `profiles` (`writers/program/assign.ts`, lane
+  // guide invariant 12); the core takes the same two first, then every other parent, parent first.
+  const parentNames = PARENT_TABLES.map(graphTableName);
+  const expected = [
+    'program_blocks',
+    'profiles',
+    ...[...parentNames].reverse().filter((t) => t !== 'program_blocks' && t !== 'profiles'),
+  ];
+  assert.deepEqual(
+    LOCK_ORDER.map(graphTableName),
+    expected,
+    "PRIV-3 2a: the core locks program_blocks, then profiles, then the other parents parent first (the program writers' order)",
+  );
+  // The mode and the place, from the source: PGlite has one connection, so no proof can show a wait.
+  const src = readFileSync(new URL('../../src/erasure/erase.ts', import.meta.url), 'utf8');
+  const lock = src.match(
+    /for \(const t of LOCK_ORDER\) \{\s*await tx\.execute\(\s*sql`SELECT \$\{t\.id\} FROM \$\{t\} WHERE \$\{householdRowsOf\(t, scope\)\} ORDER BY \$\{t\.id\} (FOR [A-Z ]+)`/,
+  );
+  assert.ok(lock, 'PRIV-3 2a: erase.ts locks each LOCK_ORDER table in one statement, in id order');
+  assert.equal(
+    lock[1],
+    'FOR UPDATE',
+    'PRIV-3 2a: the core locks the parents FOR UPDATE (FOR NO KEY UPDATE lets a child insert through)',
+  );
+  assert.ok(
+    !/\.for\(/.test(src) && (src.match(/ORDER BY \$\{t\.id\} FOR /g) ?? []).length === 1,
+    'PRIV-3 2a: erase.ts takes no other row lock',
+  );
+  assert.ok(
+    src.indexOf(lock[0]) < src.indexOf('const m = await measure(tx, scope)'),
+    'PRIV-3 2a: the core locks before it re-runs the pre-flights',
+  );
+  console.log(
+    `✓ PRIV-3 2a: the core locks the ${PARENT_TABLES.length} parent tables FOR UPDATE, program_blocks then profiles first, before its pre-flights`,
+  );
+}
+
+// ── P3: the core erases H and nothing else ──────────────────────────────────────────────────────
+async function verifyCoreErases(): Promise<void> {
+  await rolledBack(async (tx) => {
+    const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a H'));
+    const K_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a K'));
+    const h = asOwner(H_SCOPE, 'H');
+    const live = await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-h');
+    const hiddenSet = await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-h-hidden');
+    // The second set hidden: block, workout, assignment, profile, entry, membership and the rest. The
+    // household row stays live here; P5 erases a hidden one.
+    const hiddenTables = await hidePlanted(tx, hiddenSet.planted, ['households']);
+    await populateEveryGraphTable(tx, K_SCOPE, 'priv-3-2a-k');
+    // One sign-in, hidden in H and live in K (the "freed slot"): the report must mark it.
+    const shared = `verify_priv_3_2a_shared_${newId()}`;
+    await tx.insert(schema.householdMembers).values([
+      {
+        publicId: newId(),
+        householdId: live.householdId,
+        clerkUserId: shared,
+        role: HOUSEHOLD_ROLE.member,
+        deletedAt: new Date(),
+      },
+    ]);
+    const kMember = await tx
+      .select({ householdId: schema.householdMembers.householdId })
+      .from(schema.householdMembers)
+      .where(householdMemberInHousehold(K_SCOPE))
+      .limit(1);
+    await tx.insert(schema.householdMembers).values({
+      publicId: newId(),
+      householdId: kMember[0].householdId,
+      clerkUserId: shared,
+      role: HOUSEHOLD_ROLE.member,
+    });
+
+    const hBefore = await idsByTable(tx, H_SCOPE);
+    const kBefore = await idsByTable(tx, K_SCOPE);
+    const sharedBefore = await sharedRows(tx);
+
+    // The dry run: counts, pre-flights and memberships; nothing changes.
+    const dry = await eraseHousehold(asTx(tx), h, { apply: false });
+    assert.deepEqual(
+      dry.counts,
+      GRAPH_NAMES.map((t) => ({ table: t, rows: hBefore[t].length })),
+      "PRIV-3 2a: P3 the dry run counts H's rows in every graph table, in graph order",
+    );
+    assert.ok(
+      dry.counts.every((c) => c.rows > 0),
+      'PRIV-3 2a: P3 H holds a row in every graph table',
+    );
+    assert.deepEqual(
+      dry.preflights,
+      NO_PREFLIGHT,
+      'PRIV-3 2a: P3 every pre-flight reads zero on H',
+    );
+    assert.equal(dry.restorePoint, null, 'PRIV-3 2a: P3 a dry run reports no restore point');
+    assert.deepEqual(
+      await idsByTable(tx, H_SCOPE),
+      hBefore,
+      'PRIV-3 2a: P3 the dry run erases nothing',
+    );
+    assert.deepEqual(
+      dry.members.filter((m) => m.liveElsewhere).map((m) => m.clerkUserId),
+      [shared],
+      'PRIV-3 2a: P3 the report marks exactly the sign-in that is live in another household',
+    );
+    assert.equal(
+      dry.members.length,
+      hBefore.household_members.length,
+      'PRIV-3 2a: P3 the report lists every membership of H, hidden ones too',
+    );
+
+    // Inside a caller's transaction (CAT-3 R0's shape): the core completes, the caller throws, and
+    // the whole erasure is rolled back with the caller's transaction.
+    let inner: Awaited<ReturnType<typeof eraseHousehold>> | undefined;
+    let thrown: unknown;
+    try {
+      await tx.transaction(async (callerTx) => {
+        inner = await eraseHousehold(asTx(callerTx), h, { apply: true });
+        throw new CallerRollback();
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    assert.ok(
+      thrown instanceof CallerRollback,
+      `PRIV-3 2a: P3 the core erases household H, hidden rows included (threw: ${String((thrown as Error)?.message).slice(0, 120)})`,
+    );
+    assert.deepEqual(
+      inner?.counts,
+      dry.counts,
+      'PRIV-3 2a: P3 the core reports the per-table counts it deleted, equal to the dry run',
+    );
+    assert.equal(
+      inner?.total,
+      dry.total,
+      'PRIV-3 2a: P3 the deleted total equals the dry run total',
+    );
+    assert.deepEqual(
+      await idsByTable(tx, H_SCOPE),
+      hBefore,
+      "PRIV-3 2a: P3 a caller's throw after the core rolls the whole erasure back",
+    );
+
+    // The erasure, applied.
+    const applied = await eraseHousehold(asTx(tx), h, { apply: true });
+    assert.ok(
+      applied.applied && applied.restorePoint && applied.restorePoint.walLsn.length > 0,
+      'PRIV-3 2a: P3 an applied run reports its restore point',
+    );
+    assert.deepEqual(
+      applied.counts,
+      dry.counts,
+      'PRIV-3 2a: P3 the applied counts are the dry run',
+    );
+    assert.deepEqual(
+      Object.values(await idsByTable(tx, H_SCOPE)).flat(),
+      [],
+      "PRIV-3 2a: P3 no graph table holds a row of H's afterwards",
+    );
+    assert.equal(
+      (await stillThere(tx, live.planted)) + (await stillThere(tx, hiddenSet.planted)),
+      0,
+      'PRIV-3 2a: P3 every planted row of H is gone by raw id, hidden ones included',
+    );
+    assert.deepEqual(
+      await idsByTable(tx, K_SCOPE),
+      kBefore,
+      "PRIV-3 2a: P3 household K's id sets are unchanged, table by table",
+    );
+    assert.deepEqual(
+      await sharedRows(tx),
+      sharedBefore,
+      'PRIV-3 2a: P3 the reference tables and the global movements are unchanged',
+    );
+    await assert.rejects(
+      eraseHousehold(asTx(tx), h, { apply: true }),
+      ErasureTargetNotFound,
+      'PRIV-3 2a: P3 a second run finds nothing to erase',
+    );
+    await assert.rejects(
+      eraseHousehold(asTx(tx), h, { apply: false }),
+      ErasureTargetNotFound,
+      'PRIV-3 2a: P3 a dry run of an erased household finds nothing',
+    );
+    console.log(
+      `✓ PRIV-3 2a: P3 the core erases ${dry.total} rows of H across all ${GRAPH_NAMES.length} graph tables (hidden rows in ${hiddenTables.length} tables), leaves K, the reference tables and the global movements unchanged, rolls back with a caller that throws, and marks the sign-in live elsewhere`,
+    );
+  });
+}
+
+// ── P4: each pre-flight refuses, naming itself, and changes nothing ─────────────────────────────
+async function verifyPreflightsRefuse(): Promise<void> {
+  await rolledBack(async (tx) => {
+    const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P4 H'));
+    const K_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P4 K'));
+    const h = asOwner(H_SCOPE, 'H');
+    const H = (await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-p4-h')).planted;
+    const K = (await populateEveryGraphTable(tx, K_SCOPE, 'priv-3-2a-p4-k')).planted;
+    const one = (m: Map<string, number[]>, t: string) => m.get(t)![0];
+
+    /** A copy of `from`'s entry with no session, superset or prescription, then `values`. */
+    const plantEntry = async (
+      sp: VerifyTx,
+      from: number,
+      values: Partial<typeof schema.entries.$inferInsert>,
+    ) => {
+      const [base] = await sp.select().from(schema.entries).where(eq(schema.entries.id, from));
+      const { id, ...rest } = base;
+      void id;
+      const [row] = await sp
+        .insert(schema.entries)
+        .values({
+          ...rest,
+          publicId: newId(),
+          clientId: newId(),
+          sessionId: null,
+          supersetId: null,
+          supersetOrder: null,
+          prescriptionId: null,
+          prescriptionSet: null,
+          ...values,
+        })
+        .returning({ id: schema.entries.id });
+      return row.id;
+    };
+    /** A nullable pointer the check guards: the planted row must still hold it after the refusal. */
+    type Pointer = { table: PgTableWithId; id: number; column: string; value: number };
+    type PgTableWithId = (typeof HOUSEHOLD_GRAPH)[number]['table'];
+    const pointerOf = async (sp: VerifyTx, p: Pointer) =>
+      Number(
+        rowsOf<{ v: number | string | null }>(
+          await sp.execute(
+            sql`SELECT ${sql.identifier(p.column)} AS v FROM ${p.table} WHERE ${p.table.id} = ${p.id}`,
+          ),
+        )[0].v,
+      );
+
+    const cases: {
+      check: PreflightCheck;
+      what: string;
+      plant: (sp: VerifyTx) => Promise<Pointer | null>;
+    }[] = [
+      {
+        check: 'a',
+        what: "K's athlete's target on H's prescription",
+        plant: async (sp) => {
+          await sp.insert(schema.prescriptionTargets).values({
+            publicId: newId(),
+            prescriptionId: one(H, 'prescriptions'),
+            profileId: one(K, 'profiles'),
+            load: '45',
+          });
+          return null;
+        },
+      },
+      {
+        check: 'b',
+        what: "K's athlete's entry in H's session",
+        plant: async (sp) => {
+          await plantEntry(sp, one(K, 'entries'), { sessionId: one(H, 'sessions') });
+          return null;
+        },
+      },
+      {
+        check: 'c',
+        what: "K's athlete's entry in H's superset",
+        plant: async (sp) => {
+          await plantEntry(sp, one(K, 'entries'), {
+            sessionId: one(K, 'sessions'),
+            supersetId: one(H, 'supersets'),
+            supersetOrder: 2,
+          });
+          return null;
+        },
+      },
+      {
+        check: 'd',
+        what: "K's athlete's entry on H's movement",
+        plant: async (sp) => {
+          await plantEntry(sp, one(K, 'entries'), { movementId: one(H, 'movements') });
+          return null;
+        },
+      },
+      {
+        check: 'e',
+        what: "K's workout copied from H's workout",
+        plant: async (sp) => {
+          const id = one(K, 'workouts');
+          await sp
+            .update(schema.workouts)
+            .set({ copiedFromWorkoutId: one(H, 'workouts'), copiedFromProgramName: 'P4 copy' })
+            .where(eq(schema.workouts.id, id));
+          return {
+            table: schema.workouts,
+            id,
+            column: 'copied_from_workout_id',
+            value: one(H, 'workouts'),
+          };
+        },
+      },
+      {
+        check: 'f',
+        what: "K's session naming H's workout",
+        plant: async (sp) => {
+          const id = one(K, 'sessions');
+          await sp
+            .update(schema.sessions)
+            .set({ workoutId: one(H, 'workouts') })
+            .where(eq(schema.sessions.id, id));
+          return { table: schema.sessions, id, column: 'workout_id', value: one(H, 'workouts') };
+        },
+      },
+      {
+        check: 'g',
+        what: "K's entry naming H's prescription",
+        plant: async (sp) => {
+          const id = one(K, 'entries');
+          await sp
+            .update(schema.entries)
+            .set({ prescriptionId: one(H, 'prescriptions') })
+            .where(eq(schema.entries.id, id));
+          return {
+            table: schema.entries,
+            id,
+            column: 'prescription_id',
+            value: one(H, 'prescriptions'),
+          };
+        },
+      },
+      {
+        check: 'h',
+        what: "K's athlete's assignment to H's program",
+        plant: async (sp) => {
+          await mkAssignment(sp, {
+            blockId: one(H, 'program_blocks'),
+            profileId: one(K, 'profiles'),
+            idx: 1,
+          });
+          return null;
+        },
+      },
+    ];
+
+    for (const c of cases) {
+      await inSavepoint(tx, async (sp) => {
+        const pointer = await c.plant(sp);
+        const before = [await idsByTable(sp, H_SCOPE), await idsByTable(sp, K_SCOPE)];
+        let thrown: unknown;
+        try {
+          await eraseHousehold(asTx(sp), h, { apply: true });
+        } catch (e) {
+          thrown = e;
+        }
+        assert.ok(
+          thrown instanceof ErasurePreflightRefused && thrown.check === c.check,
+          `PRIV-3 2a: P4 (${c.check}) ${c.what} refuses the erasure, naming (${c.check}) (threw: ${String((thrown as Error)?.message).slice(0, 120)})`,
+        );
+        assert.deepEqual(
+          [await idsByTable(sp, H_SCOPE), await idsByTable(sp, K_SCOPE)],
+          before,
+          `PRIV-3 2a: P4 (${c.check}) the refusal changes no row of H or K`,
+        );
+        if (pointer) {
+          assert.equal(
+            await pointerOf(sp, pointer),
+            pointer.value,
+            `PRIV-3 2a: P4 (${c.check}) the planted row still points at H's row`,
+          );
+        }
+        const dry = await eraseHousehold(asTx(sp), h, { apply: false });
+        assert.deepEqual(
+          PREFLIGHT_CHECKS.filter((x) => dry.preflights[x] !== 0),
+          [c.check],
+          `PRIV-3 2a: P4 (${c.check}) the dry run reports (${c.check}) alone`,
+        );
+      });
+    }
+
+    // (d) the other way: H's own entry on K's movement is erased with H, and is not refused.
+    await inSavepoint(tx, async (sp) => {
+      await plantEntry(sp, one(H, 'entries'), { movementId: one(K, 'movements') });
+      await assert.doesNotReject(
+        eraseHousehold(asTx(sp), h, { apply: true }),
+        "PRIV-3 2a: P4 (d) H's own entry on another household's movement does not refuse",
+      );
+      assert.equal(
+        await stillThere(sp, new Map([['movements', [one(K, 'movements')]]])),
+        1,
+        "PRIV-3 2a: P4 (d) K's movement survives H's erasure",
+      );
+    });
+    console.log(
+      `✓ PRIV-3 2a: P4 each of the ${cases.length} pre-flights, planted alone, refuses the erasure naming itself and changes nothing (the SET NULL pointers of (e), (f) and (g) included); (d) the other way erases`,
+    );
+  });
+}
+
+// ── P5: a hidden household is erased (committed; measured by raw id) ─────────────────────────────
+async function verifyHiddenHouseholdErased(): Promise<void> {
+  // Committed, not rolled back, so the core runs as production runs it: its own transaction on a
+  // database handle. It creates its own household and erases it, so nothing is left behind.
+  const householdId = await newHousehold(db, 'verify PRIV-3 2a P5 hidden');
+  const P5_SCOPE = householdScopeForScript(householdId);
+  let planted = new Map<string, number[]>();
+  await db.transaction(async (tx) => {
+    planted = (await populateEveryGraphTable(tx, P5_SCOPE, 'priv-3-2a-p5')).planted;
+    await tx
+      .update(schema.households)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.households.id, householdId));
+  });
+  const executor: Executor = asPg;
+  await assert.doesNotReject(
+    eraseHousehold(executor, asOwner(P5_SCOPE, 'P5'), { apply: true }),
+    'PRIV-3 2a: P5 the core erases a hidden household',
+  );
+  const left = await db.transaction(async (tx) => stillThere(tx, planted));
+  assert.equal(left, 0, 'PRIV-3 2a: P5 every row of the hidden household is gone, by raw id');
+  console.log('✓ PRIV-3 2a: P5 a hidden household is erased like a live one, on a committed run');
 }

@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index b07bbe11..8b483713 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -127,8 +127,8 @@ export const PARENT_TABLES: readonly GraphTable[] = HOUSEHOLD_GRAPH.map((g) => g
+  * then every other parent, parent before child (reverse graph order).
+  */
+ export const LOCK_ORDER: readonly GraphTable[] = [
+-  schema.programBlocks,
+   schema.profiles,
++  schema.programBlocks,
+   ...[...PARENT_TABLES]
+     .reverse()
+     .filter((t) => t !== schema.programBlocks && t !== schema.profiles),

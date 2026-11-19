@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index b07bbe11..8be9ed9e 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -210,7 +210,7 @@ export async function eraseHousehold(
+     // 1 · Lock every parent row of H, in LOCK_ORDER, each table in id order.
+     for (const t of LOCK_ORDER) {
+       await tx.execute(
+-        sql`SELECT ${t.id} FROM ${t} WHERE ${householdRowsOf(t, scope)} ORDER BY ${t.id} FOR UPDATE`,
++        sql`SELECT ${t.id} FROM ${t} WHERE ${householdRowsOf(t, scope)} ORDER BY ${t.id} FOR NO KEY UPDATE`,
+       );
+     }
+     if (!(await householdExists(tx, scope))) throw new ErasureTargetNotFound();

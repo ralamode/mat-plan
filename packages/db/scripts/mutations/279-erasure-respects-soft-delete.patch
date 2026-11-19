@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index b07bbe11..48c7e9db 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -225,7 +225,10 @@ export async function eraseHousehold(
+     // 3 · Delete in graph order; each RETURNING length must equal its count.
+     const deleted: { table: string; rows: number }[] = [];
+     for (const [i, g] of HOUSEHOLD_GRAPH.entries()) {
+-      const where = g.householdRows(scope);
++      const where =
++        g.table === schema.entries
++          ? sql`(${g.householdRows(scope)}) AND ${schema.entries.deletedAt} IS NULL`
++          : g.householdRows(scope);
+       const gone = rowsOf<{ id: number }>(
+         await tx.execute(sql`DELETE FROM ${g.table} WHERE ${where} RETURNING ${g.table.id}`),
+       ).length;

@@ -1,6 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 
+import * as schema from '../schema';
+import type { HouseholdScope } from '../scope';
 import type { Executor } from '../writers/executor';
+import { movementInHousehold } from '../writers/ownership';
 
 /**
  * ## ONE definition of "a movement is REFERENCED", and one census of who references it
@@ -68,15 +71,8 @@ export async function crossHouseholdMovementRefs(
 ): Promise<CrossHouseholdMovementRefs> {
   const rows = (
     (await exec.execute(sql`
-      select
-        (select count(*)::int from entries e
-           join profiles p on p.id = e.profile_id
-           join movements m on m.id = e.movement_id
-          where m.household_id is not null and m.household_id <> p.household_id) as entry_refs,
-        (select count(*)::int from prescriptions pr
-           join program_blocks b on b.id = pr.block_id
-           join movements m on m.id = pr.movement_id
-          where m.household_id is not null and m.household_id <> b.household_id) as prescription_refs
+      select (${entryMovementRefs(sql`true`)}) as entry_refs,
+             (${prescriptionMovementRefs(sql`true`)}) as prescription_refs
     `)) as unknown as { rows: { entry_refs: number; prescription_refs: number }[] }
   ).rows[0];
   return {
@@ -84,6 +80,40 @@ export async function crossHouseholdMovementRefs(
     prescriptions: rows.prescription_refs,
     total: rows.entry_refs + rows.prescription_refs,
   };
+}
+
+// The two joins, written once. `about` narrows them by the referenced movement (`m.id`).
+const entryMovementRefs = (about: SQL) => sql`
+  select count(*)::int from entries e
+    join profiles p on p.id = e.profile_id
+    join movements m on m.id = e.movement_id
+   where m.household_id is not null and m.household_id <> p.household_id and ${about}`;
+const prescriptionMovementRefs = (about: SQL) => sql`
+  select count(*)::int from prescriptions pr
+    join program_blocks b on b.id = pr.block_id
+    join movements m on m.id = pr.movement_id
+   where m.household_id is not null and m.household_id <> b.household_id and ${about}`;
+
+/**
+ * Pre-flight (d), household-relative (`PRIV-3` PR 2a, `src/erasure/preflight.ts`): the `entries` and
+ * `prescriptions` of ANOTHER household that point at a movement THIS household owns. Deleting the
+ * household's movements would abort `23503` on them. The census's own joins, narrowed to the
+ * household's movements, so this is not a second copy of the join.
+ *
+ * The other direction (this household's row on another household's movement) is not counted: the
+ * row is deleted with the household, and nothing aborts.
+ */
+export async function movementRefsIntoHousehold(
+  exec: { execute: (query: SQL) => Promise<unknown> },
+  scope: HouseholdScope,
+): Promise<number> {
+  const owned = sql`m.id in (select ${schema.movements.id} from ${schema.movements} where ${movementInHousehold(scope)})`;
+  const row = (
+    (await exec.execute(
+      sql`select (${entryMovementRefs(owned)}) + (${prescriptionMovementRefs(owned)}) as n`,
+    )) as { rows: { n: number }[] }
+  ).rows[0];
+  return row.n;
 }
 
 /** One `movements` row, with how many distinct households reference it. Ids only, never text. */
