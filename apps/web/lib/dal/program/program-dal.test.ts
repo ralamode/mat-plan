@@ -445,7 +445,10 @@ describe('the program DAL (FAM-1 15 PR 3): Home’s programs by athlete', () => 
 
   it('reads once through the scope, with the route’s today, and passes the map on', async () => {
     const byAthlete = new Map([
-      [ATHLETE_ID, [{ programPublicId: PROGRAM_ID, name: 'Strength', activeFrom: TODAY }]],
+      [
+        ATHLETE_ID,
+        [{ programPublicId: PROGRAM_ID, name: 'Strength', activeFrom: TODAY, activeTo: null }],
+      ],
     ]);
     vi.mocked(readProgramsByAthlete).mockResolvedValueOnce(byAthlete);
     expect(await getProgramsByAthlete(TODAY)).toBe(byAthlete);

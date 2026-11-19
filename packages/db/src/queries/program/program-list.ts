@@ -69,17 +69,18 @@ export async function readProgramList(
 }
 
 /**
- * A program an athlete is on, for Home's tile: the contract's ref, and the first day of the row that
- * places it (`CurrentProgram.activeFrom`), so the tile can say "starts {day}" for one that begins
- * after today (FAM-1 15 PR 3) without a second read.
+ * A program an athlete is on, for Home's tile: the contract's ref, and the first and last day of the
+ * row that places it (`CurrentProgram.activeFrom` / `activeTo`), so the tile can say "starts {day}"
+ * for one that begins after today, and "last day today" for one taken off today (FAM-1 15 PR 3),
+ * without a second read. `activeTo` is `null` for an open stretch.
  */
-export type AthleteProgram = ProgramRef & { activeFrom: string };
+export type AthleteProgram = ProgramRef & { activeFrom: string; activeTo: string | null };
 
 /**
  * Each athlete's current programs, keyed by their public id (for the Home tiles, step 15 PR 3):
  * every live, not archived athlete of the household is a key, in the order they were made; the value
  * is the programs they are on as of `today` (on it now or starting later), in their own order, by the
- * day page's own rule (`athletesOnPrograms`), each with its first day. An athlete on no program maps
+ * day page's own rule (`athletesOnPrograms`), each with its first and last day. An athlete on no program maps
  * to `[]`.
  */
 export async function readProgramsByAthlete(
@@ -96,6 +97,7 @@ export async function readProgramsByAthlete(
       athlete.current.map((p) => ({
         ...programRefSchema.parse({ programPublicId: p.programPublicId, name: p.name }),
         activeFrom: p.activeFrom,
+        activeTo: p.activeTo,
       })),
     ]),
   );

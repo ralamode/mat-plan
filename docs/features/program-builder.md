@@ -373,7 +373,8 @@ flowchart LR
       never one per tile; Home skips it with no household or no athletes. A tile with no entry
       shows no line rather than "No program yet". The line uses the day page's words
       (`PROGRAM_COPY.line`), `startsText` for a program that has not begun (`hasStarted`, the
-      program page's rule) and `NO_PROGRAM_YET_LINE` for none. The tile's link is named by
+      program page's rule), `lastDayText` for one taken off today (dates with no-break spaces,
+      `unbrokenDay`) and `NO_PROGRAM_YET_LINE` for none. The tile's link is named by
       `aria-labelledby` (name and kind) and described by the line, so a program named after an
       athlete never changes what the link is called.
     - **The real `ProgramActions` is `PROGRAM_ACTIONS`** (`actions.contract.ts`, 7a-ii), the six

@@ -130,21 +130,25 @@ export const takeOffLabel = (athlete: string) => `${BUILDER_COPY.takeOff} ${athl
 export const takingOffLabel = (athlete: string) => `${BUILDER_COPY.takingOff} ${athlete}`;
 
 /**
+ * A short day with no-break spaces inside it, "Fri,\u00a0Nov\u00a020", so a wrapping line (Home's
+ * tile, the Put-on dialog) never splits the date across two lines (15 PR 3's UX review).
+ */
+export const unbrokenDay = (day: string) => formatDayShort(day).replace(/ /g, '\u00a0');
+
+/**
  * An athlete's last day, the one rule for "Who's on it" and the Put-on dialog: "last day today" when
  * it is today (as recorded, C15; Take off only ever writes today), else the date.
  */
 export const lastDayText = (day: string, today: string) =>
-  `last day ${day === today ? 'today' : formatDayShort(day)}`;
+  `last day ${day === today ? 'today' : unbrokenDay(day)}`;
 
 /** A start after today, "starts Fri, Nov 20": the program page's athlete line and Home's tile. */
-export const startsText = (day: string) => `starts ${formatDayShort(day)}`;
+export const startsText = (day: string) => `starts ${unbrokenDay(day)}`;
 
 /** An athlete's line on the program page: "since Mon, Nov 9 · last day today · also on Stretching". */
 export function athleteHint(athlete: ProgramView['athletes'][number], today: string): string {
   const parts = [
-    hasStarted(athlete, today)
-      ? `since ${formatDayShort(athlete.since)}`
-      : startsText(athlete.since),
+    hasStarted(athlete, today) ? `since ${unbrokenDay(athlete.since)}` : startsText(athlete.since),
   ];
   if (athlete.lastDay) parts.push(lastDayText(athlete.lastDay, today));
   if (athlete.alsoOn.length) parts.push(`also on ${formatList(athlete.alsoOn)}`);

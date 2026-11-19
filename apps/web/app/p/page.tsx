@@ -71,8 +71,10 @@ export default async function ProfilePickerPage() {
   // every archive control off the picker). `listProfiles` has already dropped them, so the subtraction
   // is what tells us there are any.
   const archivedCount = noHousehold ? 0 : (await listHouseholdAthletes()).length - profiles.length;
-  // FAM-1 15 PR 3: each tile names its athlete's programs, from ONE read for the whole page (never
-  // one per tile), as of the household's today, which only a route resolves (AGENTS.md → Time).
+  // FAM-1 15 PR 3: each tile names its athlete's programs, from ONE DAL call for the whole page
+  // (never one per tile), as of the household's today, which only a route resolves (AGENTS.md →
+  // Time). That call is one query for the athletes plus one per athlete (`athletesOnPrograms`),
+  // capped by `MAX_HOUSEHOLD_ATHLETES` (25); batching it is in docs/tech-debt.md.
   const today = await getActiveLocalDay();
   const programsByAthlete = noHousehold || empty ? null : await getProgramsByAthlete(today);
 

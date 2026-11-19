@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PROFILE_KIND_LABELS, PROGRAM_NAME_MAX } from '@mat-plan/shared';
 
 import { PROGRAM_COPY } from '@/components/day/day-copy';
-import { NO_PROGRAM_YET_LINE, startsText } from '@/components/program-builder/builder-text';
+import {
+  lastDayText,
+  NO_PROGRAM_YET_LINE,
+  startsText,
+} from '@/components/program-builder/builder-text';
 import { athletePath, NAME_WRAP_CLASS } from '@/lib/constants';
 import type { AthleteProgramDTO } from '@/lib/dal/program/reads';
 import type { ProfileDTO } from '@/lib/dal/profiles';
@@ -30,10 +34,15 @@ const athleteOne: ProfileDTO = {
 };
 
 const TODAY = '2026-11-19';
-const program = (n: number, activeFrom = '2026-11-02'): AthleteProgramDTO => ({
+const program = (
+  n: number,
+  activeFrom = '2026-11-02',
+  activeTo: string | null = null,
+): AthleteProgramDTO => ({
   programPublicId: `019826b4-0000-7000-8000-0000000000a${n}`,
   name: `Program ${n}`,
   activeFrom,
+  activeTo,
 });
 
 describe('ProfileTile', () => {
@@ -112,8 +121,23 @@ describe('ProfileTile: the programs line (FAM-1 15 PR 3)', () => {
 
   it('a program that begins after today says when; one that began today does not', () => {
     tile([program(1, TODAY), program(2, '2026-11-20')]);
+    // No-break spaces inside the date, so a wrap never splits "Fri, Nov 20".
+    expect(programsLine([program(1, TODAY), program(2, '2026-11-20')], TODAY)).toBe(
+      'Programs: Program 1, Program 2 (starts Fri,\u00a0Nov\u00a020)',
+    );
     expect(screen.getByText('Programs: Program 1, Program 2 (starts Fri, Nov 20)')).toBeTruthy();
-    expect(startsText('2026-11-20')).toBe('starts Fri, Nov 20');
+    expect(startsText('2026-11-20')).toBe('starts Fri,\u00a0Nov\u00a020');
+  });
+
+  it('a program taken off today says "last day today", as the program page does', () => {
+    tile([program(1, '2026-11-02', TODAY), program(2)]);
+    expect(screen.getByText('Programs: Program 1 (last day today), Program 2')).toBeTruthy();
+    expect(lastDayText(TODAY, TODAY)).toBe('last day today');
+  });
+
+  it('the line is muted, like the kind label above it', () => {
+    tile([program(1)]);
+    expect(screen.getByText('Program: Program 1').className).toContain('text-muted-foreground');
   });
 
   it('no entry (an athlete gone between Home’s reads) shows no line and claims nothing', () => {

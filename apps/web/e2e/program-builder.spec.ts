@@ -364,6 +364,12 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await expect(who.getByRole('button', { name: takeOffLabel(athlete) })).toHaveCount(0);
   const lastDayToday = lastDayText(isoDaysAgo(0), isoDaysAgo(0));
   await expect(who.getByText(lastDayToday, { exact: false })).toBeVisible();
+  // Home's tile says the same: the program is still named, with its last day (15 PR 3).
+  await page.goto(APP_HOME_PATH);
+  await expect(homeTile(page, athlete)).toHaveAccessibleDescription(
+    PROGRAM_COPY.line([`${program} (${lastDayToday})`]),
+  );
+  await page.goto(mine);
 
   // 6. Put them back on before midnight: the same stretch, no last day, and Take off is back.
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();

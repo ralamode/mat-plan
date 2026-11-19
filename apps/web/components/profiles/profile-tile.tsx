@@ -2,7 +2,11 @@ import { hasStarted, PROFILE_KIND_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 
 import { PROGRAM_COPY } from '@/components/day/day-copy';
-import { NO_PROGRAM_YET_LINE, startsText } from '@/components/program-builder/builder-text';
+import {
+  lastDayText,
+  NO_PROGRAM_YET_LINE,
+  startsText,
+} from '@/components/program-builder/builder-text';
 import { athletePath, NAME_WRAP_CLASS } from '@/lib/constants';
 import type { AthleteProgramDTO } from '@/lib/dal/program/reads';
 import type { ProfileDTO } from '@/lib/dal/profiles';
@@ -11,17 +15,19 @@ import type { ProfileDTO } from '@/lib/dal/profiles';
  * The line under an athlete's name on Home (FAM-1 15 PR 3): their programs in their own order, in
  * the day page's words (`PROGRAM_COPY.line`), so Home and the day page name them the same way. A
  * program that begins after `today` says so, "Mat strength (starts Fri, Nov 20)", because the day
- * page shows it only from that day; the brackets keep the date's own comma out of the list. None is
- * "No program yet", the Put-on dialog's words.
+ * page shows it only from that day; one taken off today says "(last day today)", as the program
+ * page does. The brackets keep the date's own comma out of the list. None is "No program yet", the
+ * Put-on dialog's words.
  */
 export function programsLine(programs: readonly AthleteProgramDTO[], today: string): string {
   if (!programs.length) return NO_PROGRAM_YET_LINE;
   return PROGRAM_COPY.line(
-    programs.map((p) =>
-      hasStarted({ since: p.activeFrom }, today)
-        ? p.name
-        : `${p.name} (${startsText(p.activeFrom)})`,
-    ),
+    programs.map((p) => {
+      if (!hasStarted({ since: p.activeFrom }, today))
+        return `${p.name} (${startsText(p.activeFrom)})`;
+      // Taken off today (C15: Take off only ever writes today): the program page's own words.
+      return p.activeTo ? `${p.name} (${lastDayText(p.activeTo, today)})` : p.name;
+    }),
   );
 }
 
@@ -92,7 +98,7 @@ export function ProfileTile({
         {/* Never truncated: the wrap rule lets a 60-character program name with no spaces break
             anywhere, so the line wraps inside the column rather than widening the tile. */}
         {programs ? (
-          <span id={ids.programs} className={`text-foreground text-sm ${NAME_WRAP_CLASS}`}>
+          <span id={ids.programs} className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
             {programsLine(programs, today)}
           </span>
         ) : null}

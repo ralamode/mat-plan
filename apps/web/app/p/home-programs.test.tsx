@@ -47,6 +47,7 @@ const PROGRAM = {
   programPublicId: '019826b4-0000-7000-8000-0000000000a1',
   name: 'Mat strength',
   activeFrom: '2026-11-02',
+  activeTo: null,
 };
 
 afterEach(cleanup);
