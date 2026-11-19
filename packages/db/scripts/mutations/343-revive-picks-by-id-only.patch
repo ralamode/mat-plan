@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 23f0a3d8..38a473c1 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -408,7 +408,7 @@ export async function logRow(
+       if (slot.some((row) => row.deletedAt === null)) return null;
+       const [pick] = slot
+         .filter((row): row is { id: number; deletedAt: Date } => row.deletedAt !== null)
+-        .sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime() || b.id - a.id);
++        .sort((a, b) => b.id - a.id);
+       if (!pick) return null;
+       try {
+         const revived = await tx.transaction(async (sp) => {

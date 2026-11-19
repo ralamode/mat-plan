@@ -1,0 +1,30 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 23f0a3d8..f1d18fee 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -411,7 +411,7 @@ export async function logRow(
+         .sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime() || b.id - a.id);
+       if (!pick) return null;
+       try {
+-        const revived = await tx.transaction(async (sp) => {
++        const revived = await (async (sp: typeof tx) => {
+           const [row] = await sp
+             .update(schema.entries)
+             .set({ ...UNHIDE, clientId: write.clientId, ...frozen, updatedAt: sql`now()` })
+@@ -429,7 +429,7 @@ export async function logRow(
+             .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+             .where(and(eq(schema.entrySets.entryId, row.id), isNull(schema.entrySets.deletedAt)));
+           return row;
+-        });
++        })(tx);
+         return revived ? { entry: revived } : null;
+       } catch (error) {
+         if (isUniqueViolationOn(error, ['uq_entries_client_id'])) {
+@@ -437,7 +437,6 @@ export async function logRow(
+           if (holder.held) return { answer: await answerHolder(tx, holder) };
+           throw error;
+         }
+-        if (isUniqueViolationOn(error, [ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX])) return null;
+         throw error;
+       }
+     };
