@@ -15,6 +15,7 @@ import {
 import { useState, type ReactNode } from 'react';
 
 import { AthleteSwitcher } from '@/components/day/athlete-switcher';
+import { offersProgramsLink } from '@/components/day/day-notices';
 import { DayScreen } from '@/components/day/day-screen';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
@@ -31,7 +32,7 @@ import {
   type FakePrograms,
 } from './fakes';
 import { pickerOptions, previewHowTo } from './picker-options';
-import { dayPreviewHrefFor, type PreviewSelection } from './preview-registry';
+import { dayPreviewHrefFor, previewHref, type PreviewSelection } from './preview-registry';
 
 /**
  * Mounts one screen with one named fixture and the fakes, exactly as a real route mounts it with
@@ -168,6 +169,13 @@ function ProgramsPreview({
   return children(state, fake.actions);
 }
 
+/** Where the day preview's Programs link goes: the preview's own Programs list. */
+const PREVIEW_PROGRAMS_HREF = previewHref({
+  screen: 'programs-list',
+  fixture: 'programs-list',
+  failNext: false,
+});
+
 /**
  * The day page, as far as the plan's lanes build it: the page's `<h1>`, then the three parts the
  * page places itself (FAM-1 plan D34), then the day screen. The order is the page's
@@ -208,8 +216,17 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
         </p>
       ) : null}
       <ProgramLine plan={plan} actions={fake.actions} />
-      {/* No `programsHref`: the day page passes none either until step 15 (invariant 11). */}
-      <NotOnAProgram plan={plan} />
+      {/* As the page does since 15 PR 2 (invariant 11): the Programs link under the page's own
+          rule, `offersProgramsLink`. The preview has no `/programs`, so here it opens the preview's
+          Programs list. */}
+      <NotOnAProgram
+        plan={plan}
+        programsHref={
+          offersProgramsLink({ archived: athlete.archived === true })
+            ? PREVIEW_PROGRAMS_HREF
+            : undefined
+        }
+      />
       <DayScreen plan={plan} actions={fake.actions} />
     </>
   );
