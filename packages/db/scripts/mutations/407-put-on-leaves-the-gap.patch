@@ -1,0 +1,23 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 240dbb23..7bc05bad 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -232,14 +232,16 @@ export async function putOn(
+           publicId: newId(),
+           blockId: block.id,
+           profileId: athlete.id,
+-          idx: PARK_IDX,
++          idx: open.length === 0 ? 0 : Math.max(...open.map((r) => r.idx)) + 1,
+           activeFrom: draft.from,
+         })
+         .returning({ id: a.id });
+       await tx
+         .insert(schema.programAssignmentWeekdays)
+         .values(WEEKDAYS.map((weekday) => ({ assignmentId: made!.id, weekday })));
+-      await placeAssignments(tx, athlete.id, [...order.slice(0, at), block.id, ...order.slice(at)]);
++      if (at < order.length) {
++        await placeAssignments(tx, athlete.id, [...order.slice(0, at), block.id, ...order.slice(at)]);
++      }
+     }
+ 
+     return { ok: true as const };
