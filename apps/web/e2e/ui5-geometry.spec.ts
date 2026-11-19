@@ -253,43 +253,51 @@ test.describe('the tablet width is still the phone layout', () => {
  * and a `pnpm probe` then showed the first replacement could not fail either: every page in `PAGES`
  * is taller than a phone viewport, so the footer is below the fold no matter what the column does.
  *
- * ⚠️ **So the viewport is TALL and the page is SHORT.** At 2400px these two pages are ~700px of
- * content, and `flex-1` is the only thing that grows `<main>` to put the footer on the bottom edge.
+ * ⚠️ **So the viewport is TALL and the page is SHORT.** The viewport is at least 2400px and at least
+ * `SHORT_PAGE_GAP` taller than the page itself, measured first, so `flex-1` is the only thing that
+ * grows `<main>` to put the footer on the bottom edge, however many rows the shared fixture holds.
  * Measured: with it, `footer.bottom === innerHeight`; without it the footer lands mid-screen with
  * white space under it — the "footer rides up under the fold" regression, visible at last.
  */
 test.describe('a short page still pushes the footer to the bottom', () => {
-  test.use({ viewport: { width: MOBILE_VIEWPORT.width, height: 2400 } });
+  /** The viewport is never shorter than this, and never less than `SHORT_PAGE_GAP` taller than the page. */
+  const TALL_VIEWPORT_MIN = 2400;
+  const SHORT_PAGE_GAP = 600;
+  test.use({ viewport: { width: MOBILE_VIEWPORT.width, height: TALL_VIEWPORT_MIN } });
 
   for (const { name, path } of PAGES.filter((p) => p.path !== SEED_PROFILE_ROUTE)) {
     test(`${name} fills the viewport`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'networkidle' });
 
-      const { footerBottom, viewportHeight, mainHeight, contentHeight } = await page.evaluate(
-        () => {
-          const main = document.querySelector('main')!;
-          return {
-            footerBottom: Math.round(
-              document.querySelector('footer')!.getBoundingClientRect().bottom,
-            ),
-            viewportHeight: window.innerHeight,
-            mainHeight: Math.round(main.getBoundingClientRect().height),
-            contentHeight: (main.firstElementChild as HTMLElement).scrollHeight,
-          };
-        },
-      );
+      // Where the footer would sit if `<main>` hugged its content: the whole page's own height,
+      // header, padding and footer included. Growth is switched off for one read and restored.
+      const naturalBottom = await page.evaluate(() => {
+        const main = document.querySelector('main')!;
+        main.style.flexGrow = '0';
+        const bottom = Math.round(document.querySelector('footer')!.getBoundingClientRect().bottom);
+        main.style.flexGrow = '';
+        return bottom;
+      });
+      // 🔴 **The viewport is sized from the page, so the page is always the shorter one.** It was a
+      // fixed 2400px, and `/settings` renders one row per athlete on a database the whole suite
+      // shares (`fullyParallel`): `athletes.spec.ts` adds and archives several per run. On #652's
+      // run 44502104829 the page carried 4 live and 10 archived athletes and was 2568px tall, so the
+      // footer could not reach a 2400px bottom edge and the assertion blamed `flex-1`, on both
+      // attempts. The old precondition did not catch it: it compared `<main>`'s first child with the
+      // viewport, which leaves out the header, `<main>`'s padding and the footer.
+      const viewportHeight = Math.max(TALL_VIEWPORT_MIN, naturalBottom + SHORT_PAGE_GAP);
+      await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height: viewportHeight });
 
-      // 🔴 **The precondition, asserted rather than assumed.** This proof only works while the page
-      // is SHORTER than the viewport — `flex-1` is what closes the gap, and there is no gap to close
-      // on a page that already overflows. `/settings` renders one row per athlete on a database the
-      // whole suite shares (`fullyParallel`), and `athletes.spec.ts` adds several per run, so the
-      // fixture grows. Without this line the eventual failure would read "flex-1 broke" when the
-      // truth is "the fixture outgrew the viewport" — and a guard that lies about why it is red is
-      // one someone silences.
-      expect(
-        contentHeight,
-        'the fixture must stay shorter than the viewport, or this proves nothing about flex-1',
-      ).toBeLessThan(viewportHeight);
+      const { footerBottom, mainHeight, natural } = await page.evaluate(() => {
+        const main = document.querySelector('main')!;
+        return {
+          footerBottom: Math.round(
+            document.querySelector('footer')!.getBoundingClientRect().bottom,
+          ),
+          mainHeight: Math.round(main.getBoundingClientRect().height),
+          natural: Math.round(main.firstElementChild!.getBoundingClientRect().height),
+        };
+      });
 
       expect(
         footerBottom,
@@ -297,8 +305,10 @@ test.describe('a short page still pushes the footer to the bottom', () => {
       ).toBe(viewportHeight);
       // Stated separately so a failure says WHICH half broke: a collapsed `<main>` reads as its
       // content height, far short of the viewport.
-      expect(mainHeight, '<main> stretched rather than hugging its content').toBeGreaterThan(
-        viewportHeight / 2,
+      // `SHORT_PAGE_GAP` is the room `flex-1` has to fill: a `<main>` that hugged its content
+      // would be at least that much shorter than this.
+      expect(mainHeight, '<main> stretched rather than hugging its content').toBeGreaterThanOrEqual(
+        natural + SHORT_PAGE_GAP,
       );
     });
   }
