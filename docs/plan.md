@@ -2550,6 +2550,9 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   **Done when:** the maintainer has read `notice.md` end to end against
   [data-inventory.md](./privacy/data-inventory.md), `Last updated` is the date of that read,
   `pnpm privacy:generate` has run, and the inventory's banner records the sign-off with its date.
+  That date is the sign-off's own. **A later change to the notice still moves `Last updated`, in
+  the same commit** ([priv-2-serve-the-notice.md](./plans/priv-2-serve-the-notice.md)), so a date
+  after the sign-off's shows that the text has moved since it was read.
   ⚠️ **Pair it with the other pre-invite conditionals** so one session clears them: `TEN-2c-1`'s
   re-measure (a dated zero is not an invariant) and `PRIV-3`'s deletion rehearsal.
 

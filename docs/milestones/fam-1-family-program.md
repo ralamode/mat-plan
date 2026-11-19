@@ -297,7 +297,7 @@ gantt
   11a                          :done, e1, 4, 5
   11b row writer               :crit, done, e2, 5, 7
   12a-i the day's read         :crit, done, e3, 7, 8
-  14, 11c (14a, 11c-i merged)  :active, e4, 8, 9
+  14, 11c (11c-ii is left)     :active, e4, 8, 9
   12a-ii replayed fixtures     :done, e5, 9, 10
 
   section B · builder
@@ -341,10 +341,10 @@ gantt
 
 **What is not fully planned** _(maintainer, 2026-11-18: a timeline says what in it still needs planning, because an estimate over unplanned work is not a true estimate)_
 
-The end of this chart is firm only for the steps planned in detail. Of the 11 PRs left (2026-11-19):
+The end of this chart is firm only for the steps planned in detail. Of the 10 PRs left (2026-11-19):
 
-- **Seven are planned in detail.** Five have a merged plan of their own: 6d-iii (#634), 14b, 11c-ii, 7b-ii and B2. Two are small enough that the row is the whole design, with every file and the proof named and no open question: 12d-iii (from the file table in the comparison of forms) and 12c-ii (one heading).
-- **Four have only a row in the plan** and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path and whose plan is not merged yet, 15c, 12f and 12c-iii. Their rows name files too, but each is large or has a question its lane must answer first: how the order's action reaches the day page (15c), a deletion across several lanes' guides (12f), where the collapsed state lives and what a screen reader hears (12c-iii), and the put-on screen's wiring and its phone test (15).
+- **Six are planned in detail.** Four have a merged plan of their own: 6d-iii (#634), 11c-ii, 7b-ii and B2. Two are small enough that the row is the whole design, with every file and the proof named and no open question: 12d-iii (from the file table in the comparison of forms) and 12c-ii (one heading).
+- **Four have only a row in the plan** and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path, 15c, 12f and 12c-iii. **Step 15's plan was approved by the maintainer on 2026-11-19 (#650) and is not on `main` yet**: it makes step 15 three PRs, so when it merges this count becomes 63, with step 15 planned in detail and three steps left with only a row. Their rows name files too, but each is large or has a question its lane must answer first: how the order's action reaches the day page (15c), a deletion across several lanes' guides (12f), where the collapsed state lives and what a screen reader hears (12c-iii), and the put-on screen's wiring and its phone test (15).
 
 **What it shows**
 
@@ -369,10 +369,10 @@ The end of this chart is firm only for the steps planned in detail. Of the 11 PR
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, and so is 7a-ii, which needed 6b and 6a-iii-b (#586).
-- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-19, 50 of the 61: Take off (6d-i, #617), reorder (6d-ii, #633), the blank-weight fix (12d-ii, #644) and the list and program pages (7b-i, #636) the latest; the count was 54 until the plan's review log L52 gave 6d its second and third PRs, 7b its second, three decided follow-ups their rows, and the collapse of finished workouts its row once its prototype was accepted). The
+- **Grey is merged; a highlighted bar is part merged** (as of 2026-11-19, 51 of the 61: reorder (6d-ii, #633), the blank-weight fix (12d-ii, #644), the list and program pages (7b-i, #636) and the export's check-ins file (14b, #655) the latest; the count was 54 until the plan's review log L52 gave 6d its second and third PRs, 7b its second, three decided follow-ups their rows, and the collapse of finished workouts its row once its prototype was accepted). The
   contract's five PRs and the plan update were opened and merged on 2026-11-15, partly in parallel
-  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525), 11c-i (#539) and 14a (#582); lane B's six screen steps (8a to 10b) and both of 7a's (7a-i, 7a-ii); lane C's seven (13, 13b, 13b-ii, 13d, 12b, the first real ✓, #528, 12c, the workouts on the day page, #567, and 12d, Change on the page, #607); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
-  All four of 6a's PRs (6a-iii-b, copying a workout, is #571), 6b (#522), 6c-i (#588) and 6c-ii (#612) are merged. Both of 7a's PRs are merged (7a-ii is #586). The bar for 14 and 11c is part merged: 14a and 11c-i are merged, 14b and 11c-ii are not. A bar is marked here when its PRs are on `main`.
+  themselves. Since then: all of lane A's chain; lane E's 11a, 11b, 12a-i (#505), 12a-ii (#525), 11c-i (#539), 14a (#582) and 14b (#655); lane B's six screen steps (8a to 10b) and both of 7a's (7a-i, 7a-ii); lane C's seven (13, 13b, 13b-ii, 13d, 12b, the first real ✓, #528, 12c, the workouts on the day page, #567, and 12d, Change on the page, #607); lane S's 3b-page, 3b-bw, 3b-0, 3b-life, B2-0 (#514) and B1-2 (#547).
+  All four of 6a's PRs (6a-iii-b, copying a workout, is #571), 6b (#522), 6c-i (#588) and 6c-ii (#612) are merged. Both of 7a's PRs are merged (7a-ii is #586). The bar for 14 and 11c is part merged: 14a, 14b (#655) and 11c-i are merged, 11c-ii is not. A bar is marked here when its PRs are on `main`.
 
 **What it does not show**: review rounds that find a flaw (a bar gets longer), a contract change
 (every lane reading the shape waits), and the maintainer's own time for sign-offs and the phone

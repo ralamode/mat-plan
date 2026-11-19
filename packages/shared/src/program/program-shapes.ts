@@ -193,7 +193,7 @@ export const saveWorkoutSchema = workoutDraftSchema
  * database. A write that would pass one answers `limit_reached` and writes nothing.
  *
  * - `MAX_HOUSEHOLD_ITEMS`: the household's own items (movements it made with "+ New item"). The
- *   library's movements do not count.
+ *   library's movements do not count. `householdItemsFull` is the count.
  * - `MAX_PROGRAM_WORKOUTS`: the workouts of one program, a saved new one and a copy alike.
  * - `MAX_DAY_SLOTS`: the workouts on one weekday of one program's week. `weekDaysSchema` holds it,
  *   so a week past it fails the parse: `weekExceedsDaySlots` tells that from any other failure.
@@ -214,6 +214,27 @@ export const saveWorkoutSchema = workoutDraftSchema
 export const MAX_HOUSEHOLD_ITEMS = 500;
 export const MAX_PROGRAM_WORKOUTS = 50;
 export const MAX_DAY_SLOTS = 30;
+
+/**
+ * **Whether a household already has `MAX_HOUSEHOLD_ITEMS` items of its own**, from the item
+ * picker's options: the one count for the server (`newItem`), the picker's own "full" line and the
+ * preview's fake, so the three cannot come to disagree about which options are the household's.
+ * An option is the household's when its `owner` is `household`; a library movement (`catalog`)
+ * never counts, an old built-in with no library entry included.
+ *
+ * The options must hold every live item the household made, as the picker's list does (one a
+ * library movement shadows is not in it, and is not counted).
+ *
+ * ⚠️ `owner` is the two words on purpose: a third kind of owner fails to compile here, and whoever
+ * adds it decides whether it counts. It says nothing about the NAME being asked for: `newItem` for
+ * a name that already names an item selects it and is never capped (invariant 30), so a caller
+ * asks this only once it knows a new item would be made.
+ */
+export function householdItemsFull(
+  options: readonly { readonly owner: 'catalog' | 'household' }[],
+): boolean {
+  return options.filter((option) => option.owner === 'household').length >= MAX_HOUSEHOLD_ITEMS;
+}
 
 /** One slot of a weekday: a workout and its optional label. */
 const weekSlotSchema = z.object({
