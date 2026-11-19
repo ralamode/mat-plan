@@ -1,8 +1,10 @@
-import { globSync, readFileSync } from 'node:fs';
+import { globSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+
+import { code } from '@/test/source-scan';
 
 /**
  * TEN-1 chunk 1a's central safety claim, as a test rather than a sentence.
@@ -33,13 +35,6 @@ const REPO = resolve(dirnameOf(import.meta.url), '../../..');
 
 function dirnameOf(url: string): string {
   return fileURLToPath(new URL('.', url));
-}
-
-/** Comments out, strings kept — matching identifiers in this repo's source. */
-function code(file: string): string {
-  return readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 }
 
 /**
