@@ -241,8 +241,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
     `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
     has no nav rail). **`NotOnAProgram` gets `programsHref` as the page gives it** (since 15 PR 2,
-    #679): under the page's own rule, `offersProgramsLink` (lane C's, in `components/day/`), so a
-    change to that rule reaches the preview with no edit here. The preview has no `/programs`, so
+    #679): under the page's own rule, `offersProgramsLink` (lane C's, in `components/day/`), so the
+    preview cannot drift from the page: a change to what the rule answers needs no edit here, and a
+    change to its arguments fails to compile here. The preview has no `/programs`, so
     its link opens the preview's own Programs list. `preview-harness.test.tsx` holds the value
     for every day fixture, a live athlete's and an archived one's. The rule today: a live athlete,
     on any day (plan D48, #683). The switcher's links
