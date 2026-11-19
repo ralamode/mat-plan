@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { previewHref } from '../app/design/program/preview-registry';
 import { ITEM_PICKER_COPY, newItemLabel } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as COPY } from '../lib/movements/movement-picker-copy';
-import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
 /**
@@ -23,27 +23,11 @@ test.use({ viewport: NARROW_VIEWPORT });
 
 const EDITOR = previewHref({ screen: 'workout-editor', fixture: 'heavy-a-draft', failNext: false });
 
-/**
- * 🔴 **Inside the sheet, not the document.** The sheet is fixed and its scroll lock hides the body's
- * overflow, so `expectNoHorizontalOverflow` (the document's) cannot see a panel that spills past the
- * sheet's edge (`sheet.tsx` says so). This measures the dialog and its scrolling body.
- */
-async function expectNoSheetOverflow(page: Page, state: string) {
-  const spill = await page.evaluate(() => {
-    const dialog = document.querySelector('[role="dialog"]');
-    if (!dialog) return ['no dialog'];
-    return [dialog, ...dialog.querySelectorAll('.overflow-y-auto')]
-      .filter((el) => el.scrollWidth > el.clientWidth + 1)
-      .map((el) => `${el.className.slice(0, 40)}: ${el.scrollWidth} > ${el.clientWidth}`);
-  });
-  expect(spill, `${state}: sideways scroll inside the sheet`).toEqual([]);
-}
-
 async function check(page: Page, state: string) {
   await expectNoAxeViolations(page, state);
   await expectTapTargets(page, state);
   await expectNoHorizontalOverflow(page, state);
-  await expectNoSheetOverflow(page, state);
+  await expectNoOverflowWithin(page.getByRole('dialog'), state);
 }
 
 const filtersButton = (page: Page) => page.getByRole('button', { name: /^Filters, / });
@@ -119,12 +103,12 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
       document.documentElement.style.fontSize = '200%';
     });
     await filtersButton(page).click();
-    await expectNoSheetOverflow(page, 'filter panel at 200 % text');
+    await expectNoOverflowWithin(page.getByRole('dialog'), 'filter panel at 200 % text');
     await page.getByRole('button', { name: COPY.filtersBack, exact: true }).click();
     // The row wraps: the box keeps room to type rather than shrinking to a few letters.
     const width = await search(page).evaluate((el) => el.clientWidth);
     expect(width, 'the search box at 200 % text').toBeGreaterThanOrEqual(160);
-    await expectNoSheetOverflow(page, 'search row at 200 % text');
+    await expectNoOverflowWithin(page.getByRole('dialog'), 'search row at 200 % text');
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '';
     });

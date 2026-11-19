@@ -4,18 +4,22 @@ import {
   copyWorkout,
   createProgram,
   newItem,
+  putOn,
   renameProgram,
   saveWeek,
   saveWorkout,
+  takeOff,
 } from '@mat-plan/db';
 import {
   PROGRAM_REFUSAL,
+  type AssignDraft,
   type CopyDraft,
   type CreateProgram,
   type NewItem,
   type ProgramActions,
   type ProgramResult,
   type RenameProgram,
+  type TakeOff,
   type WeekDraft,
   type WorkoutDraft,
 } from '@mat-plan/shared';
@@ -23,10 +27,10 @@ import {
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from '../quiet-db-errors';
-import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import { reportAssignMiss, reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
 
 /**
- * The program builder's writes, each through the caller's household (FAM-1 steps 7a-i and 7a-ii). The actions
+ * The program builder's writes, each through the caller's household (FAM-1 steps 7a-i, 7a-ii and 15). The actions
  * in `app/programs/actions.ts` stay thin: entry, parse, one call here, revalidate.
  *
  * - **One exported function per operation**, named apart from lane P's writers they wrap: the
@@ -111,4 +115,30 @@ export async function newHouseholdItem(input: NewItem): Promise<ProgramAnswer<'n
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
   return quietDbErrors('newItem', () => newItem(db, scope, input));
+}
+
+/**
+ * Put on and Take off (FAM-1 step 15). `today` is the household's today, which the action resolves
+ * (`getActiveLocalDay`); lane P's writer holds `from` to today or tomorrow, the one check of it.
+ * A `not_found` reports the program, then the first athlete id the household does not have.
+ */
+export async function putOnHouseholdProgram(
+  draft: AssignDraft,
+  today: string,
+): Promise<ProgramAnswer<'putOn'>> {
+  const scope = await getHouseholdScope();
+  if (!scope) return missed(() => reportAssignMiss(scope, draft));
+  const result = await quietDbErrors('putOn', () => putOn(db, scope, draft, today));
+  return isNotFound(result) ? missed(() => reportAssignMiss(scope, draft)) : result;
+}
+
+export async function takeOffHouseholdProgram(
+  input: TakeOff,
+  today: string,
+): Promise<ProgramAnswer<'takeOff'>> {
+  const scope = await getHouseholdScope();
+  const ids = { programPublicId: input.programPublicId, profilePublicIds: [input.profilePublicId] };
+  if (!scope) return missed(() => reportAssignMiss(scope, ids));
+  const result = await quietDbErrors('takeOff', () => takeOff(db, scope, input, today));
+  return isNotFound(result) ? missed(() => reportAssignMiss(scope, ids)) : result;
 }

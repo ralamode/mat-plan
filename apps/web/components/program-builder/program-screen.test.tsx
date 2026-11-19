@@ -8,10 +8,11 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// The week editor refreshes the page on a stale week.
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+// The week editor and Take off refresh the page when it is stale.
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }) }));
 
-import { SAVING_LABEL } from '@/lib/constants';
+import { athletePath, SAVING_LABEL } from '@/lib/constants';
 
 import {
   athleteHint,
@@ -25,12 +26,17 @@ import {
   takingOffLabel,
   usedByText,
   WEEK_COPY,
+  workoutSavedText,
   workoutSummary,
 } from './builder-text';
+import { noteArrival, takeArrival } from './arrival';
 import { ProgramScreen } from './program-screen';
 import { newWorkoutPath, PROGRAMS_PATH, workoutPath } from './routes';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  refresh.mockClear();
+});
 
 function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
   return {
@@ -215,6 +221,66 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     await waitFor(() => expect(alerts()).toEqual([takeOffFailedText('Athlete One')]));
     expect(screen.getByRole('status').textContent).toBe('');
     expect(document.activeElement).toBe(button);
+  });
+
+  it('🔴 a Take off that throws (a dropped connection) is a refusal: no button left pending (15)', async () => {
+    const takeOff = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    const button = screen.getByRole('button', { name: takeOffLabel('Athlete One') });
+    fireEvent.click(button);
+    await waitFor(() => expect(alerts()).toEqual([takeOffFailedText('Athlete One')]));
+    expect(document.activeElement).toBe(button);
+    for (const name of ['Athlete One', 'Athlete Two']) {
+      const each = screen.getByRole('button', { name: takeOffLabel(name) });
+      expect(each.getAttribute('aria-disabled')).toBeNull();
+    }
+  });
+
+  it('🔴 a Take off answered not_found is a stale page: it refreshes and says so, never "Try again"', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.not_found });
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete One') }));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(BUILDER_COPY.takeOffStale),
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(alerts()).toEqual([]);
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { level: 2, name: BUILDER_COPY.whosOnIt }),
+    );
+  });
+
+  it('each name under "Who’s on it" links to the athlete’s day page (15)', () => {
+    render(<ProgramScreen program={familyProgram} actions={actions()} />);
+    const who = section(BUILDER_COPY.whosOnIt);
+    for (const athlete of familyProgram.athletes) {
+      const link = within(who).getByRole('link', { name: athlete.name });
+      expect(link.getAttribute('href')).toBe(athletePath(athlete.profilePublicId));
+      // 44px wide for a one-letter name: the wrap class's min-w-0 must not win the class merge.
+      expect(link.classList.contains('min-w-11')).toBe(true);
+      expect(link.classList.contains('min-w-0')).toBe(false);
+    }
+  });
+
+  it('🔴 arriving from a workout’s Save: focus on the Workouts heading, and the bar says it (7b-ii)', async () => {
+    noteArrival(familyProgram.programPublicId, workoutSavedText('Heavy A'));
+    render(<ProgramScreen program={familyProgram} actions={actions()} />);
+    const heading = screen.getByRole('heading', { level: 2, name: BUILDER_COPY.workouts });
+    expect(document.activeElement).toBe(heading);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(workoutSavedText('Heavy A')),
+    );
+    // Taken once: the same page opened again moves nothing.
+    cleanup();
+    render(<ProgramScreen program={familyProgram} actions={actions()} />);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a message left for another program is not taken by this one', () => {
+    noteArrival(adultProgramWithCopy.programPublicId, workoutSavedText('Heavy A'));
+    render(<ProgramScreen program={familyProgram} actions={actions()} />);
+    expect(document.activeElement).toBe(document.body);
+    expect(takeArrival(adultProgramWithCopy.programPublicId)).toBe(workoutSavedText('Heavy A'));
   });
 
   it('Rename: a stacked form with the counter up to PROGRAM_NAME_MAX; Save returns to the heading', async () => {
