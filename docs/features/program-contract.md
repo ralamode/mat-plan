@@ -122,6 +122,7 @@ safe in a `'use client'` component; those two are the proof modules' and come fr
 | `itemUnit(trackingType, quantities)`                                                                                                                                                                                                         | `packages/shared/src/program/pieces.ts`                                           | The unit an item logs in, which is `DayItem.unit`: `null` for a Check or Reps, the type's fixed unit, else the prescription's unit in the type's slot. One definition for the day's read and the row writer, because `fillRowValues` refuses a quantity in any other unit.                                                                                                                                                                                                                                                                 |
 | `DAY_PLAN_FIXTURE_SOURCES`, `DayPlanFixtureSource`, `PROGRAM_VIEW_FIXTURE_SOURCES`, `ProgramViewFixtureSource`, `PROGRAM_LIST_FIXTURE_SOURCES`, `ProgramListFixtureSource`, `World`, `workoutDraft`, `programView`, `programOf`, `workoutOf` | `packages/shared/src/program/fixtures/index.ts` (the `/program/fixtures` subpath) | What each `DayPlan` fixture was built from: `{ world, athlete, day, before }`. A data lane's proof seeds `world` and deep-equals the fixture of the same name. `before` is the world before an edit, or `null`. `workoutDraft(world, programId, wid)` gives a workout as a `WorkoutDraft`, ready for the writer. `programView(world, programId)` gives a program's page as a `ProgramView`; its `week` is a `WeekDraft['days']`, ready for `saveWeek` (C27).                                                                               |
 | `showsOnlyLogged(day)`                                                                                                                                                                                                                       | `packages/shared/src/program/day-shapes.ts`                                       | Whether a day shows only what was logged: not writable and not a future day (a day before yesterday; an archived athlete's today or yesterday). There, an unlogged workout or item is absent and PREVIOUS is `null`. The fixture builder, the day resolver and the day screen all ask it (C23).                                                                                                                                                                                                                                            |
+| `programsByStay(programs)`                                                                                                                                                                                                                   | `packages/shared/src/program/day-shapes.ts`                                       | A day's current programs split by `endsToday`: `{ staying, ending }`, each in the order given, the members' own type kept. `[...staying, ...ending]` is the order `currentPrograms` is in. The fixture builder and the fake's reorder use it; the Program order dialog lists `staying` with arrows and `ending` below with none (invariant 33).                                                                                                                                                                                            |
 | `lowerCaseUuidSchema`                                                                                                                                                                                                                        | `packages/shared/src/program/pieces.ts`                                           | An id as every shape here reads it: any uuid, handed back in lower case, so two spellings of one id compare equal after the parse (invariant 26). For an action or a query that parses an id of its own (a page's route parameter, say) and then compares it in JS.                                                                                                                                                                                                                                                                        |
 | `weekRepeatsAWorkout(draft)`                                                                                                                                                                                                                 | `packages/shared/src/program/program-shapes.ts`                                   | Whether a week names one workout twice on a day, asked of a draft `weekDraftSchema` refused: `saveWeek` answers `once_per_day` when it does, else `invalid`. Takes the raw input (anything), counts only slots whose id is a uuid, and reads two spellings of one id as one workout. Any repeat counts, whatever else is wrong. One definition for the fake and the writer (invariant 26).                                                                                                                                                 |
 | `emptyWeek()`                                                                                                                                                                                                                                | `packages/shared/src/program/program-shapes.ts`                                   | A week with nothing on any day: every weekday present, each `[]`, as a `WeekDraft['days']`. A new object and new arrays on every call, so a caller may fill it. For a week read with no slots yet and a week editor's starting state (C26). `emptyWeek<Slot>()` is the same week for another slot type.                                                                                                                                                                                                                                    |
@@ -192,7 +193,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
    own PR: this guide is owed by every file here, so such a PR fails `guides:check` without it.
 2. 🔴 **The fixtures are the accepted prototype's data, state for state** (plan §8).
    `fixtures/prototype.test.ts` runs the prototype's own data functions and requires the
-   transcription to equal them. A fixture is changed by changing the prototype first. **Nine fixtures are not prototype states and say so**: `every-type-once`, `closed-day-program-since-left` (C17), `archived-athlete-today` (C18), `closed-day-nothing-logged` and `archived-athlete-nothing-logged` (C22), `family-program-archived-athlete` and `programs-list-archived-athlete` (C36), `family-program-full-weekday` (C35) and `coach-label-program-ending-today` (C32, C37). Each is the
+   transcription to equal them. A fixture is changed by changing the prototype first. **Eleven fixtures are not prototype states and say so**: `every-type-once`, `closed-day-program-since-left` (C17), `archived-athlete-today` (C18), `closed-day-nothing-logged` and `archived-athlete-nothing-logged` (C22), `family-program-archived-athlete` and `programs-list-archived-athlete` (C36), `family-program-full-weekday` (C35), `coach-label-program-ending-today` (C32, C37), `today-three-programs-one-ending` (C37) and `unit-edited-after-logging` (C28). Each is the
    prototype's data arranged to reach a rule no prototype state reaches. **And one field of one
    fixture differs from the prototype's own state, by the maintainer's decision** (2026-11-17):
    the workout that left the week in `workout-left-the-week` has no label, where v12 shows the
@@ -449,8 +450,16 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     kg number would be stored on a row still labelled lb: a load in the wrong unit. So an amend
     passes `fillRowValues` the row's own unit (`{ trackingType, unit: loggedRowUnit(…) }`, with
     no target), in the fake as in the writer: the lb row is changed in lb and a kg number answers
-    `bad_value`. A new ✓ is not a Change and is still in the item's unit. The day screen is
-    stricter and offers no Change at all on a row logged in another unit than the item's.
+    `bad_value`. A new ✓ is not a Change and is still in the item's unit. The screen offers
+    such a row's reps only (`changeableFields`, 12d-iii): the load stays text in the unit it was
+    logged in and is sent back unchanged, and the Change is judged in that unit, as the writer
+    judges it (C28). A distance or count row logged in another unit has no reps and stays text.
+    **`unit-edited-after-logging` holds the state**: `yesterday-half-done` after the bench press
+    and the vest weight went from lb to kg. Each item reads kg (`unit`, `target`, its text); the
+    rows logged before the edit keep their pounds and the text they were logged against; two of
+    the bench's sets are not logged. No other fixture holds a logged row in another unit than its
+    item's (`fixtures.test.ts`). In a fixture world a weight is in pounds unless its item names
+    a `unit`, and only this fixture's edit names one.
     **A row that does not hold what its type now logs has no unit to be changed in**
     (`loggedRowUnit` is `null`: no quantity in the type's slot, or one in a unit the type cannot
     be in), so a Change that sends a quantity for it is `bad_value`. No FAM-1 screen changes an
@@ -563,11 +572,23 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       fake ignores that move as the real order would.
     - **`reorderPrograms` still takes the full list**, the program ending today included, and the
       fake puts it last whatever place it was given, as the day's read does.
+    - **The list holds at most 50 ids** (`MAX_ORDER_PROGRAMS` in `program-shapes.ts`; maintainer,
+      2026-11-19: "cap at 50"): `programOrderSchema` refuses a longer one, so the action and the
+      fake answer `invalid` before anything is read or written. It bounds the body and is not one of
+      invariant 30's caps: nothing limits how many programs an athlete is on, so an athlete on
+      more than 50 could not reorder, which is accepted as far above any real use.
+    - **The split has one definition: `programsByStay(programs)`** (`day-shapes.ts`). It answers
+      `{ staying, ending }`, split on `endsToday`, each in the order given. The fixture builder
+      ranks with it and the fake's reorder puts `ending` last with it. A screen that lists the
+      two groups apart calls it too.
     - ⚠️ **A known gap in the fake:** it accepts a reorder for an archived athlete, where the real
       writer answers `not_found`. `DayPlan` carries no `archived` field on purpose (invariant
       24), so the fake cannot tell.
     - `coach-label-program-ending-today` holds it: the program ending today is first in the
       athlete's own order and reads back last.
+    - `today-three-programs-one-ending` holds the dialog's state: `today-two-programs` with a
+      third program, second in the athlete's own order, whose last day is today. Two programs
+      move and one stays below them. Each of the three has a workout that day.
 
 ## Traps
 

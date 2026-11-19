@@ -7,6 +7,13 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## Database / migrations
 
+- **On `db:verify`'s PGlite, every transaction already starts at `lock_timeout = 5s` and
+  `statement_timeout = 60s`, so a proof that a writer SETS a timeout passes with the writer's call
+  deleted.** → Each migration ends with a session-level `SET lock_timeout`/`statement_timeout`,
+  `migrate()` commits them all in one transaction, and PGlite has one session, so the values stay for
+  the rest of the run. Found by a review lens before mutations 447 and 448 could report it as
+  "STAYED GREEN". → A proof that reads a timeout clears it first, transaction-locally, and asserts
+  the clear held (`lockTimeoutSetBy` in `scripts/verify/harness.ts`).
 - **A migration that merged after another one, but was generated before it, never runs on prod, and
   nothing says so.** → drizzle's migrator applies a migration only when its journal `when` is later
   than the newest one applied (`created_at < folderMillis`, drizzle-orm `pg-core/dialect.js`), and a
@@ -256,6 +263,18 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A Server Action form submitted before hydration answered `Invalid Server Actions request.` and
+  nothing showed: the cause was our own `Referrer-Policy: no-referrer`.** → Under it every browser
+  (Fetch, "append a request `Origin` header") sends a native form POST with `Origin: null`, even
+  same-origin, and Next's CSRF check (origin host must equal host) aborts. The server log says so:
+  ``… does not match `origin` header with value `null` … Aborting the action.``. A hydrated
+  `fetch` is CORS-mode and carries a real Origin, so only early taps fail. → `Referrer-Policy:
+same-origin` (`REFERRER_POLICY`); never `serverActions.allowedOrigins: ['null']`. To reproduce,
+  abort `**/_next/static/chunks/**` in Playwright: the page stays unhydrated and the harness still
+  works, where `javaScriptEnabled: false` blinds Playwright too. ⚠️ Only a form whose `action` IS a
+  server reference posts natively; a client closure gets a `javascript:` action and waits for
+  hydration. Before hydration, clerk-js is not refreshing the session token, so an expired one
+  refuses the POST and lands on sign-in.
 - **`toMatchSnapshot` is the wrong tool for a layout baseline, and it fails twice before it tells
   you so.** → UI-5 pinned the pre-shell phone geometry as six JSON snapshots. (1) `pnpm format`
   formats `**/*.json` — Prettier collapsed each baseline's arrays onto one line, and since
@@ -310,10 +329,11 @@ access token`, which reads like a permissions problem with the repo. The cause w
   page", and an assertion written against it reads as a product bug. **Instead:**
   `await page.route('**/_next/static/chunks/**', (r) => r.abort())` — the harness keeps working, the
   page stays SSR-only, and the submit is a native POST. That swap turned a dead end into a
-  measurement in one run. ⚠️ **And the measurement was worth having:** `/p/new`'s unhydrated POST is
-  refused by Next (`Invalid Server Actions request`), which **withdrew the justification for a fix
-  that had already shipped in that PR** — it restored form state for a render that cannot happen.
-  [tech-debt.md](./tech-debt.md) has it. **The general shape: a cheap probe that could falsify your
+  measurement in one run. ⚠️ **And the measurement was worth having:** `/p/new`'s unhydrated POST
+  was refused by Next (`Invalid Server Actions request`), which at the time withdrew the
+  justification for a fix that had already shipped in that PR. ✅ **The refusal's cause was ours and
+  is fixed** (2026-11-19, `Referrer-Policy`; the entry below), so that render CAN happen now, and the
+  narrowed [tech-debt.md](./tech-debt.md) entry owes the fix back. **The general shape: a cheap probe that could falsify your
   own fix is worth running BEFORE you defend the fix in a docblock, not after.**
 - **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
   OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when

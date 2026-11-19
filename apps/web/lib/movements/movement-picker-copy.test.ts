@@ -100,9 +100,16 @@ describe('the row tags', () => {
     expect(COPY.tagAlreadyIn('Strength A')).toBe('already in Strength A');
     expect(COPY.tagAlsoCalled('RDL')).toBe('also called RDL');
   });
+});
 
-  it('labels a group from the shared map rather than a second copy', () => {
-    expect(COPY.groupLabel('legs')).toBe('Legs');
+describe('the browse tree (CAT-3 B3)', () => {
+  it('names its sections, and a heading carries its count with the one separator', () => {
+    expect(COPY.allMovements).toBe('All movements');
+    expect(COPY.notSorted).toBe('Not sorted yet');
+    expect(COPY.separator).toBe(' · ');
+    expect(COPY.foldedCount(COPY.allMovements, 35)).toBe('All movements · 35');
+    expect(COPY.choiceName(COPY.allMovements, 1)).toBe('All movements, 1 movement');
+    expect(COPY.choiceName(COPY.allMovements, 12)).toBe('All movements, 12 movements');
   });
 });
 

@@ -58,6 +58,7 @@ import {
   householdItemsFull,
   MAX_DAY_SLOTS,
   MAX_HOUSEHOLD_ITEMS,
+  MAX_ORDER_PROGRAMS,
   MAX_PROGRAM_WORKOUTS,
   newItemSchema,
   programOrderSchema,
@@ -413,11 +414,18 @@ describe('WeekDraft and ProgramView', () => {
     expect(weekRepeatsAWorkout(both)).toBe(true);
   });
 
-  it('names the caps the maintainer approved (C35): a change to one is a decision', () => {
-    expect({ MAX_HOUSEHOLD_ITEMS, MAX_PROGRAM_WORKOUTS, MAX_DAY_SLOTS }).toEqual({
+  it("names the caps and the order's bound the maintainer approved (C35, D49): a change to one is a decision", () => {
+    expect({
+      MAX_HOUSEHOLD_ITEMS,
+      MAX_PROGRAM_WORKOUTS,
+      MAX_DAY_SLOTS,
+      MAX_ORDER_PROGRAMS,
+    }).toEqual({
       MAX_HOUSEHOLD_ITEMS: 500,
       MAX_PROGRAM_WORKOUTS: 50,
       MAX_DAY_SLOTS: 30,
+      // The order's list (maintainer, 2026-11-19: "cap at 50"): a bound on the body, `invalid`.
+      MAX_ORDER_PROGRAMS: 50,
     });
   });
 
@@ -536,6 +544,14 @@ describe('the dialog drafts', () => {
     expect(order([A_PROGRAM, A_PROGRAM])).toBe(false);
     expect(order([])).toBe(false);
     expect(order(['p1'])).toBe(false);
+  });
+
+  it('🔴 ProgramOrder takes MAX_ORDER_PROGRAMS ids and refuses one more', () => {
+    const order = (programPublicIds: string[]) =>
+      programOrderSchema.safeParse({ profilePublicId: A_PROFILE, programPublicIds }).success;
+    // Distinct ids, so the only thing wrong with the long list is its length.
+    expect(order(distinctIds(MAX_ORDER_PROGRAMS))).toBe(true);
+    expect(order(distinctIds(MAX_ORDER_PROGRAMS + 1))).toBe(false);
   });
 
   it('CopyDraft takes any set of weekdays, none included, and an optional label', () => {

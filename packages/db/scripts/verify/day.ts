@@ -46,7 +46,14 @@ import { householdScopeForScript } from '../../src/writers/household-scope-scrip
 import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
 import { updateStrengthSetById } from '../../src/writers/strength-session';
 import { verifyDayPlan } from './day-plan';
-import { asDb, asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import {
+  asDb,
+  asTx,
+  rolledBack,
+  stageHideDuringInsert,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import {
   entriesOnAnotherWorkoutsPrescriptions,
   entriesOnForeignPrescriptions,
@@ -68,8 +75,8 @@ import {
  *   that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–181; 120 is unused, see there);
  * - **step 12a-i**: the day resolver and PREVIOUS, in `./day-plan.ts` (`verifyDayPlan`, called at
  *   the end of `verifyDay`): it seeds the state each `DayPlan` fixture with no `before` describes,
- *   with hand-written timestamps (eleven, plus the two whose only change is an archive), and
- *   deep-equals it with ids mapped exactly; 12a-ii adds the other four of the six with a `before`;
+ *   with hand-written timestamps (twelve, plus the two whose only change is an archive), and
+ *   deep-equals it with ids mapped exactly; 12a-ii adds the other six of the eight with a `before`;
  * - **step 11c-i (`verifyAmend`, after 11b's)**: Change, `amendRow`, as
  *   `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan lists it, with mutations 348–356 and 358–363. A
  *   non-number is the contract's schema test (`rowAmendSchema`), since the action parses (plan S4);
@@ -969,24 +976,14 @@ async function verifyRowRace(): Promise<void> {
         await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
         'FAM-1 11b race: the holder ✓',
       );
-      await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
-      await tx.execute(sql`insert into race_target values (${holder.entryPublicId}::uuid)`);
-      await tx.execute(sql`create function verify_row_race_hide() returns trigger language plpgsql as $$
-        begin
-          update entries set deleted_at = now()
-            where public_id in (select public_id from race_target) and deleted_at is null;
-          return null;
-        end $$`);
-      await tx.execute(
-        sql`create trigger row_race_hide after insert on entries for each statement execute function verify_row_race_hide()`,
-      );
+      const hide = await stageHideDuringInsert(tx);
+      await hide.arm(holder.entryPublicId);
       // Different numbers from the holder's, so "revived with the ✓'s numbers" can fail.
       const second = await f.tick({
         prescriptionPublicId: f.p.reps.publicId,
         values: { reps: 7, quantities: [] },
       });
-      await tx.execute(sql`drop trigger row_race_hide on entries`);
-      await tx.execute(sql`drop function verify_row_race_hide()`);
+      await hide.disarm();
       const saved = expectOk(second, 'FAM-1 11b race: a ✓ on a set un-ticked mid-insert saves');
       // 11c-ii: the retry goes back through the revive, so the un-ticked entry is brought back
       // (plan 11c, § Proofs 11b's rewrite; it was a new entry under 11b).

@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index f9a1e2f0..3ec62930 100644
+index c3b16c61..13b6a0f0 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
 @@ -1,4 +1,4 @@
@@ -10,14 +10,14 @@ index f9a1e2f0..3ec62930 100644
    existingItem,
 @@ -16,7 +16,7 @@ import { movementOptions } from '../../queries/program/movement-options';
  import type { HouseholdScope } from '../../scope';
- import type { Executor } from '../executor';
+ import { setLocalLockTimeout, type Executor } from '../executor';
  import { findOrCreateTypedMovement } from '../movement-catalog';
 -import { householdRowIs, movementIsAvailableTo, movementIsGlobal } from '../ownership';
 +import { householdRowIs, movementInHousehold, movementIsAvailableTo, movementIsGlobal } from '../ownership';
  import { ADVISORY_LOCK } from '../locks';
  import { refuse } from './refuse';
  
-@@ -126,7 +126,8 @@ async function addOrSelect(
+@@ -130,7 +130,8 @@ async function addOrSelect(
  
    // The household's own items, as the picker lists them (live, not shadowed by a catalog item):
    // the fake's count, from the list already read under the lock.

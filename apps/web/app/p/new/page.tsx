@@ -6,7 +6,7 @@ import { newId } from '@mat-plan/shared';
 import { AppShell } from '@/components/layout/app-shell';
 import { listProfiles } from '@/lib/dal/profiles';
 
-import { NoHouseholdState } from '@/components/onboarding/no-household-state';
+import { NoHouseholdPage } from '@/components/onboarding/no-household-page';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
 import { requireSession } from '@/lib/dal/session';
 import {
@@ -71,7 +71,8 @@ export const metadata: Metadata = { title: ADD_ATHLETE_COPY.pageHeading };
  * What each case then does, which is the test of whether per-request is right:
  * a **double tap** reuses the key (one athlete); a **retry after a refusal** reuses it, because the
  * RSC does not re-run when `useActionState` re-renders the island (so a name typo fixed and
- * resubmitted still adds one); an **add that succeeded but whose redirect was interrupted** replays
+ * resubmitted still adds one). ⚠️ An UNHYDRATED refusal is the exception: the native POST
+ * re-renders the page, which mints a new key, harmless because a refusal created nothing; an **add that succeeded but whose redirect was interrupted** replays
  * onto the existing row and lands on the athlete; and a **deliberate page reload** mints a new key,
  * which is correct — that is a new intent, not a retry.
  */
@@ -82,7 +83,7 @@ export default async function AddAthletePage() {
   if (state === HOUSEHOLD_STATE.none) {
     return (
       <AppShell athletes={await listProfiles()}>
-        <NoHouseholdState />
+        <NoHouseholdPage />
       </AppShell>
     );
   }

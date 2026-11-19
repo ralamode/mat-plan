@@ -14,7 +14,7 @@ import {
   isOwnerOf,
   profileByClientId,
 } from './ownership';
-import type { Executor } from './executor';
+import { setLocalLockTimeout, type Executor } from './executor';
 import { ADVISORY_LOCK } from './locks';
 
 /** What both archive writers return — the row's public id and the stored `archived_at`, or `null`. */
@@ -394,6 +394,8 @@ async function lockedCreate(
   scope: HouseholdScope,
   input: Parameters<typeof addProfile>[2],
 ): Promise<CreateProfileResult> {
+  // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
+  await setLocalLockTimeout(exec);
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
   // unwrapped here. No row means the household is gone (an erasure mid-call): `refused`, so the
   // count never runs without the lock.

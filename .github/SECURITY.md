@@ -131,8 +131,19 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
 
 ## Sensitive data
 
-- Kid **bodyweight** is privileged: never returned outside the household operator, never logged,
-  never included in the LLM/MCP payload unless a scoped, explicit purpose requires it.
+- **Bodyweight** is privileged, for every profile: never returned to anyone outside the household,
+  never logged, and never included in the LLM/MCP payload unless a scoped, explicit purpose requires
+  it. No **access** rule here branches on age (`ID-1` keep-open item 5). _(Reworded with the
+  maintainer, 2026-11-19.)_
+  - **In the app**, anyone signed in to the household may see it.
+  - **The export** goes to the household's owner logins only. The authority is the membership row's
+    role, read once by `getHouseholdScope()` and narrowed by `ownerScope()` in `buildExportEntries`;
+    `isOwnerOf` on `loggedMonths` makes a scope cast past that narrowing read zero months (`db:verify`
+    plus mutation 610). It reads no column, so it is not a database-side check. "Owner" is every login
+    a correction bound as owner, not necessarily one person. An adult athlete's access to their own is
+    `ID-1`'s question.
+  - **A future product rule, recorded for `ID-1`:** any feed or sharing feature never shows a child's
+    bodyweight; an adult may choose to publish their own.
 
 ## Input
 
@@ -192,9 +203,11 @@ described the gate's cookie, which is deleted. What is true now:
   is reasoning about a dependency this repo cannot pin — which is why the production observation below
   is what settles it.
 - ⚠️ **Do not write "`httpOnly` does not apply".** That is true on the custom domain, where clerk-js
-  reads the cookies from JavaScript. On the `*.vercel.app` alias Clerk's auto-proxy forwards the
-  Frontend API's own `Set-Cookie` verbatim, with whatever attributes Clerk chooses — which can
-  include `HttpOnly`. The two deployments differ.
+  reads the cookies from JavaScript. Clerk's auto-proxy, where armed, forwards the Frontend API's own
+  `Set-Cookie` verbatim, with whatever attributes Clerk chooses, which can include `HttpOnly`. ✅
+  **It is disarmed on every host** (`proxy.ts` passes `frontendApiProxy: { enabled: false }`, AUTH-1
+  1d; `proxy.test.ts` pins the option), so no deployment relays Clerk's cookies through this origin.
+  This bullet read as if the `*.vercel.app` alias still did; corrected 2026-11-19.
 
 **So the post-`1d` CSRF story is Next's Origin-vs-Host check PLUS a vendor default — two layers and a
 dependency, not the three the row claimed.**
@@ -282,7 +295,15 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 ## Transport / headers
 
 - HSTS, nonce-based CSP (middleware), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy`, `Permissions-Policy`. ⚠️ **No credential cookie is set by this app** — the
+  `Referrer-Policy: same-origin` (`REFERRER_POLICY`), `Permissions-Policy`. **`same-origin`, not
+  `no-referrer`, because** under `no-referrer` every browser (Fetch, "append a request `Origin`
+  header") sends a native form POST with `Origin: null`, even to this site, and Next's Server Action
+  check refuses it, so a server-action form tapped before hydration did nothing (four routes; the day page's closure-wrapped forms always waited for hydration). `same-origin` still sends no
+  referrer to any other site. That holds only while **no same-origin path relays to a third party**:
+  Clerk's frontend-API relay stays disarmed (pinned in `proxy.test.ts`), there is no Sentry
+  `tunnelRoute` and no external `rewrites()`. Adding any of them would forward a `Referer` naming an
+  athlete page. Sentry also drops `referer` (`lib/sentry-scrub.ts`). `strict-origin` was rejected:
+  it fixes the bug but sends our origin to every cross-origin request. ⚠️ **No credential cookie is set by this app** — the
   only one it writes is `tz`, deliberately neither `Secure` nor `HttpOnly` because a client writes it;
   the session cookies are Clerk's (see Injection / CSRF).
 - **CORS closed** — the LLM calls server-to-server, so no browser origin needs opening.

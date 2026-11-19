@@ -11,12 +11,14 @@
  * 0001 still writes the household id on every new database.
  */
 
+import { seedPublicId } from './catalog-seed';
+
 /** The root household (named `HOUSEHOLD_DEFAULT_NAME`, in `enums.ts`). */
-export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
+export const SEED_HOUSEHOLD_PUBLIC_ID = seedPublicId('010');
 
 // The the kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
-export const SEED_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
-export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
+export const SEED_PROFILE_PUBLIC_ID = seedPublicId('001');
+export const SEED_PROFILE_2_PUBLIC_ID = seedPublicId('002');
 /**
  * A THIRD athlete, seeded for `PROF-1 b` (2026-11-08) and owned by the **archive** specs.
  *
@@ -30,7 +32,19 @@ export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
  * ⚠️ **So do not reach for this one for anything else.** A second spec depending on it would recreate
  * the problem it was added to solve.
  */
-export const SEED_PROFILE_3_PUBLIC_ID = '019826b4-0000-7000-8000-000000000003';
+export const SEED_PROFILE_3_PUBLIC_ID = seedPublicId('003');
+/**
+ * A FOURTH athlete, seeded for FAM-1's Change e2e (2026-11-19) and owned by it alone: it is on the
+ * test-only program `Test – Change e2e` (`packages/db/src/writers/program/seed-e2e.ts`), which holds
+ * both superset workouts every day of the week (docs/plans/fam-1-e2e-change-athlete.md).
+ *
+ * ⚠️ **Do not reach for it for anything else**: the Change e2e changes this athlete's rows, so a
+ * second spec reading them would see its edits.
+ *
+ * Only the fixture seed writes it, and **no seed has ever written this id to production**: a row
+ * found there means a fixture seed was pointed at the wrong database.
+ */
+export const SEED_PROFILE_4_PUBLIC_ID = seedPublicId('004');
 
 /**
  * Every household and profile `public_id` the seed writes (`PRIV-3` RC, D7), built from the
@@ -47,6 +61,7 @@ export const SEED_PUBLIC_IDS: ReadonlySet<string> = new Set([
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_3_PUBLIC_ID,
+  SEED_PROFILE_4_PUBLIC_ID,
 ]);
 
 /**
@@ -62,6 +77,7 @@ export const SEED_PUBLIC_IDS: ReadonlySet<string> = new Set([
 export const SEED_PROFILE_NAME = 'Athlete One';
 export const SEED_PROFILE_2_NAME = 'Athlete Two';
 export const SEED_PROFILE_3_NAME = 'Athlete Three';
+export const SEED_PROFILE_4_NAME = 'Athlete Four';
 
 /**
  * AUTH-1 1c-3a — the synthetic principal the **test session bypass** returns, injected by

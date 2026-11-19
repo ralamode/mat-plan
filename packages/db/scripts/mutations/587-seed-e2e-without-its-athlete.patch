@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
+index e0c49a56..60a85b5e 100644
+--- a/packages/db/src/writers/program/seed-fixtures.ts
++++ b/packages/db/src/writers/program/seed-fixtures.ts
+@@ -148,7 +148,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
+     );
+     // The e2e program (`seed-e2e.ts`, not a contract fixture) only with its athlete live and
+     // active: a run before the profile exists never leaves the program with nobody on it.
+-    if (await liveActive(tx, scope, SEED_PROFILE_4_PUBLIC_ID)) {
++    if (scope !== null) {
+       await seedWorld(
+         tx,
+         scope,

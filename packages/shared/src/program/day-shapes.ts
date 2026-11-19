@@ -258,7 +258,7 @@ export const dayPlanSchema = z.object({
    * is today: the athlete has started it and comes off it after today. Those are the ones ADR 0007
    * Amendment 5 sorts after every program that stays, so they are last here. Absent on a program
    * that stays, one that starts later included. The Reorder dialog lists such a program with no
-   * arrows, since no order can move it up.
+   * arrows, since no order can move it up. `programsByStay` splits the list on it.
    *
    * The day's read ranks a row "has an end and has started"; that is the same set, because Take
    * off is the only writer of an end and it ends on today.
@@ -289,6 +289,27 @@ export type DayPlan = z.infer<typeof dayPlanSchema>;
  */
 export function showsOnlyLogged(day: Pick<DayPlan, 'writable' | 'future'>): boolean {
   return !day.writable && !day.future;
+}
+
+/**
+ * **A day's current programs, split by whether they stay**: `ending` holds each program whose last
+ * day is today (`endsToday: true`, contract change C37), `staying` every other one, a program that
+ * starts later included. Each list keeps the order it was given.
+ *
+ * `[...staying, ...ending]` is the order `DayPlan.currentPrograms` is in (ADR 0007 Amendment 5), so
+ * for a list read from a plan it gives the list back. The Program order dialog lists `staying`
+ * with arrows and `ending` below them with none; a reorder puts `ending` last whatever was asked.
+ * One function, so the fixture builder, the fake and the day screen split the list the same way.
+ *
+ * It takes any list whose members may carry `endsToday`, and hands back the members' own type.
+ */
+export function programsByStay<Program extends { readonly endsToday?: boolean }>(
+  programs: readonly Program[],
+): { staying: Program[]; ending: Program[] } {
+  return {
+    staying: programs.filter((program) => program.endsToday !== true),
+    ending: programs.filter((program) => program.endsToday === true),
+  };
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   rolesNeedingLiveMatch,
   type HouseholdScope,
   loggedMonths,
+  ownerScope,
   programDayRows,
   strengthMonthRows,
 } from '@mat-plan/db';
@@ -27,7 +28,7 @@ import {
 } from '@mat-plan/shared/csv';
 
 import { db } from './db';
-import { getHouseholdScope } from './household';
+import { AUTHORITY_ACTION, getHouseholdScope, reportAuthorityRefusal } from './household';
 import { getProfileByPublicId } from './profiles';
 
 /**
@@ -79,16 +80,32 @@ async function liveMatchesFor(
   return byRole;
 }
 
-/** Every CSV file for one athlete, as zip entries. */
-export async function buildExportEntries(profilePublicId: string): Promise<ZipEntry[]> {
+/**
+ * Every CSV file for one athlete, as zip entries, or **`null` when this caller may not have them**.
+ *
+ * `null` is the refusal and `[]` means only "the owner, and no logged months", so the route answers
+ * a refusal with its one miss and never sends an empty zip in place of one.
+ *
+ * 🔴 **Only the household's owner gets an export** (FAM-1 export follow-up, plan PR B; the
+ * maintainer's Q1, 2026-11-19: _"otherwise refuse unless it's the owner"_). Any other login gets
+ * `null` before any month query, with one id-free authority-refusal event. "An adult member exports
+ * their own data" is `ID-1`'s, once a login can be linked to its own athlete. The SQL backstop is
+ * `loggedMonths`' `isOwnerOf` (mutation 610).
+ */
+export async function buildExportEntries(profilePublicId: string): Promise<ZipEntry[] | null> {
   // The gate: a foreign (or unknown) id returns nothing before any month query runs. `getProfileByPublicId`
   // is itself household-scoped since TEN-1 1b, so a null scope also lands here.
   const profile = await getProfileByPublicId(profilePublicId);
-  if (!profile) return [];
+  if (!profile) return null;
   const scope = await getHouseholdScope();
-  if (!scope) return [];
+  if (!scope) return null;
+  const owner = ownerScope(scope);
+  if (!owner) {
+    await reportAuthorityRefusal(AUTHORITY_ACTION.exportProfile);
+    return null;
+  }
 
-  const months = (await loggedMonths(db, { profilePublicId, scope })).map((r) => r.month);
+  const months = (await loggedMonths(db, { profilePublicId, scope: owner })).map((r) => r.month);
   const entries: ZipEntry[] = [];
 
   for (const month of months) {
@@ -136,7 +153,8 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
     entries.push(
       { path: strengthLogPath(profilePublicId, month), content: buildStrengthLog(strengthRows) },
       { path: bodyweightPath(profilePublicId, month), content: buildBodyweight(bodyweightRows) },
-      // A month with no check-ins still writes the header, so every month's zip holds the same files.
+      // A month with no check-ins still writes the header, so every month's zip holds the same files
+      // (an export is only ever the owner's, so there is one shape).
       { path: checkinsPath(profilePublicId, month), content: buildCheckins(checkinRows) },
     );
   }
@@ -144,7 +162,11 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
   return entries;
 }
 
-/** The whole export as a zip. Deterministic: re-exporting the same data is byte-identical. */
-export async function buildExportZip(profilePublicId: string): Promise<Uint8Array> {
-  return buildZip(await buildExportEntries(profilePublicId));
+/**
+ * The whole export as a zip, or `null` (the refusal, above). Deterministic: re-exporting the same data
+ * is byte-identical.
+ */
+export async function buildExportZip(profilePublicId: string): Promise<Uint8Array | null> {
+  const entries = await buildExportEntries(profilePublicId);
+  return entries === null ? null : buildZip(entries);
 }

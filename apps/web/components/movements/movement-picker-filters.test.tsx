@@ -4,7 +4,6 @@ import {
   EQUIPMENT_CODE,
   EQUIPMENT_FILTER_SHOWN_FIRST,
   EQUIPMENT_LABELS,
-  MOVEMENT_PICKER_GROUP_LABELS,
   MUSCLE,
   MUSCLE_LABELS,
   TRACKING_TYPE,
@@ -23,6 +22,7 @@ import {
   pickerTrigger,
   stubSheetHistory,
   TEST_TAXONOMY,
+  withoutLibraryData,
 } from '@/test/movement-picker-fixtures';
 
 import { MovementPicker } from './movement-picker';
@@ -36,8 +36,8 @@ import { MovementPicker } from './movement-picker';
 afterEach(cleanup);
 beforeEach(stubSheetHistory);
 
-// Seeded movements, with the taxonomy each test needs. Listed pull before push on purpose: the
-// filtered browse sorts by the legacy groups' order, not the input's.
+// Seeded movements, with the taxonomy each test needs. Listed out of name order on purpose: the
+// filtered browse sorts by name, not the input's order.
 const PULL_UP = catalogOption('Pull-Up', {
   equipment: [EQUIPMENT_CODE.pull_up_bar],
   primaryMuscle: MUSCLE.lats,
@@ -157,9 +157,7 @@ describe('the Filters control (P15)', () => {
 
   it('⏳ is not shown over built-ins with no library data either: a filter can judge none of them', () => {
     // Until CAT-3 chunk R every old built-in is listed, most with no taxonomy (7a-ii).
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     render(<Harness options={[bare, CIRCUIT]} />);
     open();
     expect(screen.queryByRole('button', { name: /^Filters, / })).toBeNull();
@@ -422,18 +420,19 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(folded.closest('details')!.open).toBe(false);
   });
 
-  it("what fits is in the legacy groups' order, whatever the input order, each row tagged", () => {
+  it("what fits is by name (the tree's comparator), whatever the input order, with no group tag", () => {
     render(<Harness />);
     open();
     withMuscles(MUSCLE_LABELS.lats, MUSCLE_LABELS.chest);
     const fit = screen.getByRole('region', { name: COPY.fitHeading });
     const rows = within(fit).getAllByRole('button');
-    expect(rows.map((b) => b.textContent!.split(/[\s,]/)[0])).toEqual([
-      'Push-Ups',
+    // OPTIONS gives Pull-Up, Inverted Rows, Push-Ups: neither the input's order nor the old groups'.
+    expect(rows.map((b) => b.textContent!.split(',')[0])).toEqual([
+      'Inverted Rows',
       'Pull-Up',
-      'Inverted',
+      'Push-Ups',
     ]);
-    expect(rows[0]!.textContent).toContain(MOVEMENT_PICKER_GROUP_LABELS.push);
+    for (const row of rows) expect(row.querySelector('[data-row-tag]')).toBeNull();
   });
 
   it('🔴 the folded section opens itself while it holds a ticked row (so focus can reach it)', () => {
@@ -504,9 +503,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
   });
 
   it('⏳ an exact hit with no library data says its equipment is not known, never "not in your filters"', () => {
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
     open();
     withLats();
@@ -554,9 +551,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
   });
 
   it('⏳ a search that only finds rows with no library data says why the filters hide them', () => {
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
     open();
     withLats();
@@ -566,9 +561,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
   });
 
   it('⏳ both kinds hidden: the judged count first, then the bare one, never swapped', () => {
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     const BACK = catalogOption('Back Squat', { primaryMuscle: MUSCLE.quadriceps });
     render(<Harness options={[...OPTIONS.map((o) => (o === FRONT ? bare : o)), BACK]} />);
     open();

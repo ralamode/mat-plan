@@ -34,13 +34,18 @@ path and **creating** the deliberate one.
 - **CAT-3 B1** — the list reads the library's search (short forms, similar names); invariant 13.
 - **CAT-3 B2-i** — every row's second line, the supervision label and "How to"; invariant 14.
 - **CAT-3 B2-ii** — the filters (equipment, main muscle) and the list under them; invariant 15.
+- **CAT-3 B3-i** — with no query, "All movements" is the kind of training, then a family, with
+  "Your custom items" first and the old built-ins with no library entry in "Not sorted yet";
+  invariant 11. B3-ii puts the same tree under a filter
+  ([plan](../plans/cat-3-b3-browse-by-kind.md)).
 
 ## The map
 
 | File                                                      | What                                                                                                                                                                                                                                                                                                                                    |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/shared/src/movement-search.ts`                  | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`, and CAT-3's `searchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
-| `packages/shared/src/movement-picker-catalog.ts`          | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`.                                                                                                                                                                                                    |
+| `packages/shared/src/movement-picker-catalog.ts`          | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`. Since B3 browse reads none of the groups: `movement-picker-catalog.test.ts`'s key-set test guards the DB read's allow-list, not browse. The post-R2 cleanup deletes the groups.                    |
+| `apps/web/lib/movements/browse-view.ts`                   | The browse list as data (CAT-3 B3): `browseView` partitions the options once into the tree (`browseTree`), K24's rows and the custom items, with N; and the open-state model (`isBrowseOpen`, `seedBrowse`, `forgetClosed`, `CUSTOM_OPEN_AT_MOST`). Pure, no DOM.                                                                       |
 | `apps/web/lib/movements/movement-option.ts`               | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                                                     |
 | `apps/web/lib/movements/movement-picker-copy.ts`          | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                                                          |
 | `apps/web/components/movements/movement-picker.tsx`       | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                                                         |
@@ -126,11 +131,47 @@ path and **creating** the deliberate one.
     renders "1 match." for twenty-one of them. In English the two are indistinguishable, which is
     exactly why it is a rule here rather than something noticed later.
 
-11. **The browse list shows only what the entries map groups.** A seeded row with no entry in
-    `MOVEMENT_PICKER_ENTRIES` is not browsable — it still resolves by id and by typed name — and the
-    key-set test fails until someone chooses a group. That is what makes "no `other` group" true by
-    construction rather than by a test that happens to pass, and it is why `CAT-2` cannot add a
-    movement without deciding where it lives.
+11. **With no query, "All movements" is the kind of training, then a family** (CAT-3 B3; spec P12,
+    K24 to K27). This **overturns** the old invariant 11 ("the browse list shows only what the
+    entries map groups"): browse reads no legacy `group`, and every listed row is reachable by
+    browsing. What lives between files:
+    - **The tree is `browseTree`'s**, from the contract (`packages/shared/src/catalog/families.ts`):
+      the kinds in `BROWSE_KINDS`' order, families biggest first, rows by `byFoldedName`, and no
+      family level for a kind in `BROWSE_FLAT_KINDS` (Conditioning and Skill, K27 and K30). The
+      picker draws what it is given; a label changes in `MODALITY_LABELS` or
+      `MOVEMENT_FAMILY_LABELS`, never here.
+    - **`browseView` partitions once**: `filterMovementOptions` over the picker's own `matchable`
+      (`movement-option.ts`, the mapping the search and the filter counts read), then `hasLibraryData` (the one test
+      for "has a kind") splits the tree's rows from K24's. **N for "All movements" is the tree plus
+      K24's rows**, which is `movementFilterCounts(…).total`, pinned by a test.
+    - ⏳ **K24: the old built-ins with no library entry are "Not sorted yet"**, an `h4` after the
+      kinds, sorted by `byFoldedName`: folded on a long tree, and open by itself while the tree
+      opens itself _(maintainer, 2026-11-19: "Open it while the tree is small")_. One sibling block tagged `TODO(CAT-3 chunk R)`, so the
+      post-R2 cleanup deletes it whole. K23's pairs are listed in both places.
+    - **The order**: "Your custom items" (open at `CUSTOM_OPEN_AT_MOST` or fewer, K25), Recent,
+      Today's program, then All movements (open). A kind or a family starts closed, except that
+      **every kind and family opens itself while the tree holds `BROWSE_OPEN_AT_MOST` rows or
+      fewer** (K26), counted on the tree alone; never the custom items by that rule. No row carries
+      a group tag (P12). With no match at all and no filter, the list beneath is All movements, with
+      no custom section.
+    - **Every group is a button inside its heading** (the APG disclosure), never `<details>`:
+      `aria-expanded`, `aria-controls` while open, and a closed group renders nothing. Headings: the
+      top sections `h3`, a kind and "Not sorted yet" `h4`, a family `h5`, and "How to" one below its
+      row's section. Only the top sections are landmarks.
+    - 🔴 **The open state is ONE model, in the picker** (`browse-view.ts`): a tap's choice beats
+      everything; a `seeded` latch holds the groups above every row ticked or current. It survives
+      the filter panel, the takeover, a no-match query and clearing the search, and resets only when
+      the sheet opens. **A new selection reopens the groups above it even if the person closed one**
+      (its taps are forgotten), adjusted during render, so the row a caller focuses after a create is
+      in that commit; unticking closes nothing. **`reveal`** (`{ id, revision }`) does the same for
+      a row whose selection does not change (Select on an item already ticked, a new item not
+      ticked because the workout is full); a new revision reveals the same id again. A filter change forgets only the groups the person
+      closed. Keys and ids are kind-qualified (`strength/core`, `mobility/core`).
+    - **360px:** only the disclosure buttons indent (a kind `pl-3`, a family `pl-6`). Rows step in
+      `ml-3` only from 400px (`min-[400px]:ml-3`): at 360px the name column keeps 194px in multi
+      mode with "How to", and at 200% text (195 CSS px) an indent would leave it a few pixels. A long
+      family label wraps inside its tap target, its count in a `shrink-0` span. `e2e/movement-picker.a11y.spec.ts`
+      opens a kind (from the keyboard) and a family at 360px; `picker-browse-open` is the capture.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
     union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
@@ -202,9 +243,9 @@ path and **creating** the deliberate one.
       that two fit with a phone's keyboard up. A household item carries no tag: its second line
       already says what it is.
     - **A library option IS the contract's `CatalogOption`** (the DTO's catalog arm), taxonomy
-      required, plus the legacy `group` where an old built-in has one. A library entry has no group:
-      it is found by search, carries no group tag, and is left out of the legacy browse groups
-      (invariant 11) until B3's tree. ⚠️ A read that has not got the equipment set must not build a
+      required, plus the legacy `group` where an old built-in has one, which nothing reads since B3
+      (it goes in the post-R2 cleanup). A library entry is found by search and by browsing its kind
+      and family (invariant 11). ⚠️ A read that has not got the equipment set must not build a
       library option: `equipment: []` MEANS "No equipment" and passes that filter.
     - ⏳ **Until the catalog's fresh start (CAT-3 chunk R), an old built-in with no library entry is
       `BuiltInWithoutLibrary`** (FAM-1 7a-ii; maintainer, 2026-11-17: "Show all 35 until reset"): a
@@ -221,7 +262,7 @@ path and **creating** the deliberate one.
       row shows the button; with one, it shows only on a library row whose entry
       `hasInstructions`, and a row without steps keeps the column empty so rows end at one edge.
     - **One box per row ON SCREEN**, keyed `${section}:${publicId}`: a movement listed twice
-      (Recent and its group) opens one box, under the row tapped. Each load has a number, and an
+      (Recent and its family) opens one box, under the row tapped. Each load has a number, and an
       answer applies only while that load is still the open one, read from state, so a reopen, a
       search change (typing, Enter, the takeover) or opening another row drops a late answer.
     - **The box** is a region named by its `h4` ("How to do X"), busy while loading: **the
@@ -284,11 +325,9 @@ path and **creating** the deliberate one.
       when nothing at all matches, and a near miss the filters hide is still named ("… is listed
       but is not in your filters."). A filter that hid a match and turned the button loud would
       invite the permanent duplicate invariant 4 exists to prevent.
-    - **The filtered browse is interim**: one "Movements that fit your filters" section in the
-      legacy groups' order, each row tagged with its group, until B3's tree (P12). ⚠️ It lists
-      every library row that fits, so a library entry with no legacy group (invariant 11 keeps it
-      out of the unfiltered browse) appears here, after the grouped ones: invariant 11 governs the
-      unfiltered browse only.
+    - **The filtered browse is interim until B3-ii**: one "Movements that fit your filters" section
+      in the legacy groups' order, with no group tag since B3-i, until the filtered tree (P12). It
+      lists every library row that fits, a library entry with no legacy group after the grouped ones.
 
 ## Traps
 
@@ -307,9 +346,12 @@ path and **creating** the deliberate one.
 - ⚠️ **In a jsdom test, query the trigger from the DOM, not through `screen`.** Radix's modal puts
   `aria-hidden` on the rest of the document, so a role query stops finding the opener the moment the
   sheet opens — and fails with an error that reads as "the harness did not render".
-- ⚠️ **A fixture must come from `MOVEMENT_SEED_ROWS`.** The grouping, aliases and names are what PR
-  4's DAL reads out of the real catalog; a suite over invented options passes while the catalog does
-  something else.
+- ⚠️ **Library fixtures come from `CATALOG_FIXTURE`** (`libraryOption`, `LIBRARY_OPTIONS`,
+  `libraryNamed` in `test/movement-picker-fixtures.ts`), and **the old seed rows
+  (`catalogOption`, from `MOVEMENT_SEED_ROWS`) only until F1**; `withoutLibraryData` makes a K24 row.
+  A suite over invented options passes while the catalog does something else. The test library
+  holds more than `BROWSE_OPEN_AT_MOST` rows, so its tree starts closed: open the groups a test needs
+  (`expandBrowse`, in the fixtures file; the item picker's suite uses it too).
 - ⚠️ **One bounded consequence lives in [write-path.md](./write-path.md) invariant 14, not here.** A
   household row whose slug a global row shadows is reachable by id, and freezes `''` for the
   `prescribed` snapshot. It stays in that guide — the behaviour is `resolveMovementByPublicId`'s, and
@@ -327,7 +369,8 @@ the footer's states and the source scans. They deliberately **do not** claim:
 - `useDeferredValue` settling, and the status being read **once** by a screen reader (criterion 46).
   ⚠️ jsdom settles it synchronously, so invariant 8's bug class is **invisible** here in both
   directions: a regression that re-splits the query would not redden a single test;
-- `enterKeyHint="search"`, `maxLength` on paste, `<summary>` ≥44px;
+- `enterKeyHint="search"`, `maxLength` on paste, `<summary>` ≥44px, and the browse tree's 360px
+  width math and its disclosure buttons' 44px (`movement-picker.a11y.spec.ts`);
 - Enter in the portaled input **not** submitting the form.
 
 A test plan that promised these would be claiming coverage it cannot deliver, which is the defect
