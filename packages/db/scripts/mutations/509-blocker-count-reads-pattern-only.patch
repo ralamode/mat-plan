@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 1bec1d85..8555d509 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -679,7 +679,7 @@ const movementsOwnershipReport: Correction = {
+       .where(
+         and(
+           isNull(schema.movements.householdId),
+-          sql`NOT (${schema.movementGlobalRowHasPattern(schema.movements)})`,
++          isNull(schema.movements.pattern),
+         ),
+       );
+     const checkViolations = blockers?.n ?? 0;

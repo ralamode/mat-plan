@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 24a0d1f6..d9387ae6 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -229,7 +229,7 @@ export function movementIsGlobal() {
+  * the option read (P11-ii) and the proofs use.
+  */
+ export function movementIsCatalog() {
+-  return and(movementIsGlobal(), isNotNull(schema.movements.modality));
++  return movementIsGlobal();
+ }
+ 
+ /** `movements.household_id IS NOT NULL` — any household's own namespace. */
