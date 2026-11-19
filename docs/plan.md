@@ -1218,12 +1218,34 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   they already have: a printed workout sheet, a screenshot from another app, or text pasted from a
   document or a spreadsheet. A model reads it and drafts the program, and a review screen lets the
   parent check that we have the program right before anything is saved.
+
   **Most of this is already scoped in `ONB-1`'s PRD** ([PRD](./plans/onb-1-self-serve-onboarding-prd.md)):
   paste and CSV import is its phase 3 and photo import its phase 4, which it calls a separate, later
   problem. What this row adds is the sources (a screenshot, a printed sheet) and **a review screen
   that shows every line beside its source**, each matched to a library movement or flagged as
   unmatched. `ONB-1`'s scope rule holds: a program, never a family's logged history.
-  **Decided already in the PRD (maintainer, 2026-08-20 and 2026-08-26), and binding here:**
+
+  ⚠️ **The review screen reopens two closed decisions, and the maintainer has not yet said so in
+  those words.** The PRD records "no bulk confirm screen": confirmation is deferred to first use
+  (R8a, its closed question 4). It also records that verification after import is loads-only, and
+  that nothing asks the coach to re-read the whole plan against the paper (R16a, its closed
+  question 5). A screen that shows every line beside its source before saving is that re-read. The
+  plan owner reads the 2026-11-19 request ("a screen to review and ensure that we have their
+  programs correct") as reversing R16a for structure and movement matching only, with R8 and R8a
+  still holding for loads. **The maintainer confirms that before any plan.**
+
+  **Still open in the PRD (its open question 5, not the closed one):** how long an uploaded image is
+  kept, and where. Proposed by the plan owner: processed and discarded, never kept and never used
+  for anything else, because a sheet can carry a child's name and numbers, and other children's.
+
+  **What it needs settled before any plan:** the two answers above (`privacy-reviewer` lens on
+  every PR); a test set of **synthetic** sheets in real formats (`SYNTH-1`), never a real family's
+  sheet, with the expected result for each, so accuracy is measured and not claimed; and what the
+  screen does with a line it cannot read. Depends on `CAT-3` (the matching) and on FAM-1's builder
+  (the draft is an ordinary program).
+
+  **Binding here from the PRD.** R7 is a requirement of the PRD; R7a, R8 and R8a are the
+  maintainer's decisions of 2026-08-20:
   - **R7:** the extractor emits only what the source literally states. Anything else is empty,
     never inferred.
   - **R7a:** free-form prose is refused, that fragment only, and routed to a form. Text pasted from
@@ -1231,15 +1253,8 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   - **R8:** a risky value (a load, a height, a distance, a rep count, which movement it is) is never
     written by the model. The sheet's value is shown as fixed source text beside an **empty** field
     and one tap fills it, one value at a time. There is no "fill all" and no bulk confirm, ever.
-    So the review screen checks structure and matching; it is not where loads are accepted.
-    **Still open in the PRD (its Q5):** how long an uploaded image is kept, and where. Proposed by the
-    plan owner: processed and discarded, never kept and never used for anything else, because a sheet
-    can carry a child's name and numbers, and other children's.
-    **What it needs settled before any plan:** that answer (`privacy-reviewer` lens on every PR); a
-    test set of **synthetic** sheets in real formats (`SYNTH-1`), never a real family's sheet, with
-    the expected result for each, so accuracy is measured and not claimed; and what the screen does
-    with a line it cannot read. Depends on `CAT-3` (the matching) and on FAM-1's builder (the draft is
-    an ordinary program).
+  - **R8a:** an imported load is filled at the moment of use, the first day that movement comes up,
+    which is what makes R8's one tap safe. So a review screen is not where loads are accepted.
 
 - **LIFE-1 — the Wake button on a past day writes TODAY's wake, and can write a second one.**
   _(found by a UX panel during `V1-9b` B1-2, 2026-11-14; not scoped.)_ `logLifeActivitiesAction`
