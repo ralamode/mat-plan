@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index c888c629..64793522 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -146,7 +146,7 @@ export const PARENT_TABLES: readonly GraphTable[] = HOUSEHOLD_GRAPH.map((g) => g
+     ),
+ );
+ 
+-const FIRST: readonly GraphTable[] = [schema.programBlocks, schema.profiles];
++const FIRST: readonly GraphTable[] = [schema.profiles, schema.programBlocks];
+ 
+ /**
+  * 🔴 The order the core locks in (see the module doc): `program_blocks`, `profiles`, the household

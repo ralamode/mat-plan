@@ -1,14 +1,13 @@
 diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
-index fe2b9d5..05c6eb8 100644
+index 20e9eff5..7a3741ff 100644
 --- a/packages/db/src/writers/ownership.ts
 +++ b/packages/db/src/writers/ownership.ts
-@@ -415,7 +415,8 @@ export async function findNameMatch(
+@@ -505,7 +505,7 @@ export async function findNameMatch(
      (r) =>
        foldName(r.name) === folded &&
        // `!=` on purpose: a NULL `client_id` must NOT be excluded. See the docblock.
--      (options.excludeClientId === undefined || r.clientId !== options.excludeClientId),
-+      (options.excludeClientId === undefined ||
-+        (r.clientId !== null && r.clientId !== options.excludeClientId)),
+-      (exclude === undefined || r.clientId !== exclude),
++      (exclude === undefined || (r.clientId !== null && r.clientId !== exclude)),
    );
    if (matches.length === 0) return null;
  

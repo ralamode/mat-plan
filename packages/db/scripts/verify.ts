@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
+  ACTIVITY_TYPE_KEYS,
   ACTIVITY_CATEGORIES,
   ACTIVITY_INPUT_SHAPES,
   ACTIVITY_METRIC_MAP,
@@ -21,6 +22,7 @@ import {
   METRIC_AGGREGATIONS,
   METRIC_DEFINITION_SEED_ROWS,
   METRIC_KEYS,
+  PRACTICE_UNIT,
   METRIC_VALUE_TYPES,
   MOVEMENT_PATTERNS,
   MOVEMENT_SEED_PUBLIC_IDS,
@@ -69,7 +71,12 @@ import { type Database, schema } from '../src/client';
 import { writeCheckinEntries } from '../src/writers/checkin';
 import { hideEntries, restoreHidden } from '../src/writers/hide';
 import { hiddenDayCounts, hiddenEntriesForDay } from '../src/queries/hidden-entries';
-import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
+import {
+  bodyweightMonthRows,
+  checkinMonthRows,
+  loggedMonths,
+  strengthMonthRows,
+} from '../src/queries/export-month';
 import { prescribedSnapshotsFor } from '../src/writers/prescribed-snapshot';
 import { householdProfileRows } from '../src/queries/household-profiles';
 import { liveHouseholdIds } from '../src/queries/household-scope';
@@ -154,8 +161,10 @@ import {
   db,
   expectRejectedBy,
   orFail,
+  rolledBack,
   type VerifyContext,
 } from './verify/harness';
+import { ADVISORY_LOCK } from '../src/writers/locks';
 import { verifyProgram } from './verify/program';
 import { verifySchema } from './verify/schema';
 import { verifySingleValues } from './verify/single-values';
@@ -421,6 +430,9 @@ const A_SCOPE = householdScopeForScript(households[0].id);
 // ⚠️ It is NOT narrowable: `ownerScope(A_MEMBER_SCOPE)` returns `null`, which is what makes it
 // impossible to pass to `archiveProfile` without a cast — the compile-time half, asserted below.
 const A_MEMBER_SCOPE = householdScopeForScript(households[0].id, HOUSEHOLD_ROLE.member);
+// A household id no row will ever carry: the "household is gone" case of `createProfile`'s lock (an
+// erasure mid-call). Far above any id this file's inserts can reach.
+const GONE_SCOPE = householdScopeForScript(2_000_000_000);
 
 // ── TEN-1 chunk 1a: households.synthetic — the OBS-2 flag, shipped dark (migration 0014) ─────────
 // Deliberately NOT a bare `assert.equal(households[0].synthetic, false)`: that compares the column
@@ -5208,6 +5220,25 @@ const aBwExportTarget = await insertBodyweightProbe({
   activityDate: '2026-03-02',
 });
 
+// (f) FAM-1 14b: a check-in for each household in that same March, so `checkinMonthRows` has a row to
+// wrongly find in both directions too.
+{
+  const practiceId = await activityTypeIdByKey(ACTIVITY_TYPE_KEYS.wrestling_practice);
+  for (const profileId of [bwOwnerRow.id, verifyProfileRow.id]) {
+    await db.insert(schema.entries).values({
+      publicId: newId(),
+      clientId: newId(),
+      profileId,
+      activityDate: '2026-03-05',
+      unit: PRACTICE_UNIT,
+      valueNum: '60',
+      activityTypeId: practiceId,
+      metricKey: METRIC_KEYS.practice_minutes,
+      status: ENTRY_STATUS.done,
+    });
+  }
+}
+
 // (e) TEN-1 1c: ONE block per household, both programming the SAME day_role, through the REAL
 // `seedProgram`. The V1-10 fixture deliberately gives the two households DISJOINT day_roles, which
 // proves day-aware block selection but cannot prove household scoping — asked for a day_role the
@@ -5269,7 +5300,7 @@ assert.equal(
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
 // `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
 // row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
-// adherence and programmed-day cards, and the three month reads behind the CSV export.
+// adherence and programmed-day cards, and the four month reads behind the CSV export.
 //
 // Each row names **its own pair of profiles**. The reads need different fixtures — adherence needs
 // ramp targets, the export reads need logged sessions, the program read needs a block — and one
@@ -5359,6 +5390,13 @@ const TEN1_READS_1C: readonly Ten1Read[] = [
     VERIFY_PROFILE_PUBLIC_ID,
     (profilePublicId, scope) =>
       bodyweightMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
+  ],
+  [
+    'checkinMonthRows (the CSV export’s check-ins)',
+    bwOwner,
+    VERIFY_PROFILE_PUBLIC_ID,
+    (profilePublicId, scope) =>
+      checkinMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
   ],
   [
     'loggedMonths (which months the export writes at all)',
@@ -5561,7 +5599,7 @@ console.log(
 // follow-up 1c's own review recorded for 1d.
 await ten1ReadMatrix(TEN1_READS_1C);
 console.log(
-  `✓ TEN-1 1c: the READ matrix — ${TEN1_READS_1C.length} scoped reads (programDayRows, the three ` +
+  `✓ TEN-1 1c: the READ matrix — ${TEN1_READS_1C.length} scoped reads (programDayRows, the four ` +
     'export month reads), each proved in BOTH directions, after every 1b proof above',
 );
 
@@ -7426,52 +7464,9 @@ console.log(
     await asPg.delete(schema.households).where(eq(schema.households.id, tmpHh2!.id));
   }
 
-  // (5) 🔴 THE DELETION-ORDER PROOF — the one PRIV-3 predicted in writing.
-  //
-  // Isolated on its OWN household, deliberately: deleting the seeded household aborts on
-  // `profiles_household_id_households_id_fk` FIRST, so it proves the runbook aborts somewhere and
-  // says nothing about THIS table. A household whose only child is a membership names the FK that
-  // runbooks.md step 13 exists for, and nothing else.
-  const [lone] = await asPg
-    .insert(schema.households)
-    .values({ publicId: newId(), name: 'verify 1b deletion-order' })
-    .returning({ id: schema.households.id });
-  // Inserted DIRECTLY, not through `insertHouseholdMember`: the writer takes a `HouseholdScope`, and
-  // minting a third one here is precisely what `scope.test.ts`'s "exactly two named scopes" guard
-  // forbids — it caught this on the first run. The capability path is already proved at (2); what
-  // this proof needs is a row, and the FK does not care how it arrived.
-  await asPg.insert(schema.householdMembers).values({
-    publicId: newId(),
-    householdId: lone!.id,
-    clerkUserId: CLERK_B,
-    role: HOUSEHOLD_ROLE.member,
-  });
-
-  // Out of order: `households` before `household_members` → the NO ACTION FK aborts the transaction.
-  await expectRejectedBy('household_members_household_id_households_id_fk', async () =>
-    asPg.delete(schema.households).where(eq(schema.households.id, lone!.id)),
-  );
-  assert.equal(
-    (
-      await asPg
-        .select()
-        .from(schema.householdMembers)
-        .where(eq(schema.householdMembers.householdId, lone!.id))
-    ).length,
-    1,
-    'AUTH-1 1b: the aborted delete rolled back — the membership is still there',
-  );
-
-  // In the runbook's order (step 13 then 14): it commits, and leaves zero rows.
-  await asPg
-    .delete(schema.householdMembers)
-    .where(eq(schema.householdMembers.householdId, lone!.id));
-  await asPg.delete(schema.households).where(eq(schema.households.id, lone!.id));
-  assert.equal(
-    (await asPg.select().from(schema.households).where(eq(schema.households.id, lone!.id))).length,
-    0,
-    'AUTH-1 1b: in runbooks.md order the household deletion COMMITS and leaves nothing',
-  );
+  // (5) The deletion-order proof that stood here (memberships before the household row) is
+  // subsumed by `verify/erasure.ts` (PRIV-3 2a): P2 holds every FK into the graph child before
+  // parent against `pg_constraint`, and P3 runs the whole delete in that order.
 
   // (6) THE CLAIM CORRECTION, exercised rather than read. A correction nobody has run is a
   // correction nobody has tested, and this one performs the single write that 1c's whole resolver
@@ -8760,6 +8755,78 @@ console.log(
       `${MAX_HOUSEHOLD_ATHLETES + 1}th while still honouring a replay at the cap`,
   );
 }
+
+// ── TD: the athlete cap holds under concurrent adds (plan: docs/plans/td-athlete-cap-lock.md) ────────
+// `createProfile` takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` before it counts,
+// as `newItem` does (#605). Waiting cannot be shown on PGlite's single connection; the lock and its
+// key can. Every case runs in `rolledBack`, so nothing here changes what later blocks count.
+await rolledBack(async (tx) => {
+  // (1) The lock, keyed by the household. `asTx(tx)`, never `asPg`: on one connection a query on the
+  //     pool inside this transaction would wait forever. createProfile's own transaction is a
+  //     savepoint here, and an xact lock taken in a savepoint is held until the outer one ends.
+  await createProfile(asTx(tx), A_SCOPE, {
+    name: 'TD Cap Lock Probe',
+    kind: PROFILE_KIND.kid,
+    clientId: newId(),
+  });
+  const [key] = (await tx.execute(sql`select hashint8(${households[0].id}::bigint) as k`))
+    .rows as Array<{ k: number }>;
+  const locks = (
+    await tx.execute(
+      sql`select classid::bigint as c, objid::bigint as o from pg_locks where locktype = 'advisory' and objsubid = 2`,
+    )
+  ).rows as Array<{ c: string | number; o: string | number }>;
+  assert.ok(
+    locks.some(
+      (l) =>
+        Number(l.c) === ADVISORY_LOCK.householdAthletes &&
+        Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
+    ),
+    'TD athlete cap: createProfile holds the household-athletes advisory lock, keyed by its household',
+  );
+});
+
+await rolledBack(async (tx) => {
+  // (2) A household that is gone takes no lock, so nothing is counted or written: `refused`.
+  const goneKey = newId();
+  assert.deepEqual(
+    await createProfile(asTx(tx), GONE_SCOPE, {
+      name: 'TD Cap Orphan',
+      kind: PROFILE_KIND.kid,
+      clientId: goneKey,
+    }).catch((e: unknown) => ({ threw: String(e).slice(0, 80) })),
+    { ok: false, reason: 'refused' },
+    'TD athlete cap: createProfile for a household that is gone is refused, never counted unlocked',
+  );
+  const [stray] = await tx
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.clientId, goneKey));
+  assert.equal(stray, undefined, 'TD athlete cap: …and writes nothing');
+});
+
+await rolledBack(async (tx) => {
+  // (3) `findNameMatch`'s exclusion compares in one case: an upper-cased id still excludes its own
+  //     row (the stored `uuid` reads back lower-case). Defence in depth: through `createProfile` the
+  //     SQL replay lookup ignores case and returns first.
+  const key = newId();
+  const made = await createProfile(asTx(tx), A_SCOPE, {
+    name: 'TD Case Probe',
+    kind: PROFILE_KIND.kid,
+    clientId: key,
+  });
+  assert.ok(made.ok, 'TD athlete cap: the case probe athlete is added');
+  assert.equal(
+    await findNameMatch(asTx(tx), A_SCOPE, foldName('TD Case Probe'), {
+      excludeClientId: key.toUpperCase(),
+    }),
+    null,
+    'TD athlete cap: an upper-cased client id still excludes its own row from the name match',
+  );
+});
+console.log(
+  '✓ TD athlete cap: createProfile counts under the household lock; a gone household is refused; the exclusion ignores case',
+);
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // PROF-1 a-1d — the duplicate-name warning: advisory, scoped, archived-aware, and NULL-key-safe.

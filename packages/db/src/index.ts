@@ -93,4 +93,4 @@ export {
   SEED_FIXTURES_ENV,
 } from './seed';
 
-export type { StrengthMonthRow } from './queries/export-month';
+export type { CheckinMonthRow, StrengthMonthRow } from './queries/export-month';

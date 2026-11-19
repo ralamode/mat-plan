@@ -28,7 +28,12 @@ import { type HouseholdScope, makeHouseholdScope } from '../scope';
  * TEN-1 matrix), `scripts/corrections/registry.ts` (a correction has no request to derive a household
  * from, and it must still be household-scoped), and `src/seed.ts` (TEN-1 1c — `seedProgram` resolves
  * **one household per block, inside the loop**, so a caller-supplied scope would be the wrong one).
- * Three real consumers, not a speculative extraction.
+ * Three real consumers, not a speculative extraction. The proof modules under `scripts/verify/`
+ * mint their own households' scopes the same way (`src/scope.test.ts` requires each to be a named
+ * `const`).
+ *
+ * `PRIV-3`'s erasure core (`src/erasure/erase.ts`) does NOT call it: it takes an `OwnerScope`, so its
+ * caller (a correction, or `db:verify`) mints the scope here and narrows it with `ownerScope()`.
  *
  * ⚠️ `src/seed.ts` is in the barrel's graph, so this constructor is transitively in `apps/web`'s
  * module graph. That is safe only because nothing re-exports it and nothing in `apps/web` names it —
