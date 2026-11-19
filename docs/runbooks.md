@@ -2146,7 +2146,7 @@ also asked for their account to go (step 0); no names. Retention as for a househ
 
 **When:** the household asks for one program it built, one workout in such a program, or one item it
 typed (a movement of its own) to be removed, and nothing else. The app can rename a program, and a
-workout once the workout pages are in (FAM-1 7b-ii), but delete neither, and it can neither rename nor delete a typed item, so FAM-1 7b-i's notice
+workout (since FAM-1 7b-ii), but delete neither, and it can neither rename nor delete a typed item, so FAM-1 7b-i's notice
 sentence tells the household to ask. **Manual until `PRIV-3` scripts it** (PR 3b scripts the program
 removal). Read ["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1) first: this
 section reuses its transaction shape, its pre-flights and its delete order, restricted to one program,
