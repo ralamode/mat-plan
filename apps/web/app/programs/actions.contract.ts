@@ -4,16 +4,18 @@ import {
   copyWorkoutAction,
   createProgramAction,
   newItemAction,
+  putOnAction,
   renameProgramAction,
   saveWeekAction,
   saveWorkoutAction,
+  takeOffAction,
 } from './actions';
 
 /**
- * The real `ProgramActions` (FAM-1 step 7a-ii): the object a page hands one lane-B screen, now
- * that all six required members exist. A route passes the real actions it has, never a mix
- * (`packages/shared/src/program/actions.ts`); `putOn` and `takeOff` arrive at step 15 and are left
- * out, so their controls stay hidden.
+ * The real `ProgramActions` (FAM-1 steps 7a-ii and 15): the object a page hands one lane-B screen,
+ * the six required members and, since step 15, `putOn` and `takeOff`, which light the Put-on dialog
+ * and Take off. A route passes the real actions it has, never a mix
+ * (`packages/shared/src/program/actions.ts`).
  *
  * ⚠️ **Not in `actions.ts`**: a `'use server'` module may export only async functions. A plain
  * module (no `'server-only'`, no `'use client'`), so 7b's pages can pass it to a client screen:
@@ -27,4 +29,6 @@ export const PROGRAM_ACTIONS = {
   saveWeek: saveWeekAction,
   copyWorkout: copyWorkoutAction,
   newItem: newItemAction,
+  putOn: putOnAction,
+  takeOff: takeOffAction,
 } satisfies ProgramActions;

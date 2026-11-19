@@ -1,7 +1,6 @@
 import {
   emptyWeek,
   MAX_DAY_SLOTS,
-  MAX_HOUSEHOLD_ITEMS,
   MAX_PROGRAM_WORKOUTS,
   MONDAY_FIRST,
   PROGRAM_REFUSAL,
@@ -19,7 +18,6 @@ import {
   dayFullLabel,
   dayFullText,
   dayIsFull,
-  householdIsFull,
   ITEM_PICKER_COPY,
   nameRefusal,
   newItemRefusal,
@@ -28,6 +26,7 @@ import {
   saveRefusal,
   supersetLetterOf,
   supersetSpoken,
+  lastDayText,
   takenOffText,
   usedByText,
   weekdayName,
@@ -50,8 +49,11 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
     expect(athleteHint(one!, familyProgram.today)).toBe('since Mon, Nov 9 · also on Stretching');
     const two = familyProgramAfterTakeOff.athletes[1]!;
     expect(athleteHint(two, familyProgramAfterTakeOff.today)).toBe(
-      'since Mon, Nov 9 · last day Sat, Nov 14',
+      'since Mon, Nov 9 · last day today',
     );
+    // The one rule: a last day that is not today (no writer makes one) is its date.
+    expect(lastDayText('2026-11-14', '2026-11-14')).toBe('last day today');
+    expect(lastDayText('2026-11-15', '2026-11-14')).toBe('last day Sun, Nov 15');
     expect(athleteHint({ ...two, since: '2026-11-15', lastDay: null }, '2026-11-14')).toBe(
       'starts Sun, Nov 15',
     );
@@ -59,10 +61,10 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
 
   it('Take off says what happens, for someone started and someone not', () => {
     expect(takenOffText('Athlete Two', 'Family program', true)).toBe(
-      'Athlete Two comes off Family program after today. Days already logged keep what they had.',
+      'Athlete Two comes off Family program after today. Until midnight, putting them back on undoes this. What they’ve logged stays.',
     );
     expect(takenOffText('Athlete Two', 'Family program', false)).toBe(
-      'Athlete Two won’t start Family program.',
+      'Athlete Two is off Family program.',
     );
   });
 
@@ -177,14 +179,6 @@ describe('the workout editor’s caps (FAM-1 7b-ii): its own words for limit_rea
       footer:
         'Your household has the most custom items it can keep (500), so this one wasn’t made. Pick one from the list instead.',
     });
-  });
-
-  it('counts the household’s own items only, and stops at the cap, not one before', () => {
-    const own = (n: number) => Array.from({ length: n }, () => ({ owner: 'household' }));
-    const library = Array.from({ length: MAX_HOUSEHOLD_ITEMS }, () => ({ owner: 'catalog' }));
-    expect(householdIsFull(own(MAX_HOUSEHOLD_ITEMS - 1))).toBe(false);
-    expect(householdIsFull(own(MAX_HOUSEHOLD_ITEMS))).toBe(true);
-    expect(householdIsFull([...library, ...own(1)])).toBe(false);
   });
 
   it('every other refusal keeps its own line (no refusal falls to limit_reached’s words)', () => {

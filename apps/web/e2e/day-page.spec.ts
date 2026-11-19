@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { addDays, localWeekday } from '@mat-plan/shared';
 import { todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
@@ -8,7 +8,14 @@ import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
 import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
-import { bodyweightSection, isoDaysAgo, SEED_PROFILE_2_ROUTE, SEED_PROFILE_ROUTE } from './steps';
+import {
+  bodyweightSection,
+  isoDaysAgo,
+  programRowTick,
+  SEED_PROFILE_2_ROUTE,
+  SEED_PROFILE_ROUTE,
+  settled,
+} from './steps';
 
 /**
  * The day page's workouts, end to end (FAM-1 12c, the contract's first end-to-end path).
@@ -42,13 +49,7 @@ const logDay = () => (localWeekday(today()) === 0 ? isoDaysAgo(1) : today());
 const routeFor = (day: string) =>
   day === today() ? SEED_PROFILE_ROUTE : `${SEED_PROFILE_ROUTE}?d=${day}`;
 
-const card = (page: Page, item: string) =>
-  page
-    .getByRole('region', { name: morning.name })
-    .getByRole('listitem')
-    .filter({ has: page.getByRole('heading', { level: 4, name: item, exact: true }) });
-const tick = (page: Page, item: string) =>
-  card(page, item).getByRole('button', { name: DAY_COPY.logLabel(item) });
+const tick = (page: Page, item: string) => programRowTick(page, morning.name, item);
 const ticks = (page: Page) => page.getByRole('button', { name: new RegExp(`^${LOG_PREFIX}`) });
 /** Stretching (the fixture's second program) runs every day, so its workout has a row on any day. */
 const daily = todayTwoPrograms.workouts.find(
@@ -63,12 +64,6 @@ const anyTick = (page: Page) =>
     .getByRole('region', { name: daily.name })
     .getByRole('button', { name: new RegExp(`^${LOG_PREFIX}`) })
     .first();
-
-/** A ✓ has settled: pressed or not, and no longer saving. */
-async function settled(button: Locator, pressed: boolean) {
-  await expect(button).toHaveAttribute('aria-pressed', String(pressed));
-  await expect(button).not.toHaveAttribute('aria-busy', 'true');
-}
 
 // Tests that write the same rows run in order, each group on its own, so one failure does not hide
 // the others' results.

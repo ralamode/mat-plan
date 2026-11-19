@@ -47,18 +47,25 @@ vi.mock('@/lib/dal/program/writes', () => ({
   saveHouseholdWeek: vi.fn(async () => ({ ok: true })),
   copyHouseholdWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: COPY_ID })),
   newHouseholdItem: vi.fn(async () => ({ ok: true, ...ITEM })),
+  putOnHouseholdProgram: vi.fn(async () => ({ ok: true })),
+  takeOffHouseholdProgram: vi.fn(async () => ({ ok: true, lastDay: TODAY })),
 }));
+// The active-zone day (FAM-1 15): Put on and Take off read it here and hand it to the DAL.
+vi.mock('@/lib/active-timezone', () => ({ getActiveLocalDay: vi.fn(async () => TODAY) }));
 
 import { revalidatePath } from 'next/cache';
 
 import { PROGRAMS_PATH } from '@/components/program-builder/routes';
+import { APP_HOME_PATH, athletePath } from '@/lib/constants';
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
   newHouseholdItem,
+  putOnHouseholdProgram,
   renameHouseholdProgram,
   saveHouseholdWeek,
   saveHouseholdWorkout,
+  takeOffHouseholdProgram,
 } from '@/lib/dal/program/writes';
 import { describeActionMatrices } from '@/test/action-matrix';
 
@@ -66,9 +73,11 @@ import {
   copyWorkoutAction,
   createProgramAction,
   newItemAction,
+  putOnAction,
   renameProgramAction,
   saveWeekAction,
   saveWorkoutAction,
+  takeOffAction,
 } from './actions';
 import { PROGRAM_ACTIONS } from './actions.contract';
 import { ACTION_REGISTRY } from './actions.registry';
@@ -101,17 +110,25 @@ const copyInput = () => ({
   label: null,
 });
 const newItemInput = () => ({ name: 'Bear crawl', trackingType: TRACKING_TYPE.time_sets });
+const TODAY = '2026-11-21';
+const OTHER_PROFILE_ID = '019826b4-0000-7000-8000-000000000002';
+const putOnInput = () => ({
+  programPublicId: PROGRAM_ID,
+  profilePublicIds: [PROFILE_ID, OTHER_PROFILE_ID],
+  from: TODAY,
+});
+const takeOffInput = () => ({ programPublicId: PROGRAM_ID, profilePublicId: PROFILE_ID });
 
 const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
 
 beforeEach(() => vi.clearAllMocks());
 
 /**
- * The six actions are the contract's members: a parameter of `unknown` accepts the member's input,
- * and the answers match. `actions.contract.ts` assembles them (its own `satisfies` is the compile
- * check); this pins that it holds exactly these, with `putOn` and `takeOff` left out (step 15).
+ * The actions are the contract's members: a parameter of `unknown` accepts the member's input, and
+ * the answers match. `actions.contract.ts` assembles them (its own `satisfies` is the compile
+ * check); this pins that it holds exactly these: the six, and Put on and Take off since step 15.
  */
-it('the real ProgramActions holds the six actions, and no putOn or takeOff yet', () => {
+it('the real ProgramActions holds the six actions, and putOn and takeOff (step 15)', () => {
   expect(PROGRAM_ACTIONS).toEqual({
     createProgram: createProgramAction,
     renameProgram: renameProgramAction,
@@ -119,6 +136,8 @@ it('the real ProgramActions holds the six actions, and no putOn or takeOff yet',
     saveWeek: saveWeekAction,
     copyWorkout: copyWorkoutAction,
     newItem: newItemAction,
+    putOn: putOnAction,
+    takeOff: takeOffAction,
   });
 });
 
@@ -164,6 +183,16 @@ describeActionMatrices({
       writers: [newHouseholdItem],
       scopeMiss: () => vi.mocked(newHouseholdItem).mockResolvedValueOnce(NOT_FOUND),
     },
+    putOnAction: {
+      fn: putOnAction,
+      writers: [putOnHouseholdProgram],
+      scopeMiss: () => vi.mocked(putOnHouseholdProgram).mockResolvedValueOnce(NOT_FOUND),
+    },
+    takeOffAction: {
+      fn: takeOffAction,
+      writers: [takeOffHouseholdProgram],
+      scopeMiss: () => vi.mocked(takeOffHouseholdProgram).mockResolvedValueOnce(NOT_FOUND),
+    },
   },
   validBody: {
     createProgramAction: createInput,
@@ -172,6 +201,8 @@ describeActionMatrices({
     saveWeekAction: weekInput,
     copyWorkoutAction: copyInput,
     newItemAction: newItemInput,
+    putOnAction: putOnInput,
+    takeOffAction: takeOffInput,
   },
 });
 
@@ -211,6 +242,16 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
       'new item, an unknown tracking type',
       () => newItemAction({ ...newItemInput(), trackingType: 'vibes' }),
     ],
+    ['put on, nobody named', () => putOnAction({ ...putOnInput(), profilePublicIds: [] })],
+    [
+      'put on, one athlete twice',
+      () => putOnAction({ ...putOnInput(), profilePublicIds: [PROFILE_ID, PROFILE_ID] }),
+    ],
+    ['put on, a start that is not a day', () => putOnAction({ ...putOnInput(), from: 'today' })],
+    [
+      'take off, an athlete id that is not a uuid',
+      () => takeOffAction({ ...takeOffInput(), profilePublicId: 'x' }),
+    ],
   ])('%s is invalid, and the DAL is never called', async (_label, call) => {
     expect(await call()).toEqual({ ok: false, reason: PROGRAM_REFUSAL.invalid });
     for (const dal of [
@@ -220,6 +261,8 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
       saveHouseholdWeek,
       copyHouseholdWorkout,
       newHouseholdItem,
+      putOnHouseholdProgram,
+      takeOffHouseholdProgram,
     ]) {
       expect(dal).not.toHaveBeenCalled();
     }
@@ -373,6 +416,73 @@ describe('the program actions (FAM-1 7a-i, 7a-ii)', () => {
     ['new item', PROGRAM_REFUSAL.retry, newHouseholdItem, () => newItemAction(newItemInput())],
   ] as const)(
     '%s: the writer’s %s passes through, with nothing revalidated (7a-ii)',
+    async (_name, reason, dal, call) => {
+      vi.mocked(dal).mockResolvedValueOnce({ ok: false, reason } as never);
+      expect(await call()).toEqual({ ok: false, reason });
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('Put on and Take off (FAM-1 15)', () => {
+  /**
+   * What the mock cannot prove is proved where the writes are: a replay of a Put on is one effect
+   * (an athlete already on it is skipped), a repeat Take off answers as the first, and a `from`
+   * that is neither today nor tomorrow is `invalid` (lane P's `db:verify`,
+   * `packages/db/scripts/verify/program.ts`). Here: the action hands the writer today, from the
+   * active zone, and answers with what it said.
+   */
+  it('🔴 each hands the DAL the parsed input AND today, read from the active zone', async () => {
+    await putOnAction({ ...putOnInput(), programPublicId: PROGRAM_ID.toUpperCase() });
+    expect(vi.mocked(putOnHouseholdProgram).mock.calls).toEqual([[putOnInput(), TODAY]]);
+    await takeOffAction(takeOffInput());
+    expect(vi.mocked(takeOffHouseholdProgram).mock.calls).toEqual([[takeOffInput(), TODAY]]);
+  });
+
+  it.each([TODAY, null])(
+    'Take off answers the writer’s lastDay (%s), never its own',
+    async (day) => {
+      vi.mocked(takeOffHouseholdProgram).mockResolvedValueOnce({
+        ok: true,
+        lastDay: day,
+        since: '2026-11-01',
+      } as never);
+      expect(await takeOffAction(takeOffInput())).toEqual({ ok: true, lastDay: day });
+    },
+  );
+
+  it('Put on answers ok and nothing else, whatever the DAL adds', async () => {
+    vi.mocked(putOnHouseholdProgram).mockResolvedValueOnce({ ok: true, internalId: 4 } as never);
+    expect(await putOnAction(putOnInput())).toEqual({ ok: true });
+  });
+
+  it('a success revalidates the builder, Home and the day page of every athlete it names', async () => {
+    await putOnAction(putOnInput());
+    expect(vi.mocked(revalidatePath).mock.calls).toEqual([
+      [PROGRAMS_PATH, 'layout'],
+      [APP_HOME_PATH],
+      [athletePath(PROFILE_ID)],
+      [athletePath(OTHER_PROFILE_ID)],
+    ]);
+    vi.mocked(revalidatePath).mockClear();
+    await takeOffAction(takeOffInput());
+    expect(vi.mocked(revalidatePath).mock.calls).toEqual([
+      [PROGRAMS_PATH, 'layout'],
+      [APP_HOME_PATH],
+      [athletePath(PROFILE_ID)],
+    ]);
+  });
+
+  it.each([
+    ['put on', PROGRAM_REFUSAL.invalid, putOnHouseholdProgram, () => putOnAction(putOnInput())],
+    [
+      'take off',
+      PROGRAM_REFUSAL.retry,
+      takeOffHouseholdProgram,
+      () => takeOffAction(takeOffInput()),
+    ],
+  ] as const)(
+    '%s: the writer’s %s passes through, with nothing revalidated',
     async (_name, reason, dal, call) => {
       vi.mocked(dal).mockResolvedValueOnce({ ok: false, reason } as never);
       expect(await call()).toEqual({ ok: false, reason });

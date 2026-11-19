@@ -21,6 +21,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
+import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { athletePath } from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
@@ -105,7 +106,7 @@ describe('AthleteSwitcher', () => {
 });
 
 describe('NotOnAProgram', () => {
-  it('no-program: not on a program yet, with no link while there is no Programs page', () => {
+  it('no-program: not on a program yet, with no link when the page passes none', () => {
     render(<NotOnAProgram plan={noProgram} />);
     expect(noProgram.writable).toBe(true);
     expect(screen.getByText(`${PROGRAM_COPY.notYet} ${PROGRAM_COPY.notYetLogHere}`)).toBeTruthy();
@@ -118,11 +119,24 @@ describe('NotOnAProgram', () => {
     expect(screen.queryByText(new RegExp(PROGRAM_COPY.notYetLogHere))).toBeNull();
   });
 
+  it('an archived athlete gets no link even when the page passes one: the plan never names them', () => {
+    // An archived athlete is not in the plan's athletes (day-shapes: live athletes only), so the
+    // notice has no name to put on a program; offersProgramsLink's archived check is the first guard.
+    const archived = {
+      ...noProgram,
+      writable: false,
+      athletes: noProgram.athletes.filter((a) => a.profilePublicId !== noProgram.profilePublicId),
+    };
+    render(<NotOnAProgram plan={archived} programsHref={PROGRAMS_PATH} />);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(PROGRAM_COPY.notYet, { exact: true })).toBeTruthy();
+  });
+
   it('no-program with a Programs page: asks for the athlete to be put on one, and links there', () => {
-    render(<NotOnAProgram plan={noProgram} programsHref="/programs" />);
+    render(<NotOnAProgram plan={noProgram} programsHref={PROGRAMS_PATH} />);
     expect(screen.getByText(new RegExp(PROGRAM_COPY.notYetPutOn(nameOf(noProgram))))).toBeTruthy();
     expect(screen.getByRole('link', { name: PROGRAM_COPY.programs }).getAttribute('href')).toBe(
-      '/programs',
+      PROGRAMS_PATH,
     );
   });
 

@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/executor.ts b/packages/db/src/writers/executor.ts
+index d873c48c..3859cb4b 100644
+--- a/packages/db/src/writers/executor.ts
++++ b/packages/db/src/writers/executor.ts
+@@ -43,9 +43,7 @@ export function idsOf(res: unknown): number[] {
+  */
+ export const LOCK_TIMEOUT = '5s';
+ export async function setLocalTimeouts(tx: Reads, statementTimeout: '30s' | '60s'): Promise<void> {
+-  await tx.execute(
+-    sql`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true), set_config('statement_timeout', ${statementTimeout}, true)`,
+-  );
++  await tx.execute(sql`SELECT 1`);
+   // Compared as intervals: Postgres displays '60s' as '1min'.
+   const [held] = rowsOf<{ ok: boolean }>(
+     await tx.execute(

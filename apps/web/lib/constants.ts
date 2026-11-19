@@ -373,8 +373,15 @@ export const NAV_LINK_CLASS =
 export const NAV_ROW_CLASS =
   'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3 focus-visible:ring-inset';
 
-export const QUIET_LINK_CLASS =
-  'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
+/**
+ * An underlined, tap-target-sized link with no colour or size of its own: `QUIET_LINK_CLASS` builds on
+ * it, and a link in a name or a sentence that keeps its text's colour uses it with a hover of its own
+ * (the program builder's athlete names and "Home", FAM-1 15).
+ */
+export const INLINE_LINK_CLASS =
+  'focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-3';
+
+export const QUIET_LINK_CLASS = `text-muted-foreground hover:text-foreground text-sm ${INLINE_LINK_CLASS}`;
 
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
@@ -1264,22 +1271,18 @@ export const ATHLETE_FORM_COPY = {
   kindRecoveryMemberBefore: 'Added the wrong kind?',
   kindRecoveryOwnerAfter: 'and add them again — what they logged stays with the archived athlete.',
   /**
-   * The per-option consequences (PROF-1 a-1u). **Parallel, and BOTH always render.**
+   * What a new athlete starts with (FAM-1 15, v12's line): no program. One line under the kind
+   * choice, the same for Child and Adult, because a program is no longer something the kind decides.
+   * It replaced the per-option lines ("trains on the household's program" and its first-run and
+   * adult twins), which described the legacy seeded program (roadmap thread, N3, 2026-11-19).
    *
-   * 🔴 **The first version hid the child's consequence at first run**, which a UX lens caught: with no
-   * household program the kid line was dropped entirely, so the screen read "Child" next to
-   * "Adult — logs their own training" — in front of the form's main audience, implying children do
-   * not log. Both options now always say what the athlete's training FOLLOWS, which is the only fact
-   * that separates them.
-   *
-   * ⚠️ `kidWithProgram` vs `kidFirstRun`: the household's program is the real difference, but a
-   * first-run household has none, so claiming one would be false. The first-run wording describes the
-   * same rule by what the parent will do instead.
+   * ⚠️ **A function of the Programs page's name, not a sentence with "Programs" typed in.** The word
+   * is `BUILDER_COPY.programs` (the page's heading), and this module cannot import it:
+   * `builder-text.ts` imports from here, so reading it at this module's load would be a cycle that
+   * throws whenever `builder-text.ts` loads first. The form passes it in.
    */
-  kidWithProgram: 'trains on the household’s program',
-  kidFirstRun: 'follows the routine you save for them',
-  /** Never "no household program" — at first run there is none, which makes the negation confusing. */
-  adultConsequence: 'trains on their own',
+  startsWithNoProgram: (programs: string) =>
+    `New athletes start with no program. Put them on one or more from ${programs}.`,
   /** The submit. Named for what it does, not "Save" — this screen CREATES. */
   add: 'Add athlete',
   /**

@@ -1009,7 +1009,7 @@ describe('Change: Escape from any control, and a ✕ press that ends elsewhere',
     expect(actions.amendRow).not.toHaveBeenCalled();
   });
 
-  it('a ✕ press dragged off with a mouse in Safari (the field already blurred) is sent after the grace (pending the maintainer)', async () => {
+  it('a ✕ press dragged off with a mouse in Safari (the field already blurred) is sent after the grace', async () => {
     const { actions } = mount(yesterdayHalfDone, {
       change: true,
       wrap: () => ({ amendRow: amendOk }),
@@ -1048,7 +1048,7 @@ describe('Change: Escape from any control, and a ✕ press that ends elsewhere',
     expect(actions.amendRow).toHaveBeenCalledTimes(1);
   });
 
-  it('a ✕ press that becomes a scroll, with focus already out of the row, sends at once (pending the maintainer)', async () => {
+  it('a ✕ press that becomes a scroll, with focus already out of the row, sends at once', async () => {
     const { actions } = mount(yesterdayHalfDone, {
       change: true,
       wrap: () => ({ amendRow: amendOk }),
