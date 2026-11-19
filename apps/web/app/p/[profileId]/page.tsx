@@ -224,7 +224,7 @@ export default async function TodayPage({
       <NotOnAProgram
         plan={plan}
         programsHref={
-          offersProgramsLink(plan, { archived: profile.archived }) ? PROGRAMS_PATH : undefined
+          offersProgramsLink({ archived: profile.archived }) ? PROGRAMS_PATH : undefined
         }
       />
 

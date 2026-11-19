@@ -1,4 +1,4 @@
-import { addDays, ON_PROGRAM, type DayPlan } from '@mat-plan/shared';
+import { ON_PROGRAM, type DayPlan } from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
   noProgram,
@@ -72,22 +72,13 @@ describe('lookAheadFallsBack', () => {
 });
 
 describe('offersProgramsLink (FAM-1 15)', () => {
-  /** `noProgram` moved `n` days from its own today: the notice's case, on any day. */
-  const onDay = (n: number): DayPlan => ({ ...noProgram, day: addDays(noProgram.today, n) });
-  const live = { archived: false };
-
-  it('today and a later day link to Programs, for a live athlete', () => {
-    expect(onDay(0).day).toBe(noProgram.today);
-    expect(offersProgramsLink(onDay(0), live)).toBe(true);
-    expect(offersProgramsLink(onDay(1), live)).toBe(true);
+  // Any day (maintainer, 2026-11-19): the rule reads no day at all, so a past day, open or closed,
+  // links like today. Only an archived athlete, who cannot be put on a program, does not.
+  it('a live athlete links to Programs', () => {
+    expect(offersProgramsLink({ archived: false })).toBe(true);
   });
 
-  it('yesterday does not, though it is still writable: the link is not keyed on `writable`', () => {
-    expect(offersProgramsLink({ ...onDay(-1), writable: true }, live)).toBe(false);
-  });
-
-  it('an archived athlete does not, on today or a later day', () => {
-    expect(offersProgramsLink(onDay(0), { archived: true })).toBe(false);
-    expect(offersProgramsLink(onDay(1), { archived: true })).toBe(false);
+  it('an archived athlete does not', () => {
+    expect(offersProgramsLink({ archived: true })).toBe(false);
   });
 });

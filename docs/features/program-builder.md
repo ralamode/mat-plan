@@ -23,8 +23,8 @@ against fixtures and fakes on the preview route first, then wires it to real dat
 workout editor are real pages (`/programs`, `/programs/[programId]`, `…/workouts/[workoutId]` and
 `…/workouts/new`), opened from Home's Programs row, on the household's own data; every builder
 action is registered, Put on and Take off included (15 PR 1). The add-athlete form says a new
-athlete starts with no program, and an athlete on none, live and on today or a later day, gets a
-Programs link from their day page (15 PR 2). Home's program lines (15 PR 3) are still to come. Each
+athlete starts with no program, and an athlete on none, if live, gets a
+Programs link (on any day; maintainer, 2026-11-19) from their day page (15 PR 2). Home's program lines (15 PR 3) are still to come. Each
 step below adds its files and its invariants here.
 
 ## The map
