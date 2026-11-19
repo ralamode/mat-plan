@@ -272,12 +272,16 @@ flowchart TD
     reversed.
 21. 🔴 **The caps are counted under a lock, before the name** (C35; the contract's invariant 30).
     `newItem` stops the household's own items at `MAX_HOUSEHOLD_ITEMS` (counted as the picker lists
-    them, so the library and an item a catalog row shadows never count),
+    them, through the shared `householdItemsFull`, so the library and an item a catalog row shadows
+    never count),
     under a transaction-scoped advisory lock keyed on the household (`ADVISORY_LOCK.householdItems` in `writers/locks.ts`, reached through
     `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
     other, and a wait on it ends after `LOCK_TIMEOUT` (`setLocalLockTimeout`, set first in the
     same transaction, so it bounds every later lock wait there too) rather than queueing behind a
-    stuck holder. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
+    stuck holder. **The lock's read takes the household row `FOR KEY SHARE`**, so an erasure mid-call
+    (which holds the row `FOR UPDATE`) makes it wait and then find no row: `not_found`, never a 23503
+    from the insert after it. `db:verify` proves the lock mode in a transaction where no foreign-key
+    check can take the same lock (mutation 590). `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
     (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live
     workouts, under the block lock both take first; `copyWorkout` also refuses a weekday it would
     go on that already holds `MAX_DAY_SLOTS`, since it writes slots without a week to parse. `saveWeek` answers a weekday past
