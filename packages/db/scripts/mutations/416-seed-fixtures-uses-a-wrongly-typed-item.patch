@@ -1,12 +1,12 @@
 diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
-index e0c49a56..e5e689bb 100644
+index 7651e523..5cb77df0 100644
 --- a/packages/db/src/writers/program/seed-fixtures.ts
 +++ b/packages/db/src/writers/program/seed-fixtures.ts
-@@ -194,7 +194,6 @@ async function seedWorld(
-       if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
-       const made = must(result, `item ${key}`);
-       // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
--      if (made.trackingType !== type) return null;
-       const found = { itemPublicId: made.itemPublicId, name: made.name };
-       items.set(key, found);
-       return found;
+@@ -193,7 +193,6 @@ async function seedWorld(
+     if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
+     const made = must(result, `item ${key}`);
+     // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
+-    if (made.trackingType !== type) return null;
+     const found = { itemPublicId: made.itemPublicId, name: made.name };
+     items.set(key, found);
+     return found;

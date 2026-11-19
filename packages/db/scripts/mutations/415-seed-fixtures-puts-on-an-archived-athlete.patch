@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
-index e0c49a56..fdbda380 100644
+index 7651e523..b2df7db2 100644
 --- a/packages/db/src/writers/program/seed-fixtures.ts
 +++ b/packages/db/src/writers/program/seed-fixtures.ts
-@@ -276,7 +276,7 @@ async function seedWorld(
-       const profilePublicId = athletes[athlete];
-       if (!profilePublicId) continue;
-       // A seed athlete a person archived or removed is not put back on anything.
--      if (!(await liveActive(tx, scope, profilePublicId))) {
-+      if (!(await liveActive(tx, scope, profilePublicId)) && athlete === 'never') {
-         skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
-         continue;
-       }
+@@ -275,7 +275,7 @@ async function seedWorld(
+     const profilePublicId = athletes[athlete];
+     if (!profilePublicId) continue;
+     // A seed athlete a person archived or removed is not put back on anything.
+-    if (!(await liveActive(tx, scope, profilePublicId))) {
++    if (!(await liveActive(tx, scope, profilePublicId)) && athlete === 'never') {
+       skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
+       continue;
+     }

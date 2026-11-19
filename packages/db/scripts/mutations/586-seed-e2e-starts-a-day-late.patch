@@ -1,13 +1,21 @@
 diff --git a/packages/db/src/writers/program/seed-e2e.ts b/packages/db/src/writers/program/seed-e2e.ts
-index f193d6a3..89f9145b 100644
+index 4caf72a7..19dfb962 100644
 --- a/packages/db/src/writers/program/seed-e2e.ts
 +++ b/packages/db/src/writers/program/seed-e2e.ts
-@@ -56,7 +56,7 @@ export const SEED_E2E_WORLD: World = {
+@@ -28,6 +28,7 @@ const FIXTURE_WORLD: World = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].worl
+  * not the contract world's switch day, which the contract owner may move for a fixture's reason.
+  */
+ export const SEED_E2E_START_DAY = '2026-11-02';
++const PUT_ON_DAY = '2026-11-03';
+ 
+ /** The e2e program's id inside its own world. */
+ export const SEED_E2E_PROGRAM_ID = 'p2001';
+@@ -61,7 +62,7 @@ export const SEED_E2E_WORLD: World = {
        ) as Record<Weekday, Array<{ label: string; wid: string }>>,
      },
    ],
--  assign: { a4: [{ prog: SEED_E2E_PROGRAM_ID, from: FIXTURE_SWITCH_DAY }] },
-+  assign: { a4: [{ prog: SEED_E2E_PROGRAM_ID, from: '2026-11-10' }] },
+-  assign: { a4: [{ prog: SEED_E2E_PROGRAM_ID, from: SEED_E2E_START_DAY }] },
++  assign: { a4: [{ prog: SEED_E2E_PROGRAM_ID, from: PUT_ON_DAY }] },
    entries: [],
  };
  
