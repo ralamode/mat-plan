@@ -24,26 +24,34 @@ import {
  * to. `NAV_LINK_CLASS` keeps the 44px bar and lets it wrap at 200% text, where `Button asChild`'s
  * `whitespace-nowrap shrink-0` clipped it in a 296px settings card.
  */
+/** How the no-history reason sits on each surface: one definition for both, beside the control. */
+export const EXPORT_REASON_CLASS = {
+  /** The day page's foot: a bar the height of its neighbours. */
+  day: `${NAV_LINK_CLASS} flex items-center`,
+  /** A settings row: quieter, still a 44px row. */
+  settings: 'text-muted-foreground flex min-h-11 items-center text-sm',
+} as const;
+
 export function ExportControl({
   profileId,
   hasHistory,
   canExport,
+  surface,
   ariaLabel,
-  reasonClassName = `${NAV_LINK_CLASS} flex items-center`,
 }: {
   profileId: string;
   hasHistory: boolean;
   canExport: boolean;
+  /** Which surface it sits on; picks the reason's class (`EXPORT_REASON_CLASS`). */
+  surface: keyof typeof EXPORT_REASON_CLASS;
   /**
    * The link's accessible name where the visible label alone is ambiguous (a list of athletes).
    * SC 2.5.3: it must CONTAIN the visible text, so the caller starts it with `EXPORT_CSV_LABEL`.
    */
   ariaLabel?: string;
-  /** How the no-history reason sits on its surface; defaults to the day page's bar. */
-  reasonClassName?: string;
 }) {
   if (!canExport) return null;
-  if (!hasHistory) return <p className={reasonClassName}>{NOTHING_TO_EXPORT}</p>;
+  if (!hasHistory) return <p className={EXPORT_REASON_CLASS[surface]}>{NOTHING_TO_EXPORT}</p>;
   return (
     <a
       href={athleteExportPath(profileId)}

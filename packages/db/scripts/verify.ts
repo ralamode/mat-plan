@@ -8486,13 +8486,13 @@ console.log(
   );
 
   // (5b) 🔴 THE EXPORT IS THE OWNER'S (FAM-1 export follow-up, plan PR B; the maintainer's Q1,
-  // 2026-11-19). `loggedMonths` takes an `OwnerScope` and its WHERE carries `isOwnerOf`, so a member
-  // scope pushed past the type by a cast reads NO months, and the DAL builds no file. The forged
-  // scope is the archive proof's shape above: a cast is the only way in, which is the point.
+  // 2026-11-19). `loggedMonths` takes an `OwnerScope` and its WHERE carries `isOwnerOf`, so the real
+  // member scope pushed past the type by a cast reads NO months, and the DAL builds no file. The
+  // cast is the archive proof's (`A_MEMBER_SCOPE as unknown as OwnerScope`): it is the only way in.
   assert.deepEqual(
     await loggedMonths(asPg, {
       profilePublicId: B_P,
-      scope: { ...A_SCOPE, role: HOUSEHOLD_ROLE.member } as OwnerScope,
+      scope: A_MEMBER_SCOPE as unknown as OwnerScope,
     }),
     [],
     'FAM-1 export: a member scope cast past the type reads no months, so no export file is built',

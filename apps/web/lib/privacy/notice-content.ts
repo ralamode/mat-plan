@@ -616,7 +616,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           "children": [
             {
               "k": "text",
-              "text": "The household owner, the adult who set the household up, is the one who can export the data or\nhave it deleted."
+              "text": "A household owner can export the data or have it deleted. Today every adult given a sign-in to\nthe household is an owner, so a household can have more than one."
             }
           ]
         }
@@ -710,7 +710,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": anyone signed in to it, each with their own sign-in, sees every athlete's\nhistory in the app, weigh-ins included. Only the household owner can download an athlete's export."
+              "text": ": anyone signed in to it, each with their own sign-in, sees every athlete's\nhistory in the app, weigh-ins included. Only a household owner can download an athlete's export."
             }
           ]
         }
@@ -938,7 +938,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "and only the household owner can download it."
+                  "text": "and only a household owner can download it."
                 }
               ]
             },
@@ -1851,20 +1851,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "If you set up the household, open an athlete's page and use the export. "
+        "text": "Open an athlete's page and use the export. "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Only the household owner\ncan download an export."
+            "text": "Only a household owner can download an export."
           }
         ]
       },
       {
         "k": "text",
-        "text": " Today every adult given a sign-in to a household is its owner, so this\nchanges nothing for anyone yet; it applies once people can be invited as members, and until then\nanyone else who needs a copy can ask for one (below). Anyone signed in to the household still sees\nweigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
+        "text": " Today\nevery adult given a sign-in to a household is an owner, so this changes nothing for anyone yet; it\napplies once people can be invited as members. Then an adult who is not an owner can ask for a copy of\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "their own"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " data (below); a child's copy goes only to an owner. Anyone signed in to the household\nstill sees weigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
@@ -1926,7 +1939,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. The household owner finds their export on the "
+        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. A household owner finds their export on the "
       },
       {
         "k": "strong",
@@ -2434,7 +2447,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Only the household owner can download an athlete's export."
+            "text": "Only a household owner can download an athlete's export."
           }
         ]
       },
@@ -2447,13 +2460,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "The export is also limited to 30 downloads per signed-in person in ten minutes"
+            "text": "The export is also rate-limited per signed-in person"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", which is enough\nto export every athlete of a full household before deleting anything."
+        "text": ", with room to export every athlete of a full\nhousehold before deleting anything."
       }
     ]
   },
@@ -2896,7 +2909,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " against the export becoming the household owner's and its rate limit.\n"
+        "text": " against the export becoming the household owners' and its rate limit "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(pending the\nmaintainer's re-read)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ".\n"
       },
       {
         "k": "strong",

@@ -534,7 +534,8 @@ export type ScopeMissArgs =
  * idiom in `lib/sentry-scrub.ts`.
  *
  * ⚠️ **What it must never carry**, each for its own reason:
- * - **a profile name or any logged value** — SECURITY.md: kid bodyweight is privileged, never logged;
+ * - **a profile name or any logged value** — SECURITY.md → Sensitive data: bodyweight is privileged,
+ *   never logged;
  * - **any `DrizzleQueryError`** — SEC-3's scar: its message embeds query params and has already
  *   shipped a kid's bodyweight to Sentry once. The probe below therefore catches its own errors.
  *   `lib/sentry-scrub.ts` strips denied headers and anything named `params`, but it has **no

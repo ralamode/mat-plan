@@ -131,15 +131,19 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
 
 ## Sensitive data
 
-- **Bodyweight** is privileged, for every profile (no rule here branches on age: `ID-1` keep-open
-  item 5): never logged, and never included in the LLM/MCP payload unless a scoped, explicit purpose
-  requires it. _(Reworded with the maintainer, 2026-11-19.)_
+- **Bodyweight** is privileged, for every profile: never returned to anyone outside the household,
+  never logged, and never included in the LLM/MCP payload unless a scoped, explicit purpose requires
+  it. No **access** rule here branches on age (`ID-1` keep-open item 5). _(Reworded with the
+  maintainer, 2026-11-19.)_
   - **In the app**, anyone signed in to the household may see it.
-  - **The export** goes to the household's owner logins only (`buildExportEntries`, `loggedMonths` +
-    `isOwnerOf`, mutation 610). "Owner" is every login a correction bound as owner, not necessarily
-    one person. An adult athlete's access to their own is `ID-1`'s question.
-  - **Any future feed or sharing feature** never shows a child's bodyweight; an adult may choose to
-    publish their own.
+  - **The export** goes to the household's owner logins only. The authority is the membership row's
+    role, read once by `getHouseholdScope()` and narrowed by `ownerScope()` in `buildExportEntries`;
+    `isOwnerOf` on `loggedMonths` makes a scope cast past that narrowing read zero months (`db:verify`
+    plus mutation 610). It reads no column, so it is not a database-side check. "Owner" is every login
+    a correction bound as owner, not necessarily one person. An adult athlete's access to their own is
+    `ID-1`'s question.
+  - **A future product rule, recorded for `ID-1`:** any feed or sharing feature never shows a child's
+    bodyweight; an adult may choose to publish their own.
 
 ## Input
 

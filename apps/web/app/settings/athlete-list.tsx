@@ -328,7 +328,7 @@ export function AthleteList({
                       canExport={canExport}
                       // SC 2.5.3: the accessible name must CONTAIN the visible text.
                       ariaLabel={`${EXPORT_CSV_LABEL} for ${a.name}`}
-                      reasonClassName="text-muted-foreground flex min-h-11 items-center text-sm"
+                      surface="settings"
                     />
                   </>
                 }

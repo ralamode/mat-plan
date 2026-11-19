@@ -106,8 +106,8 @@ how you switch between athletes.
 **But a child tapping a tile is a child using this app**, and in practice the child is usually the one
 doing the logging — that is what it was built for. So:
 
-- The household owner, the adult who set the household up, is the one who can export the data or
-  have it deleted.
+- A household owner can export the data or have it deleted. Today every adult given a sign-in to
+  the household is an owner, so a household can have more than one.
 - The child types into the free-text boxes. Nothing filters what they write.
 - **Please tell your athlete what is being recorded.** Their weight and their training are being kept,
   and they should know that.
@@ -121,7 +121,7 @@ still works.
 ## Who can see it
 
 - **Your household**: anyone signed in to it, each with their own sign-in, sees every athlete's
-  history in the app, weigh-ins included. Only the household owner can download an athlete's export.
+  history in the app, weigh-ins included. Only a household owner can download an athlete's export.
 - **The maintainer.** The person who runs the app has direct access to the database and can see
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
 - **Everyone signed in to your household sees every program**: who is on each one, from which day
@@ -151,7 +151,7 @@ still works.
    a second family is invited. **The beta still starts with a single invited family**, because that
    last part is not finished.
 3. **Anyone signed in to your household can see any athlete's full history in the app** — including
-   a child tapping a sibling's tile — **and only the household owner can download it.** Today every
+   a child tapping a sibling's tile — **and only a household owner can download it.** Today every
    adult given a sign-in to a household is its owner, so anyone signed in can still download; the
    limit applies once people can be invited as members. The tiles are a convenience, not a lock. What is new in this
    version is that getting in takes **your own sign-in and a membership in your household**, and
@@ -258,11 +258,11 @@ logs, or if the new name is already in use.
 
 ## Getting your data out
 
-If you set up the household, open an athlete's page and use the export. **Only the household owner
-can download an export.** Today every adult given a sign-in to a household is its owner, so this
-changes nothing for anyone yet; it applies once people can be invited as members, and until then
-anyone else who needs a copy can ask for one (below). Anyone signed in to the household still sees
-weigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the
+Open an athlete's page and use the export. **Only a household owner can download an export.** Today
+every adult given a sign-in to a household is an owner, so this changes nothing for anyone yet; it
+applies once people can be invited as members. Then an adult who is not an owner can ask for a copy of
+**their own** data (below); a child's copy goes only to an owner. Anyone signed in to the household
+still sees weigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the
 strength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins
 (habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an
 athlete logs from a program has one row per exercise in the strength log, with the **workout's name as
@@ -278,7 +278,7 @@ targets, the programs you build and who is on which program (only a workout's na
 an exercise an athlete logged, in the "prescribed" column, go out). The export covers your logged training; it is not yet a complete copy.
 
 **An archived athlete still exports.** Archiving hides an athlete from the picker; it does not hide
-or delete anything they logged. The household owner finds their export on the **Household settings**
+or delete anything they logged. A household owner finds their export on the **Household settings**
 screen, beside their name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty
 file — an empty zip looks exactly like a download that failed.
 
@@ -365,13 +365,13 @@ Because this cannot be undone, both of the steps below stay in place:
 
 ## What changed on 19 November 2026
 
-**Only the household owner can download an athlete's export.** Any other sign-in is refused the
+**Only a household owner can download an athlete's export.** Any other sign-in is refused the
 download, and the export link is not shown to it. Everyone signed in to the household still sees
 every athlete's history in the app, weigh-ins included. Today every adult given a sign-in to a
 household is its owner, so nobody's access changes yet: this is a rule that now exists, for when
 people can be invited as members. An adult member exporting their own data is planned for later.
-**The export is also limited to 30 downloads per signed-in person in ten minutes**, which is enough
-to export every athlete of a full household before deleting anything.
+**The export is also rate-limited per signed-in person**, with room to export every athlete of a full
+household before deleting anything.
 
 ## What changed on 5 November 2026
 
@@ -446,7 +446,8 @@ one.**
 **Reviewed in full against the code and signed off by the maintainer (the household operator),
 2026-10-26. Re-reviewed 2026-11-05** against the retirement of the shared access code, which changed
 who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
-2026-11-19** against the export becoming the household owner's and its rate limit.
+2026-11-19** against the export becoming the household owners' and its rate limit _(pending the
+maintainer's re-read)_.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out

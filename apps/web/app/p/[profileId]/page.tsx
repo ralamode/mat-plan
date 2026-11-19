@@ -282,6 +282,7 @@ export default async function TodayPage({
         profileId={profileId}
         hasHistory={profile.hasHistory}
         canExport={canExportAthletes}
+        surface="day"
       />
       <Link
         href={`${athleteEditPath(profile.id)}?from=${encodeURIComponent(athletePath(profile.id))}`}

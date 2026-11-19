@@ -60,11 +60,10 @@ export function monthRange(month: string): { from: string; to: string } {
 /**
  * One flat (entry × set × quantity) row. Derived, not hand-typed — the `ProgramDayRow` precedent —
  * so a nullability change in the select cannot leave a consumer claiming a shape this no longer has.
- *
- * Not owner-gated; the export's gate is `loggedMonths`.
  */
 export type StrengthMonthRow = Awaited<ReturnType<typeof strengthMonthRows>>[number];
 
+/** Every strength-log row in one month. Not owner-gated; the export's gate is `loggedMonths`. */
 export function strengthMonthRows(
   db: NodePgDatabase<typeof schema>,
   args: {
@@ -342,7 +341,9 @@ export function checkinMonthRows(
 /** One row of `checkinMonthRows`, for tests that mock it (typed, so the shape cannot drift). */
 export type CheckinMonthRow = Awaited<ReturnType<typeof checkinMonthRows>>[number];
 
-/** Every bodyweight reading in one month. *
+/**
+ * Every bodyweight reading in one month.
+ *
  * Not owner-gated; the export's gate is `loggedMonths`.
  */
 export function bodyweightMonthRows(

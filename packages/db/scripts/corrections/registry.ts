@@ -213,8 +213,8 @@ const kbSwingsLoadRepsSwap: Correction = {
  *
  * ## Why there is no value in the guard
  *
- * `.github/SECURITY.md` classifies kid bodyweight as privileged — *"never returned outside the
- * household operator, never logged"* — and this repo is **public**, so the from-value a guard would
+ * `.github/SECURITY.md` → Sensitive data classifies bodyweight as privileged (never logged, never
+ * returned outside the household), and this repo is **public**, so the from-value a guard would
  * normally carry (README rule 2) cannot be committed. The `updated_at` token does rule 2's job
  * instead: it is per-row, any write bumps it, and a mismatch means the row changed since the read.
  * `deleted_at IS NULL` is what makes a second run a no-op. See the plan's Decision 20.
