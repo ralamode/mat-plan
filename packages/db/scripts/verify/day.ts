@@ -16,6 +16,8 @@ import {
   type RowValues,
   type RowWrite,
   SEED_ACTIVITY_TYPE_KEYS,
+  METRIC_KEYS,
+  PRACTICE_UNIT,
   SEED_METRIC_KEYS,
   SESSION_TYPE,
   TRACKING_TYPE,
@@ -26,10 +28,15 @@ import {
 } from '@mat-plan/shared';
 import { buildStrengthLog, STRENGTH_LOG_HEADER } from '@mat-plan/shared/csv';
 import { prescribedText } from '@mat-plan/shared/program/prescribed-text';
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
-import { foldStrengthMonth, strengthMonthRows } from '../../src/queries/export-month';
+import {
+  bodyweightMonthRows,
+  checkinMonthRows,
+  foldStrengthMonth,
+  strengthMonthRows,
+} from '../../src/queries/export-month';
 import { resolvePrescribed } from '../../src/queries/export-prescribed';
 import { readRowValues } from '../../src/queries/day/stored-row-values';
 import { amendRow } from '../../src/writers/day/amend-row';
@@ -700,6 +707,152 @@ async function verifyExport(): Promise<void> {
       }
     },
     '14a',
+  );
+
+  await proof(
+    '14b: every live entry of a month lands in exactly one file',
+    async (f, tx) => {
+      const typeId = (key: string) => activityTypeIdOf(tx, key);
+      const checkin = async (o: {
+        activity: string;
+        metric?: string | null;
+        unit: string;
+        value: string;
+        day?: string;
+        kind?: string | null;
+      }) => {
+        const [row] = await tx
+          .insert(schema.entries)
+          .values({
+            publicId: newId(),
+            clientId: newId(),
+            profileId: f.athlete.id,
+            activityDate: o.day ?? DAY,
+            kind: o.kind ?? null,
+            unit: o.unit,
+            valueNum: o.value,
+            activityTypeId: await typeId(o.activity),
+            metricKey: o.metric ?? null,
+            status: ENTRY_STATUS.done,
+          })
+          .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
+        return row;
+      };
+      // A weigh-in; a practice; a calisthenics day with two metrics; an old check-in metric; a bare
+      // habit (no metric); a program row.
+      const weighIn = await f.weighIn(false);
+      await checkin({
+        activity: ACTIVITY_TYPE_KEYS.wrestling_practice,
+        metric: METRIC_KEYS.practice_minutes,
+        unit: PRACTICE_UNIT,
+        value: '90',
+      });
+      await checkin({
+        activity: ACTIVITY_TYPE_KEYS.calisthenics,
+        metric: METRIC_KEYS.pushups,
+        unit: 'count',
+        value: '25',
+      });
+      await checkin({
+        activity: ACTIVITY_TYPE_KEYS.calisthenics,
+        metric: METRIC_KEYS.pullups,
+        unit: 'count',
+        value: '6',
+      });
+      await checkin({
+        activity: ACTIVITY_TYPE_KEYS.brush_teeth,
+        metric: METRIC_KEYS.stance,
+        unit: 'min',
+        value: '3',
+      });
+      await checkin({ activity: ACTIVITY_TYPE_KEYS.rice_bucket, unit: 'bool', value: '1' });
+      expectOk(
+        await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+        'FAM-1 14b: a program row',
+      );
+      // Planted: a hidden check-in, and a bodyweight METRIC under another activity (in lb, on another
+      // day than the weigh-in, so the bodyweight file and its one-per-day index accept it).
+      const hidden = await checkin({
+        activity: ACTIVITY_TYPE_KEYS.rice_bucket,
+        unit: 'bool',
+        value: '1',
+        day: YESTERDAY,
+      });
+      await tx
+        .update(schema.entries)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.entries.id, hidden.id));
+      const planted = await checkin({
+        activity: ACTIVITY_TYPE_KEYS.calisthenics,
+        metric: SEED_METRIC_KEYS.bodyweight,
+        unit: 'lb',
+        value: '81',
+        day: YESTERDAY,
+        kind: ENTRY_KIND.bodyweight,
+      });
+
+      // Planted at both edges of the month, so a dropped month bound copies one into the file.
+      const month = DAY.slice(0, 7);
+      assert.equal(month, '2026-11', 'FAM-1 14b: the edge plants assume DAY is in November 2026');
+      const edges = [
+        await checkin({
+          activity: ACTIVITY_TYPE_KEYS.rice_bucket,
+          unit: 'bool',
+          value: '1',
+          day: '2026-10-31',
+        }),
+        await checkin({
+          activity: ACTIVITY_TYPE_KEYS.rice_bucket,
+          unit: 'bool',
+          value: '1',
+          day: '2026-12-01',
+        }),
+      ];
+      const args = { profilePublicId: f.athlete.publicId, month, scope: f.H_SCOPE };
+      const strength = new Set((await strengthMonthRows(asDb(tx), args)).map((r) => r.entryId));
+      const bodyweight = await bodyweightMonthRows(asDb(tx), args);
+      const checkins = await checkinMonthRows(asDb(tx), args);
+      const live = await tx
+        .select({ id: schema.entries.id })
+        .from(schema.entries)
+        .where(
+          and(
+            eq(schema.entries.profileId, f.athlete.id),
+            isNull(schema.entries.deletedAt),
+            gte(schema.entries.activityDate, `${month}-01`),
+            lt(schema.entries.activityDate, '2026-12-01'),
+          ),
+        );
+      const files = (id: number) =>
+        [
+          strength.has(id),
+          bodyweight.some((r) => r.entryId === id),
+          checkins.some((r) => r.entryId === id),
+        ].filter(Boolean).length;
+      assert.deepEqual(
+        live.filter((r) => files(r.id) !== 1).map((r) => r.id),
+        [],
+        'FAM-1 14b: every live entry of a month lands in exactly one file',
+      );
+      const weighInId = (await f.entryRow(weighIn.publicId)).id;
+      assert.deepEqual(
+        [
+          bodyweight.map((r) => r.entryId).sort(),
+          checkins.some((r) => r.metric === SEED_METRIC_KEYS.bodyweight),
+          [strength, bodyweight, checkins].some((rows) =>
+            [...(rows instanceof Set ? rows : rows.map((r) => r.entryId))].includes(hidden.id),
+          ),
+        ],
+        [[weighInId, planted.id].sort(), false, false],
+        'FAM-1 14b: both bodyweight rows are in its file, none in check-ins, and a hidden one in none',
+      );
+      assert.deepEqual(
+        checkins.filter((r) => edges.some((e) => e.id === r.entryId)).map((r) => r.date),
+        [],
+        'FAM-1 14b: a check-in from the month before or after is not in this month’s file',
+      );
+    },
+    '14b',
   );
 }
 

@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-18. This is a beta."
+            "text": "Last updated: 2026-11-19. This is a beta."
           }
         ]
       }
@@ -1838,7 +1838,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log and the bodyweight log. Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
+        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
@@ -1882,7 +1882,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", so you are not surprised: check-ins and other logged life\nactivities, the daily readiness colour, the \"how it felt\" notes, the per-athlete prescribed\ntargets, the programs you build and who is on which program (only a workout's name and the targets of\nan exercise an athlete logged, in the \"prescribed\" column, go out). The export covers your logged training; it is not yet a complete copy."
+        "text": ", so you are not surprised: the daily readiness colour, the \"how it felt\" notes, the per-athlete prescribed\ntargets, the programs you build and who is on which program (only a workout's name and the targets of\nan exercise an athlete logged, in the \"prescribed\" column, go out). The export covers your logged training; it is not yet a complete copy."
       }
     ]
   },

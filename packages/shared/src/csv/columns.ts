@@ -22,7 +22,15 @@
  * normalises rather than assuming one separator.
  */
 export function csvMovement(slug: string): string {
-  return slug.replaceAll('_', '-');
+  return csvToken(slug);
+}
+
+/**
+ * **The one `_`→`-` rule for a code written into a CSV cell** (a movement slug, a session type, an
+ * activity or metric key; FAM-1 14b). Values use hyphens, column names underscores.
+ */
+export function csvToken(code: string): string {
+  return code.replaceAll('_', '-');
 }
 
 /**
@@ -38,5 +46,5 @@ export function csvMovement(slug: string): string {
  * trailing-empty-fields rule already accommodates.
  */
 export function csvSessionType(dayRole: string | null, sessionType: string | null): string {
-  return (dayRole ?? sessionType ?? '').replaceAll('_', '-');
+  return csvToken(dayRole ?? sessionType ?? '');
 }

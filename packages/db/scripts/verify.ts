@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
+  ACTIVITY_TYPE_KEYS,
   ACTIVITY_CATEGORIES,
   ACTIVITY_INPUT_SHAPES,
   ACTIVITY_METRIC_MAP,
@@ -21,6 +22,7 @@ import {
   METRIC_AGGREGATIONS,
   METRIC_DEFINITION_SEED_ROWS,
   METRIC_KEYS,
+  PRACTICE_UNIT,
   METRIC_VALUE_TYPES,
   MOVEMENT_PATTERNS,
   MOVEMENT_SEED_PUBLIC_IDS,
@@ -69,7 +71,12 @@ import { type Database, schema } from '../src/client';
 import { writeCheckinEntries } from '../src/writers/checkin';
 import { hideEntries, restoreHidden } from '../src/writers/hide';
 import { hiddenDayCounts, hiddenEntriesForDay } from '../src/queries/hidden-entries';
-import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
+import {
+  bodyweightMonthRows,
+  checkinMonthRows,
+  loggedMonths,
+  strengthMonthRows,
+} from '../src/queries/export-month';
 import { prescribedSnapshotsFor } from '../src/writers/prescribed-snapshot';
 import { householdProfileRows } from '../src/queries/household-profiles';
 import { liveHouseholdIds } from '../src/queries/household-scope';
@@ -5212,6 +5219,25 @@ const aBwExportTarget = await insertBodyweightProbe({
   activityDate: '2026-03-02',
 });
 
+// (f) FAM-1 14b: a check-in for each household in that same March, so `checkinMonthRows` has a row to
+// wrongly find in both directions too.
+{
+  const practiceId = await activityTypeIdByKey(ACTIVITY_TYPE_KEYS.wrestling_practice);
+  for (const profileId of [bwOwnerRow.id, verifyProfileRow.id]) {
+    await db.insert(schema.entries).values({
+      publicId: newId(),
+      clientId: newId(),
+      profileId,
+      activityDate: '2026-03-05',
+      unit: PRACTICE_UNIT,
+      valueNum: '60',
+      activityTypeId: practiceId,
+      metricKey: METRIC_KEYS.practice_minutes,
+      status: ENTRY_STATUS.done,
+    });
+  }
+}
+
 // (e) TEN-1 1c: ONE block per household, both programming the SAME day_role, through the REAL
 // `seedProgram`. The V1-10 fixture deliberately gives the two households DISJOINT day_roles, which
 // proves day-aware block selection but cannot prove household scoping — asked for a day_role the
@@ -5273,7 +5299,7 @@ assert.equal(
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
 // `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
 // row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
-// adherence and programmed-day cards, and the three month reads behind the CSV export.
+// adherence and programmed-day cards, and the four month reads behind the CSV export.
 //
 // Each row names **its own pair of profiles**. The reads need different fixtures — adherence needs
 // ramp targets, the export reads need logged sessions, the program read needs a block — and one
@@ -5363,6 +5389,13 @@ const TEN1_READS_1C: readonly Ten1Read[] = [
     VERIFY_PROFILE_PUBLIC_ID,
     (profilePublicId, scope) =>
       bodyweightMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
+  ],
+  [
+    'checkinMonthRows (the CSV export’s check-ins)',
+    bwOwner,
+    VERIFY_PROFILE_PUBLIC_ID,
+    (profilePublicId, scope) =>
+      checkinMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
   ],
   [
     'loggedMonths (which months the export writes at all)',
@@ -5565,7 +5598,7 @@ console.log(
 // follow-up 1c's own review recorded for 1d.
 await ten1ReadMatrix(TEN1_READS_1C);
 console.log(
-  `✓ TEN-1 1c: the READ matrix — ${TEN1_READS_1C.length} scoped reads (programDayRows, the three ` +
+  `✓ TEN-1 1c: the READ matrix — ${TEN1_READS_1C.length} scoped reads (programDayRows, the four ` +
     'export month reads), each proved in BOTH directions, after every 1b proof above',
 );
 
