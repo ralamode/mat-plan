@@ -648,7 +648,9 @@ The shapes those lanes agree on, the fakes and the preview route are
     under a burst; a household that is gone answers `refused` before anything is counted. Its wait is
     bounded: `setLocalLockTimeout` (`writers/executor.ts`) sets `lock_timeout` to `LOCK_TIMEOUT` in
     the same transaction first, so a stuck holder ends the next add as a throw, not a hang (it bounds
-    every later lock wait in that transaction too, the insert's foreign-key lock included). The lock
+    every later lock wait in that transaction too, the insert's foreign-key lock included). ⚠️ Its
+    household read takes no row lock, so an add during an erasure can still throw 23503 (or 55P03);
+    `newItem` reads the household row `FOR KEY SHARE` and answers `not_found` (#714). The lock
     comes BEFORE the replay lookup on purpose: a same-key twin then finds its twin's row instead of
     counting it ([plan](../plans/td-athlete-cap-lock.md)).
     ⚠️ **`uq_profiles_client_id` is GLOBAL and non-partial**, so a caller-chosen key collides across
