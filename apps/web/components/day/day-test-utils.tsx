@@ -123,3 +123,11 @@ export function held() {
 }
 
 export const lb = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'lb' as const, value });
+
+/** The texts an element's `aria-describedby` points at, in order: what a screen reader adds. */
+export function describedTexts(el: Element): string[] {
+  return (el.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`);
+}
