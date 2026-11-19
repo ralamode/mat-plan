@@ -154,13 +154,22 @@ describe('browseView under a filter (CAT-3 P12: "Movements that fit your filters
   it('"Your custom items" starts folded under a filter, however few (P9, K25); a seed still opens it', () => {
     expect(MINE.length).toBeLessThanOrEqual(CUSTOM_OPEN_AT_MOST);
     const filtered = browseView(ALL, LATS);
-    expect(isBrowseOpen(BROWSE_KEY.custom, CLOSED_BROWSE, filtered)).toBe(false);
+    const unfiltered = browseView(ALL, NO_MOVEMENT_FILTERS);
+    expect(isBrowseOpen(BROWSE_KEY.customFiltered, CLOSED_BROWSE, filtered)).toBe(false);
+    expect(isBrowseOpen(BROWSE_KEY.custom, CLOSED_BROWSE, unfiltered)).toBe(true);
     expect(
-      isBrowseOpen(BROWSE_KEY.custom, CLOSED_BROWSE, browseView(ALL, NO_MOVEMENT_FILTERS)),
+      isBrowseOpen(BROWSE_KEY.customFiltered, seedBrowse(CLOSED_BROWSE, [MINE[0]!]), filtered),
     ).toBe(true);
-    expect(isBrowseOpen(BROWSE_KEY.custom, seedBrowse(CLOSED_BROWSE, [MINE[0]!]), filtered)).toBe(
+  });
+
+  it('🔴 opening them with no filter does not open them under one: two keys', () => {
+    const opened = toggleBrowse(CLOSED_BROWSE, BROWSE_KEY.custom, false);
+    expect(isBrowseOpen(BROWSE_KEY.custom, opened, browseView(ALL, NO_MOVEMENT_FILTERS))).toBe(
       true,
     );
+    expect(
+      isBrowseOpen(BROWSE_KEY.customFiltered, forgetClosed(opened), browseView(ALL, LATS)),
+    ).toBe(false);
   });
 });
 
@@ -177,10 +186,27 @@ describe("Today's program", () => {
     ).toBe(false);
   });
 
+  it('…unless it holds a ticked row, read live (the ids may arrive after the tick)', () => {
+    const allOnTicked = { ...view, programAllOnForm: true, programHoldsTicked: true };
+    expect(isBrowseOpen(BROWSE_KEY.program, CLOSED_BROWSE, allOnTicked)).toBe(true);
+    // A tap still wins.
+    expect(
+      isBrowseOpen(
+        BROWSE_KEY.program,
+        toggleBrowse(CLOSED_BROWSE, BROWSE_KEY.program, true),
+        allOnTicked,
+      ),
+    ).toBe(false);
+  });
+
   it('🔴 a selection in it opens it, even with all of it on a card (the row is about to be focused)', () => {
     const program = new Set([GOBLET.publicId, MINE[0]!.publicId]);
     expect(browseAncestors(GOBLET, program)).toContain(BROWSE_KEY.program);
-    expect(browseAncestors(MINE[0]!, program)).toEqual([BROWSE_KEY.custom, BROWSE_KEY.program]);
+    expect(browseAncestors(MINE[0]!, program)).toEqual([
+      BROWSE_KEY.custom,
+      BROWSE_KEY.customFiltered,
+      BROWSE_KEY.program,
+    ]);
     expect(browseAncestors(GOBLET)).not.toContain(BROWSE_KEY.program);
     const allOn = { ...view, programAllOnForm: true };
     expect(
@@ -246,7 +272,7 @@ describe('browseAncestors and seedBrowse: a selection opens every group above it
     ]);
     expect(browseAncestors(RUN)).toEqual([BROWSE_KEY.all, kindKey(MODALITY.conditioning)]);
     expect(browseAncestors(BARE[0]!)).toEqual([BROWSE_KEY.all, BROWSE_KEY.notSorted]);
-    expect(browseAncestors(MINE[0]!)).toEqual([BROWSE_KEY.custom]);
+    expect(browseAncestors(MINE[0]!)).toEqual([BROWSE_KEY.custom, BROWSE_KEY.customFiltered]);
   });
 
   it('agrees with browseTree for EVERY row: the groups it names are the ones the row is drawn in', () => {

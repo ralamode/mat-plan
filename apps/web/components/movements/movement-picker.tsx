@@ -718,7 +718,9 @@ export function MovementPicker({
   // Open while any prescribed movement is NOT yet on a card; the list always holds every prescribed
   // row, so a second card for one stays one tap away: only the heading changes.
   const programAllOnForm = programOptions.every((o) => todaysProgram?.onFormIds.has(o.publicId));
-  const defaults = { ...view, programAllOnForm };
+  // Live, not only seeded: a program whose ids arrive after the tick still opens for it.
+  const programHoldsTicked = programOptions.some((o) => selectedSet.has(o.publicId));
+  const defaults = { ...view, programAllOnForm, programHoldsTicked };
   const isGroupOpen = (key: BrowseKey) => isBrowseOpen(key, browseOpen, defaults);
   const toggleGroup = (key: BrowseKey) =>
     setBrowseOpen((state) => toggleBrowse(state, key, isBrowseOpen(key, state, defaults)));
@@ -734,13 +736,21 @@ export function MovementPicker({
     if (fresh.length > 0 || seededFor.size !== wanted.length) {
       setSeededFor(new Set(wanted));
       if (fresh.length > 0)
-        setBrowseOpen((state) => seedBrowse(state, resolveOptions(fresh, byId), programIds));
+        setBrowseOpen((state) =>
+          seedBrowse(
+            state,
+            resolveOptions(fresh, byId),
+            // Today's program latches open for a multi-mode TICK only: never the current row
+            // (single mode), whose card is already there, nor a reveal.
+            new Set(fresh.filter((id) => selectedSet.has(id) && programIds.has(id))),
+          ),
+        );
     }
     // The caller's `reveal`: the same seed, for a row whose selection did not change.
     const revealed = reveal ? byId.get(reveal.id) : undefined;
     if (reveal && revealed && reveal.revision !== revealedRevision) {
       setRevealedRevision(reveal.revision);
-      setBrowseOpen((state) => seedBrowse(state, [revealed], programIds));
+      setBrowseOpen((state) => seedBrowse(state, [revealed]));
     }
   }
 
@@ -759,7 +769,9 @@ export function MovementPicker({
   );
 
   // "Your custom items": with no filter its own section, open at `CUSTOM_OPEN_AT_MOST` or fewer;
-  // under one, folded and marked "not filtered" (P9). One group, one key, either way.
+  // under one, folded however few and marked "not filtered" (P9, K25). Two keys, so opening it with
+  // no filter does not carry 24 open rows above the filtered results.
+  const customKey = view.filtered ? BROWSE_KEY.customFiltered : BROWSE_KEY.custom;
   const customGroup =
     view.custom.length > 0 ? (
       <Group
@@ -768,8 +780,8 @@ export function MovementPicker({
         landmark
         label={view.filtered ? COPY.householdNotFiltered : COPY.household}
         count={view.custom.length}
-        open={isGroupOpen(BROWSE_KEY.custom)}
-        onToggle={() => toggleGroup(BROWSE_KEY.custom)}
+        open={isGroupOpen(customKey)}
+        onToggle={() => toggleGroup(customKey)}
       >
         <OptionList rows={rowsFrom(view.custom)} mode={mode} scope={`${headingId}-household`} />
       </Group>
@@ -1258,7 +1270,9 @@ function OptionList({
   className?: string;
 }) {
   return (
-    <ul className={cn('flex flex-col gap-1', className)}>
+    // `@container`: a row stacks "How to" under the name when the list is narrower than `@xs`
+    // (20rem), which is large text or a zoomed page on a phone (WCAG 1.4.4), not a 360px phone.
+    <ul className={cn('@container flex flex-col gap-1', className)}>
       {rows.map(({ option, tag }) => (
         <OptionRow
           key={option.publicId}
@@ -1286,6 +1300,11 @@ function OptionList({
  *   the keyboard up (UX panel, B2).
  * - With a loader, a row without steps keeps the "How to" column empty (the prototype's spacer), so
  *   the rows' outlines end at one edge and names wrap at one width.
+ * - 🔴 **Below `@xs` of its list, "How to" drops under the name** (`@max-xs:flex-col`) and the
+ *   spacer goes. At 360px and 100% text the list is 328px, so the row is one line and the name
+ *   column keeps 194px in multi mode. At 200% text everything here scales: side by side the name
+ *   column would be about 30px, a letter per line; stacked it is about 174px (296px list). On a
+ *   page zoomed to 195 CSS px it is about 101px (163px list) instead of a few letters.
  */
 function OptionRow({
   option,
@@ -1341,7 +1360,7 @@ function OptionRow({
   );
   return (
     <li>
-      <div className="flex items-stretch gap-1">
+      <div className="flex items-stretch gap-1 @max-xs:flex-col">
         {mode.kind === 'multi' ? (
           <button
             type="button"
@@ -1384,12 +1403,12 @@ function OptionRow({
             onClick={() => mode.howTo?.toggle(rowKey, option)}
             // Looks like its own button beside the pick target (the prototype's): underlined, medium,
             // and a divider at 3:1, so a thumb can tell where the row ends.
-            className="focus-visible:ring-ring hover:bg-muted border-muted-foreground/60 min-h-11 w-17 shrink-0 rounded-lg border-l px-2 text-sm font-medium underline underline-offset-3 outline-none focus-visible:ring-3"
+            className="focus-visible:ring-ring hover:bg-muted border-muted-foreground/60 min-h-11 w-17 shrink-0 rounded-lg border-l px-2 text-sm font-medium underline underline-offset-3 outline-none focus-visible:ring-3 @max-xs:self-start"
           >
             {COPY.howTo}
           </button>
         ) : mode.howTo !== null ? (
-          <span aria-hidden className="w-17 shrink-0" />
+          <span aria-hidden className="w-17 shrink-0 @max-xs:hidden" />
         ) : null}
       </div>
       {howState && mode.howTo ? (
@@ -1530,9 +1549,10 @@ function Section({
  * - **`landmark`** for the top sections only: a region per kind and family floods a screen
  *   reader's landmark list. A kind, a family and "Not sorted yet" are a plain `div`.
  * - **The indent is the button's.** Rows step in `ml-3` only from 400px (`min-[400px]:ml-3`): at
- *   360px the name column keeps 194px in multi mode with "How to", and at 200% text (195 CSS px)
- *   an indent would crush it to a few pixels. The label is `min-w-0 flex-1`, so a long family
- *   wraps inside the tap target and its count never sits alone on a line.
+ *   360px the name column keeps 194px in multi mode with "How to", and every pixel of indent is
+ *   taken from it (at 200% text, or on a page zoomed to 195 CSS px, the row stacks "How to" under
+ *   the name: `OptionRow`). The label is `min-w-0 flex-1`, so a long family wraps inside the tap
+ *   target and its count never sits alone on a line (about 128px for the label at 200% text).
  * - **The count is said once**: visibly "· 12", hidden; to a screen reader ", 12 movements", the
  *   same words as a filter choice's name (`choiceName`).
  * - **The focus ring is inset**, so the sheet's scroll container cannot clip it at the edges.

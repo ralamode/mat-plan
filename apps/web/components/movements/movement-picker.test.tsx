@@ -618,6 +618,76 @@ describe("Today's program", () => {
     expect(program()).toBeNull();
   });
 
+  it('single mode: the current row does not open it once all of it is on a card', () => {
+    // Only a multi-mode tick latches it: the current row's card is already there.
+    render(
+      <Harness
+        data={{ options: ALL_CATALOG }}
+        todaysProgram={{ ids: [prescribed.publicId], onFormIds: new Set([prescribed.publicId]) }}
+        currentId={prescribed.publicId}
+      />,
+    );
+    open();
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  /** Multi mode with the sheet open and the selection and program set as props, for a rerender. */
+  function ArrivalHarness({
+    program: today,
+    selected = [prescribed.publicId],
+  }: {
+    program?: TodaysProgramForPicker;
+    selected?: readonly string[];
+  }) {
+    const ref = useRef<HTMLButtonElement>(null);
+    return (
+      <main>
+        <button ref={ref} type="button">
+          Open
+        </button>
+        <MovementPicker
+          open
+          onOpenChange={vi.fn()}
+          title="Add items"
+          data={{ options: ALL_CATALOG }}
+          todaysProgram={today}
+          returnFocusTo={ref}
+          multiple={{
+            selected,
+            onToggle: vi.fn(),
+            onCreate: vi.fn(),
+            createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+            noMatchHint: 'No item matches.',
+            searchLabel: 'Search items',
+            searchPlaceholder: 'Search items',
+            footerAction: <button type="button">Add</button>,
+          }}
+        />
+      </main>
+    );
+  }
+
+  it('🔴 opens for a ticked row whose program arrives after the tick was seeded', () => {
+    const { rerender } = render(<ArrivalHarness />);
+    rerender(
+      <ArrivalHarness
+        program={{ ids: [prescribed.publicId], onFormIds: new Set([prescribed.publicId]) }}
+      />,
+    );
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('🔴 a tick latches it: unticking a row already on another card does not fold it', () => {
+    // The row was on a card before the tick, so all of it stays on the form throughout.
+    const allOn = { ids: [prescribed.publicId], onFormIds: new Set([prescribed.publicId]) };
+    const { rerender } = render(<ArrivalHarness program={allOn} selected={[]} />);
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('false');
+    rerender(<ArrivalHarness program={allOn} selected={[prescribed.publicId]} />);
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
+    rerender(<ArrivalHarness program={allOn} selected={[]} />);
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
+  });
+
   /** Multi mode, the caller's toggle putting each ticked row on a card, as the item picker does. */
   function ProgramHarness() {
     const [isOpen, setOpen] = useState(false);

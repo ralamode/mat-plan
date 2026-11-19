@@ -22,6 +22,7 @@ import {
   type LibraryOption,
   type MovementOptionDTO,
 } from '@/lib/movements/movement-option';
+import { CUSTOM_OPEN_AT_MOST } from '@/lib/movements/browse-view';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import {
   catalogOption,
@@ -461,8 +462,12 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     hasLibraryData(o) && o.primaryMuscle === MUSCLE.quadriceps;
 
   it("is the tree of what fits: browseTree's kinds and families over those rows, with their counts", () => {
-    render(<Harness options={LIBRARY_OPTIONS} />);
+    // ⏳ With a row that has no library data, so "Not sorted yet" is there before the filter.
+    render(<Harness options={[withoutLibraryData(FRONT), ...LIBRARY_OPTIONS]} />);
     open();
+    const notSorted = () =>
+      screen.queryByRole('heading', { level: 4, name: (n) => n.startsWith(COPY.notSorted) });
+    expect(notSorted()).toBeTruthy();
     withMuscles(MUSCLE_LABELS.quadriceps);
     const fitting = LIBRARY_OPTIONS.filter(QUADS);
     const tree = browseTree(fitting);
@@ -483,7 +488,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(tree.length).toBeLessThan(browseTree(LIBRARY_OPTIONS.filter(hasLibraryData)).length);
     expect(screen.queryAllByRole('heading', { level: 5 }).length).toBeGreaterThan(1);
     // No "Not sorted yet": no row without library data passes a filter.
-    expect(screen.queryByRole('heading', { name: (n) => n.startsWith(COPY.notSorted) })).toBeNull();
+    expect(notSorted()).toBeNull();
   });
 
   it(`opens itself on the FILTERED tree's rows: at most ${BROWSE_OPEN_AT_MOST} that fit (K26)`, () => {
@@ -603,6 +608,23 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(hit.textContent).not.toContain(COPY.tagNotInFilters);
     expect(status()).toContain(COPY.statusAlreadyListedNoData(FRONT.name));
     expect(status()).not.toContain(COPY.statusAlreadyListedOutside(FRONT.name));
+  });
+
+  it('🔴 custom items opened with no filter start folded once a filter is on (P9, K25)', () => {
+    const mine = Array.from({ length: CUSTOM_OPEN_AT_MOST + 1 }, (_, i) =>
+      householdOption(`Garage ${i + 1}`, `g-${i + 1}`),
+    );
+    render(<Harness options={[...OPTIONS.filter((o) => o.owner !== 'household'), ...mine]} />);
+    open();
+    const unfiltered = groupButton(COPY.household, mine.length);
+    expect(unfiltered.getAttribute('aria-expanded')).toBe('false');
+    act(() => void fireEvent.click(unfiltered));
+    expect(groupButton(COPY.household, mine.length).getAttribute('aria-expanded')).toBe('true');
+    withLats();
+    expect(groupButton(COPY.householdNotFiltered, mine.length).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    expect(screen.queryByRole('button', { name: /^Garage 1\b/ })).toBeNull();
   });
 
   it('🔴 the custom items opened by a tick stay open when the tick is undone', () => {

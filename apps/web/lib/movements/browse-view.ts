@@ -39,7 +39,13 @@ export const CUSTOM_OPEN_AT_MOST = 5;
 export type BrowseKey = string;
 
 export const BROWSE_KEY = {
+  /** "Your custom items" with no filter. */
   custom: 'custom',
+  /**
+   * "Your custom items (not filtered)": a key of its own, so opening the custom items with no
+   * filter never carries into the filtered list, where they start folded however few (P9, K25).
+   */
+  customFiltered: 'custom-filtered',
   /** "All movements", and "Movements that fit your filters" under a filter: one group, one key. */
   all: 'all',
   /** "Today's program", which a caller passes; never under a filter. */
@@ -79,10 +85,15 @@ export type BrowseView = {
   readonly filtered: boolean;
 };
 
-/** What a group's default reads: the view's, and whether every one of Today's program is on a card. */
+/** What a group's default reads: the view's, and Today's program's two facts. */
 export type BrowseDefaults = Pick<BrowseView, 'auto' | 'custom' | 'filtered'> & {
-  /** Today's program starts folded once every prescribed movement is on a card. */
+  /** Today's program starts folded once every prescribed movement is on a card… */
   readonly programAllOnForm?: boolean;
+  /**
+   * …unless it holds a ticked row (multi mode), read live: so a program whose ids arrive after the
+   * tick was seeded still opens for it.
+   */
+  readonly programHoldsTicked?: boolean;
 };
 
 /**
@@ -113,15 +124,18 @@ export function browseView(
 /**
  * The groups that hold an option, outermost first: what must be open for its row to be on screen.
  * A household item sits in "Your custom items"; a library row in All movements, its kind and (when
- * its kind has families) its family; a built-in with no library data in K24's section. A row in
- * Today's program (`programIds`) is in that section too.
+ * its kind has families) its family; a built-in with no library data in K24's section. A household
+ * item names both custom keys, the filtered list's and the unfiltered one's, so a tick opens it in
+ * whichever is drawn. A row in `programIds` (a multi-mode tick in Today's program; never the
+ * current row or a reveal) is in that section too.
  */
 export function browseAncestors(
   option: MovementOptionDTO,
   programIds: ReadonlySet<string> = new Set(),
 ): readonly BrowseKey[] {
   const program = programIds.has(option.publicId) ? [BROWSE_KEY.program] : [];
-  if (option.owner === 'household') return [BROWSE_KEY.custom, ...program];
+  if (option.owner === 'household')
+    return [BROWSE_KEY.custom, BROWSE_KEY.customFiltered, ...program];
   if (!hasLibraryData(option)) return [BROWSE_KEY.all, BROWSE_KEY.notSorted, ...program];
   const kind = option.modality;
   if (BROWSE_FLAT_KINDS.includes(kind)) return [BROWSE_KEY.all, kindKey(kind), ...program];
@@ -145,8 +159,9 @@ export const CLOSED_BROWSE: BrowseOpenState = { userChoice: new Map(), seeded: n
 
 /**
  * Whether a group is open: the person's tap, else seeded, else its default. All movements (or what
- * fits the filters) starts open; "Your custom items" while it holds `CUSTOM_OPEN_AT_MOST` or fewer
- * and no filter is on (P9); Today's program while any of it is not yet on a card; a kind, a family
+ * fits the filters) starts open; "Your custom items" while it holds `CUSTOM_OPEN_AT_MOST` or fewer,
+ * and never under a filter (P9; its own key); Today's program while any of it is not yet on a card
+ * or it holds a ticked row; a kind, a family
  * and K24's "Not sorted yet" when the tree opens itself (`auto`). Never the custom items by `auto`:
  * twenty-four of them would bury a short tree.
  */
@@ -162,9 +177,11 @@ export function isBrowseOpen(
     case BROWSE_KEY.all:
       return true;
     case BROWSE_KEY.custom:
-      return !view.filtered && view.custom.length <= CUSTOM_OPEN_AT_MOST;
+      return view.custom.length <= CUSTOM_OPEN_AT_MOST;
+    case BROWSE_KEY.customFiltered:
+      return false;
     case BROWSE_KEY.program:
-      return !view.programAllOnForm;
+      return !view.programAllOnForm || !!view.programHoldsTicked;
     default:
       // A kind, a family, and ⏳ K24's "Not sorted yet": folded on a long tree (K24), open with a
       // short one _(maintainer, 2026-11-19: "Open it while the tree is small")_, since before the
