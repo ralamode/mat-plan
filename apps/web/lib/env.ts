@@ -61,7 +61,7 @@ export const env = createEnv({
     // no-ops and the app behaves exactly as it did before V1-14a. Making them required would break
     // `pnpm dev` and CI the day this merged.
 
-    // Upstash Redis — rate limiting for the access gate only (see lib/rate-limit.ts).
+    // Upstash Redis — the mutation and export rate limits (see lib/rate-limit.ts).
     UPSTASH_REDIS_REST_URL: z.string().url().optional(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
 

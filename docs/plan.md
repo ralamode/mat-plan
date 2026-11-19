@@ -387,11 +387,10 @@ now and dearer once FAM-1's lanes have written their actions and reads, or once 
   owes the `db-migration` skill and the db-safety lens. _(Beta 0.)_ **Plan:**
   [scale-3-statement-timeout.md](./plans/scale-3-statement-timeout.md) (the role-level default; probe
   results in the plan; the seed gets no override, reasoned there).
-- <a id="scale-4"></a>**SCALE-4 — the rules that are written down but not wired (one docs PR).** Nine
-  places where a doc states something the code does not do. For each, fix the claim (mark it "planned,
-  not wired yet" with its owner row) or fix the code; almost always the claim. The nine: `Intl`
-  formatting (`docs/principles.md` §8); rate-limit expensive operations (AGENTS.md, Backend rules 7:
-  the zip export has no limiter); Sentry `enableLogs` (AGENTS.md, Server conventions); cursor
+- <a id="scale-4"></a>**SCALE-4 — the rules that are written down but not wired (one docs PR).** Eight
+  places where a doc states something the code does not do (nine until the export's rate limit, 2026-11-19). For each, fix the claim (mark it "planned,
+  not wired yet" with its owner row) or fix the code; almost always the claim. The eight: `Intl`
+  formatting (`docs/principles.md` §8); Sentry `enableLogs` (AGENTS.md, Server conventions); cursor
   pagination for any list that can grow (`docs/principles.md`: the export loads every month); the
   `Idempotency-Key` header (AGENTS.md, Backend rules 6: idempotency is the body's `clientId` plus a
   UNIQUE, which is fine, so the claim changes); last-write-wins on a client `updated_at` (AGENTS.md,
