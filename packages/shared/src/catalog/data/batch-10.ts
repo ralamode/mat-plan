@@ -90,7 +90,7 @@ export const CATALOG_BATCH_10: readonly CatalogMovement[] = [
     aliases: ['Standing long jump'],
     modality: 'strength',
     pattern: 'jump',
-    trackingType: 'reps',
+    trackingType: 'distance',
     unitDefault: null,
     isBodyweight: true,
     equipment: [],
