@@ -4,12 +4,10 @@ import {
   MOVEMENT_NAME_MAX,
   EQUIPMENT_LABELS,
   MODALITY_LABELS,
-  byFoldedName,
   requiresNoEquipment,
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
   existingItem,
-  filterMovementOptions,
   equipmentFilterOrder,
   movementFilterCounts,
   movementFiltersOn,
@@ -42,6 +40,7 @@ import {
   isBrowseOpen,
   kindKey,
   seedBrowse,
+  seedKeys,
   toggleBrowse,
   type BrowseKey,
   type BrowseOpenState,
@@ -319,6 +318,8 @@ export function MovementPicker({
   // groups have been opened, so a NEW tick or current row is noticed during render.
   const [browseOpen, setBrowseOpen] = useState<BrowseOpenState>(CLOSED_BROWSE);
   const [seededFor, setSeededFor] = useState<ReadonlySet<string>>(() => new Set());
+  /** Whether Today's program held a ticked row at the last render: its rise is seeded, below. */
+  const [programHeldTicked, setProgramHeldTicked] = useState(false);
   /** The `reveal` revision whose groups have been opened. Not reset on open: a reveal is one-off. */
   const [revealedRevision, setRevealedRevision] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -458,6 +459,7 @@ export function MovementPicker({
       // Every group starts from its default again; the selection's groups are opened next render.
       setBrowseOpen(CLOSED_BROWSE);
       setSeededFor(new Set());
+      setProgramHeldTicked(false);
       reopening = true;
     }
     // The panel never reopens with the sheet: it opens on the list, filters kept (P7).
@@ -703,11 +705,29 @@ export function MovementPicker({
     ? { kind: 'multi', selected: selectedSet, onPick: pickExisting, howTo: howToControl }
     : { kind: 'single', currentId, onPick: pickExisting, howTo: howToControl };
 
-  // ── The browse tree (CAT-3 P12, K24): no filter here; B3-ii puts the filtered one under a filter ──
-  const view = useMemo(() => browseView(data.options, NO_MOVEMENT_FILTERS), [data.options]);
-  const isGroupOpen = (key: BrowseKey) => isBrowseOpen(key, browseOpen, view);
+  // ── The browse tree (CAT-3 P12, K24): "All movements", or under a filter what fits it ───────────
+  const view = useMemo(() => browseView(data.options, filters), [data.options, filters]);
+  // Today's program: never under a filter or with `alreadyIn` (D2 edits a workout, with no "today").
+  // ⚠️ A prescribed id with no option is DROPPED before the open/closed decision (panel 2 · 6):
+  // otherwise the section opens over a row it cannot render. It happens when a prescription names a
+  // movement outside the picker map, or a household row that fell off Decision 5's list.
+  const programOptions = useMemo(
+    () => (todaysProgram && !alreadyIn ? resolveOptions(todaysProgram.ids, byId) : []),
+    [todaysProgram, alreadyIn, byId],
+  );
+  const programIds = useMemo(
+    () => new Set(programOptions.map((o) => o.publicId)),
+    [programOptions],
+  );
+  // Open while any prescribed movement is NOT yet on a card; the list always holds every prescribed
+  // row, so a second card for one stays one tap away: only the heading changes.
+  const programAllOnForm = programOptions.every((o) => todaysProgram?.onFormIds.has(o.publicId));
+  // Live, not only seeded: a program whose ids arrive after the tick still opens for it.
+  const programHoldsTicked = programOptions.some((o) => selectedSet.has(o.publicId));
+  const defaults = { ...view, programAllOnForm, programHoldsTicked };
+  const isGroupOpen = (key: BrowseKey) => isBrowseOpen(key, browseOpen, defaults);
   const toggleGroup = (key: BrowseKey) =>
-    setBrowseOpen((state) => toggleBrowse(state, key, isBrowseOpen(key, state, view)));
+    setBrowseOpen((state) => toggleBrowse(state, key, isBrowseOpen(key, state, defaults)));
   // 🔴 **A new selection opens every group above it**, even one the person closed: a tick, the
   // caller's select or create (whose row it then focuses), or the current row. Adjusted DURING
   // render against the selection last seeded, never in an effect, so the row is in the same commit
@@ -720,18 +740,34 @@ export function MovementPicker({
     if (fresh.length > 0 || seededFor.size !== wanted.length) {
       setSeededFor(new Set(wanted));
       if (fresh.length > 0)
-        setBrowseOpen((state) => seedBrowse(state, resolveOptions(fresh, byId)));
+        setBrowseOpen((state) =>
+          seedBrowse(
+            state,
+            resolveOptions(fresh, byId),
+            // Today's program latches open for a multi-mode TICK only: never the current row
+            // (single mode), whose card is already there, nor a reveal.
+            new Set(fresh.filter((id) => selectedSet.has(id) && programIds.has(id))),
+            view.filtered,
+          ),
+        );
+    }
+    // 🔴 Today's program that ARRIVES holding a ticked row (its ids came after the tick was
+    // seeded) is latched open the moment it does, the same way: else unticking would fold it.
+    if (programHoldsTicked !== programHeldTicked) {
+      setProgramHeldTicked(programHoldsTicked);
+      if (programHoldsTicked) setBrowseOpen((state) => seedKeys(state, [BROWSE_KEY.program]));
     }
     // The caller's `reveal`: the same seed, for a row whose selection did not change.
     const revealed = reveal ? byId.get(reveal.id) : undefined;
     if (reveal && revealed && reveal.revision !== revealedRevision) {
       setRevealedRevision(reveal.revision);
-      setBrowseOpen((state) => seedBrowse(state, [revealed]));
+      setBrowseOpen((state) => seedBrowse(state, [revealed], undefined, view.filtered));
     }
   }
 
   // ⚠️ **ONE element, rendered at every site that shows the tree** (the empty query and "no matches
-  // at all"): written out at each, two constructions of the old browse groups drifted by a prop.
+  // at all", each with a filter or without): written out at each, two constructions of the old
+  // browse groups drifted by a prop. The filter is in `view`, so the filtered tree is this one too.
   const browse = (
     <Browse
       view={view}
@@ -743,38 +779,34 @@ export function MovementPicker({
     />
   );
 
-  // Browsing with a filter on (P9; P12's heading, B3-ii's tree): the household's items first,
-  // folded to one line and marked "not filtered", then the library movements that fit, by name
-  // (the tree's comparator). Recent and Today's program are not shown.
-  const filteredBrowse =
-    filtersOn > 0
-      ? (() => {
-          const { fitting, custom: own } = filterMovementOptions(matchableOptions, filters);
-          const fits = fitting.map((m) => m.option).sort(byFoldedName);
-          return (
-            <>
-              {/* TODO(CAT-3 B3-ii): onto `Group`, with the filtered tree; then `FoldedSection` goes. */}
-              <FoldedSection
-                headingId={`${headingId}-household-folded`}
-                heading={COPY.householdNotFiltered}
-                rows={rowsFrom(own.map((m) => m.option))}
-                mode={mode}
-                count
-              />
-              {fits.length > 0 ? (
-                <Section
-                  mode={mode}
-                  id={`${headingId}-fit`}
-                  heading={COPY.fitHeading}
-                  rows={rowsFrom(fits)}
-                />
-              ) : (
-                <ListLine text={COPY.noneFit} />
-              )}
-            </>
-          );
-        })()
-      : null;
+  // "Your custom items": with no filter its own section, open at `CUSTOM_OPEN_AT_MOST` or fewer;
+  // under one, folded however few and marked "not filtered" (P9, K25). Two keys, so opening it with
+  // no filter does not carry 24 open rows above the filtered results.
+  const customKey = view.filtered ? BROWSE_KEY.customFiltered : BROWSE_KEY.custom;
+  const customGroup =
+    view.custom.length > 0 ? (
+      <Group
+        id={`${headingId}-household`}
+        level={3}
+        landmark
+        label={view.filtered ? COPY.householdNotFiltered : COPY.household}
+        count={view.custom.length}
+        open={isGroupOpen(customKey)}
+        onToggle={() => toggleGroup(customKey)}
+      >
+        <OptionList rows={rowsFrom(view.custom)} mode={mode} scope={`${headingId}-household`} />
+      </Group>
+    ) : null;
+
+  // Browsing with a filter on (P9, P10, P12): the household's items folded first, then "Movements
+  // that fit your filters", the same tree; or, when nothing fits, the line with Clear filters.
+  // Recent and Today's program are not shown. Also the list beneath a query that matched nothing.
+  const filteredBrowse = (
+    <>
+      {customGroup}
+      {view.total > 0 ? browse : <ListLine text={COPY.noneFit} />}
+    </>
+  );
 
   return (
     <Sheet
@@ -1082,23 +1114,7 @@ export function MovementPicker({
           ) : deferredTrimmed === '' ? (
             // P12's order: Your custom items, Recent, Today's program, All movements.
             <>
-              {view.custom.length > 0 ? (
-                <Group
-                  id={`${headingId}-household`}
-                  level={3}
-                  landmark
-                  label={COPY.household}
-                  count={view.custom.length}
-                  open={isGroupOpen(BROWSE_KEY.custom)}
-                  onToggle={() => toggleGroup(BROWSE_KEY.custom)}
-                >
-                  <OptionList
-                    rows={rowsFrom(view.custom)}
-                    mode={mode}
-                    scope={`${headingId}-household`}
-                  />
-                </Group>
-              ) : null}
+              {customGroup}
               {data.recentIds && data.recentIds.length > 0 ? (
                 <Section
                   mode={mode}
@@ -1107,14 +1123,21 @@ export function MovementPicker({
                   rows={rowsFrom(resolveOptions(data.recentIds, byId))}
                 />
               ) : null}
-              {todaysProgram && !alreadyIn ? (
-                <TodaysProgram
-                  headingId={`${headingId}-program`}
-                  program={todaysProgram}
-                  byId={byId}
-                  rowsFrom={rowsFrom}
-                  mode={mode}
-                />
+              {programOptions.length > 0 ? (
+                <Group
+                  id={`${headingId}-${BROWSE_KEY.program}`}
+                  level={3}
+                  landmark
+                  label={programAllOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
+                  open={isGroupOpen(BROWSE_KEY.program)}
+                  onToggle={() => toggleGroup(BROWSE_KEY.program)}
+                >
+                  <OptionList
+                    rows={rowsFrom(programOptions)}
+                    mode={mode}
+                    scope={`${headingId}-${BROWSE_KEY.program}`}
+                  />
+                </Group>
               ) : null}
               {browse}
             </>
@@ -1223,39 +1246,6 @@ function CreateTop({
   );
 }
 
-function TodaysProgram({
-  headingId,
-  program,
-  byId,
-  rowsFrom,
-  mode,
-}: {
-  headingId: string;
-  program: TodaysProgramForPicker;
-  byId: Map<string, MovementOptionDTO>;
-  rowsFrom: (options: readonly MovementOptionDTO[]) => Row[];
-  mode: RowMode;
-}) {
-  // ⚠️ A prescribed id with no option is DROPPED before the open/closed decision (panel 2 · 6) —
-  // otherwise the `<details>` opens over a row it cannot render. It happens when a prescription names
-  // a movement outside the picker map, or a household row that fell off Decision 5's list.
-  const options = resolveOptions(program.ids, byId);
-  if (options.length === 0) return null;
-  // Open while any prescribed movement is NOT yet on a card; the list always shows every prescribed
-  // row, so a second card for one stays one tap away — only the summary changes.
-  const allOnForm = options.every((o) => program.onFormIds.has(o.publicId));
-  // TODO(CAT-3 B3-ii): onto `Group`, so the picker has one disclosure; then `FoldedSection` goes.
-  return (
-    <FoldedSection
-      headingId={headingId}
-      heading={allOnForm ? COPY.todaysProgramAllOnForm : COPY.todaysProgram}
-      rows={rowsFrom(options)}
-      mode={mode}
-      open={!allOnForm}
-    />
-  );
-}
-
 /**
  * A line in the list with an optional control beside it: the filters-on line (panel row 10) and
  * the counts outside the filters (P10). Plain text: the sheet's one region says the count.
@@ -1267,63 +1257,6 @@ function ListLine({ text, children }: { text: string; children?: ReactNode }) {
       <p className="text-sm font-medium wrap-anywhere">{text}</p>
       {children}
     </div>
-  );
-}
-
-/**
- * A section folded to one line: Today's program (open while any of it is not yet on a card) and,
- * under a filter, the household's items (P9), whose summary carries its count.
- *
- * 🔴 **It opens itself while it holds a ticked row** (multi mode). A caller focuses the row it just
- * made or selected (the item form's Create), and a row inside a closed `<details>` cannot take
- * focus in a browser: focus would fall to the page and the new item would look lost, inviting a
- * second, permanent create (review of B2-ii).
- */
-function FoldedSection({
-  headingId,
-  heading,
-  rows,
-  mode,
-  open = false,
-  count = false,
-}: {
-  headingId: string;
-  heading: string;
-  rows: Row[];
-  mode: RowMode;
-  open?: boolean;
-  /** Show the rows' count in the summary. */
-  count?: boolean;
-}) {
-  const holdsTicked =
-    mode.kind === 'multi' && rows.some(({ option }) => mode.selected.has(option.publicId));
-  // The TICK is a latch, not a live value: once a ticked row held the section open it stays held
-  // (the caller's `open` stays live). If `open` followed `holdsTicked` live, unticking the last ticked row would drop
-  // the attribute, React would close the section under the person's thumb, and the focused row
-  // would vanish with nowhere for focus to go. A tap on the summary still closes it: the browser
-  // owns the attribute after that, and React re-applies nothing while the prop stays `true`.
-  // Adjusted during render (React's pattern), as the sheet's reset is above.
-  const [held, setHeld] = useState(holdsTicked);
-  if (holdsTicked && !held) setHeld(true);
-  if (rows.length === 0) return null;
-  return (
-    <section aria-labelledby={headingId} className="mb-4">
-      <details open={open || held || undefined}>
-        {/*
-          ⚠️ **The `h3` is INSIDE the `summary`**, not replaced by it. Every other section here is
-          headed by an `h3`, and a screen-reader user navigating by heading — which is how you skim a
-          long sheet — skipped straight past the one section holding the day's actual program,
-          because a bare `summary` is a disclosure button and not a heading. Nesting them keeps the
-          disclosure behaviour and puts the section back in the heading list.
-        */}
-        <summary className="min-h-11">
-          <h3 id={headingId} className="text-muted-foreground mb-1 inline text-sm font-semibold">
-            {count ? COPY.foldedCount(heading, rows.length) : heading}
-          </h3>
-        </summary>
-        <OptionList rows={rows} mode={mode} scope={headingId} />
-      </details>
-    </section>
   );
 }
 
@@ -1348,7 +1281,10 @@ function OptionList({
   className?: string;
 }) {
   return (
-    <ul className={cn('flex flex-col gap-1', className)}>
+    // `@container`: a row stacks "How to" under the name when the list is narrower than `@xs`
+    // (20rem, against the ROOT font size): any text enlargement on a 360px phone, or a zoomed page
+    // (WCAG 1.4.4). See `OptionRow`.
+    <ul className={cn('@container flex flex-col gap-1', className)}>
       {rows.map(({ option, tag }) => (
         <OptionRow
           key={option.publicId}
@@ -1376,6 +1312,15 @@ function OptionList({
  *   the keyboard up (UX panel, B2).
  * - With a loader, a row without steps keeps the "How to" column empty (the prototype's spacer), so
  *   the rows' outlines end at one edge and names wrap at one width.
+ * - 🔴 **Below `@xs` of its list, "How to" drops under the name** (`@max-xs:flex-col`) and the
+ *   spacer goes. At 360px and 100% text the list is 328px, so the row is one line and the name
+ *   column keeps 194px in multi mode. At 200% text everything here scales: side by side the name
+ *   column would be about 30px, a letter per line; stacked it is about 174px (296px list). On a
+ *   page zoomed to 195 CSS px it is about 101px (163px list) instead of a few letters.
+ * - **The threshold moves with the text**, because `@xs` is 20rem and rem resolves against the
+ *   root: measured, a row stacks from about 103% text at 360px, 112% at 390px and 118% at 412px.
+ *   So it is any text enlargement on a 360px phone, which is the right trigger: a px threshold
+ *   would keep the row side by side at 110% text, where the name column has already shrunk.
  */
 function OptionRow({
   option,
@@ -1431,7 +1376,7 @@ function OptionRow({
   );
   return (
     <li>
-      <div className="flex items-stretch gap-1">
+      <div className="flex items-stretch gap-1 @max-xs:flex-col">
         {mode.kind === 'multi' ? (
           <button
             type="button"
@@ -1474,12 +1419,12 @@ function OptionRow({
             onClick={() => mode.howTo?.toggle(rowKey, option)}
             // Looks like its own button beside the pick target (the prototype's): underlined, medium,
             // and a divider at 3:1, so a thumb can tell where the row ends.
-            className="focus-visible:ring-ring hover:bg-muted border-muted-foreground/60 min-h-11 w-17 shrink-0 rounded-lg border-l px-2 text-sm font-medium underline underline-offset-3 outline-none focus-visible:ring-3"
+            className="focus-visible:ring-ring hover:bg-muted border-muted-foreground/60 min-h-11 w-17 shrink-0 rounded-lg border-l px-2 text-sm font-medium underline underline-offset-3 outline-none focus-visible:ring-3 @max-xs:self-start"
           >
             {COPY.howTo}
           </button>
         ) : mode.howTo !== null ? (
-          <span aria-hidden className="w-17 shrink-0" />
+          <span aria-hidden className="w-17 shrink-0 @max-xs:hidden" />
         ) : null}
       </div>
       {howState && mode.howTo ? (
@@ -1609,8 +1554,9 @@ function Section({
 }
 
 /**
- * One group of the browse list that a person opens and closes (CAT-3 B3): "Your custom items", All
- * movements, a kind, a family, and K24's "Not sorted yet". **The APG disclosure: a button inside
+ * One group of the list that a person opens and closes (CAT-3 B3): "Your custom items", Today's
+ * program, All movements (or what fits the filters), a kind, a family, and K24's "Not sorted yet".
+ * The picker's one disclosure. **The APG disclosure: a button inside
  * its heading, not `<details>`.** React controls it fully, so the open state is the picker's one
  * model and never a DOM attribute React and the browser disagree on (a `toggle` event also fires on
  * a programmatic open, and a heading inside `<summary>` is not reliably exposed on iOS VoiceOver).
@@ -1619,9 +1565,10 @@ function Section({
  * - **`landmark`** for the top sections only: a region per kind and family floods a screen
  *   reader's landmark list. A kind, a family and "Not sorted yet" are a plain `div`.
  * - **The indent is the button's.** Rows step in `ml-3` only from 400px (`min-[400px]:ml-3`): at
- *   360px the name column keeps 194px in multi mode with "How to", and at 200% text (195 CSS px)
- *   an indent would crush it to a few pixels. The label is `min-w-0 flex-1`, so a long family
- *   wraps inside the tap target and its count never sits alone on a line.
+ *   360px the name column keeps 194px in multi mode with "How to", and every pixel of indent is
+ *   taken from it (at 200% text, or on a page zoomed to 195 CSS px, the row stacks "How to" under
+ *   the name: `OptionRow`). The label is `min-w-0 flex-1`, so a long family wraps inside the tap
+ *   target and its count never sits alone on a line (about 128px for the label at 200% text).
  * - **The count is said once**: visibly "· 12", hidden; to a screen reader ", 12 movements", the
  *   same words as a filter choice's name (`choiceName`).
  * - **The focus ring is inset**, so the sheet's scroll container cannot clip it at the edges.
@@ -1641,7 +1588,8 @@ function Group({
   id: string;
   level: 3 | 4 | 5;
   label: string;
-  count: number;
+  /** Shown after the label; Today's program has none, as before it moved onto `Group`. */
+  count?: number;
   open: boolean;
   onToggle: () => void;
   landmark?: boolean;
@@ -1681,14 +1629,18 @@ function Group({
             )}
           />
           <span className="min-w-0 flex-1 wrap-anywhere">{label}</span>
-          <span aria-hidden className="shrink-0 pr-2 tabular-nums">
-            {COPY.separator.trimStart()}
-            {count}
-          </span>
-          <span className="sr-only">
-            {COPY.choiceJoin}
-            {movementCount(count)}
-          </span>
+          {count === undefined ? null : (
+            <>
+              <span aria-hidden className="shrink-0 pr-2 tabular-nums">
+                {COPY.separator.trimStart()}
+                {count}
+              </span>
+              <span className="sr-only">
+                {COPY.choiceJoin}
+                {movementCount(count)}
+              </span>
+            </>
+          )}
         </button>
       </Heading>
       {open ? (
@@ -1710,7 +1662,10 @@ function Group({
 /**
  * "All movements" (CAT-3 P12): the kinds in `BROWSE_KINDS`' order, each with its families (biggest
  * first) or, for a kind in `BROWSE_FLAT_KINDS`, its rows by name; then K24's "Not sorted yet".
- * It draws `browseView`'s tree and decides nothing about it. Module scope, as `Section` is.
+ * Under a filter it is "Movements that fit your filters", the same tree over the rows that fit
+ * (P12): `browseTree` drops an empty kind or family, and "Not sorted yet" is empty, since no row
+ * without library data passes a filter. It draws `browseView`'s tree and decides nothing about
+ * it. Module scope, as `Section` is.
  *
  * Headings: All movements `h3`, a kind and "Not sorted yet" `h4`, a family `h5`, so no level is
  * skipped and a screen reader can jump between kinds and between families.
@@ -1737,7 +1692,7 @@ function Browse({
       id={`${headingId}-${BROWSE_KEY.all}`}
       level={3}
       landmark
-      label={COPY.allMovements}
+      label={view.filtered ? COPY.fitHeading : COPY.allMovements}
       count={view.total}
       open={isOpen(BROWSE_KEY.all)}
       onToggle={() => onToggle(BROWSE_KEY.all)}

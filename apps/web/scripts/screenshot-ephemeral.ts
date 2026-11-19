@@ -653,7 +653,9 @@ async function quadsOnThenBack(page: Page) {
     .getByRole('checkbox', { name: new RegExp(`^${quads}${PICKER_COPY.choiceJoin}`) })
     .check();
   await page.getByRole('button', { name: PICKER_COPY.filtersBack, exact: true }).click();
-  await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
+  // Not exact: the heading's name adds its count ("…, 3 movements"; CAT-3 B3-ii's tree). With
+  // "Quads" on the tree holds three rows, so it has opened itself (K26) by the time it is drawn.
+  await page.getByRole('heading', { level: 3, name: PICKER_COPY.fitHeading }).waitFor();
 }
 
 /**

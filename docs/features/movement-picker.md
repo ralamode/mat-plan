@@ -36,8 +36,9 @@ path and **creating** the deliberate one.
 - **CAT-3 B2-ii** — the filters (equipment, main muscle) and the list under them; invariant 15.
 - **CAT-3 B3-i** — with no query, "All movements" is the kind of training, then a family, with
   "Your custom items" first and the old built-ins with no library entry in "Not sorted yet";
-  invariant 11. B3-ii puts the same tree under a filter
-  ([plan](../plans/cat-3-b3-browse-by-kind.md)).
+  invariant 11 ([plan](../plans/cat-3-b3-browse-by-kind.md)).
+- **CAT-3 B3-ii** — under a filter, "Movements that fit your filters" is the same tree; Today's
+  program and the custom items move onto the one disclosure, and `FoldedSection` goes.
 
 ## The map
 
@@ -45,7 +46,7 @@ path and **creating** the deliberate one.
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/shared/src/movement-search.ts`                  | `foldMovementQuery`, **`movementNameKey`** (THE "same movement" key), `matchMovementOptions`, and CAT-3's `searchMovementOptions`. Pure, no React, no DB. **Owned by [program-contract.md](./program-contract.md) since CAT-3 C0a**: the library's search is added beside it, so a change to this file goes through the contract owner. |
 | `packages/shared/src/movement-picker-catalog.ts`          | `MOVEMENT_PICKER_GROUPS`, `MOVEMENT_PICKER_ENTRIES` (group + aliases per slug), `MOVEMENT_PICKER_ALIASES`, `RECENT_MOVEMENTS_LIMIT`. Since B3 browse reads none of the groups: `movement-picker-catalog.test.ts`'s key-set test guards the DB read's allow-list, not browse. The post-R2 cleanup deletes the groups.                    |
-| `apps/web/lib/movements/browse-view.ts`                   | The browse list as data (CAT-3 B3): `browseView` partitions the options once into the tree (`browseTree`), K24's rows and the custom items, with N; and the open-state model (`isBrowseOpen`, `seedBrowse`, `forgetClosed`, `CUSTOM_OPEN_AT_MOST`). Pure, no DOM.                                                                       |
+| `apps/web/lib/movements/browse-view.ts`                   | The browse list as data (CAT-3 B3): `browseView` partitions the options once into the tree (`browseTree`), K24's rows and the custom items, with N; and the open-state model (`isBrowseOpen`, `seedBrowse`, `forgetClosed`, `CUSTOM_OPEN_AT_MOST`), Today's program included. Pure, no DOM.                                             |
 | `apps/web/lib/movements/movement-option.ts`               | `MovementOptionDTO` (a union on `owner`; each option declares its `trackingType`), `MovementPickerData`. Types only — **not** `server-only`, so a client component may import them.                                                                                                                                                     |
 | `apps/web/lib/movements/movement-picker-copy.ts`          | Every string the picker, the card hint and the Save line show.                                                                                                                                                                                                                                                                          |
 | `apps/web/components/movements/movement-picker.tsx`       | The component. `'use client'`, on U0's `Sheet`.                                                                                                                                                                                                                                                                                         |
@@ -131,8 +132,8 @@ path and **creating** the deliberate one.
     renders "1 match." for twenty-one of them. In English the two are indistinguishable, which is
     exactly why it is a rule here rather than something noticed later.
 
-11. **With no query, "All movements" is the kind of training, then a family** (CAT-3 B3; spec P12,
-    K24 to K27). This **overturns** the old invariant 11 ("the browse list shows only what the
+11. **With no query, "All movements" is the kind of training, then a family, and so is what fits a
+    filter** (CAT-3 B3; spec P12, K24 to K27). This **overturns** the old invariant 11 ("the browse list shows only what the
     entries map groups"): browse reads no legacy `group`, and every listed row is reachable by
     browsing. What lives between files:
     - **The tree is `browseTree`'s**, from the contract (`packages/shared/src/catalog/families.ts`):
@@ -154,14 +155,29 @@ path and **creating** the deliberate one.
       fewer** (K26), counted on the tree alone; never the custom items by that rule. No row carries
       a group tag (P12). With no match at all and no filter, the list beneath is All movements, with
       no custom section.
-    - **Every group is a button inside its heading** (the APG disclosure), never `<details>`:
+    - **Under a filter it is the same tree, from the same `browse` element** (B3-ii): the view is
+      `browseView(options, filters)`, so the heading reads "Movements that fit your filters", the
+      counts are the filtered ones, an empty kind or family is not there, and "Not sorted yet" is
+      empty (no bare row passes a filter). **It opens itself on the FILTERED tree's rows**, so a
+      filter that leaves `BROWSE_OPEN_AT_MOST` or fewer opens every kind and family. "Your custom
+      items (not filtered)" comes first, **folded however few there are** (P9, K25), under a key of its
+      own (`customFiltered`), so opening the custom items with no filter does not carry two dozen
+      open rows above the filtered results; a tick seeds only the key of the list being drawn (`browseAncestors`'
+      `filtered`), so a tick made with no filter does not carry it open either. Nothing fits: `COPY.noneFit` with Clear filters.
+      With no match at all under a filter, the list beneath is this one, custom items included (P10).
+    - **Every group is a button inside its heading** (the APG disclosure, `Group`, the picker's only
+      one since B3-ii: Today's program and the custom items too), never `<details>`:
       `aria-expanded`, `aria-controls` while open, and a closed group renders nothing. Headings: the
       top sections `h3`, a kind and "Not sorted yet" `h4`, a family `h5`, and "How to" one below its
       row's section. Only the top sections are landmarks.
     - 🔴 **The open state is ONE model, in the picker** (`browse-view.ts`): a tap's choice beats
       everything; a `seeded` latch holds the groups above every row ticked or current. It survives
       the filter panel, the takeover, a no-match query and clearing the search, and resets only when
-      the sheet opens. **A new selection reopens the groups above it even if the person closed one**
+      the sheet opens. **Today's program is a group in the same model**: open while any of it is not
+      on a card or while it holds a ticked row (read live, so ids that arrive after the tick still
+      open it), and a multi-mode tick in it seeds it (and so does the program ARRIVING holding a tick), so unticking does not fold it under the thumb
+      (what `FoldedSection`'s latch did). The current row (single mode) and a `reveal` do not open
+      it: their card is already there. **A new selection reopens the groups above it even if the person closed one**
       (its taps are forgotten), adjusted during render, so the row a caller focuses after a create is
       in that commit; unticking closes nothing. **`reveal`** (`{ id, revision }`) does the same for
       a row whose selection does not change (Select on an item already ticked, a new item not
@@ -169,9 +185,25 @@ path and **creating** the deliberate one.
       closed. Keys and ids are kind-qualified (`strength/core`, `mobility/core`).
     - **360px:** only the disclosure buttons indent (a kind `pl-3`, a family `pl-6`). Rows step in
       `ml-3` only from 400px (`min-[400px]:ml-3`): at 360px the name column keeps 194px in multi
-      mode with "How to", and at 200% text (195 CSS px) an indent would leave it a few pixels. A long
-      family label wraps inside its tap target, its count in a `shrink-0` span. `e2e/movement-picker.a11y.spec.ts`
-      opens a kind (from the keyboard) and a family at 360px; `picker-browse-open` is the capture.
+      mode with "How to", and every pixel of indent is taken from it. A long family label wraps
+      inside its tap target, its count in a `shrink-0` span (about 128px for the label at 200% text).
+    - 🔴 **Large text and zoom (WCAG 1.4.4): a row stacks "How to" under its name** when its list
+      is narrower than `@xs` (the list is an `@container`; the row `@max-xs:flex-col`, the empty
+      spacer `@max-xs:hidden`). Side by side at 200% text the paddings, box and "How to" all scale,
+      and the name column would be about 30px, a letter per line. Stacked it is about 174px at 200%
+      text on a 360px phone, and about 101px on a page zoomed to 195 CSS px; at 360px and 100% text
+      the list is 328px, so the row stays one line at 194px. ⚠️ **`@xs` is 20rem, and rem resolves
+      against the root**, so the threshold moves with the text: a row stacks from about 103% text
+      at 360px, 112% at 390px and 118% at 412px. It is any text enlargement on a 360px phone, not
+      "never on a 360px phone", and rem is still the right unit (a px threshold would keep the row
+      side by side while its name column shrinks).
+    - **e2e** (`e2e/movement-picker.a11y.spec.ts`): a kind (from the keyboard) and a family at
+      360px, with Goblet squat's "How to" beside its name at 100% text; the filtered tree's
+      headings; and the open Squats family at 200% text and at 195 CSS px: no text-bearing span
+      wider than its box, Goblet squat's name at least 120px (90 at 195, assuming headless
+      Chromium's hidden scrollbars), "How to" under the name, the family's count inside its
+      button, nothing in the dialog wider than its box. (Not `expectNoHorizontalOverflow`: the page under the fixed sheet cannot
+      scroll sideways.) `picker-browse-open` and `picker-filter-browse` are the captures.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
     union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
@@ -307,7 +339,7 @@ path and **creating** the deliberate one.
       Clear filters (P10). **With no match at all**, the list beneath is the filtered browse, never
       the whole list; with matches the filters hide, nothing else is listed (a kid reads a browse
       there as results for the query, and the accepted prototype shows it only when nothing
-      matched). Browsing with a filter shows no Recent and no Today's program.
+      matched). Browsing with a filter is invariant 11's tree, with no Recent and no Today's program.
     - ⏳ **A built-in with no library data is never "not in your filters"** (until CAT-3 chunk R;
       board call, 2026-11-17, after a UX lens): no filter can judge it, so its exact-hit tag is
       "equipment and muscles not known yet" (`tagNoLibraryData`, never starting "No equipment",
@@ -318,16 +350,13 @@ path and **creating** the deliberate one.
       more: its equipment and muscles aren't known yet." One function decides the whole line.
     - **The status counts each custom row as what it was found as**: a match when the unfiltered
       search matched anything, otherwise a near miss or a some-words row (P5, P9).
-    - **A folded section opens itself while it holds a ticked row** (`FoldedSection`, shared with
-      Today's program): the item form focuses the row it just made, and a row in a closed
-      `<details>` cannot take focus in a browser. **The tick is a latch:** once a ticked row held the section open it stays held, so unticking the last row never closes it under the person's thumb and takes focus with it; only a tap on the summary closes it. The caller's own `open` stays live.
+    - **The folded custom items open themselves for a ticked row**: the item form focuses the row
+      it just made, and a closed group renders no row to focus. It is invariant 11's seed (since
+      B3-ii; `FoldedSection` and its latch are gone): unticking closes nothing, and only a tap closes it.
     - 🔴 **The create button and its hint read the UNFILTERED search** (panel row 9): loud only
       when nothing at all matches, and a near miss the filters hide is still named ("… is listed
       but is not in your filters."). A filter that hid a match and turned the button loud would
       invite the permanent duplicate invariant 4 exists to prevent.
-    - **The filtered browse is interim until B3-ii**: one "Movements that fit your filters" section
-      in the legacy groups' order, with no group tag since B3-i, until the filtered tree (P12). It
-      lists every library row that fits, a library entry with no legacy group after the grouped ones.
 
 ## Traps
 
@@ -369,8 +398,10 @@ the footer's states and the source scans. They deliberately **do not** claim:
 - `useDeferredValue` settling, and the status being read **once** by a screen reader (criterion 46).
   ⚠️ jsdom settles it synchronously, so invariant 8's bug class is **invisible** here in both
   directions: a regression that re-splits the query would not redden a single test;
-- `enterKeyHint="search"`, `maxLength` on paste, `<summary>` ≥44px, and the browse tree's 360px
-  width math and its disclosure buttons' 44px (`movement-picker.a11y.spec.ts`);
+- `enterKeyHint="search"`, `maxLength` on paste, the browse tree's 360px and 200%-text width math
+  and its disclosure buttons' 44px (`movement-picker.a11y.spec.ts`);
+- ⚠️ **Today's program's disclosure has no e2e step and no capture**: no caller passes
+  `todaysProgram` yet (the preview's item picker does not). Its first caller adds both;
 - Enter in the portaled input **not** submitting the form.
 
 A test plan that promised these would be claiming coverage it cannot deliver, which is the defect

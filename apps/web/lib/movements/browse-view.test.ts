@@ -111,6 +111,128 @@ describe('browseView: the tree opens itself when short (K26)', () => {
   });
 });
 
+describe('browseView under a filter (CAT-3 P12: "Movements that fit your filters")', () => {
+  it('is the same tree over the rows that fit: no empty kind or family, no "Not sorted yet"', () => {
+    const view = browseView(ALL, LATS);
+    expect(view.filtered).toBe(true);
+    expect(browseView(ALL, NO_MOVEMENT_FILTERS).filtered).toBe(false);
+    const rows = treeRows(view);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((o) => hasLibraryData(o) && o.primaryMuscle === MUSCLE.lats)).toBe(true);
+    for (const { count, families } of view.tree) {
+      expect(count).toBeGreaterThan(0);
+      for (const { options } of families) expect(options.length).toBeGreaterThan(0);
+    }
+    expect(view.bare).toEqual([]);
+    // Custom items are never filtered (P9): all of them, as with no filter.
+    expect(view.custom).toEqual(MINE);
+    // Non-vacuity: the filter dropped a kind the unfiltered tree has.
+    expect(view.tree.length).toBeLessThan(browseView(ALL, NO_MOVEMENT_FILTERS).tree.length);
+  });
+
+  /** `n` library rows that work the lats, each its own movement. */
+  const lats = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      ...(LIBRARY_OPTIONS[0] as LibraryOption),
+      publicId: `lats-${i}`,
+      name: `Lats ${i}`,
+      primaryMuscle: MUSCLE.lats,
+    }));
+  const others = LIBRARY_OPTIONS.filter(
+    (o) => hasLibraryData(o) && o.primaryMuscle !== MUSCLE.lats,
+  );
+
+  it(`auto-opens on the FILTERED tree's rows: ${BROWSE_OPEN_AT_MOST} that fit, not one more (K26)`, () => {
+    // Over the threshold with no filter, so only the filtered count can open it.
+    expect(others.length).toBeGreaterThan(BROWSE_OPEN_AT_MOST);
+    const at = [...lats(BROWSE_OPEN_AT_MOST), ...others];
+    expect(browseView(at, NO_MOVEMENT_FILTERS).auto).toBe(false);
+    expect(browseView(at, LATS).auto).toBe(true);
+    expect(browseView([...lats(BROWSE_OPEN_AT_MOST + 1), ...others], LATS).auto).toBe(false);
+  });
+
+  it('"Your custom items" starts folded under a filter, however few (P9, K25); a seed still opens it', () => {
+    expect(MINE.length).toBeLessThanOrEqual(CUSTOM_OPEN_AT_MOST);
+    const filtered = browseView(ALL, LATS);
+    const unfiltered = browseView(ALL, NO_MOVEMENT_FILTERS);
+    expect(isBrowseOpen(BROWSE_KEY.customFiltered, CLOSED_BROWSE, filtered)).toBe(false);
+    expect(isBrowseOpen(BROWSE_KEY.custom, CLOSED_BROWSE, unfiltered)).toBe(true);
+    // A seed under the filter opens it.
+    expect(
+      isBrowseOpen(
+        BROWSE_KEY.customFiltered,
+        seedBrowse(CLOSED_BROWSE, [MINE[0]!], undefined, true),
+        filtered,
+      ),
+    ).toBe(true);
+  });
+
+  it('🔴 a tick with no filter seeds only the unfiltered key: the filtered list stays folded', () => {
+    const seeded = seedBrowse(CLOSED_BROWSE, [MINE[0]!]);
+    expect(isBrowseOpen(BROWSE_KEY.custom, seeded, browseView(ALL, NO_MOVEMENT_FILTERS))).toBe(
+      true,
+    );
+    expect(isBrowseOpen(BROWSE_KEY.customFiltered, seeded, browseView(ALL, LATS))).toBe(false);
+  });
+
+  it('🔴 opening them with no filter does not open them under one: two keys', () => {
+    const opened = toggleBrowse(CLOSED_BROWSE, BROWSE_KEY.custom, false);
+    expect(isBrowseOpen(BROWSE_KEY.custom, opened, browseView(ALL, NO_MOVEMENT_FILTERS))).toBe(
+      true,
+    );
+    expect(
+      isBrowseOpen(BROWSE_KEY.customFiltered, forgetClosed(opened), browseView(ALL, LATS)),
+    ).toBe(false);
+  });
+});
+
+describe("Today's program", () => {
+  const view = browseView(ALL, NO_MOVEMENT_FILTERS);
+  const GOBLET = libraryNamed('Goblet squat');
+
+  it('starts open while any of it is not on a card, folded once all of it is', () => {
+    expect(
+      isBrowseOpen(BROWSE_KEY.program, CLOSED_BROWSE, { ...view, programAllOnForm: false }),
+    ).toBe(true);
+    expect(
+      isBrowseOpen(BROWSE_KEY.program, CLOSED_BROWSE, { ...view, programAllOnForm: true }),
+    ).toBe(false);
+  });
+
+  it('…unless it holds a ticked row, read live (the ids may arrive after the tick)', () => {
+    const allOnTicked = { ...view, programAllOnForm: true, programHoldsTicked: true };
+    expect(isBrowseOpen(BROWSE_KEY.program, CLOSED_BROWSE, allOnTicked)).toBe(true);
+    // A tap still wins.
+    expect(
+      isBrowseOpen(
+        BROWSE_KEY.program,
+        toggleBrowse(CLOSED_BROWSE, BROWSE_KEY.program, true),
+        allOnTicked,
+      ),
+    ).toBe(false);
+  });
+
+  it('🔴 a selection in it opens it, even with all of it on a card (the row is about to be focused)', () => {
+    const program = new Set([GOBLET.publicId, MINE[0]!.publicId]);
+    expect(browseAncestors(GOBLET, program)).toContain(BROWSE_KEY.program);
+    expect(browseAncestors(MINE[0]!, program)).toEqual([BROWSE_KEY.custom, BROWSE_KEY.program]);
+    expect(browseAncestors(MINE[0]!, program, true)).toEqual([
+      BROWSE_KEY.customFiltered,
+      BROWSE_KEY.program,
+    ]);
+    expect(browseAncestors(GOBLET)).not.toContain(BROWSE_KEY.program);
+    const allOn = { ...view, programAllOnForm: true };
+    expect(
+      isBrowseOpen(BROWSE_KEY.program, seedBrowse(CLOSED_BROWSE, [GOBLET], program), allOn),
+    ).toBe(true);
+    // A row outside the program does not open it.
+    const other = libraryNamed('Easy run');
+    expect(
+      isBrowseOpen(BROWSE_KEY.program, seedBrowse(CLOSED_BROWSE, [other], program), allOn),
+    ).toBe(false);
+  });
+});
+
 describe('isBrowseOpen: the defaults', () => {
   const view = browseView(ALL, NO_MOVEMENT_FILTERS);
   const SQUAT = familyKey(MODALITY.strength, 'squat');
@@ -164,6 +286,7 @@ describe('browseAncestors and seedBrowse: a selection opens every group above it
     expect(browseAncestors(RUN)).toEqual([BROWSE_KEY.all, kindKey(MODALITY.conditioning)]);
     expect(browseAncestors(BARE[0]!)).toEqual([BROWSE_KEY.all, BROWSE_KEY.notSorted]);
     expect(browseAncestors(MINE[0]!)).toEqual([BROWSE_KEY.custom]);
+    expect(browseAncestors(MINE[0]!, undefined, true)).toEqual([BROWSE_KEY.customFiltered]);
   });
 
   it('agrees with browseTree for EVERY row: the groups it names are the ones the row is drawn in', () => {
