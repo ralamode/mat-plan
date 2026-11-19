@@ -138,7 +138,13 @@ function localDay(offsetDays = 0): string {
 // `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
 // the registry (`./actions.registry.ts`), which is the single source for both the action names and
 // their refusal copy.
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY, PRACTICE_COPY } from '@/lib/constants';
+import {
+  AMEND_ERROR_COPY,
+  BODYWEIGHT_COPY,
+  CHECKIN_COPY,
+  HIDE_COPY,
+  PRACTICE_COPY,
+} from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -1099,6 +1105,32 @@ describe('logCheckinsAction — boundary (bad body → zod-reject)', () => {
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
+  // Two items under one id write one row, and both would answer `created`. Postgres compares uuids,
+  // so an id and its upper-case twin are the same id (plan v1-9b-checkin-distinct-ids).
+  it.each([
+    ['the same id', (id: string) => id],
+    ['the same id in another case', (id: string) => id.toUpperCase()],
+  ])('refuses two fields carrying %s, marking both', async (_label, twin) => {
+    const id = newId();
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1', [BOOL_METRIC.key]: '1' },
+        clientIds: { [HABIT.key]: id, [BOOL_METRIC.key]: twin(id) },
+      }),
+    );
+    expect(res).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        [HABIT.key]: [CHECKIN_COPY.itemNotSubmitted],
+        [BOOL_METRIC.key]: [CHECKIN_COPY.itemNotSubmitted],
+      },
+    });
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
   // todayIso() is UTC and check-ins are evening activities, so the form submits the day
   // it rendered; a day far from the server's today means a stale tab, not a valid log.
   it('rejects a stale day (more than ±1 from today)', async () => {
@@ -1132,6 +1164,43 @@ describe('logCheckinsAction — happy path + ownership', () => {
       }),
     );
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+
+  it('forwards an upper-case clientId folded', async () => {
+    const clientId = newId();
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1' },
+        clientIds: { [HABIT.key]: clientId.toUpperCase() },
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0].items).toMatchObject([{ clientId }]);
+  });
+
+  it('maps an answer for the folded id back to the field sent in upper case', async () => {
+    const clientId = newId();
+    // The writer answers with the id it parsed, lower case, as Postgres prints it.
+    vi.mocked(logCheckinEntries).mockImplementationOnce(async ({ items }) =>
+      items.map((i) => ({
+        clientId: i.clientId.toLowerCase(),
+        id: null,
+        created: false,
+        outcome: 'own_hidden' as const,
+      })),
+    );
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1' },
+        clientIds: { [HABIT.key]: clientId.toUpperCase() },
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[HABIT.key]).toEqual([HIDE_COPY.loggedThenDeleted]);
   });
 
   it('writes a mixed batch: a habit, a bool metric, and a rated metric', async () => {

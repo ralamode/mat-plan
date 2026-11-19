@@ -4,7 +4,7 @@
 > (row 12f, `fam-1-family-program.md:633`). Branch for this plan: `docs/fam-1-12f-retire-old-forms-plan`.
 > Lane C builds it. Five code PRs, named **12f PR 1 to 5** here.
 >
-> **Plan only. No code until the maintainer approves.** Drafted by the plan owner on 2026-11-19 at the
+> **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at the
 > maintainer's request, from lane C's notes. Panelled the same day by four lenses; every finding is
 > applied (the log is at the end).
 
@@ -147,16 +147,20 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 - **No day page changes.** Today the page shows the routine's Life keys minus Wake
   (`page.tsx:125-127`, `life-section.tsx:17-19`). After the trim it shows the routine's Life keys:
 
-  | Stored `routine_config`                                     | Life on the day page today | After |
-  | ----------------------------------------------------------- | -------------------------- | ----- |
-  | none (every athlete added in the app)                       | none                       | none  |
-  | the full routine (`seed.ts:69-89`; the live household)      | practice                   | same  |
-  | Athlete Two's (`seed.ts:92-104`: check-ins, strength, Wake) | none                       | none  |
-  | only keys that left (`life:wake`, any `checkin:*`)          | none                       | none  |
-  | `life:wrestling_practice` alone                             | practice                   | same  |
+  | Stored `routine_config`                                             | Life on the day page today | After |
+  | ------------------------------------------------------------------- | -------------------------- | ----- |
+  | none (every athlete added in the app)                               | none                       | none  |
+  | the full routine (`seed.ts:69-89`)                                  | practice                   | same  |
+  | Athlete Two's (`seed.ts:92-104`: check-ins, strength, Wake)         | none                       | none  |
+  | only keys that left (`life:wake`, any `checkin:*`)                  | none                       | none  |
+  | `strength` and check-in keys, no Life key (found in production, Q5) | none                       | none  |
+  | `life:wrestling_practice` alone                                     | practice                   | same  |
 
-  The table covers the seed's shapes and the default. Q5's second read lists the shapes production
-  holds, and it gates PR 5.
+  The table covers the seed's shapes, the default and the one other shape production holds.
+  **Q5's second read was run on 2026-11-19: production holds three shapes, each a row above**
+  (none; Athlete Two's; `strength` with check-in keys and no Life key). None of them shows a Life
+  item today and none will after the trim, so no athlete's day page changes. The live household's
+  athletes do not hold the full routine, as this plan first assumed.
 
 - **The editor** lists Life items only. What it does not list (`strength`, with its `conditional`
   marker) rides along in the saved order. `savedOrder(initial, listed)` in `lib/routine/catalog.ts`
@@ -278,7 +282,7 @@ last user is `lib/checkins`. All of them sit in packages this step may not edit.
   merges: `docs/plan.md:248`, `:1014-1022`, `:2840`, `:3135`, `:3161`;
   `docs/plans/ai-1-nl-logging.md:73`, `:94`, `:444`, `:569`; `docs/plans/assign-1-assignments.md:390`;
   and `PICK-1` PR 4, which the debt row says mounts into the strength form (`docs/tech-debt.md:188-189`).
-- What Q4 decides for `TEN-2b-1`.
+- What Q4 decided for `TEN-2b-1`: `LEGACY-1` closes it as overtaken (`docs/plan.md`).
 
 No file under `packages/shared/src/program/` or `apps/web/app/design/program/` names a deleted module
 or export (`git grep`), so neither changes.
@@ -370,9 +374,10 @@ prototype's day page has no such card.
   editor tab that still holds check-in keys after PR 5 is refused with the editor's existing message
   (`actions.ts:789-792`); a reload fixes it.
 - **Practice appears for an athlete who should not see it.** The table test covers the neutral default
-  and every shape the seed holds. A correction gave the live household's athletes the full routine
-  (`packages/db/scripts/corrections/registry.ts:495-581`). Q5's second read lists every shape stored
-  in production; a shape the table does not cover gets its own row and test case before PR 5 merges.
+  and every shape the seed holds. Q5's second read (2026-11-19) found three shapes in production. One was not in the table,
+  `strength` with check-in keys and no Life key; it has its own row, and PR 5 gives it a test case.
+  None of the three holds `life:wrestling_practice`, so nobody in production sees practice before
+  or after. If the fresh start runs before PR 5, the read is run again: it replaces the household's athletes.
 - **A routine saved after PR 5 loses its check-in and Wake keys for good.** They have rendered nothing
   since #418, `routine_config` is a setting and not a log, and no export carries it
   (`docs/privacy/data-inventory.md:773`). Accepted.
@@ -391,7 +396,8 @@ prototype's day page has no such card.
 
 ## Out-of-scope / deferred
 
-- Retiring the legacy strength write path below the actions (DAL, writer, shared schemas): Q4.
+- Retiring the legacy strength write path below the actions (DAL, writer, shared schemas): its own
+  row after FAM-1, `LEGACY-1` (Q4, answered).
 - `weeklyAdherenceRows`, the `ramp_targets` table, the legacy program read, and the exports in
   `packages/shared` and comments in `packages/db` the debt row lists. Typed targets are `TGT-1`.
 - Showing an old Wake or check-in entry in the app, and any history view.
@@ -402,13 +408,13 @@ prototype's day page has no such card.
 
 ## Open questions
 
-| #   | For            | Question                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Recommendation                                                                                                                                                                                                                                                                                                                                                        |
-| --- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q1  | the board      | Guest edits no grant covers yet. PR 5: lane S's `life-section.tsx:13-19` and `life-section.test.tsx:35`, `:115-133`; `e2e/landing.spec.ts:138`, no lane's. PR 2, comment only: lane B's `components/ui/sheet.tsx:140`, lane S's `bodyweight-section.test.tsx:7`, and no lane's `components/ui/announcer.tsx:8`, `components/theme/theme-toggle.tsx:25`, `.claude/skills/add-server-action/SKILL.md:120`. PR 4, comment only: `ownership.ts:280-282`, on lane C's list but not in the grant as relayed. Guest edits, or each owner's own commit? | **Cleared by the board (2026-11-19).** Guest edits, each owner reviewing its hunk; the security lens reads the spec's. The second grant (`catalog-activity-types.ts`) is handed back unused.                                                                                                                                                                          |
-| Q2  | the board      | The token preview (`app/design/tokens/`, `UI-3`'s) mounts three components the row deletes. Who clears lane C to edit it?                                                                                                                                                                                                                                                                                                                                                                                                                       | **The roadmap thread's half is answered (2026-11-19): the two demos go in PR 1, and the plan owner rewords the `UI-3` row when this plan merges.** `UI-3`'s own first step is to preview the real pages (`docs/plan.md:895-899`). Lane C's edit of the page is cleared by the board (2026-11-19).                                                                     |
-| Q3  | the board      | The row gates all of 12f on "lane S done". PRs 1, 2 and 3 touch no file of lane S's sections beyond the guest edits in Q1, shared guides and `actions.ts`. May they start before B2 merges? _Unverified:_ B2's file list was not read for this draft.                                                                                                                                                                                                                                                                                           | **Cleared by the board (2026-11-19):** the whole-file deletes and the dead actions may start before B2 if no file overlaps B2's, each guide turn ordered by the board. PR 4 waits for B2 on `page.tsx` regardless.                                                                                                                                                    |
-| Q4  | the maintainer | After PR 3 nothing in the app can write a legacy strength session. `logStrengthSession`, `editStrengthSet`, their db writers and `TEN-2b-1`'s planned work on that path are left with no caller. Retire the path, or keep it?                                                                                                                                                                                                                                                                                                                   | Keep the path in 12f; retire it under a new row after FAM-1. That row closes `TEN-2b-1` as overtaken. It touches `packages/db` proofs and many mutation patches, so it needs its own plan.                                                                                                                                                                            |
-| Q5  | the maintainer | Two read-only checks on production, run by the maintainer. The tables and columns are `ramp_targets.target_value` and `profiles.routine_config` (`packages/db/src/schema.ts:1217-1230`, `:241`, `:271`), each with `deleted_at` (`:42-47`).                                                                                                                                                                                                                                                                                                     | Run both. (a) `SELECT count(*) FROM ramp_targets WHERE deleted_at IS NULL AND target_value > 0;` Recorded in PR 4's description. Not a gate: losing the card is D21. (b) `SELECT routine_config::text, count(*) FROM profiles WHERE deleted_at IS NULL GROUP BY 1;` **A gate for PR 5:** every shape it returns must be a row of the routine table, with a test case. |
+| #   | For            | Question                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Recommendation                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | the board      | Guest edits no grant covers yet. PR 5: lane S's `life-section.tsx:13-19` and `life-section.test.tsx:35`, `:115-133`; `e2e/landing.spec.ts:138`, no lane's. PR 2, comment only: lane B's `components/ui/sheet.tsx:140`, lane S's `bodyweight-section.test.tsx:7`, and no lane's `components/ui/announcer.tsx:8`, `components/theme/theme-toggle.tsx:25`, `.claude/skills/add-server-action/SKILL.md:120`. PR 4, comment only: `ownership.ts:280-282`, on lane C's list but not in the grant as relayed. Guest edits, or each owner's own commit? | **Cleared by the board (2026-11-19).** Guest edits, each owner reviewing its hunk; the security lens reads the spec's. The second grant (`catalog-activity-types.ts`) is handed back unused.                                                                                                                                                                                                                                                                                       |
+| Q2  | the board      | The token preview (`app/design/tokens/`, `UI-3`'s) mounts three components the row deletes. Who clears lane C to edit it?                                                                                                                                                                                                                                                                                                                                                                                                                       | **The roadmap thread's half is answered (2026-11-19): the two demos go in PR 1, and the plan owner rewords the `UI-3` row when this plan merges.** `UI-3`'s own first step is to preview the real pages (`docs/plan.md:895-899`). Lane C's edit of the page is cleared by the board (2026-11-19).                                                                                                                                                                                  |
+| Q3  | the board      | The row gates all of 12f on "lane S done". PRs 1, 2 and 3 touch no file of lane S's sections beyond the guest edits in Q1, shared guides and `actions.ts`. May they start before B2 merges? _Unverified:_ B2's file list was not read for this draft.                                                                                                                                                                                                                                                                                           | **Cleared by the board (2026-11-19):** the whole-file deletes and the dead actions may start before B2 if no file overlaps B2's, each guide turn ordered by the board. PR 4 waits for B2 on `page.tsx` regardless.                                                                                                                                                                                                                                                                 |
+| Q4  | the maintainer | After PR 3 nothing in the app can write a legacy strength session. `logStrengthSession`, `editStrengthSet`, their db writers and `TEN-2b-1`'s planned work on that path are left with no caller. Retire the path, or keep it?                                                                                                                                                                                                                                                                                                                   | **Answered by the maintainer (2026-11-19): "Yes, own row after FAM-1 (Recommended)".** The path stays in 12f and is retired under a new row after FAM-1, [`LEGACY-1`](../plan.md#legacy-1) (FAM-1 plan decision D51). That row closes `TEN-2b-1` as overtaken. It touches `packages/db` proofs and many mutation patches, so it needs its own plan.                                                                                                                                |
+| Q5  | the maintainer | Two read-only checks on production, run by the maintainer. The tables and columns are `ramp_targets.target_value` and `profiles.routine_config` (`packages/db/src/schema.ts:1217-1230`, `:241`, `:271`), each with `deleted_at` (`:42-47`).                                                                                                                                                                                                                                                                                                     | **Answered by the maintainer (2026-11-19):** (a) 0; (b) three shapes, each a row of the routine table. The reads were: (a) `SELECT count(*) FROM ramp_targets WHERE deleted_at IS NULL AND target_value > 0;` Recorded in PR 4's description. Not a gate: losing the card is D21. (b) `SELECT routine_config::text, count(*) FROM profiles WHERE deleted_at IS NULL GROUP BY 1;` **A gate for PR 5:** every shape it returns must be a row of the routine table, with a test case. |
 
 **Answered by the board (2026-11-19):**
 
@@ -422,7 +428,15 @@ prototype's day page has no such card.
 - **Q3: yes.** The whole-file deletes and the dead actions may start before B2 merges if no file
   overlaps B2's. The PR that edits `page.tsx` waits for B2.
 
-Q4 and Q5 are the maintainer's and stay open.
+**Answered by the maintainer (2026-11-19):**
+
+- **Q4: "Yes, own row after FAM-1 (Recommended)".** 12f keeps the legacy strength write path. It is
+  retired under its own row after FAM-1, [`LEGACY-1`](../plan.md#legacy-1), which closes `TEN-2b-1` as
+  overtaken (FAM-1 plan decision D51).
+
+**Q5, answered: the maintainer ran both reads on 2026-11-19.** (a) No live `ramp_targets` row has a
+target above zero, so nobody sees the "This week" card. (b) Three stored shapes, all rows of the
+routine table now; the gate for PR 5 is met, with the new row's test case owed in that PR.
 
 ## Review-response log (adversarial panel)
 

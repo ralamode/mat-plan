@@ -162,6 +162,7 @@ import {
   columnsOf,
   db,
   expectRejectedBy,
+  lockTimeoutSetBy,
   orFail,
   rolledBack,
   type VerifyContext,
@@ -8805,11 +8806,13 @@ await rolledBack(async (tx) => {
   // (1) The lock, keyed by the household. `asTx(tx)`, never `asPg`: on one connection a query on the
   //     pool inside this transaction would wait forever. createProfile's own transaction is a
   //     savepoint here, and an xact lock taken in a savepoint is held until the outer one ends.
-  await createProfile(asTx(tx), A_SCOPE, {
-    name: 'TD Cap Lock Probe',
-    kind: PROFILE_KIND.kid,
-    clientId: newId(),
-  });
+  const { set: timeoutSet } = await lockTimeoutSetBy(tx, () =>
+    createProfile(asTx(tx), A_SCOPE, {
+      name: 'TD Cap Lock Probe',
+      kind: PROFILE_KIND.kid,
+      clientId: newId(),
+    }),
+  );
   const [key] = (await tx.execute(sql`select hashint8(${households[0].id}::bigint) as k`))
     .rows as Array<{ k: number }>;
   const locks = (
@@ -8824,6 +8827,10 @@ await rolledBack(async (tx) => {
         Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
     ),
     'TD athlete cap: createProfile holds the household-athletes advisory lock, keyed by its household',
+  );
+  assert.ok(
+    timeoutSet,
+    'TD lock timeout: createProfile sets lock_timeout before it waits on the household-athletes lock',
   );
 });
 

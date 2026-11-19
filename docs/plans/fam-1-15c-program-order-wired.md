@@ -4,9 +4,10 @@
 > (row 15c, `fam-1-family-program.md:632`). Branch for this plan: `docs/fam-1-15c-program-order-plan`.
 > Lane C builds it. Three code PRs, named **15c PR 1–3** here.
 >
-> **Plan only. No code until the maintainer approves.** Drafted by the plan owner on 2026-11-19 at
+> **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes, each checked against the code. Hardened by a
-> five-lens panel the same day (the log is at the end).
+> five-lens panel the same day (the log is at the end). Amended the same day for the maintainer's
+> answers to Q5 and Q6: "Links in 15c; cap at 50" (the Amendment section).
 
 ## Where this sits
 
@@ -73,10 +74,12 @@ Done when:
 - A refused save puts the list back and says why; a stale list re-reads the page. **The dialog
   never vanishes while it is open**: if the re-read leaves fewer than two staying, it stays up with
   its message until the person closes it.
+- Each program's name on the programs line is a link to that program's page (the Amendment; D49).
+- A list of more than 50 ids is refused as `invalid` before the writer runs (the Amendment; D49).
 
 ## File-by-file changes
 
-### 15c PR 1: the dialog as D47 shows it (≈ 250 lines with tests)
+### 15c PR 1: the dialog as D47 shows it, and the names as links (≈ 300 lines with tests)
 
 Seen on the preview only: production still passes no action. **Gate: the contract owner's commit**
 (Contract and preview, below), which lands first: the split of staying and ending programs, and a
@@ -86,9 +89,9 @@ states (§8 of the FAM-1 plan, `fam-1-family-program.md:801-803`). Sheet is a gu
 | Path                                                                      | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/shared/src/program/` (the contract owner's commit, before PR 1) | —      | `programsByStay(programs)` answers `{ staying, ending }`, split on `endsToday === true` (`day-shapes.ts:257-266`). It would otherwise be a third copy of the rule the fake and the fixture builder already hold (`app/design/program/fakes.ts:346-347`; `fixtures/build.ts:211-212`), which then call it too. The server-rendered line and the client dialog both import it. PR 1 adds no helper of its own.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `apps/web/components/day/program-line.tsx`                                | EDIT   | `canOrder` asks for two or more **staying** programs in place of two or more current ones (`:27`). The other three conditions stay: two programs on the viewed day, a writable day, the action supplied (`:19-22`). The docblock says so. **The line renders `ProgramOrderButton` whenever those three hold and passes it `canOrder`**: the client hides the button when `canOrder` is false but keeps its dialog mounted while it is open, so a re-read never unmounts an open dialog (`:34` unmounted both).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/components/day/program-line.tsx`                                | EDIT   | `canOrder` asks for two or more **staying** programs in place of two or more current ones (`:27`). The other three conditions stay: two programs on the viewed day, a writable day, the action supplied (`:19-22`). The docblock says so. **The line renders `ProgramOrderButton` whenever those three hold and passes it `canOrder`**: the client hides the button when `canOrder` is false but keeps its dialog mounted while it is open, so a re-read never unmounts an open dialog (`:34` unmounted both). **Links (the Amendment):** an optional `programHrefFor`; given it, each name on the line is a link to its program's page, and without it the names stay text. The docblock's "so the names are not links" (`:16-17`) is rewritten.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `apps/web/components/day/program-order-dialog.tsx`                        | EDIT   | `order` stays the full list, so what is sent does not change (`:153-156`). (1) The numbered list maps `staying`; an end arrow is the first or last **of the staying** (`:203`); a move swaps inside `staying` with `moveUp` and `moveDown` as today (`lib/routine/editor.ts:32`; `:16`, `:194`) and rebuilds `[...staying, ...ending]` (`:192-200`). (2) Under the list, when any program ends today: the note, then a second list, a `<ul role="list">` named by the note (`aria-labelledby`), one row each: the name with `NAME_WRAP_CLASS` as the staying rows have (`:256`), then "· last day today" in the muted colour, kept on one line (`whitespace-nowrap`), its "·" hidden from a screen reader with a comma read in its place; no number, no buttons. A long unbroken name is the case to test at 360px: the name column is about 182px. (3) The announcement counts the staying: `PROGRAM_COPY.moved(name, place among the staying, staying.length)` (`:189`). (4) The U+00A0 trick goes (`:141-142`): `status` becomes `{ text, n }`, each announcement a new `n`, passed as `status` and `statusKey`. (5) One focus rule: whenever the arrow to refocus, or the arrow that has focus, no longer exists (its program now ends today, after a re-read or after a revert, where today's refocus is a silent no-op, `:134-139`), focus goes to Done, and Done is described by the error line while there is one. (6) Opened with fewer than two staying left (a stale refusal's re-read), the dialog shows what stays with both arrows `aria-disabled`, the note and the message; Done returns focus through the sheet's existing fallback to `main`. |
-| `apps/web/components/day/day-copy.ts`                                     | EDIT   | `PROGRAM_COPY.endingNote(count)`: "This one comes off after today, so it is listed last and can’t be moved." and, for two or more, "These come off after today, so they are listed last and can’t be moved." "last day today" has one wording: the dialog calls lane B's `lastDayText(plan.today, plan.today)` (`components/program-builder/builder-text.ts:136-137`) where it prints the row, with no wrapper of its own; `day-copy.ts` already imports from there (`:3`). `orderExplainer` gains the prototype's third sentence. `moved` keeps its words (`:120`); only the count passed to it changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `apps/web/components/day/day-copy.ts`                                     | EDIT   | `PROGRAM_COPY.endingNote(count)`: "This one comes off after today, so it is listed last and can’t be moved." and, for two or more, "These come off after today, so they are listed last and can’t be moved." "last day today" has one wording: the dialog calls lane B's `lastDayText(plan.today, plan.today)` (`components/program-builder/builder-text.ts:136-137`) where it prints the row, with no wrapper of its own; `day-copy.ts` already imports from there (`:3`). `orderExplainer` gains the prototype's third sentence. `moved` keeps its words (`:120`); only the count passed to it changes. The line's label ("Program:" or "Programs:") can be printed alone, for the linked line; `line` keeps its words (the Amendment).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `apps/web/components/ui/sheet.tsx` · `sheet.test.tsx`                     | EDIT   | One optional prop, `statusKey?: number`, beside `status` (`:84-85`, `:398`), passed to the region as `messageKey` (`:603`; `components/ui/announcer.tsx:45-50`, `:70`). With no key the region renders as today, so the picker and the builder's two dialogs do not change. One test: the same `status` with a new key is a new node. About 6 lines and one test. Not lane C's file: Q2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `program-parts.test.tsx` · `day-notices.test.ts`                          | EDIT   | See Test plan. The three-program state is built in the test from `todayTwoPrograms`, as `program-parts.test.tsx:424-425` already does.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `docs/features/day-page.md` · `docs/tech-debt.md`                         | EDIT   | The two files' rows (`day-page.md:57-58`); the "one copy is left" note closes (`tech-debt.md:688-691`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -109,16 +112,16 @@ No page passes the action yet. Independent of PR 1. Q1 is answered: the DAL hunk
 | `apps/web/components/day/owed.test.ts`                                        | EDIT       | Delete `:40` (a list that is not a permutation answers `invalid`): proved by lane P (`fam-1-6d-ii-program-order.md:99-101`), passed through by this action, and shown by the dialog as stale (`program-parts.test.tsx:398-412`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `day-page.md` · `program-builder.md` · `docs/privacy/data-inventory.md`       | EDIT       | The action's rows (`day-page.md:39`, `:67-69`); the DAL rows (`program-builder.md:99`, `:105`); "Called by no action until step 15c" (`data-inventory.md:315-317`) names the action. The privacy docs are a queue (`fam-1-family-program.md:732`): the board places the turn.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
-### 15c PR 3: the control on the real page, and the e2e (≈ 240 lines)
+### 15c PR 3: the control and the links on the real page, and the e2e (≈ 250 lines)
 
 Waits for PR 1 and PR 2, so production never shows the dialog D47 replaced.
 
-| Path                                                                            | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/app/p/[profileId]/page.tsx`                                           | EDIT   | `reorderPrograms: reorderProgramsAction` joins `dayActions` (`:135-140`), which already reaches `ProgramLine` and `DayScreen` (`:223`, `:258`). The two "arrives at 15c" comments go (`:133-134`, `:221-222`), with `program-line.tsx:22` and `day-screen.tsx:29`. `page.tsx` is a queued file with no turn for 15c (`fam-1-family-program.md:730`): Q4.                                     |
-| `apps/web/e2e/steps.ts` · `apps/web/e2e/program-builder.spec.ts`                | EDIT   | `openPrograms` and `createProgram` (`program-builder.spec.ts:61-78`), the copy onto every weekday (`:288-298`) and Put on from today (`:322-328`) move into `steps.ts` as helpers; the builder's spec and its a11y spec's `reachProgram` (`program-builder.a11y.spec.ts:49-55`) use them. The specs are lane B's: a guest edit that moves code and changes no step, reviewed by lane B (Q1). |
-| `apps/web/e2e/day-page.spec.ts`                                                 | EDIT   | The journey in Test plan, at 360px.                                                                                                                                                                                                                                                                                                                                                          |
-| `owed.test.ts` · `day-page.md` · `docs/privacy/notice.md` · `notice-content.ts` | EDIT   | Delete `owed.test.ts:20` and `:39`. The notice's list of what anyone signed in can do (`notice.md:42-45`) gains "and change the order an athlete's programs show in"; `notice-content.ts` is regenerated (`pnpm --filter web privacy:generate`), and the notice's `Last updated` moves to the day of the commit (`docs/plan.md`, the pre-invite sign-off's done-when).                       |
+| Path                                                                            | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/app/p/[profileId]/page.tsx`                                           | EDIT   | `reorderPrograms: reorderProgramsAction` joins `dayActions` (`:135-140`), which already reaches `ProgramLine` and `DayScreen` (`:223`, `:258`). The two "arrives at 15c" comments go (`:133-134`, `:221-222`), with `program-line.tsx:22` and `day-screen.tsx:29`. **Links (the Amendment):** `ProgramLine` gets `programHrefFor={programPath}` (`:223`), with `programPath` imported beside `PROGRAMS_PATH` (`:10`). `page.tsx` is a queued file with no turn for 15c (`fam-1-family-program.md:730`): Q4. |
+| `apps/web/e2e/steps.ts` · `apps/web/e2e/program-builder.spec.ts`                | EDIT   | `openPrograms` and `createProgram` (`program-builder.spec.ts:61-78`), the copy onto every weekday (`:288-298`) and Put on from today (`:322-328`) move into `steps.ts` as helpers; the builder's spec and its a11y spec's `reachProgram` (`program-builder.a11y.spec.ts:49-55`) use them. The specs are lane B's: a guest edit that moves code and changes no step, reviewed by lane B (Q1).                                                                                                                |
+| `apps/web/e2e/day-page.spec.ts`                                                 | EDIT   | The journey in Test plan, at 360px.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `owed.test.ts` · `day-page.md` · `docs/privacy/notice.md` · `notice-content.ts` | EDIT   | Delete `owed.test.ts:20` and `:39`. The notice's list of what anyone signed in can do (`notice.md:42-45`) gains "and change the order an athlete's programs show in"; `notice-content.ts` is regenerated (`pnpm --filter web privacy:generate`), and the notice's `Last updated` moves to the day of the commit (`docs/plan.md`, the pre-invite sign-off's done-when).                                                                                                                                      |
 
 Each PR carries its changelog fragment, its `docs/status.md` and `docs/roadmap.md` move, and the
 FAM-1 milestone chart in its description.
@@ -160,7 +163,67 @@ ending (`fixtures/index.ts:446-458`), so after PR 1 its preview shows the "no bu
 
 **The contract owner's commit, after PR 1:** `docs/features/program-contract.md:555-557` ("Until
 lane C's dialog reads the flag, it still shows arrows there") is rewritten, and row 15c, §8 and the
-milestone are updated.
+milestone are updated. The harness passes `programHrefFor` (the Amendment).
+
+## Amendment: links and the cap (maintainer, 2026-11-19)
+
+The maintainer answered Q5 and Q6 with the approval: "Links in 15c; cap at 50" (FAM-1 plan decision
+D49). Both fit the three PRs. Neither adds one.
+
+**1. Links.** Each program's name on the day page's programs line becomes a link to that program's
+page, inside this step and not in a later row.
+
+- **Why now.** The accepted prototype has them: each name is a text button followed by "›", and the
+  "›" is hidden from a screen reader (`docs/prototypes/beta-0/index.html:2566-2575`;
+  `program-order-ends-today.html:2607`). The code left the names as text because the program pages
+  were not wired when 13d was built (`program-line.tsx:16-17`). The pages are real since 7b-i (#636),
+  so that reason has passed.
+- **The prop.** `ProgramLine` (`apps/web/components/day/program-line.tsx`) gains an optional prop,
+  `programHrefFor?: (programPublicId: string) => string`. Given it, each program's name on the line
+  is a link to `programHrefFor(programPublicId)`. The link is named by the program's name, and the
+  prototype's "›" follows the name inside the link, `aria-hidden`. Without the prop the names stay
+  text, as today.
+- **The sentence stays.** The line is still "Programs: A, B" (13d): the label and the commas are
+  text between the links. The prototype sets the names apart with a gap and no comma; the commas
+  are 13d's and are kept.
+- **Every day the line shows.** A read-only day links too, and so does a program the athlete has
+  since come off: an id in `plan.programs` is one the household can use now (contract change C21).
+- **Size and wrap.** The link takes the class of the page's other inline link, `QUIET_LINK_CLASS`
+  (`not-on-a-program.tsx:43`), which holds the 44px tap target (`min-h-11`), with `NAME_WRAP_CLASS`
+  so a long unbroken name wraps at 360px.
+- **Not built.** The prototype's "Since" tooltip on a name. The day's read carries no start date:
+  a program on the line is an id and a name (`programRefSchema`).
+- **15c PR 1** builds the prop, with a component test. With the prop: one link per program, each
+  with the right `href` and name. Without it: no link.
+- **15c PR 3** passes it on the real page: `programHrefFor={programPath}`. `programPath` is lane B's
+  helper (`apps/web/components/program-builder/routes.ts:15`), in the module `page.tsx` already
+  imports `PROGRAMS_PATH` from (`page.tsx:10`).
+- **The contract owner's commit after PR 1** passes the preview's own href in the harness
+  (`app/design/program/preview-harness.tsx:218`). Contract guide invariant 11: the harness mounts
+  what the page does. The preview has no `/programs/<id>`, so the link opens one of the preview's
+  own program page states, as its Programs link opens the preview's list. The preview walk then
+  scans the links. **PR 1's own preview capture still shows plain names**, because lane C does not
+  edit the harness. The linked line is first seen in that commit, and it is checked against the
+  prototype's line there, at 360px.
+- **Why no new PR.** PR 1 already edits `program-line.tsx`, `day-copy.ts` and
+  `program-parts.test.tsx`. PR 3 already edits `page.tsx` at the `ProgramLine` it passes the prop
+  to, and takes that file's turn. PR 2 does not change. PR 1 grows by about 50 lines (about 20 in
+  the line and its copy, about 30 of tests), from ≈ 250 to ≈ 300. PR 3 grows by about 10 (an
+  import, a prop, the e2e's check and the guide's line), from ≈ 240 to ≈ 250. Both stay under 400.
+
+**2. The cap.** `programOrderSchema.programPublicIds` holds at most 50 ids (`MAX_ORDER_PROGRAMS`,
+`packages/shared/src/program/program-shapes.ts`).
+
+- **Why.** The list had a minimum and no maximum, so the body was capped only by the framework's
+  limit (the correctness lens, Co-X).
+- **Where.** In the contract, in the contract owner's PR that records this approval. It merges
+  before 15c PR 2.
+- **What the action does.** PR 2's action parses with `programOrderSchema` first, so a longer list
+  answers `invalid` before the writer runs. PR 2 adds one case: 51 distinct ids are `invalid` and
+  the DAL is not called. The preview's fake parses with the same schema and answers the same.
+- **What it is not.** It is not a cap on how many programs an athlete may be on: Put on has none.
+  An athlete on more than 50 current programs could not reorder, and the dialog would show its
+  stale-list message. That is accepted: 50 is far above any real use.
 
 ## Test plan
 
@@ -175,6 +238,9 @@ milestone are updated.
   message visible and announced, and focus on Done; a revert that removes the arrow to refocus puts
   focus on Done; the ending rows are a list named by the note, and a long unbroken name wraps
   inside the dialog. Sheet's `statusKey` gets a unit test (`programsByStay`'s are the contract's).
+  **Links (the Amendment):** with `programHrefFor`, each program on the line is a link with the
+  right `href` and the program's name, the "›" is not part of the name, and a long unbroken name
+  wraps; without it the line holds no link.
 - **Beside the prototype (PR 1):** a 360px capture of the preview's two fixture states next to the
   prototype's two NEW Jump entries, in the PR.
 - **Action (PR 2), `row-actions.test.ts`:** the action joins `describeActionMatrices` (`:103-120`)
@@ -184,7 +250,7 @@ milestone are updated.
   **another household's athlete id** (write-path invariant 13; `mutating-actions.ts:47-55`): the
   mocked DAL answers `not_found`, the refusal's bytes match the no-session one, and nothing is
   revalidated (the writer's own proof is `packages/db/scripts/verify/program.ts:3160`);
-  a bad body is `invalid` and the DAL is not called; the DAL gets `(parsed, TODAY)` from the mocked
+  a bad body is `invalid` and the DAL is not called, a list of 51 distinct ids among them (the Amendment); the DAL gets `(parsed, TODAY)` from the mocked
   day; `invalid`, `not_found` and `retry` pass through with nothing revalidated; a success
   calls `refreshAssignment` with the parsed, lower-cased athlete id; the `satisfies` pin (`row-actions.test.ts:91-96`) gains the member.
 - **DAL (PR 2):** `program-dal.test.ts`, as Put on's block (`:286-332`): scope, the writer's
@@ -199,6 +265,8 @@ milestone are updated.
   never assumed. ↓ on the first: the status says `PROGRAM_COPY.moved(name, 2, 2)`, read from the
   copy module the spec already imports (`day-page.spec.ts:5`), never typed by hand. Done: the
   programs line and the workouts follow. **Reload: the same line and the same workout order.**
+  The line's two names are links whose `href` is `programPath` of each program (the Amendment); the
+  journey reads them and does not follow them.
   The ending-today states are not in the e2e (the scope lens): the dialog's tests hold them, the
   writer's ordering is lane P's proof (`verify/program.ts:3160`), and the preview's walk scans both
   fixture states.
@@ -244,17 +312,13 @@ milestone are updated.
 
 ## Out-of-scope / deferred
 
-- **Program names as links** on the day page's line. The accepted prototype has them
-  (`program-order-ends-today.html:2607`); the code does not, for a reason that has passed
-  (`program-line.tsx:16-17`). Not in row 15c: Q5.
 - **The Put-on dialog's order hint**, lane B's string, still says a program "goes after their other
   programs" (`components/program-builder/builder-text.ts:690-695`). False since 6d-iii; to the board.
-- **A bound on the order's list.** `programOrderSchema.programPublicIds` has a minimum and no
-  maximum (`packages/shared/src/program/program-shapes.ts:531`), so the body is capped only by the
-  framework's limit. The contract owner's file: Q6.
 - The fake accepting an archived athlete's reorder (`program-contract.md:560-562`): the contract
   owner's known gap. Drag to reorder. A cap on an athlete's programs
   (`fam-1-6d-ii-program-order.md:124-125`). Home's tiles (15 PR 3, lane B).
+- **Moved into this step on 2026-11-19** (the Amendment): program names as links on the day page's
+  line, and a bound on the order's list. Both were listed here until the maintainer answered Q5 and Q6.
 
 ## Open questions
 
@@ -273,13 +337,14 @@ milestone are updated.
   edit is one property and two comments. The queue ended "B2 → 12f" and named no turn for 15c or
   12c-iii (`fam-1-family-program.md:730`); the plan owner adds both turns when this plan merges,
   and the board orders them against B2 and 12f.
-- **Q6, for the maintainer, from the correctness lens: cap the order's list?** Recommended: yes, a
-  structural bound in the contract (the contract owner's commit before PR 1), set well above any
-  real athlete's programs, so a huge body is refused as `invalid` before it reaches the writer.
-  The number is the maintainer's, as the caps of 2026-11-18 were; the plan owner suggests 50.
-- **Q5, for the maintainer: program names as links to their program page.** `docs/plan.md`,
-  `docs/roadmap.md` and the FAM-1 plan were grepped for "names are not links" and "open-prog": no
-  row owns it. Recommended: its own small row for lane C after this step, not part of 15c.
+- **Q6, answered by the maintainer (2026-11-19): "Links in 15c; cap at 50".** The order's list is
+  capped at 50: a structural bound in the contract, so a huge body is refused as `invalid` before it
+  reaches the writer (the Amendment; D49). Asked by the correctness lens. The plan owner had
+  suggested 50, and had placed it in the commit before PR 1; it lands before PR 2, the PR that
+  parses the list.
+- **Q5, answered by the maintainer (2026-11-19): "Links in 15c; cap at 50".** Program names become
+  links to their program page inside 15c (the Amendment; D49). The plan owner had recommended its
+  own small row after this step; the maintainer chose this step.
 
 ## Review-response log (adversarial panel)
 
@@ -319,3 +384,15 @@ milestone are updated.
 ### Lane C's feasibility review (2026-11-19)
 
 Buildable as written, sizes right (PR 3 may run a little over 240, still under 400). Two fixes taken: the fixture lands **before** PR 1 everywhere the plan says so (Q3 said "after"), and `refreshAssignment`'s new home is named (`lib/dal/program/revalidate.ts`). The privacy notice's change in PR 3 is a turn in the privacy docs' queue, placed by the board.
+
+### Amendment (2026-11-19)
+
+The maintainer approved the plan ("Approve (Recommended)") and answered Q5 and Q6: "Links in 15c; cap
+at 50". Two changes, set out in the Amendment section. Program names on the day page's line become
+links, built in PR 1 behind an optional prop, passed by the page in PR 3 and by the preview in the
+contract owner's commit after PR 1; PR 1 is now ≈ 300 lines and PR 3 ≈ 250. The order's list is capped
+at 50 in the contract before PR 2. Both left Out-of-scope. No panel re-read: neither adds a PR or a
+file outside the PRs' tables. Two choices here are the plan owner's and not the maintainer's: the
+line keeps 13d's commas between the links, where the prototype has a gap, and the prototype's
+"Since" tooltip on a name is not built (the day's read carries no start date). Both are put to
+the maintainer.
