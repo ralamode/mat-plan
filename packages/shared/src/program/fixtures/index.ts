@@ -1,6 +1,6 @@
 import { addDays } from '../../day';
 import type { DayPlan } from '../day-shapes';
-import { emptyWeek } from '../program-shapes';
+import { emptyWeek, MAX_DAY_SLOTS } from '../program-shapes';
 import type { ProgramList, ProgramView, WorkoutDraft } from '../program-shapes';
 import {
   dayPlan,
@@ -144,6 +144,96 @@ function sinceLeftWorld(): World {
     ],
   });
 }
+/**
+ * The world of `coach-label-program-ending-today`, before the clean left Camp lifts.
+ *
+ * Two of its items ARE movements of the test library (`catalog[...].library`): Hang power clean,
+ * which the library labels for a coach, and Goblet squat, which it does not. Push-ups is the
+ * household's own. Camp week is listed FIRST in the athlete's order and ends today.
+ */
+function coachLabelWorld(): World {
+  const base = seedWorld();
+  const slot = (wid: string) => [{ label: '', wid }];
+  const everyDay = (wid: string): ProtoProgram['week'] => ({
+    0: slot(wid),
+    1: slot(wid),
+    2: slot(wid),
+    3: slot(wid),
+    4: slot(wid),
+    5: slot(wid),
+    6: slot(wid),
+  });
+  const clean = (): ProtoItem => ({
+    iid: 'pushpress',
+    note: '',
+    ss: null,
+    sets: 3,
+    reps: 3,
+    load: 45,
+  });
+  const barbell: ProtoProgram = {
+    id: 'p910',
+    name: 'Barbell club',
+    workouts: [
+      {
+        wid: 'w910',
+        name: 'Barbell day',
+        desc: '',
+        rests: {},
+        items: [
+          clean(),
+          { iid: 'goblet', note: '', ss: null, sets: 3, reps: 10, load: 30 },
+          { iid: 'pushups', note: '', ss: null, sets: 2, reps: 10 },
+        ],
+      },
+    ],
+    week: everyDay('w910'),
+  };
+  const camp: ProtoProgram = {
+    id: 'p911',
+    name: 'Camp week',
+    workouts: [
+      {
+        wid: 'w911',
+        name: 'Camp lifts',
+        desc: '',
+        rests: {},
+        items: [clean(), { iid: 'pushups', note: '', ss: null, sets: 1, reps: 20 }],
+      },
+    ],
+    week: everyDay('w911'),
+  };
+  return stamped({
+    ...base,
+    catalog: {
+      ...base.catalog,
+      pushpress: { name: 'Hang power clean', type: 'weight_reps', library: 'hang_power_clean' },
+      goblet: { ...base.catalog.goblet, library: 'goblet_squat' },
+    },
+    programs: [barbell, camp],
+    assign: {
+      a1: [
+        // `to` is the first day off: Camp week's last day is today.
+        { prog: 'p911', from: FIXTURE_SWITCH_DAY, to: addDays(FIXTURE_TODAY, 1) },
+        { prog: 'p910', from: FIXTURE_SWITCH_DAY },
+      ],
+    },
+    entries: [
+      {
+        n: 961,
+        ath: 'a1',
+        day: FIXTURE_TODAY,
+        prog: 'p911',
+        wid: 'w911',
+        iid: 'pushpress',
+        set: 1,
+        v: { reps: 3, load: 45 },
+      },
+    ],
+  });
+}
+const coachLabelBefore = coachLabelWorld();
+
 /** A Tuesday four days back: closed, and before Stretching started. Two fixtures stand on it. */
 const CLOSED_TUESDAY = '2026-11-10';
 const sinceLeftBefore = sinceLeftWorld();
@@ -228,6 +318,15 @@ export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
   ),
   'future-preview': from(seeded, 'a1', '2026-11-16'),
   'every-type-once': from(everyTypeWorld(), 'a1', FIXTURE_TODAY),
+  'coach-label-program-ending-today': from(
+    edit(coachLabelBefore, (world) => {
+      const campLifts = workoutOf(programOf(world, 'p911'), 'w911');
+      campLifts.items = campLifts.items.filter((item) => item.iid !== 'pushpress');
+    }),
+    'a1',
+    FIXTURE_TODAY,
+    coachLabelBefore,
+  ),
 } satisfies Record<string, DayPlanFixtureSource>);
 
 const built = (name: keyof typeof DAY_PLAN_FIXTURE_SOURCES): DayPlan => {
@@ -344,6 +443,20 @@ export const futurePreview: DayPlan = built('future-preview');
  */
 export const everyTypeOnce: DayPlan = built('every-type-once');
 
+/**
+ * The library's coach label, and a program that ends today (contract changes C32 and C37). NOT a
+ * prototype state: the prototype has no library and no program with an end.
+ *
+ * - **Barbell day** holds a library movement the library labels for a coach (Hang power clean:
+ *   `supervision: 'coach'`), a library movement it does not label (Goblet squat) and the
+ *   household's own item (Push-ups). The last two carry no `supervision` key.
+ * - **Camp lifts** was logged against Hang power clean, which then left the workout: the row still
+ *   shows, and its item carries the label, because the label follows the movement.
+ * - **Camp week** is first in the athlete's own order and ends today, so it is last in
+ *   `currentPrograms`, with `endsToday: true`, and its workout is after Barbell day.
+ */
+export const coachLabelProgramEndingToday: DayPlan = built('coach-label-program-ending-today');
+
 function everyTypeWorld() {
   const family = baseProgram();
   const from = (wid: string, iid: ProtoItem['iid']): ProtoItem => {
@@ -441,6 +554,21 @@ const withCopyWorld = edit(seeded, (world) => {
   adult.week[1].push({ label: 'Evening', wid: copy.wid });
 });
 /** Athlete Two archived while still on the Family program: the assignment is untouched. */
+const fullWeekdayWorld = edit(seeded, (world) => {
+  const family = programOf(world, 'p1');
+  const monday = family.week[1];
+  for (let n = 1; monday.length < MAX_DAY_SLOTS; n += 1) {
+    const wid = `w${3000 + n}`;
+    family.workouts.push({
+      wid,
+      name: `Extra ${n}`,
+      desc: '',
+      rests: {},
+      items: [{ iid: 'pushups', note: '', ss: null, sets: 1, reps: 10 }],
+    });
+    monday.push({ label: '', wid });
+  }
+});
 const archivedAthleteWorld = edit(seeded, (world) => {
   for (const athlete of world.athletes) if (athlete.id === 'a2') athlete.archived = true;
 });
@@ -460,6 +588,7 @@ export const PROGRAM_VIEW_FIXTURE_SOURCES = deepFreeze({
     program: 'p1',
     before: seeded,
   },
+  'family-program-full-weekday': { world: fullWeekdayWorld, program: 'p1', before: seeded },
 } satisfies Record<string, ProgramViewFixtureSource>);
 
 const listOf = (name: keyof typeof PROGRAM_LIST_FIXTURE_SOURCES): ProgramList =>
@@ -507,6 +636,14 @@ export const adultProgramWithCopy: ProgramView = viewOf('adult-program-with-copy
  */
 export const familyProgramArchivedAthlete: ProgramView = viewOf('family-program-archived-athlete');
 
+/**
+ * The Family program's page with Monday holding `MAX_DAY_SLOTS` workouts. NOT a prototype state
+ * (C35): the state where a copy onto Monday, or one more workout on Monday in the week dialog, is
+ * refused with `limit_reached`. Monday keeps its own workouts and gains one-item workouts
+ * ("Extra 1", "Extra 2", …) up to the cap; every other day is the prototype's.
+ */
+export const familyProgramFullWeekday: ProgramView = viewOf('family-program-full-weekday');
+
 /** The Programs list of that same household: the Family program names Athlete One alone (C36). */
 export const programsListArchivedAthlete: ProgramList = listOf('programs-list-archived-athlete');
 
@@ -530,6 +667,7 @@ export const DAY_PLAN_FIXTURES = {
   'archived-athlete-nothing-logged': archivedAthleteNothingLogged,
   'future-preview': futurePreview,
   'every-type-once': everyTypeOnce,
+  'coach-label-program-ending-today': coachLabelProgramEndingToday,
 } as const satisfies Record<keyof typeof DAY_PLAN_FIXTURE_SOURCES, DayPlan>;
 
 export const WORKOUT_DRAFT_FIXTURES = {
@@ -548,4 +686,5 @@ export const PROGRAM_VIEW_FIXTURES = {
   'new-program-empty': newProgramEmpty,
   'adult-program-with-copy': adultProgramWithCopy,
   'family-program-archived-athlete': familyProgramArchivedAthlete,
+  'family-program-full-weekday': familyProgramFullWeekday,
 } as const satisfies Record<keyof typeof PROGRAM_VIEW_FIXTURE_SOURCES, ProgramView>;

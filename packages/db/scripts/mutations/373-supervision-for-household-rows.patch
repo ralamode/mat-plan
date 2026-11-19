@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 6fbbfe4b..f0925d85 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -517,7 +517,7 @@ async function availableMovements(
+   for (const r of rows) {
+     // C32: only a GLOBAL movement (no household) reads the library; a household's own item on
+     // the same slug never carries a label.
+-    const supervision = r.householdId === null ? labels.get(r.slug) : undefined;
++    const supervision = labels.get(r.slug);
+     found.set(r.id, {
+       publicId: r.publicId,
+       name: r.name,
