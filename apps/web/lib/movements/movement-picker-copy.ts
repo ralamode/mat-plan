@@ -1,5 +1,3 @@
-import { MOVEMENT_PICKER_GROUP_LABELS, type MovementPickerGroup } from '@mat-plan/shared';
-
 import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural, quote } from '@/lib/i18n/plural';
 
@@ -10,8 +8,11 @@ const asTypedHintText = (name: string) =>
 const statusNoMatches = 'No matches.';
 /** "12 movements": a filter choice's count, and the panel's. */
 const movementCount = (n: number) => plural(n, { one: `${n} movement`, other: `${n} movements` });
-/** Between the parts of a row's second line, and before its tag. */
-const ROW_META_JOIN = ' · ';
+/**
+ * The one separator mark: between the parts of a row's second line and before its tag, between
+ * "Filters" and how many are on, and between a heading and its count ("All movements · 35").
+ */
+const SEPARATOR = ' · ';
 /** A FRAGMENT of `statusNone`'s sentence, not a sentence: it has no terminal period. */
 const statusSomeWords = (n: number) => `${n} with some of your words`;
 /**
@@ -78,7 +79,20 @@ export const MOVEMENT_PICKER_COPY = {
   someWords: 'Has some of your words',
   /** Near misses (CAT-3 spec P5 as amended at the prototype's sign-off, 2026-11-17). */
   near: 'Did you mean',
-  groupLabel: (group: MovementPickerGroup) => MOVEMENT_PICKER_GROUP_LABELS[group],
+  /**
+   * The browse tree's top section (spec P12). Its kinds are `MODALITY_LABELS` and its families
+   * `MOVEMENT_FAMILY_LABELS`, read bare from the contract: a label changes there, never here.
+   */
+  allMovements: 'All movements',
+  /**
+   * ⏳ The old built-ins with no library entry, after the kinds (spec K24). Not "Other movements",
+   * which reads as a fifth kind beside them. TODO(CAT-3 chunk R): goes with `BuiltInWithoutLibrary`.
+   */
+  notSorted: 'Not sorted yet',
+  /** "12 movements": a group's count as a screen reader hears it, a filter choice's, the panel's. */
+  movementCount,
+  /** A heading and its count, visibly ("Strength · 12"); the mark is hidden from a screen reader. */
+  separator: SEPARATOR,
 
   // ── Row tags, one per row by precedence (UX2 S2, UX3 4, UX1 8) ──────────────────────────────────
   tagAlreadyIn: (label: string) => `already in ${label}`,
@@ -96,8 +110,8 @@ export const MOVEMENT_PICKER_COPY = {
   /** The equipment a library row needs, as a locale's list ("Barbell, Bench"), never a `.join`. */
   equipmentList: (labels: readonly string[]) => formatList(labels, APP_LOCALE, 'unit'),
   /** The row's second line (P14): how it is logged, then what it needs. The tag joins with the same mark. */
-  rowMeta: (tracking: string, needs: string) => `${tracking}${ROW_META_JOIN}${needs}`,
-  rowMetaJoin: ROW_META_JOIN,
+  rowMeta: (tracking: string, needs: string) => `${tracking}${SEPARATOR}${needs}`,
+  rowMetaJoin: SEPARATOR,
   /**
    * A household's own item, in place of its equipment. 🔴 **Never "No equipment"**: it has no
    * equipment field at all, and saying it needs none is a claim nobody made (P14).
@@ -119,7 +133,7 @@ export const MOVEMENT_PICKER_COPY = {
   // ⚠️ `filters`, `filtersName`, `showAllEquipment` and `statusOutsideOnly` show a number with no
   // counted noun beside it, so they need no `plural()` (invariant 10 is about counted nouns).
   /** The control's visible text: "Filters", or "Filters · 3" while three are on. */
-  filters: (on: number) => (on === 0 ? FILTERS : `${FILTERS} · ${on}`),
+  filters: (on: number) => (on === 0 ? FILTERS : `${FILTERS}${SEPARATOR}${on}`),
   /** Its accessible name carries how many are on (P15). */
   filtersName: (on: number) => (on === 0 ? `${FILTERS}, none on` : `${FILTERS}, ${on} on`),
   filtersHeading: FILTERS,
@@ -199,12 +213,12 @@ export const MOVEMENT_PICKER_COPY = {
   },
   /** Browsing with nothing that fits (P10). */
   noneFit: 'No movements fit your filters.',
-  /** Browsing with a filter on, until B3's tree (P12's heading). */
+  /** Browsing with a filter on (P12's heading); B3-ii puts the filtered tree under it. */
   fitHeading: 'Movements that fit your filters',
   /** The household's items under a filter: a filter cannot judge them (P9). */
   householdNotFiltered: `${HOUSEHOLD} (not filtered)`,
   /** A folded section's summary carries its count, so a person can tell whether to open it. */
-  foldedCount: (heading: string, n: number) => `${heading} · ${n}`,
+  foldedCount: (heading: string, n: number) => `${heading}${SEPARATOR}${n}`,
   /** After a headingless hit (panel row 15): the hit is a match too. */
   moreMatches: 'More matches',
   tagNotInFilters: 'not in your filters',

@@ -1,11 +1,14 @@
 import {
+  catalogOptionOf,
   EQUIPMENT_CODE,
   MODALITY,
   MOVEMENT_PICKER_ENTRIES,
   MOVEMENT_SEED_ROWS,
   TRACKING_TYPE,
+  type CatalogMovement,
   type CatalogOptionTaxonomy,
 } from '@mat-plan/shared';
+import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS } from '@mat-plan/shared/catalog/fixture';
 import { vi } from 'vitest';
 
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
@@ -57,6 +60,36 @@ export const catalogOption = (
     ...taxonomy,
   };
 };
+
+/**
+ * A library movement as the option read gives it (CAT-3 C0b-2): `catalogOptionOf` over a
+ * `CATALOG_FIXTURE` entry, with its fixture id, and no legacy `group`. What the browse tree is
+ * tested over: the test library covers every kind and lift pattern.
+ */
+export const libraryOption = (entry: CatalogMovement): MovementOptionDTO => {
+  const publicId = CATALOG_FIXTURE_IDS[entry.slug];
+  if (!publicId) throw new Error(`fixture: ${entry.slug} has no fixture id`);
+  return catalogOptionOf(entry, publicId);
+};
+
+/** Every `CATALOG_FIXTURE` entry as an option, in the fixture's order. */
+export const LIBRARY_OPTIONS: readonly MovementOptionDTO[] = CATALOG_FIXTURE.map(libraryOption);
+
+/** The test library's option named `name`. */
+export const libraryNamed = (name: string): MovementOptionDTO => {
+  const entry = CATALOG_FIXTURE.find((e) => e.name === name);
+  if (!entry) throw new Error(`fixture: no library movement named ${name}`);
+  return libraryOption(entry);
+};
+
+/**
+ * ⏳ The same row as an old built-in with no library entry (`BuiltInWithoutLibrary`, until CAT-3
+ * chunk R): every taxonomy field removed, never a placeholder.
+ */
+export const withoutLibraryData = (option: MovementOptionDTO): MovementOptionDTO =>
+  Object.fromEntries(
+    Object.entries(option).filter(([key]) => !(key in TEST_TAXONOMY)),
+  ) as MovementOptionDTO;
 
 export const householdOption = (name: string, publicId: string): MovementOptionDTO => ({
   publicId,

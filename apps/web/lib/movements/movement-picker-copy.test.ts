@@ -100,9 +100,18 @@ describe('the row tags', () => {
     expect(COPY.tagAlreadyIn('Strength A')).toBe('already in Strength A');
     expect(COPY.tagAlsoCalled('RDL')).toBe('also called RDL');
   });
+});
 
-  it('labels a group from the shared map rather than a second copy', () => {
-    expect(COPY.groupLabel('legs')).toBe('Legs');
+describe('the browse tree (CAT-3 B3)', () => {
+  it('names its sections, and a heading carries its count with the one separator', () => {
+    expect(COPY.allMovements).toBe('All movements');
+    expect(COPY.notSorted).toBe('Not sorted yet');
+    expect(COPY.separator).toBe(' · ');
+    expect(COPY.foldedCount(COPY.allMovements, 35)).toBe('All movements · 35');
+    expect(COPY.movementCount(1)).toBe('1 movement');
+    expect(COPY.movementCount(12)).toBe('12 movements');
+    // One mark everywhere: the row's second line and the Filters control read the same const.
+    expect(COPY.rowMetaJoin).toBe(COPY.separator);
   });
 });
 

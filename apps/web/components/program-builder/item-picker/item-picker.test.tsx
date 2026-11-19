@@ -91,7 +91,21 @@ const opener = () =>
   [...document.querySelectorAll('button')].find(
     (button) => button.textContent === ITEM_PICKER_COPY.open,
   )!;
-const openPicker = () => fireEvent.click(opener());
+/**
+ * Opens the picker with every browse group open (CAT-3 B3): the preview's list is longer than
+ * `BROWSE_OPEN_AT_MOST`, so its kinds and families start closed, and these tests are about the
+ * selection, not the tree (movement-picker's own suite covers that).
+ */
+const openPicker = () => {
+  fireEvent.click(opener());
+  for (;;) {
+    const closed = document.querySelector<HTMLButtonElement>(
+      '[role="dialog"] :is(h3, h4, h5) > button[aria-expanded="false"]',
+    );
+    if (!closed) return;
+    fireEvent.click(closed);
+  }
+};
 const sheet = () => screen.getByRole('dialog');
 const row = (name: string) =>
   within(sheet()).getByRole('checkbox', { name: new RegExp(`^${name}`) });

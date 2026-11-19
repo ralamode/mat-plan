@@ -3,6 +3,7 @@
 import {
   MOVEMENT_NAME_MAX,
   EQUIPMENT_LABELS,
+  MODALITY_LABELS,
   MOVEMENT_PICKER_GROUPS,
   requiresNoEquipment,
   SUPERVISION_LABELS,
@@ -31,6 +32,21 @@ import {
 } from 'react';
 
 import {
+  BROWSE_KEY,
+  browseView,
+  CLOSED_BROWSE,
+  familyIdPart,
+  familyKey,
+  forgetClosed,
+  isBrowseOpen,
+  kindKey,
+  seedBrowse,
+  toggleBrowse,
+  type BrowseKey,
+  type BrowseOpenState,
+  type BrowseView,
+} from '@/lib/movements/browse-view';
+import {
   hasLibraryData,
   type MovementOptionDTO,
   type MovementPickerData,
@@ -56,7 +72,8 @@ import { cn } from '@/lib/utils';
  *
  * ## What is settled elsewhere, so this file does not re-decide it
  *
- * The browse groups and aliases are `MOVEMENT_PICKER_ENTRIES` (Decision 3); the fold, the match and
+ * The browse tree is `browseTree`'s (CAT-3 P12), arranged by `lib/movements/browse-view.ts`, which also
+ * decides which of its groups are open; the aliases are the options'; the fold, the match and
  * the "already listed" signals are `searchMovementOptions`' and the server's `existingItem`'s
  * (Decision 4, CAT-3 C30), which are pure and tested against their vector tables; every string is `MOVEMENT_PICKER_COPY` (reuse S4). The eight gaps the
  * pre-implementation UX panel found in Decision 8 are decided in the plan's
@@ -303,6 +320,12 @@ export function MovementPicker({
   // the editor drops them. The panel REPLACES the body and footer while open (panel row 11).
   const [filters, setFilters] = useState<MovementFilters>(NO_MOVEMENT_FILTERS);
   const filtersOn = movementFiltersOn(filters);
+  // ── Which browse groups are open (CAT-3 B3; `browse-view.ts` holds the rules) ───────────────────
+  // ONE model, here, so it survives the filter panel, the item form's takeover, a no-match query
+  // and clearing the search. Reset when the sheet opens, below. `seededFor` is the selection whose
+  // groups have been opened, so a NEW tick or current row is noticed during render.
+  const [browseOpen, setBrowseOpen] = useState<BrowseOpenState>(CLOSED_BROWSE);
+  const [seededFor, setSeededFor] = useState<ReadonlySet<string>>(() => new Set());
   const [panelOpen, setPanelOpen] = useState(false);
   /** The panel's last change, said once in the sheet's one region (P15, panel row 12). */
   const [panelNote, setPanelNote] = useState<Omit<FilterChange, 'next'> | null>(null);
@@ -342,11 +365,13 @@ export function MovementPicker({
     // A ticked item stays listed after it is unticked while the panel is open (panel row 13).
     setShownBeyond((shown) => new Set([...shown, ...filters.chosenEquipment]));
     setFilters(change.next);
+    setBrowseOpen(forgetClosed);
     setPanelNote({ choice: change.choice, on: change.on });
     setKeptNote('');
   };
   const clearFilters = (from: 'panel' | 'list') => {
     setFilters(NO_MOVEMENT_FILTERS);
+    setBrowseOpen(forgetClosed);
     setKeptNote('');
     if (from === 'panel') {
       setPanelNote({ choice: COPY.filtersCleared, on: null });
@@ -428,11 +453,17 @@ export function MovementPicker({
   // during render is the documented pattern for deriving state from a prop, and React re-renders
   // immediately without committing the intermediate paint.
   const [wasOpen, setWasOpen] = useState(open);
+  /** This render is the one that resets the sheet: the selection is seeded on the next. */
+  let reopening = false;
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
       setQuery('');
       setHow(null);
+      // Every group starts from its default again; the selection's groups are opened next render.
+      setBrowseOpen(CLOSED_BROWSE);
+      setSeededFor(new Set());
+      reopening = true;
     }
     // The panel never reopens with the sheet: it opens on the list, filters kept (P7).
     resetPanel();
@@ -534,36 +565,27 @@ export function MovementPicker({
   );
 
   /** The ONE tag a row earns, highest precedence first (Decision 8; panel 2 · 5). */
-  const tagFor = (option: MovementOptionDTO, inSearchResults: boolean) => {
+  const tagFor = (option: MovementOptionDTO) => {
     if (alreadyIn?.ids.has(option.publicId)) return COPY.tagAlreadyIn(alreadyIn.label);
     // An exact hit the filters would hide is listed anyway, and says why it is there (P8).
     if (hitsOutside.has(option.publicId)) {
       return hasLibraryData(option) ? COPY.tagNotInFilters : COPY.tagNoLibraryData;
     }
     // `also called` fires ONLY for a row the search found through another name, naming that alias:
-    // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`). Otherwise it would
-    // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
+    // an exact alias, part of one, or a near miss of one (C30's `foundByAlias`), never for every
+    // aliased row in search results (panel 2 · 5, against UX1 8).
     //
     // ⚠️ The alias comes from the MATCHER, never re-derived here: "fold both sides, compare keys"
     // is `movement-search.ts`'s rule and a copy in a component drifts the first time it changes.
     const alias = aliasFound.get(option.publicId);
     if (alias !== undefined) return COPY.tagAlsoCalled(alias);
     if (option.publicId === currentId) return COPY.tagCurrent;
-    if (inSearchResults && option.owner === 'catalog' && option.group) {
-      return COPY.groupLabel(option.group);
-    }
-    // No `household` tag: the row's second line already says "Custom item" (P14), everywhere.
+    // No group tag (spec P12): a row's second line is P14's alone. No `household` tag: the row's second line already says "Custom item" (P14), everywhere.
     return null;
   };
 
-  const rowsFrom = (
-    options: readonly MovementOptionDTO[],
-    opts: { inSearchResults?: boolean } = {},
-  ): Row[] =>
-    options.map((option) => ({
-      option,
-      tag: tagFor(option, opts.inSearchResults ?? false),
-    }));
+  const rowsFrom = (options: readonly MovementOptionDTO[]): Row[] =>
+    options.map((option) => ({ option, tag: tagFor(option) }));
 
   /** The alias each row was found through, by option id (C30's `foundByAlias`). */
   const aliasFound = new Map(
@@ -685,31 +707,43 @@ export function MovementPicker({
     ? { kind: 'multi', selected: selectedSet, onPick: pickExisting, howTo: howToControl }
     : { kind: 'single', currentId, onPick: pickExisting, howTo: howToControl };
 
-  // Empty groups are omitted, so `wrestling` simply does not render until `C3` seeds it. The DTO
-  // carries the group the DAL read out of `MOVEMENT_PICKER_ENTRIES`, so this trusts the DTO rather
-  // than re-deriving it — one source, read once, at the boundary.
-  //
-  // ⚠️ **Rendered to ELEMENTS here, not to data.** Two branches show the browse groups — the empty
-  // query, and "no matches at all" — and as a `.map()` written out at both sites the two had already
-  // drifted by one prop during review.
-  const browseGroups = MOVEMENT_PICKER_GROUPS.map((group) => ({
-    group,
-    rows: rowsFrom(data.options.filter((o) => o.owner === 'catalog' && o.group === group)),
-  }))
-    .filter(({ rows }) => rows.length > 0)
-    .map(({ group, rows }) => (
-      <Section
-        key={group}
-        mode={mode}
-        id={`${headingId}-${group}`}
-        heading={COPY.groupLabel(group)}
-        rows={rows}
-      />
-    ));
+  // ── The browse tree (CAT-3 P12, K24): no filter here; B3-ii puts the filtered one under a filter ──
+  const view = useMemo(() => browseView(data.options, NO_MOVEMENT_FILTERS), [data.options]);
+  const isGroupOpen = (key: BrowseKey) => isBrowseOpen(key, browseOpen, view);
+  const toggleGroup = (key: BrowseKey) =>
+    setBrowseOpen((state) => toggleBrowse(state, key, isBrowseOpen(key, state, view)));
+  // 🔴 **A new selection opens every group above it**, even one the person closed: a tick, the
+  // caller's select or create (whose row it then focuses), or the current row. Adjusted DURING
+  // render against the selection last seeded, never in an effect, so the row is in the same commit
+  // the caller's focus runs after. Unticking closes nothing: `seeded` never shrinks while open.
+  const wanted = [
+    ...new Set([...selectedSet, ...(currentId === undefined ? [] : [currentId])]),
+  ].filter((id) => byId.has(id));
+  if (!reopening) {
+    const fresh = wanted.filter((id) => !seededFor.has(id));
+    if (fresh.length > 0 || seededFor.size !== wanted.length) {
+      setSeededFor(new Set(wanted));
+      if (fresh.length > 0)
+        setBrowseOpen((state) => seedBrowse(state, resolveOptions(fresh, byId)));
+    }
+  }
 
-  // Browsing with a filter on (P9; P12's heading until B3's tree): the household's items first,
+  // ⚠️ **ONE element, rendered at every site that shows the tree** (the empty query and "no matches
+  // at all"): written out at each, two constructions of the old browse groups drifted by a prop.
+  const browse = (
+    <Browse
+      view={view}
+      headingId={headingId}
+      isOpen={isGroupOpen}
+      onToggle={toggleGroup}
+      rowsFrom={rowsFrom}
+      mode={mode}
+    />
+  );
+
+  // Browsing with a filter on (P9; P12's heading, B3-ii's tree): the household's items first,
   // folded to one line and marked "not filtered", then the library movements that fit, in the
-  // browse groups' order, each row tagged with its group. Recent and Today's program are not shown.
+  // legacy groups' order. Recent and Today's program are not shown.
   const groupIndex = (option: MovementOptionDTO) => {
     const index =
       option.owner === 'catalog' && option.group
@@ -736,7 +770,7 @@ export function MovementPicker({
                   mode={mode}
                   id={`${headingId}-fit`}
                   heading={COPY.fitHeading}
-                  rows={rowsFrom(fits, { inSearchResults: true })}
+                  rows={rowsFrom(fits)}
                 />
               ) : (
                 <ListLine text={COPY.noneFit} />
@@ -993,7 +1027,7 @@ export function MovementPicker({
               {hitCount > 0 ? (
                 <div className="mb-4">
                   <OptionList
-                    rows={rowsFrom(matches.slice(0, hitCount), { inSearchResults: true })}
+                    rows={rowsFrom(matches.slice(0, hitCount))}
                     mode={mode}
                     scope={`${headingId}-hits`}
                   />
@@ -1003,25 +1037,25 @@ export function MovementPicker({
                 mode={mode}
                 id={`${headingId}-matches`}
                 heading={hitCount > 0 ? COPY.moreMatches : COPY.matches}
-                rows={rowsFrom(matches.slice(hitCount), { inSearchResults: true })}
+                rows={rowsFrom(matches.slice(hitCount))}
               />
               <Section
                 mode={mode}
                 id={`${headingId}-custom`}
                 heading={COPY.householdNotFiltered}
-                rows={rowsFrom(custom, { inSearchResults: true })}
+                rows={rowsFrom(custom)}
               />
               <Section
                 mode={mode}
                 id={`${headingId}-near`}
                 heading={COPY.near}
-                rows={rowsFrom(near, { inSearchResults: true })}
+                rows={rowsFrom(near)}
               />
               <Section
                 mode={mode}
                 id={`${headingId}-some`}
                 heading={COPY.someWords}
-                rows={rowsFrom(someWords, { inSearchResults: true })}
+                rows={rowsFrom(someWords)}
               />
               {result.outsideFilters > 0 ? (
                 <ListLine
@@ -1050,7 +1084,25 @@ export function MovementPicker({
               {shown === 0 && result.outsideFilters === 0 ? filteredBrowse : null}
             </>
           ) : deferredTrimmed === '' ? (
+            // P12's order: Your custom items, Recent, Today's program, All movements.
             <>
+              {view.custom.length > 0 ? (
+                <Group
+                  id={`${headingId}-household`}
+                  level={3}
+                  landmark
+                  label={COPY.household}
+                  count={view.custom.length}
+                  open={isGroupOpen(BROWSE_KEY.custom)}
+                  onToggle={() => toggleGroup(BROWSE_KEY.custom)}
+                >
+                  <OptionList
+                    rows={rowsFrom(view.custom)}
+                    mode={mode}
+                    scope={`${headingId}-household`}
+                  />
+                </Group>
+              ) : null}
               {data.recentIds && data.recentIds.length > 0 ? (
                 <Section
                   mode={mode}
@@ -1068,20 +1120,14 @@ export function MovementPicker({
                   mode={mode}
                 />
               ) : null}
-              {browseGroups}
-              <Section
-                mode={mode}
-                id={`${headingId}-household`}
-                heading={COPY.household}
-                rows={rowsFrom(data.options.filter((o) => o.owner === 'household'))}
-              />
+              {browse}
             </>
           ) : matches.length > 0 ? (
             <Section
               mode={mode}
               id={`${headingId}-matches`}
               heading={COPY.matches}
-              rows={rowsFrom(matches, { inSearchResults: true })}
+              rows={rowsFrom(matches)}
             />
           ) : near.length > 0 || someWords.length > 0 ? (
             // "Did you mean" first, then some-words (P5); each section omits itself when empty.
@@ -1090,19 +1136,19 @@ export function MovementPicker({
                 mode={mode}
                 id={`${headingId}-near`}
                 heading={COPY.near}
-                rows={rowsFrom(near, { inSearchResults: true })}
+                rows={rowsFrom(near)}
               />
               <Section
                 mode={mode}
                 id={`${headingId}-some`}
                 heading={COPY.someWords}
-                rows={rowsFrom(someWords, { inSearchResults: true })}
+                rows={rowsFrom(someWords)}
               />
             </>
           ) : (
-            // No matches at all: the browse list stays reachable under the "No matches" status, so the
-            // sheet is never a dead end.
-            <>{browseGroups}</>
+            // No matches at all: All movements stays reachable under the "No matches" status, so the
+            // sheet is never a dead end. No custom section: the search already looked there.
+            browse
           )}
         </>
       )}
@@ -1284,10 +1330,28 @@ function FoldedSection({
   );
 }
 
-/** A section's rows. `scope` is the section's id: it keys each row's "How to" (one per row on screen). */
-function OptionList({ rows, mode, scope }: { rows: Row[]; mode: RowMode; scope: string }) {
+/** A heading level a section can sit at; "How to"'s heading is one below its section's. */
+type HeadingLevel = 3 | 4 | 5 | 6;
+
+/**
+ * A section's rows. `scope` is the section's id: it keys each row's "How to" (one per row on screen).
+ * `howToLevel` is the level of a row's "How to" heading: one below the heading the rows sit under.
+ */
+function OptionList({
+  rows,
+  mode,
+  scope,
+  howToLevel = 4,
+  className,
+}: {
+  rows: Row[];
+  mode: RowMode;
+  scope: string;
+  howToLevel?: HeadingLevel;
+  className?: string;
+}) {
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className={cn('flex flex-col gap-1', className)}>
       {rows.map(({ option, tag }) => (
         <OptionRow
           key={option.publicId}
@@ -1295,6 +1359,7 @@ function OptionList({ rows, mode, scope }: { rows: Row[]; mode: RowMode; scope: 
           tag={tag}
           mode={mode}
           rowKey={`${scope}:${option.publicId}`}
+          howToLevel={howToLevel}
         />
       ))}
     </ul>
@@ -1320,11 +1385,13 @@ function OptionRow({
   tag,
   mode,
   rowKey,
+  howToLevel,
 }: {
   option: MovementOptionDTO;
   tag: string | null;
   mode: RowMode;
   rowKey: string;
+  howToLevel: HeadingLevel;
 }) {
   const howButton = useRef<HTMLButtonElement>(null);
   const supervision = supervisionOf(option);
@@ -1421,6 +1488,7 @@ function OptionRow({
       {howState && mode.howTo ? (
         <HowToSteps
           id={howId}
+          level={howToLevel}
           option={option}
           state={howState}
           // Focus first, then change: Try again and Hide are inside what they replace (UX panel).
@@ -1446,12 +1514,15 @@ function OptionRow({
  */
 function HowToSteps({
   id,
+  level,
   option,
   state,
   onRetry,
   onHide,
 }: {
   id: string;
+  /** One below the heading its row sits under: `h4` under a section, `h6` under a family. */
+  level: HeadingLevel;
   option: MovementOptionDTO;
   state: HowToState;
   onRetry: () => void;
@@ -1467,6 +1538,7 @@ function HowToSteps({
           .filter(Boolean)
       : [];
   const titleId = `${id}-title`;
+  const Title = `h${level}` as const;
   return (
     <div
       id={id}
@@ -1475,9 +1547,9 @@ function HowToSteps({
       aria-busy={state.status === 'loading' || undefined}
       className="bg-muted text-foreground mt-1 flex flex-col gap-2 rounded-lg p-3 text-sm"
     >
-      <h4 id={titleId} className="font-semibold">
+      <Title id={titleId} className="font-semibold">
         {COPY.howToFor(option.name)}
-      </h4>
+      </Title>
       {supervision ? <p className="font-medium">{SUPERVISION_LABELS[supervision]}</p> : null}
       {state.status === 'loading' ? <p>{COPY.howToLoading}</p> : null}
       {state.status === 'none' || (state.status === 'ready' && steps.length === 0) ? (
@@ -1536,5 +1608,227 @@ function Section({
       </h3>
       <OptionList rows={rows} mode={mode} scope={id} />
     </section>
+  );
+}
+
+/**
+ * One group of the browse list that a person opens and closes (CAT-3 B3): "Your custom items", All
+ * movements, a kind, a family, and K24's "Not sorted yet". **The APG disclosure: a button inside
+ * its heading, not `<details>`.** React controls it fully, so the open state is the picker's one
+ * model and never a DOM attribute React and the browser disagree on (a `toggle` event also fires on
+ * a programmatic open, and a heading inside `<summary>` is not reliably exposed on iOS VoiceOver).
+ *
+ * - **A closed group renders nothing**: Tab walks kind, family, then rows, never hundreds of rows.
+ * - **`landmark`** for the top sections only: a region per kind and family floods a screen
+ *   reader's landmark list. A kind, a family and "Not sorted yet" are a plain `div`.
+ * - **The indent is the button's**, never the rows' beyond `ml-3`: at 360px the name column keeps
+ *   182px in multi mode with "How to" (the plan's width math). The label is `min-w-0 flex-1`, so a
+ *   long family wraps inside the tap target and its count never sits alone on a line.
+ * - **The count is said once**: visibly "· 12", hidden; to a screen reader ", 12 movements", the
+ *   same words as a filter choice's name (`choiceName`).
+ * - **The focus ring is inset**, so the sheet's scroll container cannot clip it at the edges.
+ */
+function Group({
+  id,
+  level,
+  label,
+  count,
+  open,
+  onToggle,
+  landmark = false,
+  indent,
+  children,
+}: {
+  /** The heading's id; the body's is `${id}-body`. */
+  id: string;
+  level: 3 | 4 | 5;
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  landmark?: boolean;
+  indent?: 'kind' | 'family';
+  children: ReactNode;
+}) {
+  const Heading = `h${level}` as const;
+  const bodyId = `${id}-body`;
+  const inner = (
+    <>
+      <Heading
+        id={id}
+        className={cn(
+          'text-sm',
+          level === 3 ? 'text-muted-foreground font-semibold' : 'text-foreground',
+          level === 4 && 'font-semibold',
+          level === 5 && 'font-medium',
+        )}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          // Only while open: a reference to an element that is not there points at nothing.
+          aria-controls={open ? bodyId : undefined}
+          onClick={onToggle}
+          className={cn(
+            'focus-visible:ring-ring hover:bg-muted flex min-h-11 w-full items-center gap-2 rounded-lg text-left outline-none focus-visible:ring-3 focus-visible:ring-inset',
+            indent === 'kind' && 'pl-3',
+            indent === 'family' && 'pl-6',
+          )}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 16 16"
+            className={cn(
+              'size-4 shrink-0 transition-transform motion-reduce:transition-none',
+              open && 'rotate-90',
+            )}
+          >
+            <path
+              d="M6 3l5 5-5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="min-w-0 flex-1 wrap-anywhere">{label}</span>
+          <span aria-hidden className="shrink-0 pr-2 tabular-nums">
+            {COPY.separator.trimStart()}
+            {count}
+          </span>
+          <span className="sr-only">
+            {COPY.choiceJoin}
+            {COPY.movementCount(count)}
+          </span>
+        </button>
+      </Heading>
+      {open ? (
+        <div id={bodyId} className="mt-1">
+          {children}
+        </div>
+      ) : null}
+    </>
+  );
+  return landmark ? (
+    <section aria-labelledby={id} className="mb-4">
+      {inner}
+    </section>
+  ) : (
+    <div className="mb-1">{inner}</div>
+  );
+}
+
+/**
+ * "All movements" (CAT-3 P12): the kinds in `BROWSE_KINDS`' order, each with its families (biggest
+ * first) or, for a kind in `BROWSE_FLAT_KINDS`, its rows by name; then K24's "Not sorted yet".
+ * It draws `browseView`'s tree and decides nothing about it. Module scope, as `Section` is.
+ *
+ * Headings: All movements `h3`, a kind and "Not sorted yet" `h4`, a family `h5`, so no level is
+ * skipped and a screen reader can jump between kinds and between families.
+ */
+function Browse({
+  view,
+  headingId,
+  isOpen,
+  onToggle,
+  rowsFrom,
+  mode,
+}: {
+  view: BrowseView;
+  headingId: string;
+  isOpen: (key: BrowseKey) => boolean;
+  onToggle: (key: BrowseKey) => void;
+  rowsFrom: (options: readonly MovementOptionDTO[]) => Row[];
+  mode: RowMode;
+}) {
+  if (view.total === 0) return null;
+  const notSortedId = `${headingId}-${BROWSE_KEY.notSorted}`;
+  return (
+    <Group
+      id={`${headingId}-${BROWSE_KEY.all}`}
+      level={3}
+      landmark
+      label={COPY.allMovements}
+      count={view.total}
+      open={isOpen(BROWSE_KEY.all)}
+      onToggle={() => onToggle(BROWSE_KEY.all)}
+    >
+      {view.tree.map(({ kind, count, families }) => {
+        const key = kindKey(kind);
+        const id = `${headingId}-${kind}`;
+        return (
+          <Group
+            key={key}
+            id={id}
+            level={4}
+            indent="kind"
+            label={MODALITY_LABELS[kind]}
+            count={count}
+            open={isOpen(key)}
+            onToggle={() => onToggle(key)}
+          >
+            {families.map(({ family, label, options }) => {
+              if (family === null || label === null) {
+                // A kind with no family level (K27): its rows straight under it, by name.
+                return (
+                  <OptionList
+                    key={key}
+                    rows={rowsFrom(options)}
+                    mode={mode}
+                    scope={id}
+                    howToLevel={5}
+                    className="ml-3"
+                  />
+                );
+              }
+              const childKey = familyKey(kind, family);
+              const childId = `${headingId}-${familyIdPart(kind, family)}`;
+              return (
+                <Group
+                  key={childKey}
+                  id={childId}
+                  level={5}
+                  indent="family"
+                  label={label}
+                  count={options.length}
+                  open={isOpen(childKey)}
+                  onToggle={() => onToggle(childKey)}
+                >
+                  <OptionList
+                    rows={rowsFrom(options)}
+                    mode={mode}
+                    scope={childId}
+                    howToLevel={6}
+                    className="ml-3"
+                  />
+                </Group>
+              );
+            })}
+          </Group>
+        );
+      })}
+      {/* ⏳ K24: the old built-ins with no library entry, which have no kind. One sibling block, so
+          the post-R2 cleanup deletes it whole. TODO(CAT-3 chunk R): goes with `BuiltInWithoutLibrary`. */}
+      {view.bare.length > 0 ? (
+        <Group
+          id={notSortedId}
+          level={4}
+          indent="kind"
+          label={COPY.notSorted}
+          count={view.bare.length}
+          open={isOpen(BROWSE_KEY.notSorted)}
+          onToggle={() => onToggle(BROWSE_KEY.notSorted)}
+        >
+          <OptionList
+            rows={rowsFrom(view.bare)}
+            mode={mode}
+            scope={notSortedId}
+            howToLevel={5}
+            className="ml-3"
+          />
+        </Group>
+      ) : null}
+    </Group>
   );
 }
