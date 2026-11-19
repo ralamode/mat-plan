@@ -131,7 +131,9 @@ test('a parent writes a new workout with two items, saves, and Back never reopen
   await expect(picker).toBeVisible();
   for (const item of ['Box Jump', 'Pull-Up']) {
     await picker.getByRole('searchbox').fill(item);
-    await picker.getByRole('checkbox', { name: new RegExp(`^${item}`) }).click();
+    // The row's name is "<item>, <its lines>" (movement-picker.tsx), so the item ends at the comma:
+    // "Pull-Up" never also matches a longer name that starts the same.
+    await picker.getByRole('checkbox', { name: new RegExp(`^${item},`) }).click();
   }
   // "2 items added." is said only once the picker is gone: jsdom closes the sheet before a frame,
   // so only a browser can show the order (guide invariant 16).
@@ -165,9 +167,9 @@ test('a parent writes a new workout with two items, saves, and Back never reopen
   await expect(page).toHaveURL(mine);
   await expect(workouts.getByRole('link', { name: new RegExp(`^${workout}`) })).toBeVisible();
 
-  // 🔴 U1-1: Save REPLACED the editor's entry, so Back lands on the program page it came from,
-  // never on `/workouts/new` (whose Save could only make a duplicate, or on an editor holding the
-  // draft from before the save).
+  // 🔴 U1-1: Save REPLACED the editor's entry with the program page, so the first Back shows the
+  // program page again (accepted: guide invariant 15), never `/workouts/new` or an editor holding
+  // the draft from before the save, whose Save could overwrite it.
   await page.goBack();
   await expect(page).toHaveURL(mine);
   await page.reload();

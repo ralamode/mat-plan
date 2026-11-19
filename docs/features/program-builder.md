@@ -168,7 +168,7 @@ flowchart LR
     a unit the type can hold; otherwise the number is not shown and never converted, and the card
     says what it was (`EditorCard.dropped`): a fixed-unit type keeps its own unit, any other starts unset. The machine never picks the unit a kid logs in. **One exception, decided** _(maintainer, 2026-11-16)_: a card added from the item picker takes the item's own declared unit (`newCard`), so left alone it saves "log in that unit, no target"; the unit is the item's, not the machine's choice. What
     `readDraft` returns is parsed by `saveWorkoutSchema` before Save calls. Enter never saves. The
-    editor reads its `draft` once, when it opens, so a refreshed page never moves the ids a retry
+    editor reads its `draft` once, when it opens, so a page re-rendered (`router.refresh`) never moves the ids a retry
     sends.
 14. **The editor differs from the prototype on purpose** (each a decision, 2026-11-16): fields two
     to a row on a phone (four in one row leave 43px of text at 360px); "Used by …" under the
@@ -198,7 +198,10 @@ flowchart LR
     page, never on `/workouts/new` or on an editor holding the draft from before the save. A new
     workout's `workoutClientId` is minted by `WorkoutEditorPage` when it opens, never by the page,
     so a second "+ New workout" is a second workout (`workout-editor-page.test.tsx`; the e2e's Back
-    probe).
+    probe). **The trade-off, accepted** (7b-ii review): the replaced entry is the program page, so
+    the first Back after Save, Cancel or Discard shows the program page again, and only the next
+    one leaves it. A Back that reopened an editor holding the pre-save draft could overwrite the
+    save, which costs more than one extra tap.
 
 16. **The item picker** (step 9) _(maintainer, 2026-11-16)_:
     - **The selection is the editor's**, in pick order, kept across a Close or a back swipe until

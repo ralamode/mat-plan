@@ -18,8 +18,9 @@ export type NewWorkoutDraft = Omit<WorkoutDraft, 'workoutClientId'> & { workoutP
  * 🔴 **A new workout's `workoutClientId` is minted here, on the device, once per opened editor**
  * (7b-ii; the 7b plan's U1-1 / Co-S1). The new-workout page sends a draft without one, so no id the
  * server or a cached page holds is ever replayed: a second `/workouts/new` is a second workout, never
- * an overwrite of the first. `useState`'s initializer runs once per mount, so a refreshed page keeps
- * the id a retried Save sends.
+ * an overwrite of the first. `useState`'s initializer runs once per mount, so a page re-rendered
+ * (`router.refresh`) keeps the id a retried Save sends. A browser reload remounts the editor and
+ * mints a new one: the reloaded editor is a new attempt.
  */
 export function WorkoutEditorPage({
   draft,

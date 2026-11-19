@@ -1071,6 +1071,31 @@ describe('the household’s item cap (FAM-1 7b-ii, plan §Caps)', () => {
     expect(within(sheet()).queryByText(ITEM_PICKER_COPY.householdFull)).toBeNull();
   });
 
+  it('"+ New item" is described by the full line, and a search with no match never offers a new item', () => {
+    editor({}, newWorkoutEmpty, atCap);
+    openPicker();
+    const describedBy = (button: HTMLElement) =>
+      (button.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .map((id) => document.getElementById(id)?.textContent);
+    const plain = within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem });
+    expect(describedBy(plain)).toContain(ITEM_PICKER_COPY.householdFull);
+    search('zzzzz');
+    expect(within(sheet()).queryByText(ITEM_PICKER_COPY.noMatch)).toBeNull();
+    const typed = within(sheet()).getByRole('button', { name: newItemLabel('zzzzz') });
+    expect(describedBy(typed)).toContain(ITEM_PICKER_COPY.householdFull);
+    expect(describedBy(typed)).not.toContain(ITEM_PICKER_COPY.noMatch);
+    // One item under the cap: the usual words, and nothing extra on the button.
+    cleanup();
+    editor({}, newWorkoutEmpty, atCap.slice(0, -1));
+    openPicker();
+    search('zzzzz');
+    expect(within(sheet()).getByText(ITEM_PICKER_COPY.noMatch)).toBeTruthy();
+    expect(
+      describedBy(within(sheet()).getByRole('button', { name: newItemLabel('zzzzz') })),
+    ).toEqual([ITEM_PICKER_COPY.noMatch]);
+  });
+
   it('🔴 a new name cannot be created: Create is inactive, a tap sends nothing and says why', async () => {
     const all = editor({}, newWorkoutEmpty, atCap);
     openForm('Bear crawl');

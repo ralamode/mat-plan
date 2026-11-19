@@ -141,7 +141,7 @@ path and **creating** the deliberate one.
       deselects, never creates) and clears the search;
     - "create" is the caller's: the button sits at the TOP of the body (with the keyboard up, the
       footer is about 110 rows down), is withheld when the text already names a movement (invariants 4 and 13),
-      and hands the typed text to `onCreate`. The component still never writes (invariant 2);
+      and hands the typed text to `onCreate`. The component still never writes (invariant 2). `createDescribedBy` ties the button to a line of the caller's as well (FAM-1 7b-ii: the builder's household-full line, whose words also replace the no-match hint at the cap);
     - the caller's own words come in through the props (create, no-match hint, search label, the tag's subject, the footer). The picker's general words stay its own: the counts, `movementNameSchema`'s messages and the row's second line (invariant 14), which replaced the caller's `describe`;
     - the caller's `footerAction` sits **beside** the picker's own Close, which stays last, with the caller's `footerNote` lines above both: one row of buttons, so the list keeps its room with a phone's keyboard up, above the sheet's fixed compact threshold (`COMPACT_VIEWPORT_HEIGHT`, 480) _(maintainer, 2026-11-16)_;
     - `onReturned` passes through to the sheet: the caller's moment for a page-level message after a close;

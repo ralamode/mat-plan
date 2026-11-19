@@ -78,7 +78,8 @@ import { BuilderLink } from './route-link';
  *
  * - `draft` is read **once**, when the editor opens: what it loaded, what "changed" compares with,
  *   and the ids Save sends (its `workoutClientId`, so a retried Save replays the same attempt). A
- *   later `draft` from a refreshed page does not move them.
+ *   later `draft` from a page re-rendered (`router.refresh`) does not move them; a browser reload
+ *   remounts the screen, so it starts again from the page's draft.
  * - `program` names the program in the back link and says who a change applies to. **Optional**:
  *   the preview route does not pass it yet (the maintainer kept the harness as it is, 2026-11-16);
  *   7b's page must (`owed.test.ts`). Without it the link reads "← Program" and the line is hidden.

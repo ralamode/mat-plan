@@ -485,7 +485,9 @@ export function ItemPicker({
         onToggle: toggle,
         onCreate: openForm,
         createLabel: newItemLabel,
-        noMatchHint: COPY.noMatch,
+        // At the cap, "make it a new item" is not an offer the form can keep (7b-ii).
+        noMatchHint: householdFull ? COPY.householdFull : COPY.noMatch,
+        createDescribedBy: householdFullShown ? HOUSEHOLD_FULL_ID : undefined,
         notice,
         onQueryChange: () => setNoticeNow(''),
         searchLabel: COPY.searchLabel,
