@@ -230,8 +230,11 @@ keeps.
 
 ### Approval
 
-The maintainer merged the plan (2026-11-19, #666). Their explicit approval, in their own words, is
-recorded here once the board relays it.
+**Approved by the maintainer** _(orchestrator's chat, 2026-11-19, relayed by the board)_, asked
+"Record that you approve lane P's P11-ii plan (#666, the one you merged): the picker lists library
+movements from the database, in two PRs (P11-ii-a before the library seed switch, P11-ii-b after the
+equipment/muscle order answer)?": **"Approve (Recommended)"**. P11-ii-a can be built once A2-i is on
+main; P11-ii-b waits for Q2.
 
 ## Not in this chunk
 
