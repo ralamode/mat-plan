@@ -71,6 +71,7 @@ export async function verifySingleValues(ctx: VerifyContext): Promise<void> {
   await verifyClearDay();
   await verifyClearDayProgramRows();
   await verifyDayTakenRace();
+  await verifyRetryLandsOnTakenDay();
 }
 
 const HH_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b000';
@@ -675,6 +676,33 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       }),
       /neither inserted nor held/,
       '3b-0: a non-insert with no holder and no taken day throws rather than inventing an outcome',
+    );
+    // An id sent in upper case is the same uuid to Postgres, so the writer folds it before matching
+    // what it wrote (plan v1-9b-checkin-distinct-ids). Unfolded, the habit misses its own insert and
+    // throws, and the practice is answered day_taken against the row it just wrote.
+    const FREE_DAY = '2026-10-06';
+    const upperHabit = habit(FREE_DAY, newId().toUpperCase());
+    const upperPractice = practice(FREE_DAY, newId().toUpperCase());
+    await expectOutcomes(
+      athlete.id,
+      [upperHabit, upperPractice],
+      ['created', 'created'],
+      'an upper-case client_id is created, for a habit and a practice alike',
+    );
+    assert.equal(
+      (
+        await tx
+          .select({ id: schema.entries.id })
+          .from(schema.entries)
+          .where(
+            inArray(schema.entries.clientId, [
+              upperHabit.clientId.toLowerCase(),
+              upperPractice.clientId.toLowerCase(),
+            ]),
+          )
+      ).length,
+      2,
+      'an upper-case client_id writes one row per item',
     );
     // Only a practice can be day_taken: a habit that did not insert, in a batch with a practice on a
     // held day, is still classified by its own holder (here a live row of another metric: conflict).
@@ -1571,56 +1599,64 @@ const RACE_ATHLETE_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b1';
 const RACE_SIBLING_PUBLIC_ID = '019826b4-0000-7000-8000-00000003b0b2';
 const RACE_DAY = '2026-11-16';
 
-/**
- * The race, staged on one connection: a statement-level `AFTER INSERT` trigger hides the day's live
- * holder INSIDE the insert that the holder just skipped. Statement triggers fire on a statement that
- * inserted nothing, so the writer's re-reads find no insert, no holder and no taken day, exactly as a
- * second phone's clear landing between the statements would leave them. Before the retry each writer
- * threw ("neither inserted nor held"), which the person saw as `error.tsx`. The trigger hides only the
- * one row named in a temp table and is idempotent, so the retry's own insert passes through it. It all
- * rolls back with the section.
- */
-async function verifyDayTakenRace(): Promise<void> {
-  await rolledBack(async (tx) => {
-    const exec = asTx(tx);
-    const { athlete } = await singleValueWorld(
-      tx,
-      { hh: RACE_HH_PUBLIC_ID, athlete: RACE_ATHLETE_PUBLIC_ID, sibling: RACE_SIBLING_PUBLIC_ID },
-      'race',
-    );
-    const typeId = async (key: string) =>
-      (
-        await tx
-          .select({ id: schema.activityTypes.id })
-          .from(schema.activityTypes)
-          .where(eq(schema.activityTypes.key, key))
-      )[0]?.id;
-    const practiceTypeId = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
-    const habitTypeId = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
-    const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
-    assert.ok(
-      practiceTypeId && habitTypeId && weighInTypeId,
-      'race: the activity types are seeded',
-    );
+/** The race sections' world: one athlete, the three activity types, and value builders for its day. */
+async function raceFixture(tx: VerifyTx) {
+  const { athlete } = await singleValueWorld(
+    tx,
+    { hh: RACE_HH_PUBLIC_ID, athlete: RACE_ATHLETE_PUBLIC_ID, sibling: RACE_SIBLING_PUBLIC_ID },
+    'race',
+  );
+  const typeId = async (key: string) =>
+    (
+      await tx
+        .select({ id: schema.activityTypes.id })
+        .from(schema.activityTypes)
+        .where(eq(schema.activityTypes.key, key))
+    )[0]?.id;
+  const practiceTypeId = await typeId(ACTIVITY_TYPE_KEYS.wrestling_practice);
+  const habitTypeId = await typeId(ACTIVITY_TYPE_KEYS.brush_teeth);
+  const weighInTypeId = await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  assert.ok(practiceTypeId && habitTypeId && weighInTypeId, 'race: the activity types are seeded');
 
-    await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
-    await tx.execute(sql`create function verify_race_hide() returns trigger language plpgsql as $$
-      begin
-        update entries set deleted_at = now()
-          where public_id in (select public_id from race_target) and deleted_at is null;
-        return null;
-      end $$`);
-    await tx.execute(
-      sql`create trigger race_hide after insert on entries for each statement execute function verify_race_hide()`,
-    );
-    const holdThenClear = async (publicId: string) => {
-      await tx.execute(sql`delete from race_target`);
-      await tx.execute(sql`insert into race_target values (${publicId}::uuid)`);
-    };
-    const liveOnDay = async (metricKey: string) =>
+  return {
+    exec: asTx(tx),
+    athlete,
+    practice: (valueNum = '60'): CheckinInsertValue => ({
+      publicId: newId(),
+      clientId: newId(),
+      activityDate: RACE_DAY,
+      unit: 'min',
+      valueNum,
+      activityTypeId: practiceTypeId,
+      metricKey: METRIC_KEYS.practice_minutes,
+      status: ENTRY_STATUS.done,
+    }),
+    habit: (): CheckinInsertValue => ({
+      publicId: newId(),
+      clientId: newId(),
+      activityDate: RACE_DAY,
+      unit: 'count',
+      valueNum: '1',
+      activityTypeId: habitTypeId,
+      metricKey: null,
+      status: ENTRY_STATUS.done,
+    }),
+    weighIn: () => ({
+      profileId: athlete.id,
+      publicId: newId(),
+      clientId: newId(),
+      day: RACE_DAY,
+      unit: 'lb',
+      value: 112,
+      notes: null,
+      activityTypeId: weighInTypeId,
+      kind: ENTRY_KIND.bodyweight,
+    }),
+    /** The client ids of the day's live rows of one metric. */
+    liveOnDay: async (metricKey: string) =>
       (
         await tx
-          .select({ publicId: schema.entries.publicId, clientId: schema.entries.clientId })
+          .select({ clientId: schema.entries.clientId })
           .from(schema.entries)
           .where(
             and(
@@ -1630,39 +1666,56 @@ async function verifyDayTakenRace(): Promise<void> {
               isNull(schema.entries.deletedAt),
             ),
           )
-      ).map((r) => r.clientId);
+      ).map((r) => r.clientId),
+  };
+}
+
+/**
+ * The second phone's clear, staged inside the insert: a statement-level `AFTER INSERT` trigger hides
+ * the one live row named in `race_target`. Statement triggers fire on a statement that inserted
+ * nothing, so the writer's re-reads find no insert, no holder and no taken day, exactly as a clear
+ * landing between the statements would leave them. Idempotent, so later inserts pass through it.
+ * Returns the arming call. It all rolls back with the section (DDL is transactional).
+ */
+async function stageHideDuringInsert(tx: VerifyTx) {
+  await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
+  await tx.execute(sql`create function verify_race_hide() returns trigger language plpgsql as $$
+    begin
+      update entries set deleted_at = now()
+        where public_id in (select public_id from race_target) and deleted_at is null;
+      return null;
+    end $$`);
+  await tx.execute(
+    sql`create trigger race_hide after insert on entries for each statement execute function verify_race_hide()`,
+  );
+  return async (publicId: string) => {
+    await tx.execute(sql`delete from race_target`);
+    await tx.execute(sql`insert into race_target values (${publicId}::uuid)`);
+  };
+}
+
+/**
+ * The race, staged on one connection. Before the retry each writer threw ("neither inserted nor
+ * held"), which the person saw as `error.tsx`.
+ */
+async function verifyDayTakenRace(): Promise<void> {
+  await rolledBack(async (tx) => {
+    const f = await raceFixture(tx);
+    const holdThenClear = await stageHideDuringInsert(tx);
 
     // (a) A practice: the day's live practice skips the insert and is cleared inside it. The new one
     //     lands, and the answer keeps submit order with the retried item FIRST, so a writer that
     //     appended retried results would fail. (A habit inserted once is `uq_entries_client_id`'s
     //     doing, not the retry's, so it is not asserted here.)
-    const holder = {
-      publicId: newId(),
-      clientId: newId(),
-      activityDate: RACE_DAY,
-      unit: 'min',
-      valueNum: '60',
-      activityTypeId: practiceTypeId,
-      metricKey: METRIC_KEYS.practice_minutes,
-      status: ENTRY_STATUS.done,
-    } satisfies CheckinInsertValue;
-    const [held] = await writeCheckinEntries(exec, { profileId: athlete.id, values: [holder] });
+    const holder = f.practice();
+    const [held] = await writeCheckinEntries(f.exec, { profileId: f.athlete.id, values: [holder] });
     assert.equal(held?.outcome, 'created', 'race: the holder practice is logged');
     await holdThenClear(holder.publicId);
 
-    const practice = { ...holder, publicId: newId(), clientId: newId(), valueNum: '90' };
-    const habit = {
-      publicId: newId(),
-      clientId: newId(),
-      activityDate: RACE_DAY,
-      unit: 'count',
-      valueNum: '1',
-      activityTypeId: habitTypeId,
-      metricKey: null,
-      status: ENTRY_STATUS.done,
-    } satisfies CheckinInsertValue;
-    const raced = await writeCheckinEntries(exec, {
-      profileId: athlete.id,
+    const practice = f.practice('90');
+    const habit = f.habit();
+    const raced = await writeCheckinEntries(f.exec, {
+      profileId: f.athlete.id,
       values: [practice, habit],
     }).catch((error: unknown) => ({ threw: (error as Error).message }));
     assert.deepEqual(
@@ -1674,30 +1727,19 @@ async function verifyDayTakenRace(): Promise<void> {
       'race: a practice whose day is cleared during its insert is created, in submit order, never a throw',
     );
     assert.deepEqual(
-      await liveOnDay(METRIC_KEYS.practice_minutes),
+      await f.liveOnDay(METRIC_KEYS.practice_minutes),
       [practice.clientId],
       'race: the day holds the new practice only',
     );
 
     // (b) A weigh-in: the same race on the bodyweight day slot answers the new weigh-in's id.
-    const weighIn = (clientId: string) => ({
-      profileId: athlete.id,
-      publicId: newId(),
-      clientId,
-      day: RACE_DAY,
-      unit: 'lb',
-      value: 112,
-      notes: null,
-      activityTypeId: weighInTypeId,
-      kind: ENTRY_KIND.bodyweight,
-    });
-    const firstWeighIn = weighIn(newId());
-    const wrote = await insertBodyweightEntry(exec, firstWeighIn);
+    const firstWeighIn = f.weighIn();
+    const wrote = await insertBodyweightEntry(f.exec, firstWeighIn);
     assert.ok('id' in wrote, 'race: the holder weigh-in is logged');
     await holdThenClear(firstWeighIn.publicId);
 
-    const secondWeighIn = weighIn(newId());
-    const racedWeighIn = await insertBodyweightEntry(exec, secondWeighIn).catch(
+    const secondWeighIn = f.weighIn();
+    const racedWeighIn = await insertBodyweightEntry(f.exec, secondWeighIn).catch(
       (error: unknown) => ({ threw: (error as Error).message }),
     );
     assert.deepEqual(
@@ -1706,9 +1748,119 @@ async function verifyDayTakenRace(): Promise<void> {
       'race: a weigh-in whose day is cleared during its insert is saved, never a throw',
     );
     assert.deepEqual(
-      await liveOnDay(SEED_METRIC_KEYS.bodyweight),
+      await f.liveOnDay(SEED_METRIC_KEYS.bodyweight),
       [secondWeighIn.clientId],
       "race: the day's weigh-in is the new one",
+    );
+  });
+}
+
+/**
+ * The retry meets a THIRD phone (plan `v1-9b-checkin-distinct-ids.md`). The first insert skips on the
+ * day's holder A, which the second phone clears inside it; before the retry's insert, a third phone's
+ * practice C holds the day again. The retry must answer what the day says, `day_taken` /
+ * `{ dayTaken: true }`, never `created`. Today's retry re-runs the same attempt, so this passes
+ * trivially: it guards a future change to the retry, not today's code (board, 2026-11-19).
+ *
+ * Staged with a `BEFORE INSERT … FOR EACH STATEMENT` trigger that un-hides the row named in
+ * `race_unhide`, **only once the `race_target` row is no longer live**. That is a state gate, not a
+ * count, so it cannot fire on the first statement; a counter records how many insert statements ran,
+ * so the proof shows the retry ran. C is logged and hidden before A exists, because the day's index
+ * admits one live practice. (PGlite: a row a BEFORE STATEMENT trigger un-hides is seen by that
+ * statement's target-less `ON CONFLICT DO NOTHING`, probed 2026-11-19.) A sequential interleaving on
+ * one connection, like the section above.
+ */
+async function verifyRetryLandsOnTakenDay(): Promise<void> {
+  await rolledBack(async (tx) => {
+    const f = await raceFixture(tx);
+    const holdThenClear = await stageHideDuringInsert(tx);
+    await tx.execute(sql`create temp table race_unhide (public_id uuid not null)`);
+    await tx.execute(sql`create temp table race_inserts (n int not null)`);
+    await tx.execute(sql`insert into race_inserts values (0)`);
+    await tx.execute(sql`create function verify_race_unhide() returns trigger language plpgsql as $$
+      begin
+        update race_inserts set n = n + 1;
+        update entries set deleted_at = null
+          where public_id in (select public_id from race_unhide)
+            and deleted_at is not null
+            and not exists (
+              select 1 from entries
+                where public_id in (select public_id from race_target) and deleted_at is null
+            );
+        return null;
+      end $$`);
+    await tx.execute(
+      sql`create trigger race_unhide before insert on entries for each statement execute function verify_race_unhide()`,
+    );
+    const hide = (publicId: string) =>
+      tx
+        .update(schema.entries)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.entries.publicId, publicId));
+    /** Clears the targets, so the staging inserts that follow pass through both triggers. */
+    const disarm = async () => {
+      await tx.execute(sql`delete from race_target`);
+      await tx.execute(sql`delete from race_unhide`);
+    };
+    /** Names A to clear and C to re-hold the day, and zeroes the statement count. */
+    const arm = async (clear: string, rehold: string) => {
+      await holdThenClear(clear);
+      await tx.execute(sql`insert into race_unhide values (${rehold}::uuid)`);
+      await tx.execute(sql`update race_inserts set n = 0`);
+    };
+    const insertStatements = async () =>
+      Number(
+        ((await tx.execute(sql`select n from race_inserts`)).rows[0] as { n: number | string }).n,
+      );
+
+    // (a) A practice.
+    await disarm();
+    const third = f.practice('30');
+    await writeCheckinEntries(f.exec, { profileId: f.athlete.id, values: [third] });
+    await hide(third.publicId);
+    const holder = f.practice();
+    await writeCheckinEntries(f.exec, { profileId: f.athlete.id, values: [holder] });
+    await arm(holder.publicId, third.publicId);
+
+    const practice = f.practice('90');
+    const raced = await writeCheckinEntries(f.exec, {
+      profileId: f.athlete.id,
+      values: [practice],
+    }).catch((error: unknown) => ({ threw: (error as Error).message }));
+    assert.deepEqual(
+      Array.isArray(raced) ? raced.map((r) => [r.clientId, r.outcome]) : raced,
+      [[practice.clientId, 'day_taken']],
+      'race: a practice whose retry finds the day held again is day_taken, never created',
+    );
+    assert.equal(await insertStatements(), 2, 'race: the practice insert was retried');
+    assert.deepEqual(
+      await f.liveOnDay(METRIC_KEYS.practice_minutes),
+      [third.clientId],
+      "race: the day's practice is the third phone's",
+    );
+
+    // (b) A weigh-in.
+    await disarm();
+    const thirdWeighIn = f.weighIn();
+    await insertBodyweightEntry(f.exec, thirdWeighIn);
+    await hide(thirdWeighIn.publicId);
+    const holderWeighIn = f.weighIn();
+    await insertBodyweightEntry(f.exec, holderWeighIn);
+    await arm(holderWeighIn.publicId, thirdWeighIn.publicId);
+
+    const racedWeighIn = await insertBodyweightEntry(f.exec, f.weighIn()).catch(
+      (error: unknown) => ({ threw: (error as Error).message }),
+    );
+    assert.deepEqual(
+      racedWeighIn,
+      { dayTaken: true },
+      'race: a weigh-in whose retry finds the day held again is dayTaken, never saved',
+    );
+    assert.equal(await insertStatements(), 2, 'race: the weigh-in insert was retried');
+    assert.deepEqual(
+      await f.liveOnDay(SEED_METRIC_KEYS.bodyweight),
+      [thirdWeighIn.clientId],
+      "race: the day's weigh-in is the third phone's",
     );
   });
 }

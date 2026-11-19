@@ -138,7 +138,13 @@ function localDay(offsetDays = 0): string {
 // `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
 // the registry (`./actions.registry.ts`), which is the single source for both the action names and
 // their refusal copy.
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY, PRACTICE_COPY } from '@/lib/constants';
+import {
+  AMEND_ERROR_COPY,
+  BODYWEIGHT_COPY,
+  CHECKIN_COPY,
+  HIDE_COPY,
+  PRACTICE_COPY,
+} from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -1096,6 +1102,32 @@ describe('logCheckinsAction — boundary (bad body → zod-reject)', () => {
     fd.append(clientIdInputName(HABIT.key), 'not-a-uuid');
     const res = await logCheckinsAction(initial, fd);
     expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  // Two items under one id write one row, and both would answer `created`. Postgres compares uuids,
+  // so an id and its upper-case twin are the same id (plan v1-9b-checkin-distinct-ids).
+  it.each([
+    ['the same id', (id: string) => id],
+    ['the same id in another case', (id: string) => id.toUpperCase()],
+  ])('refuses two fields carrying %s, marking both', async (_label, twin) => {
+    const id = newId();
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1', [BOOL_METRIC.key]: '1' },
+        clientIds: { [HABIT.key]: id, [BOOL_METRIC.key]: twin(id) },
+      }),
+    );
+    expect(res).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        [HABIT.key]: [CHECKIN_COPY.itemNotSubmitted],
+        [BOOL_METRIC.key]: [CHECKIN_COPY.itemNotSubmitted],
+      },
+    });
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 

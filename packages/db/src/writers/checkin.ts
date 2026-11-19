@@ -113,18 +113,33 @@ type CheckinArgs = {
  * before the reads run: no insert, no holder, no taken day. The day is free by then, so those items
  * are inserted once more and classified again. A second miss is not that race (it would need a new
  * practice logged and cleared again inside the retry), so it throws as before.
+ *
+ * 🔴 **Ids are folded to lower case on entry, and must be distinct.** The classifier below matches
+ * the insert's `RETURNING` and the holder read by JS string, while Postgres compares `uuid`s, so an id
+ * sent in upper case used to be written and then missed: a habit threw, and a practice was answered
+ * `day_taken` against the row it had just written. And two items under one id write one row, which
+ * the per-id maps would report as two `created`. The app's forms mint one lower-case id per item and
+ * `logCheckinsAction` refuses a repeat as a field error first, so the throw is a precondition, not an
+ * answer: every caller sends distinct ids, and a batch caller (the unwired `/api/sync`) collapses
+ * identical replays before calling. The message is for `db:verify` and tests; `quietDbErrors` logs
+ * only the class. Answers carry the folded id.
  */
 export async function writeCheckinEntries(
   exec: Executor,
   args: CheckinArgs,
 ): Promise<CheckinWriteResult[]> {
-  const first = await attemptCheckinEntries(exec, args);
-  const missed = args.values.filter((_, i) => first[i] === null);
+  const values = args.values.map((v) => ({ ...v, clientId: v.clientId.toLowerCase() }));
+  if (new Set(values.map((v) => v.clientId)).size !== values.length) {
+    throw new Error('check-in client_ids repeat within one submit');
+  }
+
+  const first = await attemptCheckinEntries(exec, { ...args, values });
+  const missed = values.filter((_, i) => first[i] === null);
   if (missed.length === 0) return first as CheckinWriteResult[];
 
   const retried = await attemptCheckinEntries(exec, { ...args, values: missed });
   const byClientId = new Map(missed.map((v, i) => [v.clientId, retried[i]]));
-  return args.values.map((v, i) => {
+  return values.map((v, i) => {
     const result = first[i] ?? byClientId.get(v.clientId);
     if (result == null) {
       // No insert, no holder and no taken day, twice. The insert collided on another unique (a reused

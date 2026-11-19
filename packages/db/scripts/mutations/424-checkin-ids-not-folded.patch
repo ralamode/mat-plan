@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index 3cac7420..3543df71 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -128,7 +128,7 @@ export async function writeCheckinEntries(
+   exec: Executor,
+   args: CheckinArgs,
+ ): Promise<CheckinWriteResult[]> {
+-  const values = args.values.map((v) => ({ ...v, clientId: v.clientId.toLowerCase() }));
++  const values = args.values.map((v) => ({ ...v }));
+   if (new Set(values.map((v) => v.clientId)).size !== values.length) {
+     throw new Error('check-in client_ids repeat within one submit');
+   }

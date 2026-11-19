@@ -99,6 +99,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   the items no outcome explains, before they throw. `db:verify` stages the race on PGlite with a
   statement-level `AFTER INSERT` trigger that hides the holder inside the skipped insert
   (`verify/single-values.ts` → `verifyDayTakenRace`); mutations 420 and 421 remove each retry.
+  Since 2026-11-19 `verifyRetryLandsOnTakenDay` also stages a third phone holding the day again
+  before the retry (a `BEFORE INSERT` statement trigger), so a retry must answer `day_taken`;
+  mutations 422 and 423.
   A second miss still throws: for a check-in, a reused `public_id`; for a weigh-in, a replay of a
   hidden one, a `client_id` already used by another metric or profile, or an evening-only day.
 
