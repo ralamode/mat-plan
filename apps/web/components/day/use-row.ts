@@ -87,6 +87,8 @@ type RowError = {
   field?: RowField;
   /** The write that failed: a Change's message is cleared when its edit is abandoned. */
   write?: RowWriteKind;
+  /** H9's refusal (`retypeLoad`), which names both units, so the other-unit line steps aside. */
+  otherUnit?: true;
 };
 
 const RETRY: RowResult = { ok: false, reason: ROW_REFUSAL.retry };
@@ -441,7 +443,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
    * ("27.5 pounds"), since the field no longer shows it; `canPutBack` holds only while nothing was
    * typed over it, when the ✓ re-ticks the entry as logged (`press`). 🔴 No conversion is ever
    * asked for (plan U1.2): typing a kg load is left to whoever knows it, and H9 guards the field.
-   * Hidden while a refused ✓'s message shows: that message already names both units.
+   * Hidden while H9's refused ✓ shows (`otherUnit` on the error): that message names both units.
    */
   const held =
     logged ??
@@ -451,7 +453,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   /** What the row held, in words ("27.5 pounds"): the line's, and a refused ✓'s (H9). */
   const heldWas = heldQuantity ? spokenValues({ quantities: [heldQuantity] }) : null;
   const otherUnit =
-    heldUnit !== null && heldWas !== null && item.unit && !shownError?.invalid
+    heldUnit !== null && heldWas !== null && item.unit && !shownError?.otherUnit
       ? {
           from: heldUnit,
           to: item.unit,
@@ -493,6 +495,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
         counts: false,
         invalid: true,
         field: read.field,
+        ...(read.problem === 'other_unit' ? { otherUnit: true as const } : {}),
       });
       return;
     }

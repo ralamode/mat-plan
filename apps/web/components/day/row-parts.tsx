@@ -388,8 +388,10 @@ export function QuantityCellText({
   text: string;
 }) {
   const unit = otherUnitOf(item, values);
-  if (!unit) return <>{text}</>;
-  const quantity = text.slice(0, text.lastIndexOf(' '));
+  const space = text.lastIndexOf(' ');
+  // A plain count has no code to hide (`quantityText` writes the bare number).
+  if (!unit || space < 0) return <>{text}</>;
+  const quantity = text.slice(0, space);
   return (
     <>
       {quantity} <span aria-hidden="true">{unitSuffix(unit)}</span>

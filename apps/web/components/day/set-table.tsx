@@ -242,7 +242,7 @@ function SetRow({
     return () => onMessage(set, false);
   }, [hasMessage, onMessage, set]);
   const shownValues = r.logged ?? r.kept;
-  // The second line: Change's or a message (`status`), under the other-unit line when the row has one.
+  // The second line: Change's or a message (`status`), then the other-unit line when the row has one.
   const unitLine = r.otherUnit !== null;
   const changeFields = change.fields;
   const previous = row.previous ? valueParts(row.previous) : null;

@@ -172,15 +172,16 @@ function SingleItem({
           tickRef={tickRef}
         />
       </div>
-      {/* 12d-iii: a sibling above the status slot, so a message never replaces it. */}
+      <div className="mt-2 empty:hidden">
+        <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
+      </div>
+      {/* 12d-iii: a sibling after the status slot, as in the set table, so a message never
+          replaces it and the status stays next to the row. */}
       {r.otherUnit ? (
         <div className="mt-2">
           <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
         </div>
       ) : null}
-      <div className="mt-2 empty:hidden">
-        <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
-      </div>
     </li>
   );
 }
