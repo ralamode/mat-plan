@@ -420,10 +420,11 @@ jobs:
       - name: EVAL-0 gates (accuracy + invariant)
         run: pnpm eval
 
-      # `drizzle-kit check` first: it fails (exit 1) when two snapshots claim one parent, the
-      # collision two lanes sharing the migration queue produce. The forward-only guard's inline chain
-      # check above was the only backstop for that (docs/tech-debt.md, closed by this step).
-      - name: DB snapshot chain + drift guard + migration/seed verify
+      # `drizzle-kit check` first: it exits 1 when two snapshots claim one parent (the collision two
+      # lanes sharing the migration queue produce), and needs no database. It does NOT catch a
+      # snapshot whose prevId is its own id (#139, docs/lessons.md): it passes that. Only the
+      # forward-only guard's inline chain check above catches it, on PRs only. Keep both.
+      - name: DB snapshot parent collisions + drift guard + migration/seed verify
         run: |
           pnpm --filter @mat-plan/db db:check
           pnpm --filter @mat-plan/db db:generate

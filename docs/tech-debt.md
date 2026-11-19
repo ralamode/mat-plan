@@ -127,12 +127,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
   (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
-### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
+### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review) — ✅ CLOSED 2026-11-19
 
 > ✅ **Closed (2026-11-19):** `pnpm --filter @mat-plan/db db:check` runs first in `ci.yml`'s DB step
 > and in `pnpm verify` (`db:check`). Checked on drizzle-kit as pinned: a snapshot given its
 > neighbour's `prevId` makes it exit 1 ("… are pointing to a parent snapshot … which is a
-> collision"), and a clean tree exits 0. The entry is kept for its history.
+> collision"), and a clean tree exits 0. ⚠️ It passes a snapshot whose `prevId` is its own `id` (#139);
+> only the forward-only guard's inline chain check catches that, on PRs only, so both stay. The entry
+> is kept for its history (its Fix line's `check` script is named `db:check`).
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit
 check`), and AGENTS.md → "Database / migration PR rules" named it first among the CI gates since
