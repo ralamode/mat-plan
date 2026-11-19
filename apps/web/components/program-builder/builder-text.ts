@@ -409,6 +409,8 @@ export const ITEM_PICKER_COPY = {
   open: '+ Add items',
   newItem: '+ New item',
   noMatch: 'No item matches. Make it a new item with the button above.',
+  /** `noMatch` at the household cap: the cap line beside it says why no new item can be made. */
+  noMatchAtCap: 'No item matches.',
   searchLabel: 'Search items',
   searchPlaceholder: 'Search items',
   /** An empty name. A name with nothing to tell it apart is the contract's own refusal (C8). */

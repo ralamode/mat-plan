@@ -1071,7 +1071,7 @@ describe('the household’s item cap (FAM-1 7b-ii, plan §Caps)', () => {
     expect(within(sheet()).queryByText(ITEM_PICKER_COPY.householdFull)).toBeNull();
   });
 
-  it('"+ New item" is described by the full line, and a search with no match never offers a new item', () => {
+  it('"+ New item" is described by the full line, and a search with no match names the cap once, not a new item', () => {
     editor({}, newWorkoutEmpty, atCap);
     openPicker();
     const describedBy = (button: HTMLElement) =>
@@ -1083,8 +1083,10 @@ describe('the household’s item cap (FAM-1 7b-ii, plan §Caps)', () => {
     search('zzzzz');
     expect(within(sheet()).queryByText(ITEM_PICKER_COPY.noMatch)).toBeNull();
     const typed = within(sheet()).getByRole('button', { name: newItemLabel('zzzzz') });
-    expect(describedBy(typed)).toContain(ITEM_PICKER_COPY.householdFull);
-    expect(describedBy(typed)).not.toContain(ITEM_PICKER_COPY.noMatch);
+    expect(describedBy(typed)).toEqual([
+      ITEM_PICKER_COPY.noMatchAtCap,
+      ITEM_PICKER_COPY.householdFull,
+    ]);
     // One item under the cap: the usual words, and nothing extra on the button.
     cleanup();
     editor({}, newWorkoutEmpty, atCap.slice(0, -1));
