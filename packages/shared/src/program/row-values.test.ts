@@ -387,20 +387,51 @@ describe('loggedRowUnit: the unit an amend is judged in (C28)', () => {
     expect(fillRowValues(now, inLb, null)).toBeNull();
   });
 
-  it('is the item’s own unit for every logged row the fixtures hold', () => {
-    // No fixture describes a unit edited after logging, so the two agree everywhere today; the
-    // sample above is the case where they do not.
+  it('is the item’s own unit for every logged row the fixtures hold, but where a unit was edited', () => {
+    // One fixture describes a unit edited after logging (`unit-edited-after-logging`): there the
+    // rows logged before the edit are in pounds under an item that now reads kg. Everywhere else
+    // the two agree.
     let checked = 0;
-    for (const plan of Object.values(DAY_PLAN_FIXTURES)) {
+    const edited: string[] = [];
+    for (const [name, plan] of Object.entries(DAY_PLAN_FIXTURES)) {
       for (const item of plan.workouts.flatMap((w) => w.items)) {
         for (const row of item.rows) {
           if (!row.logged || !TRACKING_TYPE_FIELDS[item.trackingType].slot) continue;
           if (row.logged.values.quantities.length === 0) continue;
-          expect(loggedRowUnit(item.trackingType, row.logged.values)).toBe(item.unit);
+          const unit = loggedRowUnit(item.trackingType, row.logged.values);
+          if (name === 'unit-edited-after-logging' && unit !== item.unit) {
+            expect([unit, item.unit], item.name).toEqual(['lb', 'kg']);
+            edited.push(`${item.name} ${row.set}`);
+            continue;
+          }
+          expect(unit, `${name}: ${item.name}`).toBe(item.unit);
           checked += 1;
         }
       }
     }
     expect(checked).toBeGreaterThan(10);
+    expect(edited).toEqual(['Vest weight 1', 'DB bench press 1', 'DB bench press 2']);
+  });
+
+  it('🔴 judges a Change on the fixture’s lb rows in lb, though their items read kg', () => {
+    const plan = DAY_PLAN_FIXTURES['unit-edited-after-logging'];
+    const onDay = plan.workouts
+      .flatMap((w) => w.items)
+      .find((item) => item.name === 'DB bench press')!;
+    const [first] = onDay.rows;
+    expect(onDay.unit).toBe('kg');
+    const stored = {
+      trackingType: onDay.trackingType,
+      unit: loggedRowUnit(onDay.trackingType, first!.logged!.values),
+    };
+    const inLb = { reps: 8, quantities: [primary('lb', 30)] };
+    const inKg = { reps: 8, quantities: [primary('kg', 14)] };
+    expect(fillRowValues(stored, inLb, null)).toEqual(inLb);
+    expect(fillRowValues(stored, inKg, null)).toBeNull();
+    // A new ✓ on an unlogged set is not a Change: it is in the item's unit, from its target.
+    expect(fillRowValues(onDay, { quantities: [] }, onDay.target)).toEqual({
+      reps: 8,
+      quantities: [primary('kg', 12.5)],
+    });
   });
 });
