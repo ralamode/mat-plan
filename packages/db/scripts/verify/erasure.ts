@@ -1384,7 +1384,8 @@ async function verifyOneShotErasure(): Promise<void> {
       .from(schema.households)
       .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
     assert.ok(seedRow, 'CAT-3 R0: the seeded household is in the verify database');
-    await insertHouseholdMember(asTx(tx), householdScopeForScript(seedRow.id), {
+    const SEED_SCOPE = householdScopeForScript(seedRow.id);
+    await insertHouseholdMember(asTx(tx), SEED_SCOPE, {
       publicId: newId(),
       clerkUserId: 'user_verifyR0seedmember',
       role: HOUSEHOLD_ROLE.owner,
