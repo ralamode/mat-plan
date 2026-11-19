@@ -182,10 +182,8 @@ export const CHOOSE_KIND_MESSAGE = 'Choose Child or Adult.';
  * Until 2026-11-19 it was a count-then-insert that a burst overshot; the fix needed no `Executor`
  * change after all (plan: docs/plans/td-athlete-cap-lock.md).
  *
- * 🔴 **An earlier draft of this paragraph said the burst "is bounded by the limiter", which the
- * paragraph above contradicts** — `checkMutationLimit` fails open, so with Upstash down there is no
- * limiter to bound it and the only ceiling is Neon's connection count. A security lens caught the two
- * halves of one docblock disagreeing. The honest statement is the one now above it.
+ * (History: an earlier draft claimed the burst "is bounded by the limiter". It never was:
+ * `checkMutationLimit` fails open. The lock above is what bounds it now.)
  *
  * In `packages/shared` because three consumers must agree: the writer enforces it, the DAL maps the
  * refusal, and the copy says what the limit is.

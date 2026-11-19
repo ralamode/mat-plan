@@ -164,7 +164,7 @@ describe('renameAthlete — the rename uses the SAME predicate as the read', () 
  * mistake neither can see: a scope resolved and then used in only SOME of the four queries, or an
  * INSERT that takes a tenant or a `public_id` from the caller.
  */
-describe("createAthlete — all THREE of the create's queries carry the resolved household", () => {
+describe("createAthlete — the lock and all three of the create's queries carry the resolved household", () => {
   it('the household-athletes lock comes before every read and the insert, on the resolved household', async () => {
     // The only proof of WHERE the lock sits: mutation 444 shows it exists, not that it precedes the
     // count. Moved after the count, the cap would be walked past again.
@@ -180,6 +180,15 @@ describe("createAthlete — all THREE of the create's queries carry the resolved
     ]) {
       expect(at(later), `${later} ran before the lock`).toBeGreaterThan(lock);
     }
+    // …and all of it inside ONE transaction. A transaction-scoped lock taken outside one releases as
+    // soon as its own statement returns, so dropping the `exec.transaction` wrapper would bring the
+    // race back while the order above stayed green (the db:verify case cannot see it either: it
+    // already runs inside `rolledBack`'s transaction).
+    const begin = at(/^begin/i);
+    expect(begin, 'no transaction was opened').toBeGreaterThanOrEqual(0);
+    expect(begin, 'the transaction opened after the lock').toBeLessThan(lock);
+    const commit = recording.queries.findIndex((q, i) => i > lock && /^commit/i.test(q.text));
+    expect(commit, 'no commit after the lock').toBeGreaterThan(at(/^insert into "profiles"/i));
   });
 
   it('the client_id read is scoped, and bound to the household the resolver found', async () => {

@@ -273,6 +273,9 @@ export type CreateProfileResult =
  *
  * ## The order, and why each step is where it is
  *
+ * 0. **(In `createProfile`, before this body runs:)** a transaction, and the household-athletes lock.
+ *    So "before anything else" below means before anything else IN THIS BODY, and a replay now also
+ *    waits on the lock and reads the household row first.
  * 1. **Look up the `client_id` inside the scope, BEFORE anything else.** A double submit, a replayed
  *    pre-hydration POST and an offline flush all arrive as the same key, and all three must return
  *    the FIRST row rather than mint a twin. Reading first also means a replay costs one indexed point
@@ -381,13 +384,7 @@ async function addProfile(
 export async function createProfile(
   exec: Executor,
   scope: HouseholdScope,
-  input: {
-    name: string;
-    kind: ProfileKind;
-    clientId: string;
-    /** The FOLDED name the caller was warned about, if they are re-confirming. */
-    acknowledgedDuplicate?: string;
-  },
+  input: Parameters<typeof addProfile>[2],
 ): Promise<CreateProfileResult> {
   return exec.transaction(async (tx) => lockedCreate(tx, scope, input));
 }
