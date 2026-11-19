@@ -2,6 +2,16 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+# One version for the database client packages both workspaces declare (tech-debt: "apps/web's
+# drizzle peers"). apps/web declares them only so its drizzle-orm peer key is stated rather than
+# inferred; if the two workspaces named different ranges, a Dependabot bump to one could leave two
+# copies of drizzle-orm, which fails `next build` in files it never touched (docs/lessons.md →
+# pnpm / build). Both package.json files say `catalog:`, so there is one range to bump.
+catalog:
+  '@electric-sql/pglite': ^0.5.15
+  '@types/pg': ^8.23.1
+  pg: ^8.23.1
+
 # Native deps allowed to run install/build scripts (pnpm 11 blocks these by default and
 # HARD-ERRORS in CI). sharp = Next image optimization; unrs-resolver = ESLint import resolver;
 # esbuild = bundler behind drizzle-kit / tsx / pglite (needs its postinstall to fetch its binary).
