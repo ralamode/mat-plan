@@ -764,10 +764,10 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
       athlete's own entry is still exported.
 
 16. **The export's check-ins file, and one bodyweight test** (FAM-1 14b, [plan](../plans/fam-1-14-export.md)):
-    `checkinMonthRows` reads every live entry with no movement that is not `bodyweightEntry()` (the
-    weigh-in activity OR the bodyweight metric), and `bodyweightMonthRows` uses the same conjunct, so
-    each live entry lands in exactly one of the three files (`verify/day.ts`, the 14b proof; mutations
-    368–371). Its `entryId` is for the proof only: `lib/dal/export.ts` maps fields one by one.
+    `checkinMonthRows` reads every live entry with no movement that is not `bodyweightEntry()` (no
+    movement, AND the weigh-in activity OR the bodyweight metric), and `bodyweightMonthRows` uses the
+    same conjunct, so each live entry lands in exactly one of the three files (`verify/day.ts`, the 14b
+    proof; mutations 368–371, 376–379). A weigh-in naming a movement is the strength log's alone. Its `entryId` is for the proof only: `lib/dal/export.ts` maps fields one by one.
 
 ## Traps
 
