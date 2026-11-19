@@ -308,6 +308,15 @@ only way a notice about minors' health data is worth anything.
 > closed row stays as history; the weekday rows stay. No new column, processor, log or export. Called
 > by no action until step 15.
 >
+> **§8 re-read 2026-11-19 for the referrer policy** (`Referrer-Policy: no-referrer` → `same-origin`,
+> plan td-form-before-hydration): requests to this origin now carry a `Referer` (the page they came
+> from, which can name an athlete's public id and a day). It goes to this origin only: Vercel
+> receives a header carrying a URL it already serves; Sentry receives none (`httpHeaders: false`, and
+> `lib/sentry-scrub.ts` drops `referer`); Clerk receives none (its API is cross-origin, and its
+> same-origin relay is disarmed and pinned). No cross-origin request carries one. ⚠️ Owed: a read of
+> whether Vercel's runtime logs record `Referer`. The notice says nothing about referrers and stays
+> true.
+>
 > **§1 re-read 2026-11-19 for FAM-1 step 6d-iii**: `putOn` now places a program in an athlete's
 > order by the household's Programs list (a reopen at its old place). Only `program_assignments.idx`
 > changes; no new column, processor, log or export. Called by no action until step 15.
