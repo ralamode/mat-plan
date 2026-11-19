@@ -55,6 +55,7 @@ import {
   copyDraftSchema,
   createProgramSchema,
   emptyWeek,
+  householdItemsFull,
   MAX_DAY_SLOTS,
   MAX_HOUSEHOLD_ITEMS,
   MAX_PROGRAM_WORKOUTS,
@@ -418,6 +419,21 @@ describe('WeekDraft and ProgramView', () => {
       MAX_PROGRAM_WORKOUTS: 50,
       MAX_DAY_SLOTS: 30,
     });
+  });
+
+  it("counts a household as full by its own items alone, never the library's", () => {
+    const own = (n: number) => Array.from({ length: n }, () => ({ owner: 'household' as const }));
+    const library = (n: number) => Array.from({ length: n }, () => ({ owner: 'catalog' as const }));
+    expect(householdItemsFull([])).toBe(false);
+    // The library alone never fills a household, however long it is.
+    expect(householdItemsFull(library(MAX_HOUSEHOLD_ITEMS + 1))).toBe(false);
+    // One short of the cap is not full, with any number of library movements beside them.
+    expect(
+      householdItemsFull([...library(MAX_HOUSEHOLD_ITEMS), ...own(MAX_HOUSEHOLD_ITEMS - 1)]),
+    ).toBe(false);
+    // At the cap, and past it (the old Strength form can make an item outside the cap).
+    expect(householdItemsFull([...library(3), ...own(MAX_HOUSEHOLD_ITEMS)])).toBe(true);
+    expect(householdItemsFull(own(MAX_HOUSEHOLD_ITEMS + 1))).toBe(true);
   });
 
   it('starts an empty week with every weekday, each with nothing on it (C26)', () => {

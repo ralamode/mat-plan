@@ -30,7 +30,7 @@ flowchart TB
   CLERK["Clerk<br/>household auth"]
   CLAUDE["Claude skills<br/>/retro · /daily-plan"]
   SENTRY["Sentry<br/>server + edge errors only"]
-  UPSTASH["Upstash Redis<br/>mutation rate limit"]
+  UPSTASH["Upstash Redis<br/>mutation + export rate limits"]
   GHA["GitHub Actions<br/>migrate.yml"]
 
   UI -->|"Server Action"| ACT
@@ -46,7 +46,8 @@ flowchart TB
   RH -->|"CSV export v1 · MCP+REST v3"| CLAUDE
   ACT -.->|"scrubbed errors"| SENTRY
   RSC -.->|"scrubbed errors"| SENTRY
-  ACT -.->|"Clerk user id, mutations only"| UPSTASH
+  ACT -.->|"Clerk user id, mutations"| UPSTASH
+  RH -.->|"Clerk user id, the zip export"| UPSTASH
   GHA ==>|"prod DDL + seed on every merge<br/>holds PROD_DATABASE_URL_UNPOOLED;<br/>the seed writes reference data only"| NEON
 ```
 
