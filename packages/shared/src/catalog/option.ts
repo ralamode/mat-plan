@@ -49,6 +49,10 @@ export type CatalogOptionTaxonomy = {
  * tables that hold a movement's equipment keep no order either, so a read that returned "whatever
  * came back" and a mapping that returned "as authored" would word one movement's "what it needs"
  * two ways. Both call this instead. Returns a new array; a value named twice comes back once.
+ *
+ * ⚠️ **A code that is not in the vocabulary is left out, without an error.** An entry cannot hold
+ * one (`equipmentSchema`). A read that takes codes from the tables parses them with
+ * `equipmentSchema` / `muscleSchema` first, so an unknown code fails there and does not vanish here.
  */
 export function equipmentInOrder(equipment: readonly Equipment[]): Equipment[] {
   return EQUIPMENT.filter((item) => equipment.includes(item));
