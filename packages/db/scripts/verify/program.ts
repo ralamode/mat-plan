@@ -4171,6 +4171,7 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         (world.assign[a.id] ?? []).map((s) => ({
           programPublicId: ids.get(fixtureIds.program(s.prog)),
           name: world.programs.find((p) => p.id === s.prog)!.name,
+          activeFrom: s.from,
         })),
       ]),
       'FAM-1 6c-ii: readProgramsByAthlete answers each athlete’s current programs, in their order',
