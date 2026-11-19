@@ -21,6 +21,8 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_3_NAME,
   SEED_PROFILE_3_PUBLIC_ID,
+  SEED_PROFILE_4_NAME,
+  SEED_PROFILE_4_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   UNITS,
@@ -126,15 +128,17 @@ export {
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_3_PUBLIC_ID,
+  SEED_PROFILE_4_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_2_NAME,
   SEED_PROFILE_3_NAME,
+  SEED_PROFILE_4_NAME,
 } from '@mat-plan/shared';
 
 /**
  * 🔴 **The environment flag that turns the fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10, `OPS-2`).
  *
- * With it, the seed also writes `seedFixtures` (the seed household and its three role-named athletes),
+ * With it, the seed also writes `seedFixtures` (the seed household and its four role-named athletes),
  * `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c). Without it, which is how
  * `migrate.yml` seeds **production**, it writes reference data only (`seedReference`), and household
  * rows a database already holds stay as they are. Only the exact value `1` turns it on.
@@ -199,7 +203,7 @@ export function resolveSeedOptions(
  * - `seedReference` always: units, quantity slots, categories, equipment, muscles, activity types,
  *   metric definitions and the legacy movement catalog, plus the TEN-2c shadow detection. No row a
  *   household owns. It never reads `households` or `profiles`, so no household state can make it throw.
- * - `seedFixtures` only with fixtures: the seed household (1c-4's guard and refusal) and its three
+ * - `seedFixtures` only with fixtures: the seed household (1c-4's guard and refusal) and its four
  *   fixture athletes, then the program and lane P's fixture world. Never in production: `migrate.yml`
  *   seeds without `SEED_FIXTURES`, and `resolveSeedOptions` refuses the flag for any database that is
  *   not provably local or the preview.
@@ -530,7 +534,7 @@ export async function seedCatalog(
 }
 
 /**
- * The seed household and its three fixture athletes (fixture databases only). Returns the household
+ * The seed household and its four fixture athletes (fixture databases only). Returns the household
  * the fixture programs are scoped to. Exported for `db:verify`; `seed` is its only other caller.
  */
 export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{ id: number }> {
@@ -627,6 +631,15 @@ export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{
         kind: 'kid',
         householdId: household.id,
         routineConfig: SEED_ATHLETE_TWO_ROUTINE,
+      },
+      {
+        // FAM-1: the Change e2e's own athlete, on the test-only program `seed-e2e.ts` writes. See
+        // `SEED_PROFILE_4_PUBLIC_ID`'s docblock. The neutral routine (NULL): the smallest page.
+        publicId: SEED_PROFILE_4_PUBLIC_ID,
+        name: SEED_PROFILE_4_NAME,
+        kind: 'kid',
+        householdId: household.id,
+        routineConfig: null,
       },
     ])
     .onConflictDoNothing({ target: schema.profiles.publicId });

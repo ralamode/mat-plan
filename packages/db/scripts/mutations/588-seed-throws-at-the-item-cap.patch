@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
+index 7651e523..c8980920 100644
+--- a/packages/db/src/writers/program/seed-fixtures.ts
++++ b/packages/db/src/writers/program/seed-fixtures.ts
+@@ -190,7 +190,6 @@ async function seedWorld(
+     const { name, type } = world.catalog[key];
+     const result = await newItem(tx, scope, { name, trackingType: type });
+     // The household's item cap is state a person can make: skipped, never thrown.
+-    if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
+     const made = must(result, `item ${key}`);
+     // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
+     if (made.trackingType !== type) return null;
