@@ -54,7 +54,11 @@ import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import { DAY_COPY } from '../components/day/day-copy';
-import { ITEM_PICKER_COPY } from '../components/program-builder/builder-text';
+import {
+  BUILDER_COPY,
+  EDITOR_COPY,
+  ITEM_PICKER_COPY,
+} from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
 import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
 import {
@@ -489,6 +493,9 @@ const STATES = {
   // FAM-1 7b-i — a program's page. Its address is minted at seed time, so the capture starts on
   // `/programs` and taps the seeded program open (see INTERACTIONS).
   'program-open': null,
+  // FAM-1 7b-ii — a program's workout pages, reached the same way (see INTERACTIONS).
+  'workout-new': null,
+  'workout-edit': null,
   // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
   // that the server answers with a match. Three states, because the callout is three different
   // screens and the copy differs in each.
@@ -691,6 +698,20 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'program-open': async (page) => {
     await page.getByRole('link', { name: /^Family program/ }).click();
     await page.getByRole('heading', { level: 1, name: 'Family program' }).waitFor();
+  },
+  /** FAM-1 7b-ii — the seeded program's "+ New workout", waiting for the editor's name field. */
+  'workout-new': async (page) => {
+    await page.getByRole('link', { name: /^Family program/ }).click();
+    await page.getByRole('link', { name: BUILDER_COPY.newWorkout }).click();
+    await page.waitForURL(/\/workouts\/new$/);
+    await page.getByRole('textbox', { name: EDITOR_COPY.workoutName, exact: true }).waitFor();
+  },
+  /** FAM-1 7b-ii — the seeded program's "Heavy A", opened from its row. */
+  'workout-edit': async (page) => {
+    await page.getByRole('link', { name: /^Family program/ }).click();
+    await page.getByRole('link', { name: /^Heavy A/ }).click();
+    await page.waitForURL(/\/workouts\/[0-9a-f-]+$/);
+    await page.getByRole('textbox', { name: EDITOR_COPY.workoutName, exact: true }).waitFor();
   },
   'picker-filter-panel': async (page) => {
     await openPickerFilters(page);

@@ -31,7 +31,7 @@ import {
   weekdayName,
 } from './builder-text';
 import { ProgramScreen } from './program-screen';
-import { newWorkoutPath } from './routes';
+import { newWorkoutPath, workoutPath } from './routes';
 
 /**
  * The program page's caps (FAM-1 7b-i, plan §Caps): each stops at its entry point, before the person
@@ -332,49 +332,24 @@ describe('a day that fills while a form is open is not sent', () => {
   });
 });
 
-describe('until 7b-ii the real program page links to no workout page', () => {
-  it('with workoutPagesWired false: no workout link and no "+ New workout"; Copy stays', () => {
-    const all = {
-      createProgram: vi.fn(),
-      renameProgram: vi.fn(),
-      saveWorkout: vi.fn(),
-      saveWeek: vi.fn(),
-      copyWorkout: vi.fn(),
-      newItem: vi.fn(),
-    } as ProgramActions;
-    render(<ProgramScreen program={familyProgram} actions={all} workoutPagesWired={false} />);
-    const workouts = within(screen.getByRole('region', { name: BUILDER_COPY.workouts }));
-    expect(workouts.queryAllByRole('link')).toEqual([]);
-    expect(workouts.queryByText(BUILDER_COPY.newWorkout)).toBeNull();
-    expect(workouts.getByText('Heavy A')).toBeTruthy();
-    expect(workouts.getByRole('button', { name: copyToLabel('Heavy A') })).toBeTruthy();
-    // At the cap, the hint goes with the control.
-    cleanup();
-    render(
-      <ProgramScreen
-        program={program({ extra: MAX_PROGRAM_WORKOUTS - familyProgram.workouts.length })}
-        actions={all}
-        workoutPagesWired={false}
-      />,
-    );
-    expect(screen.queryByText(programFullText)).toBeNull();
-  });
-
-  it('an empty program’s week says Copy is the way in, not "make a workout first"', () => {
+describe('the program page links to the workout pages (7b-ii)', () => {
+  it('an empty program’s week says to make a workout first', () => {
     const empty = { ...familyProgram, workouts: [], week: emptyWeek() };
     const all = { saveWeek: vi.fn(), copyWorkout: vi.fn() } as unknown as ProgramActions;
-    render(<ProgramScreen program={empty} actions={all} workoutPagesWired={false} />);
-    expect(screen.getByText(WEEK_COPY.noWorkoutsCopyOnly)).toBeTruthy();
-    expect(screen.queryByText(WEEK_COPY.noWorkouts)).toBeNull();
-    cleanup();
     render(<ProgramScreen program={empty} actions={all} />);
     expect(screen.getByText(WEEK_COPY.noWorkouts)).toBeTruthy();
   });
 
-  it('by default (the preview) the rows and "+ New workout" are links', () => {
+  it('each workout row and "+ New workout" are links to their pages', () => {
     page(familyProgram);
     const workouts = within(screen.getByRole('region', { name: BUILDER_COPY.workouts }));
-    expect(workouts.getByRole('link', { name: BUILDER_COPY.newWorkout })).toBeTruthy();
-    expect(workouts.getByRole('link', { name: /Heavy A/ })).toBeTruthy();
+    const id = familyProgram.programPublicId;
+    expect(workouts.getByRole('link', { name: BUILDER_COPY.newWorkout }).getAttribute('href')).toBe(
+      newWorkoutPath(id),
+    );
+    const heavyA = familyProgram.workouts.find((workout) => workout.name === 'Heavy A')!;
+    expect(workouts.getByRole('link', { name: /Heavy A/ }).getAttribute('href')).toBe(
+      workoutPath(id, heavyA.workoutPublicId),
+    );
   });
 });

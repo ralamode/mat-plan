@@ -5,6 +5,7 @@ import {
   hasStarted,
   LOGGABLE_DIMENSION_LABELS,
   MAX_DAY_SLOTS,
+  MAX_HOUSEHOLD_ITEMS,
   MAX_PROGRAM_WORKOUTS,
   MAX_WORKOUT_ITEMS,
   MONDAY_FIRST,
@@ -313,6 +314,10 @@ export function saveRefusal(reason: ProgramRefusal): string {
       return 'Couldn’t save: part of this workout wasn’t accepted. Check it and try again.';
     case PROGRAM_REFUSAL.not_found:
       return 'This workout no longer exists.';
+    // A new workout in a program at `MAX_PROGRAM_WORKOUTS` (C35): the stop is at "+ New workout",
+    // so this is a race or a typed URL (7b-ii, plan §Caps). An edit is never capped.
+    case PROGRAM_REFUSAL.limit_reached:
+      return `${PROGRAM_FULL} This one wasn’t saved.`;
     default:
       return SAVE_FAILED;
   }
@@ -389,11 +394,23 @@ export function undoneText(linked: boolean): string {
 }
 
 /** The item picker's words (FAM-1 step 9; the prototype's `vPicker2`). */
+const HOUSEHOLD_FULL = `Your household has the most custom items it can keep (${MAX_HOUSEHOLD_ITEMS})`;
+/**
+ * Whether the household's own items (never the library's) are at `MAX_HOUSEHOLD_ITEMS`.
+ * ⚠️ Must agree with the server's count, `newItem`'s `owner !== 'catalog'`
+ * (`packages/db/src/writers/program/new-item.ts`): today every non-catalog option is `household`,
+ * but see the TODO(CAT-3 chunk R) in `item-picker/item-picker.tsx`'s `create`.
+ */
+export const householdIsFull = (options: readonly { owner: string }[]) =>
+  options.filter((option) => option.owner === 'household').length >= MAX_HOUSEHOLD_ITEMS;
+
 export const ITEM_PICKER_COPY = {
   title: 'Add items',
   open: '+ Add items',
   newItem: '+ New item',
   noMatch: 'No item matches. Make it a new item with the button above.',
+  /** `noMatch` at the household cap: the cap line beside it says why no new item can be made. */
+  noMatchAtCap: 'No item matches.',
   searchLabel: 'Search items',
   searchPlaceholder: 'Search items',
   /** An empty name. A name with nothing to tell it apart is the contract's own refusal (C8). */
@@ -411,6 +428,13 @@ export const ITEM_PICKER_COPY = {
   creating: 'Creating…',
   failed: 'Couldn’t create it. Try again.',
   refused: 'That name wasn’t accepted. Check it and try again.',
+  /**
+   * The household holds `MAX_HOUSEHOLD_ITEMS` of its own (C35; 7b-ii, plan §Caps), said before any
+   * typing; a name that is already an item still selects it (never capped, contract invariant 30).
+   */
+  householdFull: `${HOUSEHOLD_FULL}. Pick one from the list instead.`,
+  /** `newItem` refused `limit_reached`: a race the stop above did not see. */
+  full: `${HOUSEHOLD_FULL}, so this one wasn’t made. Pick one from the list instead.`,
 } as const;
 
 /** "New item: “Bear Crawl”", or the plain "+ New item" for an empty search. */
@@ -426,6 +450,8 @@ export const pickedText = (names: readonly string[]) =>
 
 /** Why a tap selected nothing: the workout is full. */
 export const capText = (max: number) => `A workout holds at most ${max} items.`;
+/** Under the editor's "+ Add items", and what a tap on it says, once the workout is full (7b-ii). */
+export const workoutFullText = `This workout is full: a workout holds at most ${MAX_WORKOUT_ITEMS} items.`;
 
 /**
  * The caps the program page stops at (FAM-1 7b-i, plan §Caps). Each says "is full … holds at most
@@ -492,9 +518,10 @@ export function newItemRefusal(reason: ProgramRefusal): {
   field: string | null;
   footer: string | null;
 } {
-  return reason === PROGRAM_REFUSAL.invalid
-    ? { field: ITEM_PICKER_COPY.refused, footer: null }
-    : { field: null, footer: ITEM_PICKER_COPY.failed };
+  if (reason === PROGRAM_REFUSAL.invalid) return { field: ITEM_PICKER_COPY.refused, footer: null };
+  if (reason === PROGRAM_REFUSAL.limit_reached)
+    return { field: null, footer: ITEM_PICKER_COPY.full };
+  return { field: null, footer: ITEM_PICKER_COPY.failed };
 }
 
 /** Made or found, but not ticked: the workout is full. */
@@ -521,12 +548,6 @@ export const WEEK_COPY = {
   addLabel: '+ Label',
   editLabel: 'Edit label',
   noWorkouts: 'Make a workout first, then add it to days.',
-  /**
-   * `noWorkouts` while the workout pages don't exist (7b-i). True whether or not another program has a
-   * workout to copy: a household's first program has none.
-   */
-  noWorkoutsCopyOnly:
-    'Writing a workout isn’t in the app yet. To use one from another program, open that program and choose “Copy to…” on the workout.',
   stale:
     'This week was changed somewhere else. It now shows the latest; your last change wasn’t saved.',
   labelPlaceholder: 'e.g. Morning',
