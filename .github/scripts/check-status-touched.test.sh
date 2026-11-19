@@ -169,7 +169,8 @@ check "mid-merge, detached, main's fragments don't count" 1 'adds no changelog f
 git -C "$tmp" checkout -q feat/mid 2>/dev/null; git -C "$tmp" merge --abort 2>/dev/null
 
 # The README is the rule's own source: without it the guard refuses to judge (exit 2), never passes.
-branch feat/y-14; git -C "$tmp" rm -q docs/changelog/README.md
+# On a branch that owes NOTHING, so a check moved after the "owes" early exit is caught too.
+branch docs/y-14 'docs(x): note'; git -C "$tmp" rm -q docs/changelog/README.md
 check "a tree without the changelog README exits 2" 2 'README.md is missing'
 git -C "$tmp" reset -q --hard
 
