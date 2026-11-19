@@ -2819,8 +2819,20 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     await put(d6, L2);
     assert.deepEqual(
       await order(d6),
-      [L3, L2],
-      'FAM-1 6d-iii: a reopen with fewer programs left goes last',
+      [L2, L3],
+      'FAM-1 6d-iii: a reopen goes after the open programs that were ahead of it, not after a gap',
+    );
+
+    const d10 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Two Take Offs');
+    for (const program of [L1, L2, L3, L4]) await put(d10, program, earlier);
+    await off(d10, L1);
+    await off(d10, L3);
+    await put(d10, L3);
+    await put(d10, L1);
+    assert.deepEqual(
+      await order(d10),
+      [L1, L2, L3, L4],
+      'FAM-1 6d-iii: two Take offs undone the same day put both back where they were',
     );
 
     const d9 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reopen Reordered');
@@ -2842,6 +2854,11 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const d7 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Removed Start');
     for (const program of [L1, L2, L3]) await put(d7, program);
     await reorder(d7, [L3, L2, L1]);
+    assert.deepEqual(
+      await order(d7),
+      [L3, L2, L1],
+      'FAM-1 6d-iii: the proof sets d7 up as L3, L2, L1',
+    );
     await off(d7, L2);
     assert.deepEqual(
       (await rowsOf(d7)).filter((r) => r.program === L2 && r.deletedAt === null),
@@ -2873,7 +2890,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6d-iii: once the day has ended, the gap closes on the next put on',
     );
 
-    for (const who of [x, y, z, w, d1, d1b, d2, d3, d4, d5, d6, d7, d8, d9]) {
+    for (const who of [x, y, z, w, d1, d1b, d2, d3, d4, d5, d6, d7, d8, d9, d10]) {
       assert.ok(
         (await rowsOf(who)).every((r) => r.idx < SHIFT_BAND),
         'FAM-1 6d-iii: no row is left parked or in the band',
@@ -4378,6 +4395,19 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
       await off(n17),
       { ok: true, lastDay: null },
       'FAM-1 6d-i: a row under a session another athlete holds does not keep the start',
+    );
+    // The other side: the session's holder, on the program from today, has only another athlete's
+    // row in it, which is not theirs either.
+    const holderId = otherProfile!.id;
+    const [holder] = await tx
+      .select({ publicId: schema.profiles.publicId })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.id, holderId));
+    await on(holder!.publicId, p1, T);
+    assert.deepEqual(
+      await off(holder!.publicId),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: another athlete’s row in this athlete’s session does not keep the start',
     );
 
     const n5 = await athlete('Take-off Sibling');

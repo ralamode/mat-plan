@@ -15,6 +15,7 @@ import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { inHousehold, liveTemplateBlockIn } from '../ownership';
 import { refuse } from './refuse';
+import { programListOrder } from '../../queries/program/program-list';
 import { PARK_IDX, shiftIntoBand } from './shift-band';
 
 /**
@@ -132,9 +133,9 @@ export async function placeAssignments(
  *   is therefore one effect, with no client id (the schema's note on `programAssignments`).
  * - **Their last day on it is today** (Take off was tapped today): **reopened**. The same row's
  *   `active_to` is cleared, whatever `from` says, so they stay on with no gap and one stretch (ADR
- *   0007 Amendment 4, C15). It goes back to **its old place**, or last if fewer programs remain
- *   (D41, the maintainer, 2026-11-18). That is where it was unless a program earlier in the
- *   Programs list was put on in between, or the athlete reordered; the reorder fixes it.
+ *   0007 Amendment 4, C15). It goes back to **its old place**: after the open programs that were
+ *   ahead of it (D41, the maintainer, 2026-11-18). That is where it was unless a program earlier in
+ *   the Programs list was put on in between, or the athlete reordered; the reorder fixes it.
  * - **Otherwise**: a new row from `from`, due all seven weekdays (A2 §7: FAM-1's put-on writes all
  *   seven rows), **before the first program they keep that comes later in the household's Programs
  *   list**, or last (D41; A2 §7; the preview fake's rule). "Later" is read against their own order;
@@ -181,7 +182,7 @@ export async function putOn(
       .select({ id: schema.programBlocks.id })
       .from(schema.programBlocks)
       .where(liveTemplateBlockIn(scope))
-      .orderBy(asc(schema.programBlocks.id));
+      .orderBy(programListOrder());
     const listPlace = new Map(listed.map((b, i) => [b.id, i]));
     const rank = (blockId: number) => listPlace.get(blockId) ?? -1;
 
@@ -207,9 +208,10 @@ export async function putOn(
 
       const order = open.map((row) => row.blockId);
       if (endsToday) {
-        // D41 (the maintainer, 2026-11-18): back at its old place, or last if fewer remain. Parked
-        // first, so clearing `active_to` meets no open row on the order index.
-        const at = Math.min(endsToday.idx, order.length);
+        // D41 (the maintainer, 2026-11-18): back at its old place: after the open programs that were
+        // ahead of it (a lower `idx`), so another program taken off today too does not move it.
+        // Parked first, so clearing `active_to` meets no open row on the order index.
+        const at = open.filter((row) => row.idx < endsToday.idx).length;
         await tx
           .update(a)
           .set({ activeTo: null, idx: PARK_IDX, updatedAt: sql`now()` })

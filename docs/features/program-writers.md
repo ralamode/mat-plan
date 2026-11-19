@@ -216,7 +216,8 @@ flowchart TD
     take off left in the athlete's order, through the band. **Where it goes (D41, 6d-iii):** a new
     program goes before the first program they keep that comes later in the household's Programs
     list (`programBlocks.id` among live templates; a program outside the list, a hidden one, is never
-    later), or last; a reopen goes back to its old place, `min(old idx, the count of the others)`,
+    later), or last; a reopen goes back to its old place, after the open programs that were ahead of it (a lower
+    `idx`; recommended to the maintainer as a refinement of "reopen at old number", 2026-11-19, pending),
     which is where it was unless a program earlier in the list was put on in between or the athlete
     reordered (accepted by the maintainer, 2026-11-18; the preview fake keeps it where it was). A
     second known difference from the fake, accepted by the contract owner (2026-11-19): "later" is
@@ -293,7 +294,7 @@ flowchart TD
     counting. Take off never hides the weekday rows (invariant 19) and never moves the athlete's
     other programs. ⚠️ **An accepted limit:** "nothing logged" is read without a lock against the row
     writers, so a ✓ racing it (no race needed: a re-tick, Restore all or `restoreHidden`, which has no app caller yet, of a row hidden before it), leaves a logged row under a removed start: contract change C24's state, which the day page shows as
-    a workout that left the week (mutations 521–537, `take-off-*`; 537 is the shared program lock's household conjunct).
+    a workout that left the week (mutations 521–537 and 583, `take-off-*`; 537 is the shared program lock's household conjunct; 583, the session's athlete).
 
 ```mermaid
 flowchart TD

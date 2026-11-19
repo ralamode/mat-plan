@@ -5,8 +5,8 @@ athlete's order. Nothing in the app calls it yet; step 15 wires it.
 
 - A new program goes before the first program the athlete keeps that comes later in the household's
   Programs list, or last. A hidden program is never "later".
-- A Put on that undoes a same-day Take off goes back to its old place (or last, if fewer programs
-  remain). If a program earlier in the list was put on in between, or the athlete had reordered, it
+- A Put on that undoes a same-day Take off goes back to its old place: after the programs that were
+  ahead of it. If a program earlier in the list was put on in between, or the athlete had reordered, it
   takes its old number instead; the athlete can fix that with the reorder (the maintainer,
   2026-11-18).
 - Take off counts a row as logged only when its session is the athlete's too.
