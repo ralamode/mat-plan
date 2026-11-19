@@ -165,11 +165,11 @@ what _reaches_ a sink, never whether the string appears.
 
 **CSRF — no tokens, deliberately. Three layers cover the current surface:**
 
-| Shape                                     | Protected by                                                                                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding.                            |
-| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. The only one today is `GET` (`app/p/[profileId]/export/route.ts`).                                     |
-| **Cookies**                               | 🔴 **Two layers and a vendor default, not three — see below.** This app sets exactly one cookie now (`tz`), and it is Clerk's cookies that carry the session. |
+| Shape                                     | Protected by                                                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding.                                                                                                                                                  |
+| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. Two today, both `GET`: the export (`app/p/[profileId]/export/route.ts`), which moves a rate-limit counter, safely because the count comes after its profile check, and a how-to (`app/programs/how-to/[optionId]/route.ts`). |
+| **Cookies**                               | 🔴 **Two layers and a vendor default, not three — see below.** This app sets exactly one cookie now (`tz`), and it is Clerk's cookies that carry the session.                                                                                                                       |
 
 🔴 **The cookie row, honestly, after AUTH-1 1d.** The row used to read
 `SameSite=Lax + httpOnly + secure in prod (app/gate/actions.ts)` and claim three layers. All of that
@@ -322,15 +322,19 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 
 ## Rate limiting
 
-- `@upstash/ratelimit` (sliding window) on **mutations**, and planned for `/api/sync` and the
-  LLM-facing API. In-memory counters don't work on serverless.
+- `@upstash/ratelimit` (sliding window), keyed on the Clerk principal, never an IP or a caller-supplied id
+  (`apps/web/lib/rate-limit.ts` has the numbers):
+  - **every mutation**, through `enterMutation`;
+  - **the zip export**, through `checkExportLimit`, checked after the route's session and profile
+    checks, so only an export of the caller's own household's profile is counted;
+  - planned for `/api/sync` and the LLM-facing API.
+    In-memory counters don't work on serverless. This section is the one statement of what is limited;
+    other docs point here.
 - ⚠️ **"auth" was the first item on this list and is deliberately gone (AUTH-1 1d).** It meant the
   gate login — an unauthenticated password oracle, the one surface where a limiter was the primary
   control. `1d` deletes it. Sign-in is now Clerk's, so the brute-force surface and its limiting are
   the vendor's, not ours: **this repo rate-limits nothing on the authentication path.** State that
   rather than implying coverage we do not have.
-- ⏳ The zip export remains unlimited — the most expensive single request in the app
-  (`docs/tech-debt.md`).
 
 ## Supply chain
 
