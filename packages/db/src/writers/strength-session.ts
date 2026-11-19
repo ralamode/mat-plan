@@ -12,12 +12,12 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../client';
 import { schema } from '../client';
+import { programRow } from '../queries/day/program-rows';
 import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
 import { insertEntrySetRows } from './session-rows';
-import { programRow } from '../queries/day/program-rows';
 import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership';
 
 /**
