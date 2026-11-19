@@ -132,8 +132,9 @@ test('a parent writes a new workout with two items, saves, and Back never reopen
   for (const item of ['Box Jump', 'Pull-Up']) {
     await picker.getByRole('searchbox').fill(item);
     // The row's name is "<item>, <its lines>" (movement-picker.tsx), so the item ends at the comma:
-    // "Pull-Up" never also matches a longer name that starts the same.
-    await picker.getByRole('checkbox', { name: new RegExp(`^${item},`) }).click();
+    // "Pull-Up" never also matches a longer name that starts the same. Chrome puts a space between
+    // the row's stacked spans when it builds the name ("Box Jump , Reps"), hence `\s*`.
+    await picker.getByRole('checkbox', { name: new RegExp(`^${item}\\s*,`) }).click();
   }
   // "2 items added." is said only once the picker is gone: jsdom closes the sheet before a frame,
   // so only a browser can show the order (guide invariant 16).
