@@ -21,24 +21,29 @@ vi.mock('@mat-plan/db', () => ({
     trackingType: TRACKING_TYPE.reps,
     existed: false,
   })),
+  putOn: vi.fn(async () => ({ ok: true })),
+  takeOff: vi.fn(async () => ({ ok: true, lastDay: null })),
 }));
 // Which id missed is `report-miss.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
 vi.mock('./report-miss', () => ({
   reportProgramMiss: vi.fn(async () => {}),
   reportWeekMiss: vi.fn(async () => {}),
   reportCopyMiss: vi.fn(async () => {}),
+  reportAssignMiss: vi.fn(async () => {}),
 }));
 
 import {
   copyWorkout,
   createProgram,
   newItem,
+  putOn,
   readProgramList,
   readProgramView,
   readWorkoutDraft,
   renameProgram,
   saveWeek,
   saveWorkout,
+  takeOff,
 } from '@mat-plan/db';
 import { emptyWeek, TRACKING_TYPE } from '@mat-plan/shared';
 
@@ -46,14 +51,16 @@ import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
 import { getProgramEntry, getProgramList, getProgramView, getWorkoutDraft } from './reads';
-import { reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import { reportAssignMiss, reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
   newHouseholdItem,
+  putOnHouseholdProgram,
   renameHouseholdProgram,
   saveHouseholdWeek,
   saveHouseholdWorkout,
+  takeOffHouseholdProgram,
 } from './writes';
 
 const NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
@@ -273,6 +280,54 @@ describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
     }).catch((e: unknown) => e);
     expect(thrown).toBeInstanceOf(DbWriteError);
     expect(String((thrown as Error).message)).not.toContain('Bear crawl');
+  });
+});
+
+describe('the program DAL (FAM-1 15): Put on and Take off', () => {
+  const TODAY = '2026-11-21';
+  const ATHLETE = '019826b4-0000-7000-8000-000000000001';
+  const draft = () => ({ programPublicId: PROGRAM_ID, profilePublicIds: [ATHLETE], from: TODAY });
+  const off = () => ({ programPublicId: PROGRAM_ID, profilePublicId: ATHLETE });
+  const ids = { programPublicId: PROGRAM_ID, profilePublicIds: [ATHLETE] };
+
+  it('each goes through the caller’s scope, with the parsed input and today', async () => {
+    expect(await putOnHouseholdProgram(draft(), TODAY)).toEqual({ ok: true });
+    expect(vi.mocked(putOn).mock.calls).toEqual([[db, SCOPE, draft(), TODAY]]);
+    expect(await takeOffHouseholdProgram(off(), TODAY)).toEqual({ ok: true, lastDay: null });
+    expect(vi.mocked(takeOff).mock.calls).toEqual([[db, SCOPE, off(), TODAY]]);
+    expect(reportAssignMiss).not.toHaveBeenCalled();
+  });
+
+  it('a not_found reports the program and the athlete ids, once each call, and stays not_found', async () => {
+    vi.mocked(putOn).mockResolvedValueOnce(NOT_FOUND);
+    expect(await putOnHouseholdProgram(draft(), TODAY)).toEqual(NOT_FOUND);
+    vi.mocked(takeOff).mockResolvedValueOnce(NOT_FOUND);
+    expect(await takeOffHouseholdProgram(off(), TODAY)).toEqual(NOT_FOUND);
+    expect(vi.mocked(reportAssignMiss).mock.calls).toEqual([
+      [SCOPE, draft()],
+      [SCOPE, ids],
+    ]);
+  });
+
+  it('no scope: not_found, the writer never called, the miss reported with no scope', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await putOnHouseholdProgram(draft(), TODAY)).toEqual(NOT_FOUND);
+    expect(await takeOffHouseholdProgram(off(), TODAY)).toEqual(NOT_FOUND);
+    expect(putOn).not.toHaveBeenCalled();
+    expect(takeOff).not.toHaveBeenCalled();
+    expect(vi.mocked(reportAssignMiss).mock.calls).toEqual([
+      [null, draft()],
+      [null, ids],
+    ]);
+  });
+
+  it('another refusal passes through, and nothing is reported', async () => {
+    vi.mocked(putOn).mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.invalid });
+    expect(await putOnHouseholdProgram(draft(), TODAY)).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.invalid,
+    });
+    expect(reportAssignMiss).not.toHaveBeenCalled();
   });
 });
 

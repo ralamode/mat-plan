@@ -698,6 +698,11 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
 
 ### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
 
+> ✅ **Closed by DX-18 PR 2:** `changed-scopes.mjs` treats an image as inert only under `docs/` or
+> `.github/`, so an image under `apps/web/` runs the smoke and the build
+> (`changed-scopes.test.sh` → "an image under apps/web/ is app content"). The entry is kept for its
+> history.
+
 - **What & why:** `.github/workflows/ci.yml`'s e2e auto-skip treats any
   `\.(png|jpe?g|gif|svg|webp|ico)$` file as provably inert. That was right while images were only PR
   comment attachments. It stops being right the moment an image is **served content**.

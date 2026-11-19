@@ -8,7 +8,6 @@ import { listProfiles } from '@/lib/dal/profiles';
 
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
-import { householdProgramsAnything } from '@/lib/dal/programming';
 import { requireSession } from '@/lib/dal/session';
 import {
   ADD_ATHLETE_COPY,
@@ -88,8 +87,6 @@ export default async function AddAthletePage() {
     );
   }
 
-  const programsAnything = await householdProgramsAnything();
-
   return (
     <AppShell athletes={await listProfiles()}>
       {/* 🔴 **The back link is ABOVE the form, in the header — the day page's placement.** It was
@@ -103,7 +100,7 @@ export default async function AddAthletePage() {
         <h1 className="text-3xl font-semibold tracking-tight">{ADD_ATHLETE_COPY.pageHeading}</h1>
       </header>
 
-      <AddAthleteForm clientId={newId()} programsAnything={programsAnything} />
+      <AddAthleteForm clientId={newId()} />
 
       {/* 🔴 **The RECOVERY lives here, role-branched — it is not part of the permanence sentence.**
           The form says "Set once — the app can't change it afterwards."; what to do about a wrong

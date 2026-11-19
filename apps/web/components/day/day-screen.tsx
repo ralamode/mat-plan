@@ -7,7 +7,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Announcer } from '@/components/ui/announcer';
 import { Callout } from '@/components/ui/callout';
 import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
-import { localDayIso } from '@/lib/date';
+import { deviceToday } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 import { DayContext, type DayContextValue } from './day-context';
@@ -56,8 +56,7 @@ export function pinDayBeforeWrite(plan: Pick<DayPlan, 'day' | 'today'>): void {
   if (url.searchParams.get('d') === plan.day) return;
   // Only once midnight has PASSED: a device behind the page's zone (a first visit on the fallback
   // zone, a trip) would otherwise pin a day that is about to be the past or the future.
-  const deviceToday = localDayIso(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  if (isoDayDiff(deviceToday, plan.today) <= 0) return;
+  if (isoDayDiff(deviceToday(), plan.today) <= 0) return;
   url.searchParams.set('d', plan.day);
   window.history.replaceState(null, '', url);
 }

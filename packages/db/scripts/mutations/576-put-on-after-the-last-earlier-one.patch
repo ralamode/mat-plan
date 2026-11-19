@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 240dbb23..665ef7ac 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -223,8 +223,7 @@ export async function putOn(
+       }
+ 
+       // D41 (ADR 0007 A2 §7): before the first program they keep that comes later in the list.
+-      const later = order.findIndex((blockId) => rank(blockId) > rank(block.id));
+-      const at = later < 0 ? order.length : later;
++      const at = order.findLastIndex((blockId) => rank(blockId) < rank(block.id)) + 1;
+ 
+       const [made] = await tx
+         .insert(a)

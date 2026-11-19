@@ -13,9 +13,10 @@ import { athleteNameOf, PROGRAM_COPY } from './day-copy';
  *
  * **Placed by the page**, above Bodyweight, where v12 has it (maintainer, 2026-11-16).
  *
- * `programsHref` is the Programs list. **Until it exists, the notice offers no link and does not ask
- * anyone to put the athlete on a program** (UX panel, 13d): from 12c to step 15 every athlete sees
- * this daily, and a sentence pointing at a page that is not there reads as broken.
+ * `programsHref` is the Programs list. **The page passes it for a live athlete, on any day**
+ * (`offersProgramsLink`, FAM-1 15; maintainer, 2026-11-19): this notice means no program now, so the
+ * link helps from a past day too. An archived athlete cannot be put on one, so there the notice
+ * neither links nor asks.
  */
 export function NotOnAProgram({ plan, programsHref }: { plan: DayPlan; programsHref?: string }) {
   if (plan.onProgram === ON_PROGRAM.yes) return null;

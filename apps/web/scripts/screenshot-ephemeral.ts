@@ -57,6 +57,7 @@ import { DAY_COPY } from '../components/day/day-copy';
 import {
   BUILDER_COPY,
   EDITOR_COPY,
+  PUT_ON_COPY,
   ITEM_PICKER_COPY,
 } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
@@ -496,6 +497,8 @@ const STATES = {
   // FAM-1 7b-ii — a program's workout pages, reached the same way (see INTERACTIONS).
   'workout-new': null,
   'workout-edit': null,
+  // FAM-1 15 — the Put on dialog with one athlete ticked (see INTERACTIONS).
+  'put-on': null,
   // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
   // that the server answers with a match. Three states, because the callout is three different
   // screens and the copy differs in each.
@@ -698,6 +701,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   'program-open': async (page) => {
     await page.getByRole('link', { name: /^Family program/ }).click();
     await page.getByRole('heading', { level: 1, name: 'Family program' }).waitFor();
+  },
+  /** FAM-1 15 — the seeded program's Put on dialog, the first athlete not on it ticked. */
+  'put-on': async (page) => {
+    await page.getByRole('link', { name: /^Family program/ }).click();
+    await page.getByRole('heading', { level: 1, name: 'Family program' }).waitFor();
+    await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.waitFor();
+    await dialog.getByRole('checkbox', { checked: false, disabled: false }).first().check();
   },
   /** FAM-1 7b-ii — the seeded program's "+ New workout", waiting for the editor's name field. */
   'workout-new': async (page) => {
