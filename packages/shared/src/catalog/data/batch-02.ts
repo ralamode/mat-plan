@@ -415,7 +415,7 @@ export const CATALOG_BATCH_02: readonly CatalogMovement[] = [
   {
     slug: 'v-up',
     name: 'V-up',
-    aliases: [],
+    aliases: ['Jackknife sit-up', 'Jackknife'],
     modality: 'strength',
     pattern: 'core',
     trackingType: 'reps',

@@ -36,7 +36,7 @@ export const metadata: Metadata = { title: SETTINGS_COPY.heading };
 export default async function SettingsPage() {
   await requireSession();
 
-  const { state, canArchiveAthletes } = await householdState();
+  const { state, canArchiveAthletes, canExportAthletes } = await householdState();
   // A signed-in account with no membership reaches this page too (AUTH-1 state C). It must render the
   // same cause-free screen the picker does, not an empty settings page implying the household is
   // there but has nobody in it.
@@ -60,7 +60,11 @@ export default async function SettingsPage() {
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">{SETTINGS_COPY.heading}</h1>
       </header>
-      <AthleteList athletes={athletes} canArchive={canArchiveAthletes} />
+      <AthleteList
+        athletes={athletes}
+        canArchive={canArchiveAthletes}
+        canExport={canExportAthletes}
+      />
     </AppShell>
   );
 }

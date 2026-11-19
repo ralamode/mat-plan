@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index e4ab3b9c..3637a9b5 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -414,7 +414,7 @@ export async function logRow(
+         .sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime() || b.id - a.id);
+       if (!pick) return null;
+       try {
+-        const revived = await tx.transaction(async (sp) => {
++        const revived = await (async (sp: typeof tx) => {
+           const [row] = await sp
+             .update(schema.entries)
+             .set({ ...UNHIDE, clientId: write.clientId, ...frozen, updatedAt: sql`now()` })
+@@ -432,7 +432,7 @@ export async function logRow(
+             .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+             .where(and(eq(schema.entrySets.entryId, row.id), isNull(schema.entrySets.deletedAt)));
+           return row;
+-        });
++        })(tx);
+         return revived ? { entry: revived } : null;
+       } catch (error) {
+         if (isUniqueViolationOn(error, [ENTRY_CLIENT_ID_UNIQUE_INDEX])) {

@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index e4ab3b9c..204dab6b 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -485,9 +485,7 @@ export async function logRow(
+       // window is now an entry committed after the lock's snapshot, which the skipped insert met and
+       // which is hidden by the time it is read. The retry goes back through the revive (plan 11c §
+       // Proofs 11b's rewrite), so that entry is brought back rather than a second one inserted.
+-      placed = await place();
+-      if ('answer' in placed) return placed.answer;
+-      entry = placed.entry;
++      [entry] = await insertEntry();
+       if (!entry) {
+         // A second miss is explained the same way (a duplicate request that won the retry, or a third
+         // phone's ✓ in between) before anything throws.
