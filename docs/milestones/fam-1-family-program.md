@@ -344,7 +344,7 @@ gantt
 The end of this chart is firm only for the steps planned in detail. Of the 11 PRs left (2026-11-19):
 
 - **Seven are planned in detail.** Five have a merged plan of their own: 6d-iii (#634), 14b, 11c-ii, 7b-ii and B2. Two are small enough that the row is the whole design, with every file and the proof named and no open question: 12d-iii (from the file table in the comparison of forms) and 12c-ii (one heading).
-- **Four have only a row in the plan** and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path and whose plan lane B brings for approval on 2026-11-19, 15c, 12f and 12c-iii. Their rows name files too, but each is large or has a question its lane must answer first: how the order's action reaches the day page (15c), a deletion across several lanes' guides (12f), where the collapsed state lives and what a screen reader hears (12c-iii), and the put-on screen's wiring and its phone test (15).
+- **Four have only a row in the plan** and may split when planned, as 6c, 6d and 7b did: **15**, which is on the critical path and whose plan is not merged yet, 15c, 12f and 12c-iii. Their rows name files too, but each is large or has a question its lane must answer first: how the order's action reaches the day page (15c), a deletion across several lanes' guides (12f), where the collapsed state lives and what a screen reader hears (12c-iii), and the put-on screen's wiring and its phone test (15).
 
 **What it shows**
 

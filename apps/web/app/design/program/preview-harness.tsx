@@ -208,8 +208,7 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
         </p>
       ) : null}
       <ProgramLine plan={plan} actions={fake.actions} />
-      {/* No `programsHref`: the Programs page is real since 7b-i, and a link to it would leave the
-          preview route for live data (invariant 7). */}
+      {/* No `programsHref`: the day page passes none either until step 15 (invariant 11). */}
       <NotOnAProgram plan={plan} />
       <DayScreen plan={plan} actions={fake.actions} />
     </>

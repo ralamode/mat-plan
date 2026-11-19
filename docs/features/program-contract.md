@@ -240,7 +240,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 11. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
     `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
     `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
-    has no nav rail) and no `programsHref` until the Programs page exists (7b). The switcher's links
+    has no nav rail) and no `programsHref`: the Programs page exists since 7b-i, but the real day page passes
+    none until step 15, when an athlete can be put on a program, and the harness mounts what the
+    page does. The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
     The parts are lane C's; their props are a contract with the page and this harness.
 12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
@@ -341,16 +343,19 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     that is cleared, and they stay on with no gap, one stretch, whichever day was picked. Such an
     athlete is still `on` in `candidates` and has `lastDay` in `athletes`; the dialog joins the two
     to list them as available.
-    ⚠️ **Where the program lands in the athlete's order can differ between the fake and the real
-    writer in two rare cases** (lane P's 6d-iii, plan D41). The fake places a program in
-    `candidates[].keeps`, a list of names: it holds no end dates for an athlete's other programs,
-    and it keeps a reopened program where it was. (1) A program earlier in the household's list is
-    put on between a same-day Take off and its Put on: the writer reopens by its own rule, the fake
-    leaves the program in place (accepted by the maintainer, 2026-11-18). (2) A program is put on
-    the day another of the athlete's programs, later in the household's list, was taken off: the
+    ⚠️ **Where a program lands in the athlete's order differs between the fake and the real
+    writer.** The fake places a program by the household's list in `candidates[].keeps`, a list
+    of names: it holds no end dates for an athlete's other programs, and it keeps a reopened
+    program where it was. **Until lane P's 6d-iii (#641) merges, the writer puts every new or
+    reopened program last**, so the two differ often. After it a few rare cases remain, each put
+    right by the athlete's Reorder. Two are accepted: (1) a program earlier in the household's list
+    is put on between a same-day Take off and its Put on: the writer reopens by its own rule, the
+    fake leaves the program in place (the maintainer, 2026-11-18); (2) a program is put on the
+    day another of the athlete's programs, later in the household's list, was taken off: the
     writer places it among the programs that stay, the fake still counts the one ending today
-    (accepted by the contract owner, 2026-11-19: the real order is the writer's, and the fake
-    cannot know without a contract change). In both the athlete's Reorder puts it right.
+    (the contract owner, 2026-11-19: the real order is the writer's, and the fake cannot know
+    without a contract change). Whether a third is accepted (two of an athlete's programs taken
+    off the same day and both put back) depends on the reopen rule the maintainer picks for #641.
 
 22. **An item that is saved can be logged in its unit** (`saveWorkoutSchema`, contract change C16).
     The save, the row writer and the day's read ask one function, `itemUnit`, for the unit an item
