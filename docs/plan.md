@@ -1413,6 +1413,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
       out of every auth chunk until this row. So the adult half arrives **with** this row's one
       policy, never before it, and this row must say what makes a login an adult's and which
       athlete is its own.
+      **This row also owes the words in the app** where a login that is not the owner's has no
+      export control: until a member login exists, only the privacy notice says so (FAM-1's
+      export follow-up, its question 3). `SETTINGS_COPY.ownerOnly` is the likely pattern.
     - **Bodyweight, feeds and sharing.** "Shouldn't any member of the household be ok to see it?
       This shouldn't go on a child's feed but and adult could choose to publish." Inside the app,
       any member of the household may see a weigh-in. **Bodyweight never appears on a child's
