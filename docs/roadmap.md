@@ -183,6 +183,18 @@ rest of `PROG-1` stays in Beta 1; the draft lists what moves and proposes Beta 1
 `FUEL-1` (meal and water logging) is Beta 1 at the earliest, and only once its privacy questions are
 answered (its row).
 
+**After Beta 0, the order** _(maintainer, 2026-11-19: "queue the Insight v1 spec after Beta 0 is
+complete, and BETA 1 planning is complete")_:
+
+1. **Tech debt, alongside thorough prototypes of Beta 1**, each put to the maintainer for sign-off.
+2. **Beta 1 planned in detail**, from the signed-off prototypes, as one milestone.
+3. **A priorities discussion with the maintainer.**
+4. **An "Insight v1" spec**: one spec for what the app shows a family back about its training. It
+   unifies `DASH-1`, `V1-16`, the `MOT-*` rows, `HIST-1` and the calendar and per-movement history
+   ideas, which today are separate rows. **Its open question, undecided:** insights for the
+   household and for each athlete, or for each athlete only. It has no row and no spec yet, and
+   nothing of it starts before 1 to 3 are done.
+
 ⚠️ **PROG-1 is re-scoped** _(maintainer, 2026-11-13; [the decisions](./specs/crud-1-fix-it-yourself.md#prog-1-re-scope-2026-11-13))_ before any of its chunks start: a program
 gets a **week template** (0, 1 or many workouts per weekday, in order), **no cap on workouts**, and
 items with a **tracking type**. Each affected plan carries a banner saying what changes; read it as superseded on those points until its revision lands.
