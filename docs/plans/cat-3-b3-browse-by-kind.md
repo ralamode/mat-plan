@@ -13,7 +13,7 @@
   (#594, #596) → **B3**.
 - **This PR:** B3, the last picker chunk. With no query, "All movements" opens to the kind of
   training and then a family, replacing the five legacy groups. Until the fresh start, the old
-  built-ins with no library entry sit in one folded section after the tree (K24).
+  built-ins with no library entry sit in one section after the tree (K24), which opens by itself whenever the tree does (`BROWSE_OPEN_AT_MOST` library rows or fewer) and is folded otherwise _(maintainer, 2026-11-19: "Open it while the tree is small")_.
 - **Build gate: after B2-ii only.** The spec owner decided this under the maintainer's overnight
   delegation on 2026-11-18.
   - P11-ii is not a gate. It is where the option payload is measured and where the taxonomy's
@@ -44,8 +44,8 @@
    - "Today's program" (no filter, when passed, unchanged);
    - "All movements", opening to the kind and then the family, each with its count, biggest family
      first.
-3. **The old built-ins stay findable by browsing** (K24): one folded section after the tree, **"Not
-   sorted yet"**.
+3. **The old built-ins stay findable by browsing** (K24): one section after the tree, **"Not
+   sorted yet"**, which opens by itself whenever the tree does (`BROWSE_OPEN_AT_MOST` library rows or fewer) and is folded otherwise _(maintainer, 2026-11-19: "Open it while the tree is small")_.
 4. **A tick is never hidden, and a group never closes under the person's thumb** (movement-picker
    invariant 15).
 
@@ -72,7 +72,8 @@ because a pasted copy goes stale. Done when:
   3. "Today's program", unchanged.
   4. "All movements · N", open. It holds each kind (folded, with its count) in `BROWSE_KINDS` order,
      and each kind's families (folded, with their counts), biggest first.
-  5. After the kinds: "Not sorted yet · N", folded, shown when any listed row lacks library data.
+  5. After the kinds: "Not sorted yet · N", shown when any listed row lacks library data. It
+     opens by itself whenever the tree does (`BROWSE_OPEN_AT_MOST` library rows or fewer) and is folded otherwise _(maintainer, 2026-11-19: "Open it while the tree is small")_.
 - **N for "All movements":**
   - with no filter, the tree's rows plus the "Not sorted yet" rows;
   - under a filter, the tree's rows only;
@@ -219,7 +220,7 @@ open(key) = userChoice.get(key) ?? (auto || seeded.has(key) || defaultOpen(key))
   the picker only renders what it is given.
 - **`defaultOpen`** is true for All movements, and for custom items at ≤ `CUSTOM_OPEN_AT_MOST` (5; H2) and false
   for kinds, families and Not sorted yet.
-- **As built (B3-i):** `auto` opens **kinds and families only**, never "Your custom items": the
+- **As built (B3-i):** `auto` **never opens "Your custom items"**: the
   formula above would open twenty-four custom items whenever the tree was short and bury it, which
   is what K25 folds them for. **"Not sorted yet" opens with `auto` too** _(maintainer, 2026-11-19,
   via the board: "Open it while the tree is small")_, which overrides K24's "folded" only while the

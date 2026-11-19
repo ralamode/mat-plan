@@ -111,6 +111,9 @@ export const householdOption = (name: string, publicId: string): MovementOptionD
 export const pickerTrigger = () =>
   [...document.querySelectorAll('main > button')].at(-1) as HTMLButtonElement;
 
+/** More clicks than the test library has groups, with room to spare. */
+const EXPAND_BROWSE_MAX_CLICKS = 100;
+
 /**
  * Opens every closed group of the picker's browse tree (CAT-3 B3), outermost first, until none is
  * left. A list longer than `BROWSE_OPEN_AT_MOST` starts with its kinds and families closed; a suite
@@ -118,13 +121,17 @@ export const pickerTrigger = () =>
  * heading). `root` scopes it, to the sheet when the page behind has its own disclosures.
  */
 export function expandBrowse(root: ParentNode = document) {
-  for (;;) {
+  // Bounded: a group that does not open on a click would otherwise loop forever.
+  for (let clicks = 0; clicks < EXPAND_BROWSE_MAX_CLICKS; clicks += 1) {
     const closed = root.querySelector<HTMLButtonElement>(
       ':is(h3, h4, h5) > button[aria-expanded="false"]',
     );
     if (!closed) return;
     fireEvent.click(closed);
   }
+  throw new Error(
+    `expandBrowse: still a closed group after ${EXPAND_BROWSE_MAX_CLICKS} clicks; a group's button may not open it`,
+  );
 }
 
 /**

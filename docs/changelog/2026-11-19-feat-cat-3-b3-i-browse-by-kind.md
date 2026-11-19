@@ -6,8 +6,8 @@
   fewer library movements) opens every group by itself. The old built-ins with no library entry yet
   sit in one "Not sorted yet" section after the kinds, until the fresh start; it opens by itself
   while the tree is that short and is folded otherwise. A row no longer
-  carries a group tag. Every group is a button in its heading, and a ticked or current row always
-  has the groups above it open.
+  carries a group tag. Every group is a button in its heading, and a newly ticked or current row
+  opens the groups above it, even one closed earlier.
 
   The view model is `apps/web/lib/movements/browse-view.ts`, unit-tested without a DOM; the filtered
   tree, under a filter, is B3-ii. The e2e spec opens a kind (from the keyboard) and a family at

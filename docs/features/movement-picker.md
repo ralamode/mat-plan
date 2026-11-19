@@ -163,7 +163,9 @@ path and **creating** the deliberate one.
       the filter panel, the takeover, a no-match query and clearing the search, and resets only when
       the sheet opens. **A new selection reopens the groups above it even if the person closed one**
       (its taps are forgotten), adjusted during render, so the row a caller focuses after a create is
-      in that commit; unticking closes nothing. A filter change forgets only the groups the person
+      in that commit; unticking closes nothing. **`reveal`** (`{ id, revision }`) does the same for
+      a row whose selection does not change (Select on an item already ticked, a new item not
+      ticked because the workout is full); a new revision reveals the same id again. A filter change forgets only the groups the person
       closed. Keys and ids are kind-qualified (`strength/core`, `mobility/core`).
     - **360px:** only the disclosure buttons indent (a kind `pl-3`, a family `pl-6`). Rows step in
       `ml-3` only from 400px (`min-[400px]:ml-3`): at 360px the name column keeps 194px in multi

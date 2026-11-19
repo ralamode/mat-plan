@@ -172,6 +172,12 @@ export type MovementPickerProps = {
    * ignore it.
    */
   howTo?: (publicId: string) => Promise<CatalogHowTo | null>;
+  /**
+   * A row the caller is about to focus that the selection does not change (CAT-3 B3): an item
+   * already ticked, or one made but not ticked because the workout is full. Its groups open as a new
+   * selection's do, in the same commit. A new `revision` reveals it again, even the same id.
+   */
+  reveal?: { readonly id: string; readonly revision: number } | null;
 } & (
   | {
       /** `typed` is a deliberate "use as typed" tap: the caller owns where the name goes (P6). */
@@ -295,6 +301,7 @@ export function MovementPicker({
   multiple,
   onReturned,
   howTo,
+  reveal,
 }: MovementPickerProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -312,6 +319,8 @@ export function MovementPicker({
   // groups have been opened, so a NEW tick or current row is noticed during render.
   const [browseOpen, setBrowseOpen] = useState<BrowseOpenState>(CLOSED_BROWSE);
   const [seededFor, setSeededFor] = useState<ReadonlySet<string>>(() => new Set());
+  /** The `reveal` revision whose groups have been opened. Not reset on open: a reveal is one-off. */
+  const [revealedRevision, setRevealedRevision] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   /** The panel's last change, said once in the sheet's one region (P15, panel row 12). */
   const [panelNote, setPanelNote] = useState<Omit<FilterChange, 'next'> | null>(null);
@@ -712,6 +721,12 @@ export function MovementPicker({
       setSeededFor(new Set(wanted));
       if (fresh.length > 0)
         setBrowseOpen((state) => seedBrowse(state, resolveOptions(fresh, byId)));
+    }
+    // The caller's `reveal`: the same seed, for a row whose selection did not change.
+    const revealed = reveal ? byId.get(reveal.id) : undefined;
+    if (reveal && revealed && reveal.revision !== revealedRevision) {
+      setRevealedRevision(reveal.revision);
+      setBrowseOpen((state) => seedBrowse(state, [revealed]));
     }
   }
 

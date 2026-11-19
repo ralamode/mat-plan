@@ -227,7 +227,9 @@ flowchart LR
       families start closed, and `item-picker.test.tsx`'s `openPicker` opens them all first with
       `expandBrowse` (`test/movement-picker-fixtures.ts`). The create-and-focus test and the Enter
       test open the sheet plainly (`openSheet`), so only the new selection's seed can open the
-      groups above the row.
+      groups above the row. `closeForm` sets the picker's `reveal` to the row it focuses, so a row
+      the selection does not change (already ticked, or made but not ticked at the cap) is on screen
+      too; two tests close its group first.
     - **Add** appends a card per item in pick order (`newCard`): a fresh `prescriptionClientId`, **no
       numbers**, and the unit the type fixes, else the item's own declared unit when the type allows
       it, else none. Focus goes to the first new card's heading; the status line says how many, from

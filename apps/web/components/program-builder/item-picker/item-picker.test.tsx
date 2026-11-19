@@ -835,6 +835,56 @@ describe('the item picker (FAM-1 9)', () => {
       expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false');
     });
 
+    /** The browse group a row is drawn in: the disclosure in the heading above its list. */
+    const groupOf = (el: HTMLElement) =>
+      el.closest('ul')!.parentElement!.previousElementSibling!.querySelector('button')!;
+
+    it('🔴 Select on a ticked item in a closed group focuses its row (CAT-3 B3: reveal)', () => {
+      editor();
+      openPicker();
+      fireEvent.click(row('Wall sit'));
+      expect(row('Wall sit').getAttribute('aria-checked')).toBe('true');
+      // The person closes the group the ticked row is in: the row leaves the screen.
+      fireEvent.click(groupOf(row('Wall sit')));
+      expect(within(sheet()).queryByRole('checkbox', { name: /^Wall sit/ })).toBeNull();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
+      fireEvent.change(name, { target: { value: 'wall sit' } });
+      fireEvent.keyDown(name, { key: 'Enter' });
+      // Already ticked: Select changes no selection, so only `reveal` can open the group.
+      fireEvent.click(
+        within(sheet()).getByRole('button', { name: selectExistingText('Wall sit') }),
+      );
+      expect(document.activeElement).toBe(row('Wall sit'));
+    });
+
+    it('🔴 a full workout: the new item, not ticked, is focused in a custom section the person closed', async () => {
+      const almost = {
+        ...heavyADraft,
+        items: Array.from({ length: MAX_WORKOUT_ITEMS - 1 }, (_, i) => ({
+          ...heavyADraft.items[4]!,
+          prescriptionClientId: `00000000-0000-7000-8000-0000000${String(1000 + i)}`,
+        })),
+      };
+      editor({}, almost);
+      openSheet();
+      search('Sprawls');
+      fireEvent.click(row('Sprawls'));
+      search('');
+      // The custom section holds more than five; close it if the tick's seed opened it.
+      const custom = within(sheet()).getByRole('button', {
+        name: (n) => n.startsWith(MOVEMENT_PICKER_COPY.household + ','),
+      });
+      if (custom.getAttribute('aria-expanded') === 'true') fireEvent.click(custom);
+      expect(custom.getAttribute('aria-expanded')).toBe('false');
+      search('Bear crawl');
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(document.activeElement).toBe(row('Bear crawl')));
+      expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false');
+    });
+
     it('Enter in the search ticks the one match and says so', async () => {
       editor();
       // A plain open: the cleared search shows the closed tree, and the tick's seed opens its groups.
