@@ -4,10 +4,12 @@ import {
   quantityText,
   ROW_REFUSAL,
   supersetLabels,
+  SUPERVISION_LABELS,
   type DayPlan,
 } from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
+  coachLabelProgramEndingToday,
   futurePreview,
   heavyASupersets,
   todayTwoPrograms,
@@ -616,6 +618,48 @@ describe('after the program was edited (D7)', () => {
       within(bodyRows(card('Heavy A', 'DB bench press'))[0]!).getByText(
         quantityText(logged.value, logged.unit),
       ),
+    ).toBeTruthy();
+  });
+});
+
+describe('the coach label (12c-ii, D40)', () => {
+  const plan = coachLabelProgramEndingToday;
+  const barbell = plan.workouts.find((w) => w.name === 'Barbell day')!;
+
+  it('a movement the library labels for a coach shows the label under its name, outside the heading', () => {
+    show(plan);
+    const supervised = barbell.items.find((i) => i.supervision)!;
+    const item = card(barbell.name, supervised.name);
+    // The heading's name stays the movement's: the rows are found by it (`e2e/steps.ts`).
+    const heading = within(item).getByRole('heading', { level: 4, name: supervised.name });
+    const label = within(item).getByText(SUPERVISION_LABELS[supervised.supervision!]);
+    expect(heading.contains(label)).toBe(false);
+    expect(heading.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The ✓'s name is unchanged: the label informs and never gates the row.
+    const ticks = within(item).getAllByRole('button', {
+      name: new RegExp(`^${DAY_COPY.logLabel(supervised.name)}`),
+    });
+    expect(ticks.length).toBeGreaterThan(0);
+  });
+
+  it('a movement without the label shows none', () => {
+    show(plan);
+    for (const other of barbell.items.filter((i) => !i.supervision)) {
+      expect(
+        within(card(barbell.name, other.name)).queryByText(SUPERVISION_LABELS.coach),
+      ).toBeNull();
+    }
+  });
+
+  it('the label stays on an item whose prescription was removed, on the logged tint', () => {
+    show(plan);
+    const removed = plan.workouts.flatMap((w) =>
+      w.items.filter((i) => i.prescriptionPublicId === null && i.supervision),
+    );
+    expect(removed.length).toBeGreaterThan(0);
+    const workoutName = plan.workouts.find((w) => w.items.includes(removed[0]!))!.name;
+    expect(
+      within(card(workoutName, removed[0]!.name)).getByText(SUPERVISION_LABELS.coach),
     ).toBeTruthy();
   });
 });

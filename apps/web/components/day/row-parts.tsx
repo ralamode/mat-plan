@@ -1,6 +1,6 @@
 'use client';
 
-import { type DayItem } from '@mat-plan/shared';
+import { SUPERVISION_LABELS, type DayItem } from '@mat-plan/shared';
 import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -99,6 +99,16 @@ export function ItemHeading({
         </h4>
         {shown ? <span className={cn('ml-auto text-sm', muted)}>{shown}</span> : null}
       </div>
+      {/* The library's label for a movement learned with a coach present (D40, C32; FAM-1 12c-ii):
+          under the name, at full contrast, as the picker shows it, on every day and in every row
+          state. It informs and never gates the ✓. Outside the `<h4>`, so the heading's name stays
+          the movement's (the rows are found by it). `card-foreground`: the text token on the tint
+          too (`docs/design.md`, done-surface). */}
+      {item.supervision ? (
+        <p className="text-card-foreground mt-1 text-sm font-medium">
+          {SUPERVISION_LABELS[item.supervision]}
+        </p>
+      ) : null}
       {item.notes ? (
         <p className={cn('mt-1 text-sm', muted, NAME_WRAP_CLASS)}>{item.notes}</p>
       ) : null}
