@@ -32,8 +32,7 @@ import {
   workoutPath,
 } from '../components/program-builder/routes';
 import { PROGRAM_COPY } from '../components/day/day-copy';
-import { APP_HOME_PATH, NOT_FOUND_COPY } from '../lib/constants';
-import { MIN_TAP_TARGET_PX } from '../lib/constants';
+import { APP_HOME_PATH, MIN_TAP_TARGET_PX, NOT_FOUND_COPY } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
 import { NARROW_VIEWPORT } from './contexts';
 import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from './steps';
