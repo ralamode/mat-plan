@@ -7,11 +7,12 @@ import {
   type Unit,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, not, or, type SQL, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../client';
 import { schema } from '../client';
+import { programRow } from '../queries/day/program-rows';
 import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
@@ -518,6 +519,17 @@ export async function updateStrengthSetById(
       ),
     );
 
+  // 🔴 **Never a program row.** A program row's numbers are `amendRow`'s (FAM-1 11c-i): it holds
+  // D20's window, refuses an off-week, hidden or purged workout or prescription, and stamps the
+  // entry. This older path checks none of that, so it takes only a set whose entry is NOT a program
+  // row (`programRow()`, `prescription_set`, which a purge leaves set). No screen offers it for a
+  // program row; a crafted POST answers `null`, like every guard here. Deliberately NOT mirrored in
+  // the client's `isEditableSet`: no client renders a program row through this path.
+  const notProgramRowEntryIds = exec
+    .select({ id: schema.entries.id })
+    .from(schema.entries)
+    .where(not(programRow()));
+
   return exec.transaction(async (tx) => {
     const rows = await tx
       .update(schema.entrySets)
@@ -543,6 +555,7 @@ export async function updateStrengthSetById(
           // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
           eq(schema.entrySets.status, ENTRY_STATUS.done),
           inArray(schema.entrySets.entryId, owned),
+          inArray(schema.entrySets.entryId, notProgramRowEntryIds),
         ),
       )
       .returning({ id: schema.entrySets.id, publicId: schema.entrySets.publicId });

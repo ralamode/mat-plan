@@ -15,6 +15,7 @@ import {
   LOGGED_FIELD_CLASS,
   numberFieldProps,
   ON_TINT_BUTTON_FOCUS_CLASS,
+  otherUnitLineId,
   RowMessage,
 } from './row-parts';
 import { type RowField } from './row-values';
@@ -39,6 +40,7 @@ export function ChangeInput({
   name,
   lineId,
   described,
+  unitLine = false,
   tickRef,
   inputRef,
   className,
@@ -51,6 +53,8 @@ export function ChangeInput({
   lineId: string;
   /** Whether the row's line is showing, so the field points at it. */
   described: boolean;
+  /** Whether the row's other-unit line is showing (12d-iii), so the field points at it too. */
+  unitLine?: boolean;
   tickRef: React.RefObject<HTMLButtonElement | null>;
   inputRef: (el: HTMLInputElement | null) => void;
   className: string;
@@ -91,7 +95,11 @@ export function ChangeInput({
         void change.commit();
       }}
       aria-label={DAY_COPY.fieldLabel(name, fieldSpoken(item, field))}
-      aria-describedby={described ? lineId : undefined}
+      aria-describedby={
+        [described ? lineId : null, unitLine ? otherUnitLineId(lineId) : null]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
       className={cn(
         INPUT_CLASS,
         className,

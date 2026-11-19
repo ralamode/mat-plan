@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
+index 533f398a..3ba903d2 100644
+--- a/packages/db/src/writers/strength-session.ts
++++ b/packages/db/src/writers/strength-session.ts
+@@ -555,7 +555,6 @@ export async function updateStrengthSetById(
+           // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
+           eq(schema.entrySets.status, ENTRY_STATUS.done),
+           inArray(schema.entrySets.entryId, owned),
+-          inArray(schema.entrySets.entryId, notProgramRowEntryIds),
+         ),
+       )
+       .returning({ id: schema.entrySets.id, publicId: schema.entrySets.publicId });
