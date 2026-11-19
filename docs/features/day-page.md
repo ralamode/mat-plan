@@ -273,3 +273,5 @@ A program row's ✓ in an e2e spec is `programRowTick(page, workout, item)` and 
 `settled(button, pressed)`, both in `e2e/steps.ts` (moved out of `e2e/day-page.spec.ts` at FAM-1
 15 PR 1, when the builder's spec became the second to tick a row): a change to a row's heading level
 or its ✓'s name changes them there, once.
+The device's today (`pinDayBeforeWrite`'s check) is `deviceToday()` from `lib/date.ts`, shared
+with the builder's Put-on dialog since FAM-1 15.
