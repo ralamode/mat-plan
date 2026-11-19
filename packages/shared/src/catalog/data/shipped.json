@@ -576,14 +576,14 @@
   "straight-bar_dip": "reps",
   "front_lever_row": "reps",
   "reverse_crunch": "reps",
-  "flutter_kicks": "time_sets",
+  "flutter_kick": "time_sets",
   "windshield_wiper": "reps",
-  "heel_taps": "reps",
+  "heel_tap": "reps",
   "v-sit": "time_sets",
-  "jackknife_sit-up": "reps",
+  "v-sit_crunch": "reps",
   "body_saw": "reps",
   "pike_compression": "reps",
   "kip-up": "reps",
-  "wrist_circles": "reps",
+  "wrist_circle": "reps",
   "knee-to-wall_ankle_rock": "reps"
 }

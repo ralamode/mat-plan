@@ -80,7 +80,7 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
     primaryMuscle: 'lats',
     secondaryMuscles: ['chest', 'triceps'],
     instructions:
-      'Lie on a bench holding one dumbbell over your chest with both hands.\nKeep a slight bend in your elbows.\nLower the dumbbell back over your head until you feel a stretch along your sides.\nPull it back over your chest.',
+      'Lie on a bench and hold one dumbbell over your chest, both palms cupping the top end.\nKeep a slight bend in your elbows.\nLower the dumbbell back over your head until you feel a stretch along your sides.\nPull it back over your chest.',
   },
   {
     slug: 'wall_push-up',
@@ -125,7 +125,7 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
     primaryMuscle: 'chest',
     secondaryMuscles: ['triceps', 'shoulders'],
     instructions:
-      'Start in a wide push-up position.\nLower your chest to the floor.\nShift your body over to one hand, then across to the other, staying low.\nCome back to the middle and push up.',
+      'Start in a wide push-up position.\nLower your chest toward the floor.\nShift your body over to one hand, then across to the other, staying low.\nCome back to the middle and push up.',
   },
   {
     slug: 'typewriter_pull-up',
@@ -151,11 +151,11 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
     trackingType: 'reps',
     unitDefault: null,
     isBodyweight: true,
-    equipment: ['pull_up_bar'],
+    equipment: ['rack'],
     primaryMuscle: 'triceps',
     secondaryMuscles: ['chest', 'shoulders'],
     instructions:
-      'Jump or climb up to support yourself on a straight bar, arms straight and the bar at your hips.\nLean forward a little and bend your elbows to lower your chest toward the bar.\nPush back up until your arms are straight.',
+      'Set a bar in a rack at about chest height.\nPress up to support yourself on it, arms straight and the bar at your hips.\nLean forward a little and bend your elbows to lower your chest toward the bar.\nPush back up until your arms are straight.',
   },
   {
     slug: 'front_lever_row',
@@ -188,9 +188,9 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
       'Lie on your back with your knees bent and your feet off the floor, hands by your sides.\nCurl your hips off the floor, bringing your knees toward your chest.\nLower your hips slowly without letting your feet touch down.',
   },
   {
-    slug: 'flutter_kicks',
-    name: 'Flutter kicks',
-    aliases: ['Flutter kick'],
+    slug: 'flutter_kick',
+    name: 'Flutter kick',
+    aliases: [],
     modality: 'strength',
     pattern: 'core',
     trackingType: 'time_sets',
@@ -218,8 +218,8 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
       'Lie on your back with your arms out to the sides and your legs straight up.\nLower both legs together to one side, as far as you can control.\nBring them back up and lower them to the other side.\nKeep your shoulders on the floor.',
   },
   {
-    slug: 'heel_taps',
-    name: 'Heel taps',
+    slug: 'heel_tap',
+    name: 'Heel tap',
     aliases: ['Heel touches'],
     modality: 'strength',
     pattern: 'core',
@@ -248,9 +248,9 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
       'Sit on the floor and lean back a little.\nLift your legs so your body makes a V, arms reaching forward.\nKeep your back straight and hold.',
   },
   {
-    slug: 'jackknife_sit-up',
-    name: 'Jackknife sit-up',
-    aliases: ['Jackknife'],
+    slug: 'v-sit_crunch',
+    name: 'V-sit crunch',
+    aliases: [],
     modality: 'strength',
     pattern: 'core',
     trackingType: 'reps',
@@ -260,7 +260,7 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
     primaryMuscle: 'abdominals',
     secondaryMuscles: ['hip_flexors'],
     instructions:
-      'Lie on your back with your arms overhead and your legs straight.\nLift your arms and legs together, reaching your hands toward your feet.\nLower back down slowly.',
+      'Sit on the floor, lean back on your hands and lift your feet a little off the floor.\nBend your knees and pull them in toward your chest as you sit up tall.\nPush your legs back out straight as you lean back, feet still off the floor.\nKeep your hands on the floor the whole time, and repeat.',
   },
   {
     slug: 'body_saw',
@@ -304,12 +304,13 @@ export const CATALOG_BATCH_14: readonly CatalogMovement[] = [
     equipment: ['mat'],
     primaryMuscle: null,
     secondaryMuscles: [],
+    supervision: 'coach',
     instructions:
-      'Lie on your back on a mat and roll back onto your shoulders, hands by your ears.\nKick your legs up and forward hard as you push through your hands.\nLand on your feet in a squat and stand up.',
+      'Learn this with your coach watching.\nLie on your back on a mat and roll back onto your shoulders, hands by your ears.\nKick your legs up and forward hard as you push through your hands.\nLand on your feet in a squat and stand up.',
   },
   {
-    slug: 'wrist_circles',
-    name: 'Wrist circles',
+    slug: 'wrist_circle',
+    name: 'Wrist circle',
     aliases: ['Wrist rolls'],
     modality: 'mobility',
     pattern: null,
