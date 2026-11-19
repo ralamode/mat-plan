@@ -7,7 +7,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 
 import { schema } from '../../src/client';
 import type { HouseholdScope } from '../../src/scope';
-import type { Executor } from '../../src/writers/executor';
+import { LOCK_TIMEOUT, rowsOf, type Executor } from '../../src/writers/executor';
 
 /**
  * The `db:verify` harness (FAM-1 step 0c): the one database every proof runs against, and the
@@ -212,6 +212,35 @@ export async function captureWarnings(fn: () => Promise<void>): Promise<string> 
 
 // The raw-result readers live once in `src/writers/executor.ts` (`src/erasure/` needs them too).
 export { idsOf, rowsOf } from '../../src/writers/executor';
+
+async function lockTimeoutIsBound(tx: VerifyTx): Promise<boolean> {
+  const [row] = rowsOf<{ ok: boolean }>(
+    await tx.execute(
+      sql`select current_setting('lock_timeout')::interval = ${LOCK_TIMEOUT}::interval as ok`,
+    ),
+  );
+  return row?.ok === true;
+}
+
+/**
+ * Whether `write` itself set `lock_timeout` to `LOCK_TIMEOUT` (compared as intervals).
+ *
+ * 🔴 **It clears the setting first, and must.** Every migration ends with a session-level
+ * `SET lock_timeout = '5s'`, `migrate()` commits them, and PGlite has one session, so every later
+ * transaction here STARTS at `LOCK_TIMEOUT`. Read without the reset, the check passed with the
+ * writer's call deleted (mutations 447 and 448 stayed green). The reset is transaction-local, and
+ * a writer's `setLocalLockTimeout` runs in a savepoint here and outlives its release, so the value
+ * read afterwards is the writer's.
+ */
+export async function lockTimeoutSetBy<T>(
+  tx: VerifyTx,
+  write: () => Promise<T>,
+): Promise<{ set: boolean; result: T }> {
+  await tx.execute(sql`select set_config('lock_timeout', '0', true)`);
+  assert.equal(await lockTimeoutIsBound(tx), false, 'lockTimeoutSetBy: the reset did not hold');
+  const result = await write();
+  return { set: await lockTimeoutIsBound(tx), result };
+}
 
 // CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
 // its shared const (pins the schema CHECKs to the single source of truth — one can't drift
