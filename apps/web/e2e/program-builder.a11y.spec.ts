@@ -154,7 +154,7 @@ test('on a program others are on, the shared-targets line is in view with Start 
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
   const dialog = page.getByRole('dialog', { name: putOnTitle(familyProgram.name) });
   await expect(dialog).toBeVisible();
-  const newcomer = familyProgram.candidates.find((c) => !c.on)!;
-  await dialog.getByRole('checkbox', { name: newcomer.name, exact: true }).check();
+  // The real household's athletes, not the design fixture's: any one not on it yet will do.
+  await dialog.getByRole('checkbox', { checked: false, disabled: false }).first().check();
   await expect(dialog.getByText(sameTargetsText(familyProgram.name))).toBeInViewport();
 });
