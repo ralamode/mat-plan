@@ -848,7 +848,7 @@ flowchart TB
     S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false"]
     Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drift guard + PGlite db:verify"]
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
-    M["<b>mutations</b> × 8 shards (scoped on a PR)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
+    M["<b>mutations</b> × 8 shards on main, 4 on a PR (scoped; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
     S --> Q
     S --> E
     S --> M

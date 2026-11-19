@@ -240,9 +240,13 @@ another slot, or a second one in the same slot, is the writer's to refuse.
 11. **The day case mounts what the page will, in the page's order** (plan D34): the `<h1>`, then
     `AthleteSwitcher`, `ProgramLine` and `NotOnAProgram`, then `DayScreen`. All four get the same
     `plan` object and the two that write get the same `actions`; the harness passes no `className` (it
-    has no nav rail) and no `programsHref`: the Programs page exists since 7b-i, but the real day page passes
-    none until step 15, when an athlete can be put on a program, and the harness mounts what the
-    page does. The switcher's links
+    has no nav rail). **`NotOnAProgram` gets `programsHref` as the page gives it** (since 15 PR 2,
+    #679): under the page's own rule, `offersProgramsLink` (lane C's, in `components/day/`), so the
+    preview cannot drift from the page: a change to what the rule answers needs no edit here, and a
+    change to its arguments fails to compile here. The preview has no `/programs`, so
+    its link opens the preview's own Programs list. `preview-harness.test.tsx` holds the value
+    for every day fixture, a live athlete's and an archived one's. The rule today: a live athlete,
+    on any day (plan D48, #683). The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
     The parts are lane C's; their props are a contract with the page and this harness.
 12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
@@ -346,9 +350,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     ⚠️ **Where a program lands in the athlete's order differs between the fake and the real
     writer.** The fake places a program by the household's list in `candidates[].keeps`, a list
     of names: it holds no end dates for an athlete's other programs, and it keeps a reopened
-    program where it was. **Until lane P's 6d-iii (#641) merges, the writer puts every new or
-    reopened program last**, so the two differ often. After it a few rare cases remain, each put
-    right by the athlete's Reorder. Two are accepted: (1) a program earlier in the household's list
+    program where it was. **The writer places by the household's list too since lane P's 6d-iii
+    (#641)**: a new program goes before the first program the athlete keeps that comes later in
+    the list, or last, and a hidden program is never "later"; Put on and the Programs list read
+    one order (`programListOrder()`). A few rare cases still differ, each put right by the
+    athlete's Reorder. Two are accepted: (1) a program earlier in the household's list
     is put on between a same-day Take off and its Put on: the writer reopens by its own rule, the
     fake leaves the program in place (the maintainer, 2026-11-18); (2) a program is put on the
     day another of the athlete's programs, later in the household's list, was taken off: the

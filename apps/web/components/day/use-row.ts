@@ -4,6 +4,7 @@ import {
   hasSetRows,
   newId,
   ROW_REFUSAL,
+  slotQuantity,
   type DayItem,
   type DayRow,
   type DayWorkout,
@@ -20,14 +21,16 @@ import {
   EMPTY_TEXT,
   fieldsOf,
   otherUnitLoad,
+  otherUnitOf,
   readTyped,
   sameText,
+  spokenValues,
   sameValues,
   textOf,
   type RowField,
   type RowText,
   type RowWriteKind,
-  unitSuffix,
+  unitSpoken,
 } from './row-values';
 
 /**
@@ -84,6 +87,8 @@ type RowError = {
   field?: RowField;
   /** The write that failed: a Change's message is cleared when its edit is abandoned. */
   write?: RowWriteKind;
+  /** H9's refusal (`retypeLoad`), which names both units, so the other-unit line steps aside. */
+  otherUnit?: true;
 };
 
 const RETRY: RowResult = { ok: false, reason: ROW_REFUSAL.retry };
@@ -429,6 +434,38 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
    * now ("25 lb"). Such a load is never filled from the prescription: it must be typed again.
    */
   const retypeFrom = !logged && unticked ? otherUnitLoad(item, unticked.values) : null;
+  /**
+   * 12d-iii (D44): the row holds a quantity logged in another unit than the item's now, logged or
+   * un-ticked this visit, so its line can say why the load is text (`OtherUnitLine`). Kept while an
+   * un-tick is in flight, so the line does not leave and come back under a thumb.
+   *
+   * `unticked`: the row was un-ticked this visit and has a field. `was` is what it held, in words
+   * ("27.5 pounds"), since the field no longer shows it; `canPutBack` holds only while nothing was
+   * typed over it, when the ✓ re-ticks the entry as logged (`press`). 🔴 No conversion is ever
+   * asked for (plan U1.2): typing a kg load is left to whoever knows it, and H9 guards the field.
+   * Hidden while H9's refused ✓ shows (`otherUnit` on the error): that message names both units.
+   */
+  const held =
+    logged ??
+    (unticked ? unticked.values : pending?.write === 'untick' ? (settled?.values ?? null) : null);
+  const heldUnit = held ? otherUnitOf(item, held) : null;
+  const heldQuantity = held && heldUnit ? slotQuantity(item, held.quantities) : undefined;
+  /** What the row held, in words ("27.5 pounds"): the line's, and a refused ✓'s (H9). */
+  const heldWas = heldQuantity ? spokenValues({ quantities: [heldQuantity] }) : null;
+  const otherUnit =
+    heldUnit !== null && heldWas !== null && item.unit && !shownError?.otherUnit
+      ? {
+          from: heldUnit,
+          to: item.unit,
+          unticked:
+            logged === null && unticked && hasField
+              ? {
+                  was: heldWas,
+                  canPutBack: sameText(text, textOf(item, unticked.values)),
+                }
+              : null,
+        }
+      : null;
 
   async function press() {
     if (pending || !canWrite) return;
@@ -451,13 +488,14 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
       showError({
         // Named with both units, so nobody types the old unit's number into the new unit's field.
         message:
-          read.problem === 'other_unit' && retypeFrom !== null && item.unit
-            ? DAY_COPY.retypeLoad(retypeFrom, unitSuffix(item.unit))
+          read.problem === 'other_unit' && heldWas !== null && item.unit
+            ? DAY_COPY.retypeLoad(heldWas, unitSpoken(item.unit))
             : TYPED_PROBLEM_COPY[read.problem],
         reload: false,
         counts: false,
         invalid: true,
         field: read.field,
+        ...(read.problem === 'other_unit' ? { otherUnit: true as const } : {}),
       });
       return;
     }
@@ -470,6 +508,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setText,
     /** The load must be typed (H9): its field shows no prescription to fill from. */
     mustTypeLoad: retypeFrom !== null,
+    otherUnit,
     error: shownError,
     logged,
     /** An un-ticked row with no field (a Check, a removed prescription) still shows what it held. */
