@@ -13,23 +13,29 @@ import { useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
-import { FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { APP_HOME_PATH, FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import { deviceToday } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 import {
   candidateOnLabel,
   fromText,
+  keepLabel,
   keepsText,
   lastDayText,
   orderHintText,
   PUT_ON_COPY,
   putOnTitle,
   backOnText,
+  sameTargetsText,
   startedText,
   startEffectText,
+  startingNamesText,
   startLabel,
+  stayOnEitherWayText,
   switchHintText,
 } from './builder-text';
+import { BuilderLink } from './route-link';
 import { SheetFormFooter } from './sheet-form-footer';
 import { useAttempt } from './use-attempt';
 
@@ -37,6 +43,8 @@ const SHEET_ID = 'put-on';
 const FORM_ID = 'put-on-form';
 
 type When = 'today' | 'tomorrow';
+
+const NONE: ReadonlySet<string> = new Set();
 
 /** The program's workouts on a day, in the week's order. */
 function workoutsOn(program: ProgramView, day: string): string[] {
@@ -66,6 +74,12 @@ function firstWorkoutDay(program: ProgramView, day: string) {
  * - **Start** names its count, and is inactive until someone new is ticked; a tap then says why.
  * - Its own refusals are said in the footer, seen and heard; the success line goes to the page's
  *   bar from `onReturned`, once focus is back (the bar is hidden while the sheet is open).
+ *
+ * Honest on real data (step 15): "Starting: names" above the footer confirms who, by name; someone
+ * taken off today is kept on ("They stay on, with no gap.", "Keep n on …"), whatever day is picked;
+ * someone joining a program others are on is told the targets are shared; a household with no
+ * athlete is sent Home. **Who was just put on is held locally** (`justPutOn`), so the trigger and
+ * where focus returns are decided in the same render as the close, not when the page's refresh lands.
  */
 export function PutOn({
   program,
@@ -88,6 +102,9 @@ export function PutOn({
   const said = useRef<string | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const everyoneOn = useRef<HTMLParagraphElement>(null);
+  // Who this dialog just put on, until the page's data changes: by then the data says so itself.
+  const [justPutOn, setJustPutOn] = useState<{ for: ProgramView; ids: ReadonlySet<string> }>();
+  const held = justPutOn?.for === program ? justPutOn.ids : NONE;
   const { begin, isCurrent, cancel } = useAttempt();
   const ids = useId();
   const messageId = `${ids}-message`;
@@ -96,9 +113,13 @@ export function PutOn({
   const lastDays = new Map(program.athletes.map((a) => [a.profilePublicId, a.lastDay]));
   // Someone on it with a last day (taken off) can be put back on: that undoes the Take off (C15).
   const offered = (c: ProgramView['candidates'][number]) =>
-    !c.on || !!lastDays.get(c.profilePublicId);
+    !held.has(c.profilePublicId) && (!c.on || !!lastDays.get(c.profilePublicId));
   const addable = program.candidates.filter(offered);
   const ticked = program.candidates.filter((c) => picked.has(c.profilePublicId));
+  // Ticked and on it (taken off today): putting them on keeps them on, from today (C15).
+  const back = ticked.filter((c) => c.on).map((c) => c.name);
+  const fresh = ticked.filter((c) => !c.on).map((c) => c.name);
+  const onlyBack = ticked.length > 0 && fresh.length === 0;
   const keeps = [
     ...new Set(ticked.flatMap((c) => c.keeps).filter((name) => name !== program.name)),
   ];
@@ -149,15 +170,22 @@ export function PutOn({
       router.refresh();
       return;
     }
-    // Someone taken off and put back on never left: they are not said to start (C15).
-    const back = ticked.filter((c) => c.on).map((c) => c.name);
-    const fresh = ticked.filter((c) => !c.on).map((c) => c.name);
+    // Someone taken off and put back on never left: they are not said to start (C15). The start's
+    // day is named against the device's today NOW: the page's `today` is stale past midnight, and
+    // Put on's answer carries no day.
+    const today = deviceToday();
     said.current = [
-      fresh.length ? startedText(fresh, program.name, from, program.today) : '',
+      fresh.length ? startedText(fresh, program.name, from, today) : '',
       back.length ? backOnText(back, program.name) : '',
     ]
       .filter(Boolean)
       .join(' ');
+    // In the same render as the close: if no one is left to add, the trigger becomes the line now,
+    // and focus returns to it, rather than to a trigger the refresh is about to remove.
+    setJustPutOn({
+      for: program,
+      ids: new Set([...held, ...ticked.map((c) => c.profilePublicId)]),
+    });
     setOpen(false);
   }
 
@@ -165,7 +193,22 @@ export function PutOn({
     <>
       {/* The Sheet stays mounted when the last person is put on: only the trigger becomes a line,
           so the sheet closes (and pops its history entry) and focus has somewhere to return. */}
-      {addable.length ? (
+      {program.candidates.length === 0 ? (
+        <p
+          ref={everyoneOn}
+          tabIndex={-1}
+          className={`text-muted-foreground rounded-sm text-sm ${FOCUS_TARGET_CLASS}`}
+        >
+          {PUT_ON_COPY.addAthleteBefore}
+          <BuilderLink
+            href={APP_HOME_PATH}
+            className="focus-visible:ring-ring text-foreground inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-3"
+          >
+            {PUT_ON_COPY.addAthleteLink}
+          </BuilderLink>
+          {PUT_ON_COPY.addAthleteAfter}
+        </p>
+      ) : addable.length ? (
         <Button
           ref={trigger}
           type="button"
@@ -200,7 +243,20 @@ export function PutOn({
             formId={FORM_ID}
             messageId={messageId}
             message={message}
-            action={pending ? PUT_ON_COPY.startPending : startLabel(ticked.length, program.name)}
+            lead={
+              fresh.length ? (
+                <p className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>
+                  {startingNamesText(fresh)}
+                </p>
+              ) : null
+            }
+            action={
+              pending
+                ? PUT_ON_COPY.startPending
+                : onlyBack
+                  ? keepLabel(ticked.length, program.name)
+                  : startLabel(ticked.length, program.name)
+            }
             inactive={!ticked.length || pending}
             onCancel={() => close(false)}
           />
@@ -220,11 +276,16 @@ export function PutOn({
             {program.candidates.map((c) => {
               const lastDay = lastDays.get(c.profilePublicId);
               const fixed = !offered(c);
-              const hint = c.on
-                ? lastDay
-                  ? lastDayText(lastDay)
-                  : PUT_ON_COPY.onIt
-                : keepsText(c.keeps.filter((name) => name !== program.name));
+              // Just put on (the refresh not landed yet): on it, as the data will say.
+              const hint = held.has(c.profilePublicId)
+                ? PUT_ON_COPY.onIt
+                : c.on
+                  ? lastDay
+                    ? lastDay === program.today
+                      ? PUT_ON_COPY.lastDayToday
+                      : lastDayText(lastDay)
+                    : PUT_ON_COPY.onIt
+                  : keepsText(c.keeps.filter((name) => name !== program.name));
               return (
                 <label
                   key={c.profilePublicId}
@@ -271,31 +332,47 @@ export function PutOn({
           </fieldset>
           <fieldset className="flex flex-col gap-2" aria-describedby={effectId}>
             <legend className="mb-2 text-sm font-medium">{PUT_ON_COPY.starting}</legend>
-            {(['today', 'tomorrow'] as const).map((option) => (
-              <label
-                key={option}
-                className="flex min-h-11 items-center gap-3 rounded-lg border px-3"
-              >
-                <input
-                  type="radio"
-                  name="put-on-from"
-                  className="size-4 shrink-0"
-                  checked={when === option}
-                  onChange={() => setWhen(option)}
-                />
-                {fromText(option, option === 'today' ? program.today : tomorrow)}
-              </label>
-            ))}
-            <p id={effectId} className="text-muted-foreground text-sm">
-              {startEffectText(
-                when,
-                effectWorkouts,
-                effectWorkouts.length ? null : firstWorkoutDay(program, from),
-              )}
-            </p>
+            {/* Everyone ticked was taken off today: the day picked would be ignored (C15). */}
+            {onlyBack ? (
+              <p id={effectId} className="text-muted-foreground text-sm">
+                {PUT_ON_COPY.stayOnNoGap}
+              </p>
+            ) : null}
+            {onlyBack
+              ? null
+              : (['today', 'tomorrow'] as const).map((option) => (
+                  <label
+                    key={option}
+                    className="flex min-h-11 items-center gap-3 rounded-lg border px-3"
+                  >
+                    <input
+                      type="radio"
+                      name="put-on-from"
+                      className="size-4 shrink-0"
+                      checked={when === option}
+                      onChange={() => setWhen(option)}
+                    />
+                    {fromText(option, option === 'today' ? program.today : tomorrow)}
+                  </label>
+                ))}
+            {onlyBack ? null : (
+              <p id={effectId} className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+                {startEffectText(
+                  when,
+                  effectWorkouts,
+                  effectWorkouts.length ? null : firstWorkoutDay(program, from),
+                )}
+                {back.length ? ` ${stayOnEitherWayText(back)}` : null}
+              </p>
+            )}
           </fieldset>
+          {fresh.length > 0 && program.athletes.length > 0 ? (
+            <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
+              {sameTargetsText(program.name)}
+            </p>
+          ) : null}
           {keeps.length ? (
-            <div className="text-muted-foreground flex flex-col gap-2 text-sm">
+            <div className={`text-muted-foreground flex flex-col gap-2 text-sm ${NAME_WRAP_CLASS}`}>
               <p>{orderHintText(program.name)}</p>
               {takeOffWired ? <p>{switchHintText(keeps)}</p> : null}
             </div>

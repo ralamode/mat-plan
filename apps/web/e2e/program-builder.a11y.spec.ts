@@ -1,3 +1,4 @@
+import { PROGRAM_NAME_MAX } from '@mat-plan/shared';
 import { expect, test, type Page } from '@playwright/test';
 
 import {
@@ -5,11 +6,23 @@ import {
   copyTitle,
   copyToLabel,
   EDITOR_COPY,
+  PUT_ON_COPY,
+  putOnTitle,
 } from '../components/program-builder/builder-text';
 import { PROGRAMS_PATH } from '../components/program-builder/routes';
 import { APP_HOME_PATH } from '../lib/constants';
-import { expectLinkTargets, expectNoAxeViolations, expectTapTargets } from './a11y-checks';
-import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
+import {
+  expectLinkTargets,
+  expectNoAxeViolations,
+  expectNoOverflowWithin,
+  expectTapTargets,
+} from './a11y-checks';
+import {
+  DESKTOP_VIEWPORT,
+  expectNoHorizontalOverflow,
+  FIXTURE_PROGRAM,
+  NARROW_VIEWPORT,
+} from './contexts';
 
 /**
  * FAM-1 7b-i and 7b-ii — the builder's four real pages (the Programs list, a program's page, a
@@ -20,11 +33,10 @@ import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from '.
  * project (a phone, `bypassCSP` for axe's script).
  *
  * 🔴 **The program's id is found by tapping**, from Home through Programs to the fixture program,
- * never written here: ids are minted by the writer. Nothing here saves: the walk only opens pages.
+ * never written here: ids are minted by the writer. One test saves: the Put-on dialog's scan
+ * creates its own program, with a name as long as a name can be (FAM-1 15), and puts no one on it.
  */
 test.use({ viewport: NARROW_VIEWPORT });
-
-const FIXTURE_PROGRAM = 'Family program';
 
 async function expectTheBar(page: Page, context: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
@@ -79,10 +91,36 @@ test('a workout’s editor and a new workout meet the a11y bar at 360px', async 
 test('the Copy dialog meets the a11y bar at 360px', async ({ page }) => {
   await reachProgram(page);
   await page.getByRole('button', { name: copyToLabel('Heavy A') }).click();
-  await expect(page.getByRole('dialog', { name: copyTitle('Heavy A') })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: copyTitle('Heavy A') });
+  await expect(dialog).toBeVisible();
   await expectNoAxeViolations(page, 'Copy dialog');
   await expectTapTargets(page, 'Copy dialog');
-  await expectNoHorizontalOverflow(page, 'Copy dialog');
+  // The sheet is fixed: the document-level check cannot see inside it.
+  await expectNoOverflowWithin(dialog, 'Copy dialog');
+});
+
+test('the Put-on dialog meets the a11y bar at 360px, with the longest program name', async ({
+  page,
+}, info) => {
+  // One unbroken token, as long as a name can be, unique per run (nothing can be deleted, and CI
+  // retries): it must wrap in the title, the hints and Start, never push the sheet sideways.
+  const stamp = `E2E${Date.now().toString(36)}${info.workerIndex}`;
+  const name = stamp + 'x'.repeat(PROGRAM_NAME_MAX - stamp.length);
+  await page.goto(PROGRAMS_PATH);
+  await page.getByRole('button', { name: BUILDER_COPY.createProgram }).click();
+  await page.getByLabel(BUILDER_COPY.programName, { exact: true }).fill(name);
+  await page.getByRole('button', { name: BUILDER_COPY.create, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+
+  await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
+  const dialog = page.getByRole('dialog', { name: putOnTitle(name) });
+  await expect(dialog).toBeVisible();
+  // Someone ticked: "Starting: …", the order hint naming the program, and Start naming it too.
+  await dialog.locator('input[type="checkbox"]:not([aria-disabled])').first().check();
+  await expect(dialog.getByText(/^Starting: /)).toBeVisible();
+  await expectNoAxeViolations(page, 'Put-on dialog');
+  await expectTapTargets(page, 'Put-on dialog');
+  await expectNoOverflowWithin(dialog, 'Put-on dialog');
 });
 
 test('all four pages pass axe at desktop width, with the rail', async ({ page }) => {

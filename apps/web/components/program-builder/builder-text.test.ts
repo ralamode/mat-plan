@@ -59,10 +59,10 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
 
   it('Take off says what happens, for someone started and someone not', () => {
     expect(takenOffText('Athlete Two', 'Family program', true)).toBe(
-      'Athlete Two comes off Family program after today. Days already logged keep what they had.',
+      'Athlete Two comes off Family program after today. Until midnight, putting them back on undoes this. What they’ve logged stays.',
     );
     expect(takenOffText('Athlete Two', 'Family program', false)).toBe(
-      'Athlete Two won’t start Family program.',
+      'Athlete Two is off Family program.',
     );
   });
 

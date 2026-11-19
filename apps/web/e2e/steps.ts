@@ -1,7 +1,8 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
 import { addDays, DEFAULT_BODYWEIGHT_UNIT, PRACTICE_UNIT } from '@mat-plan/shared';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
+import { DAY_COPY } from '../components/day/day-copy';
 import {
   BODYWEIGHT_COPY,
   changeLabel,
@@ -209,4 +210,22 @@ export async function clearAnyPractice(page: Page): Promise<void> {
   if ((await anyChange.count()) === 0) return;
   const shown = (await anyChange.getAttribute('aria-label'))!.slice(prefix.length);
   await clearPractice(page, shown);
+}
+
+/**
+ * A program row on the day page: the item's card in its workout's region, and its ✓. Lifted from
+ * `day-page.spec.ts` at FAM-1 15, when `program-builder.spec.ts` became the second spec to tick one.
+ */
+export const programRowCard = (page: Page, workout: string, item: string) =>
+  page
+    .getByRole('region', { name: workout })
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('heading', { level: 4, name: item, exact: true }) });
+export const programRowTick = (page: Page, workout: string, item: string) =>
+  programRowCard(page, workout, item).getByRole('button', { name: DAY_COPY.logLabel(item) });
+
+/** A ✓ has settled: pressed or not, and no longer saving. */
+export async function settled(button: Locator, pressed: boolean) {
+  await expect(button).toHaveAttribute('aria-pressed', String(pressed));
+  await expect(button).not.toHaveAttribute('aria-busy', 'true');
 }

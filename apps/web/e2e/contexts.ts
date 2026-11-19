@@ -46,6 +46,13 @@ export const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
  */
 export const navRail = (page: Page) => page.getByRole('navigation', { name: NAV_RAIL_COPY.label });
 
+/**
+ * The fixture world's program (`SEED_FIXTURES=1`), which the builder specs open by name and never
+ * edit. Typed here once for `program-builder.spec.ts` and `program-builder.a11y.spec.ts` (FAM-1 15);
+ * not read from the contract's fixtures, which this dependency-light module does not import.
+ */
+export const FIXTURE_PROGRAM = 'Family program';
+
 /** The picker's `<h1>` — what "landed on the app home" looks like. */
 export const pickerHeading = (page: Page) =>
   page.getByRole('heading', { name: PICKER_COPY.heading, exact: true, level: 1 });

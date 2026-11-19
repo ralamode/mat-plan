@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
@@ -16,6 +18,8 @@ import { BUILDER_COPY, PENDING_CLASS } from './builder-text';
  * - **The action submits the form in the body** (`form=`): the Sheet renders its footer outside
  *   `children`, so Enter in a field and the button send the same form.
  * - **Inactive is `aria-disabled`**, reachable, and a tap says why through `message`.
+ * - **`lead`**, when given, is a line above the message, in view with the action (Put on's
+ *   "Starting: names", step 15). The action wraps a long unbroken name (`NAME_WRAP_CLASS`).
  */
 export function SheetFormFooter({
   formId,
@@ -24,6 +28,7 @@ export function SheetFormFooter({
   action,
   inactive,
   onCancel,
+  lead,
 }: {
   formId: string;
   messageId: string;
@@ -31,9 +36,11 @@ export function SheetFormFooter({
   action: string;
   inactive: boolean;
   onCancel: () => void;
+  lead?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
+      {lead}
       <Announcer
         id={messageId}
         message={message}
@@ -45,7 +52,7 @@ export function SheetFormFooter({
           type="submit"
           form={formId}
           size="lg"
-          className={`w-full text-base ${PENDING_CLASS}`}
+          className={cn('w-full text-base', PENDING_CLASS, NAME_WRAP_CLASS)}
           aria-disabled={inactive || undefined}
           aria-describedby={messageId}
         >

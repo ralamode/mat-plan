@@ -91,8 +91,8 @@ export async function expectTapTargets(
  * Every link inside `<main>` is a 44px target too (FAM-1: the program screens, moved here from
  * `program-builder.a11y.spec.ts` at 7b-i). `expectTapTargets` leaves links out (WCAG's exception for
  * a link inline in a sentence); on these screens a link is a row or a way back, which a thumb aims
- * at, so here they are all measured. ⚠️ `program-preview-a11y.spec.ts` still holds its own copy: that
- * spec is the program contract's, so the swap goes through its owner.
+ * at, so here they are all measured. Every spec that walks the program screens imports this one,
+ * `program-preview-a11y.spec.ts` included.
  */
 export async function expectLinkTargets(page: Page, context: string): Promise<void> {
   const links = await page.getByRole('main').getByRole('link').all();
@@ -105,4 +105,28 @@ export async function expectLinkTargets(page: Page, context: string): Promise<vo
     }
   }
   expect(undersized, `${context}: links under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
+}
+
+/**
+ * Nothing inside `container` is wider than its box (FAM-1 15): the container itself, every element
+ * that scrolls, and every button. For a `position: fixed` sheet, which `expectNoHorizontalOverflow`
+ * cannot see: a fixed box adds nothing to the document's scrollable width (`sheet.tsx`'s footer
+ * note). A long unbroken name that runs out of a footer button or a hint line is caught here.
+ */
+export async function expectNoOverflowWithin(container: Locator, context: string): Promise<void> {
+  const overflowing = await container.evaluate((root) =>
+    [root, ...root.querySelectorAll('*')]
+      .filter((el) => {
+        if (el === root || el.tagName === 'BUTTON') return true;
+        const style = getComputedStyle(el);
+        return /auto|scroll/.test(`${style.overflowX} ${style.overflowY}`);
+      })
+      .filter((el) => el.scrollWidth > el.clientWidth)
+      .map(
+        (el) =>
+          `<${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 40)}" ` +
+          `(scrollWidth ${el.scrollWidth} > clientWidth ${el.clientWidth})`,
+      ),
+  );
+  expect(overflowing, `${context}: wider than its box`).toEqual([]);
 }

@@ -30,6 +30,7 @@ import { moveDown, moveUp } from '@/lib/routine/editor';
 
 import {
   addedText,
+  backToLabel,
   BUILDER_COPY,
   EDITOR_COPY,
   ITEM_PICKER_COPY,
@@ -45,6 +46,7 @@ import {
   unitChangedText,
   usedByText,
   workoutFullText,
+  workoutSavedText,
   type MoveDirection,
   type SupersetChange,
 } from './builder-text';
@@ -62,6 +64,7 @@ import { ItemCard, type CardControl, type CardLink } from './item-card';
 import type { MovementPickerProps } from '@/components/movements/movement-picker';
 import { ItemPicker } from './item-picker/item-picker';
 import { NameField } from './name-field';
+import { noteArrival } from './arrival';
 import { programPath } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
 import { linkWithNext, normalizeSupersets, unlinkFromNext } from './supersets';
@@ -460,7 +463,11 @@ export function WorkoutEditorScreen({
     // `pending` stays set on success: the page changes, and Save must not read as ready again.
     // `replace`, never `push`, here and on every way out (7b plan, U1-1): Back after a Save never
     // returns to this editor, whose draft is the one from before the save, nor to `/workouts/new`.
-    if (result.ok) return router.replace(back);
+    if (result.ok) {
+      // The program page takes focus and says it, once it mounts: this page and its Save are gone.
+      noteArrival(loaded.draft.programPublicId, workoutSavedText(read.draft.name));
+      return router.replace(back);
+    }
     setPending(false);
     const message = saveRefusal(result.reason);
     refuse(
@@ -513,6 +520,9 @@ export function WorkoutEditorScreen({
             // reopens an editor holding the draft as it was before a save.
             replace
             className={NAV_LINK_CLASS}
+            // "← Family program" reads as "left arrow Family program"; its name says where it goes.
+            // The visible words are inside it (WCAG 2.5.3).
+            aria-label={program ? backToLabel(program.name) : undefined}
             onClick={(event) => {
               // A new tab (cmd, ctrl or shift) leaves this one as it is.
               if (!dirty || event.metaKey || event.ctrlKey || event.shiftKey) return;
