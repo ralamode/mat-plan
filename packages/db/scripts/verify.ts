@@ -161,8 +161,10 @@ import {
   db,
   expectRejectedBy,
   orFail,
+  rolledBack,
   type VerifyContext,
 } from './verify/harness';
+import { ADVISORY_LOCK } from '../src/writers/locks';
 import { verifyProgram } from './verify/program';
 import { verifySchema } from './verify/schema';
 import { verifySingleValues } from './verify/single-values';
@@ -427,6 +429,9 @@ const A_SCOPE = householdScopeForScript(households[0].id);
 // ⚠️ It is NOT narrowable: `ownerScope(A_MEMBER_SCOPE)` returns `null`, which is what makes it
 // impossible to pass to `archiveProfile` without a cast — the compile-time half, asserted below.
 const A_MEMBER_SCOPE = householdScopeForScript(households[0].id, HOUSEHOLD_ROLE.member);
+// A household id no row will ever carry: the "household is gone" case of `createProfile`'s lock (an
+// erasure mid-call). Far above any id this file's inserts can reach.
+const GONE_SCOPE = householdScopeForScript(2_000_000_000);
 
 // ── TEN-1 chunk 1a: households.synthetic — the OBS-2 flag, shipped dark (migration 0014) ─────────
 // Deliberately NOT a bare `assert.equal(households[0].synthetic, false)`: that compares the column
@@ -8792,6 +8797,78 @@ console.log(
       `${MAX_HOUSEHOLD_ATHLETES + 1}th while still honouring a replay at the cap`,
   );
 }
+
+// ── TD: the athlete cap holds under concurrent adds (plan: docs/plans/td-athlete-cap-lock.md) ────────
+// `createProfile` takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` before it counts,
+// as `newItem` does (#605). Waiting cannot be shown on PGlite's single connection; the lock and its
+// key can. Every case runs in `rolledBack`, so nothing here changes what later blocks count.
+await rolledBack(async (tx) => {
+  // (1) The lock, keyed by the household. `asTx(tx)`, never `asPg`: on one connection a query on the
+  //     pool inside this transaction would wait forever. createProfile's own transaction is a
+  //     savepoint here, and an xact lock taken in a savepoint is held until the outer one ends.
+  await createProfile(asTx(tx), A_SCOPE, {
+    name: 'TD Cap Lock Probe',
+    kind: PROFILE_KIND.kid,
+    clientId: newId(),
+  });
+  const [key] = (await tx.execute(sql`select hashint8(${households[0].id}::bigint) as k`))
+    .rows as Array<{ k: number }>;
+  const locks = (
+    await tx.execute(
+      sql`select classid::bigint as c, objid::bigint as o from pg_locks where locktype = 'advisory' and objsubid = 2`,
+    )
+  ).rows as Array<{ c: string | number; o: string | number }>;
+  assert.ok(
+    locks.some(
+      (l) =>
+        Number(l.c) === ADVISORY_LOCK.householdAthletes &&
+        Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
+    ),
+    'TD athlete cap: createProfile holds the household-athletes advisory lock, keyed by its household',
+  );
+});
+
+await rolledBack(async (tx) => {
+  // (2) A household that is gone takes no lock, so nothing is counted or written: `refused`.
+  const goneKey = newId();
+  assert.deepEqual(
+    await createProfile(asTx(tx), GONE_SCOPE, {
+      name: 'TD Cap Orphan',
+      kind: PROFILE_KIND.kid,
+      clientId: goneKey,
+    }).catch((e: unknown) => ({ threw: String(e).slice(0, 80) })),
+    { ok: false, reason: 'refused' },
+    'TD athlete cap: createProfile for a household that is gone is refused, never counted unlocked',
+  );
+  const [stray] = await tx
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.clientId, goneKey));
+  assert.equal(stray, undefined, 'TD athlete cap: …and writes nothing');
+});
+
+await rolledBack(async (tx) => {
+  // (3) `findNameMatch`'s exclusion compares in one case: an upper-cased id still excludes its own
+  //     row (the stored `uuid` reads back lower-case). Defence in depth: through `createProfile` the
+  //     SQL replay lookup ignores case and returns first.
+  const key = newId();
+  const made = await createProfile(asTx(tx), A_SCOPE, {
+    name: 'TD Case Probe',
+    kind: PROFILE_KIND.kid,
+    clientId: key,
+  });
+  assert.ok(made.ok, 'TD athlete cap: the case probe athlete is added');
+  assert.equal(
+    await findNameMatch(asTx(tx), A_SCOPE, foldName('TD Case Probe'), {
+      excludeClientId: key.toUpperCase(),
+    }),
+    null,
+    'TD athlete cap: an upper-cased client id still excludes its own row from the name match',
+  );
+});
+console.log(
+  '✓ TD athlete cap: createProfile counts under the household lock; a gone household is refused; the exclusion ignores case',
+);
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // PROF-1 a-1d — the duplicate-name warning: advisory, scoped, archived-aware, and NULL-key-safe.
