@@ -153,7 +153,7 @@ import { verifyErasure } from './verify/erasure';
 import {
   asPg,
   assertCheckCoversConst,
-  captureWarnings,
+  captureOutput,
   assertRefTableMatches,
   asTx,
   columnCatalogShape,
@@ -7101,7 +7101,7 @@ console.log(
     'TEN-2c guard fixture: at least one curated movement is referenced by nothing, so (b) can delete it and watch the seed restore it',
   );
 
-  // `captureWarnings` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
+  // `captureOutput` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
 
   // (a) 🔴 THE BASELINE, INVERTED — the absorb the guard existed to detect is GONE.
   // Until 0017 this asserted that a global catalog insert whose slug a household already owns is
@@ -7161,7 +7161,7 @@ console.log(
     [],
     'TEN-2c guard fixture: the curated row for the shadowed slug is absent before the seed runs — otherwise "the curated row lands" would hold because it never left',
   );
-  const guardMessage = await captureWarnings(async () => {
+  const guardMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
   assert.deepEqual(
@@ -7176,12 +7176,19 @@ console.log(
   );
   assert.match(
     guardMessage,
-    /ALSO owned by a household/,
+    /share a legacy seed slug/,
     'TEN-2c SHADOW REPORT: …and it still REPORTS the shadowing, as a console.warn rather than a throw — `migrate.yml` seeds PRODUCTION on every push to `main`, where a throw turns the job red on every subsequent push and cannot clear itself by re-running',
   );
+  // CAT-3 A2-i (spec rule 7): the report is COUNTS ONLY. It used to name the seed slug, but that slug
+  // is also the household's own row's slug, which says what they typed. The operator lists the rows
+  // from their own console (docs/runbooks.md → "the seed's shadow guard fired").
   assert.ok(
-    guardMessage.includes(shadowed.slug),
-    'TEN-2b: …and the warning NAMES the seed slug, so the operator knows which catalog row is shadowed',
+    /\b1 household-owned movement\(s\) share a legacy seed slug/.test(guardMessage),
+    'TEN-2c SHADOW REPORT: …it COUNTS the shadowed row (CAT-3 A2-i: counts only)',
+  );
+  assert.ok(
+    !guardMessage.includes(shadowed.slug),
+    'TEN-2b / CAT-3 A2-i: …and the report does NOT name the slug — a slug a household also holds says what that household typed, and this log is public',
   );
   // 🔴 Privacy: the message lands in a WORLD-READABLE Actions log (`migrate.yml` runs `db:seed`
   // against production on every push to `main`, in a public repo). Seed slugs come from a public
@@ -7198,7 +7205,7 @@ console.log(
   await db
     .delete(schema.movements)
     .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'));
-  const quietMessage = await captureWarnings(async () => {
+  const quietMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
   assert.equal(

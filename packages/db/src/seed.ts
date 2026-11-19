@@ -4,10 +4,12 @@ import {
   EQUIPMENT,
   MUSCLES,
   ACTIVITY_TYPE_SEED_ROWS,
+  type CatalogMovement,
   databaseNameOf,
   isLocalDbHost,
   METRIC_DEFINITION_SEED_ROWS,
   MOVEMENT_SEED_ROWS,
+  MUSCLE_ROLE,
   namesPreviewDatabase,
   newId,
   PROGRAM_SEED,
@@ -30,6 +32,7 @@ import * as schema from './schema';
 import { householdScopeForScript } from './writers/household-scope-script';
 import {
   inHousehold,
+  movementIsCatalog,
   movementIsGlobal,
   movementIsOwned,
   programBlockIsLegacy,
@@ -209,7 +212,10 @@ export async function seed(
   db: NodePgDatabase<typeof schema>,
   { fixtures }: SeedOptions,
 ): Promise<void> {
-  const shadowedSlugs = await seedReference(db);
+  // CAT-3 A2-i: the catalog writer is in place but production's seed gives it NOTHING to write. A2-ii
+  // switches this one argument (spec E4), with the fixture library (K29). `db:verify`'s Proof A fails
+  // if it is anything else here.
+  const counts = await seedReference(db, { catalog: [] });
 
   // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
   // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
@@ -221,15 +227,46 @@ export async function seed(
     await seedProgramFixtures(db, householdScopeForScript(household.id));
   }
 
-  reportShadowedMovements(shadowedSlugs);
+  reportSeed(counts);
+}
+
+/** `seedReference`'s required options: the library list the catalog writer is given (CAT-3 A2-i). */
+export interface SeedReferenceOptions {
+  /** `[]` in production until A2-ii; no default, as `SeedOptions.fixtures` has none. */
+  readonly catalog: readonly CatalogMovement[];
 }
 
 /**
- * Every reference table, idempotently, and the TEN-2c shadow detection taken before the movements
- * insert (so it reads only what households owned beforehand). Returns the shadowed seed slugs for
- * `reportShadowedMovements`. Exported for `db:verify`; `seed` is its only other caller.
+ * What a seed run did, as **counts only** (CAT-3 spec rule 7, E5). 🔴 Every field is a number, and
+ * `seed.test.ts` pins that: `migrate.yml` prints this to a world-readable log, and a slug of a row a
+ * household owns says what that household typed. Naming rows is the operator's job, at their own
+ * console (`docs/runbooks.md` → "the seed's shadow guard fired").
  */
-export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<string[]> {
+export interface SeedCounts {
+  /** Library entries written as new catalog rows. */
+  readonly catalogInserted: number;
+  /** Library entries whose slug a global row already held: catalog rows (left as they are, E2). */
+  readonly catalogPresent: number;
+  /** …held by a legacy global row instead (no `modality`; also left as it is). */
+  readonly catalogHeldByLegacy: number;
+  /** Library entries left out because an earlier entry in the same list has their slug. */
+  readonly catalogDuplicates: number;
+  /** Household-owned rows sitting on a library slug (counted before the write, never touched, E3). */
+  readonly householdRowsOnCatalogSlugs: number;
+  /** Household-owned rows sitting on a legacy seed slug (TEN-2c's shadow report). */
+  readonly householdRowsOnSeedSlugs: number;
+}
+
+/**
+ * Every reference table, idempotently, then the library entries it is given (`seedCatalog`, before
+ * the legacy movements), with the TEN-2c and CAT-3 shadow counts taken before either movements insert
+ * (so they read only what households owned beforehand). Exported for `db:verify`; `seed` is its only
+ * other caller.
+ */
+export async function seedReference(
+  db: NodePgDatabase<typeof schema>,
+  { catalog }: SeedReferenceOptions,
+): Promise<SeedCounts> {
   // GAP-3: the seed mirrors `UNITS` exactly (onConflictDoUPDATE, not DoNothing): the 7 pre-GAP-3 rows
   // already existed in every deployed DB, and DoNothing would leave them with whatever `dimension` the
   // migration backfilled, a reference table that silently stops mirroring its source.
@@ -339,18 +376,22 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
   // there costs: the job turns red on every subsequent push and *cannot clear itself by re-running*.
   // Recovery / context: `docs/runbooks.md` → "the seed's shadow guard fired".
   //
-  // ⚠️ The message names SEED SLUGS ONLY — a public const. Never the colliding row's `name`, which is
-  // uncontrolled household free text, because this lands in a world-readable Actions log. `db:verify`
-  // asserts both halves of that, and the privacy half is the one that is easy to lose in a rewrite.
-  const seedMovementSlugs = MOVEMENT_SEED_ROWS.map((m) => m.slug);
-  const shadowedSlugs = (
-    await db
-      .select({ slug: schema.movements.slug })
-      .from(schema.movements)
-      .where(and(inArray(schema.movements.slug, seedMovementSlugs), movementIsOwned()))
-  )
-    .map((r) => r.slug)
-    .sort();
+  // ⚠️ **CAT-3 A2-i: the report is COUNTS ONLY** (spec rule 7). It used to name the seed slugs a
+  // household also owns; that slug is also the household's own row's slug, which says what they typed,
+  // and this lands in a world-readable Actions log. Never a slug, never a `name`. `db:verify` asserts
+  // the count is printed and the slug is not, and the privacy half is the one a rewrite loses first.
+  const householdRowsOnSeedSlugs = await countOwnedRowsOn(
+    db,
+    MOVEMENT_SEED_ROWS.map((m) => m.slug),
+  );
+  const householdRowsOnCatalogSlugs = await countOwnedRowsOn(
+    db,
+    catalog.map((entry) => entry.slug),
+  );
+
+  // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
+  // DO NOTHING skips it (the order A2-ii's fixtures need, spec E4).
+  const written = await seedCatalog(db, catalog);
 
   // No filter: every seeded movement is offered to the arbiter, which is the whole fix.
   await db
@@ -358,7 +399,127 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
     .values([...MOVEMENT_SEED_ROWS])
     .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
 
-  return shadowedSlugs;
+  return { ...written, householdRowsOnCatalogSlugs, householdRowsOnSeedSlugs };
+}
+
+/** How many household-owned movements sit on one of `slugs`: a count, never the rows. */
+async function countOwnedRowsOn(
+  db: NodePgDatabase<typeof schema>,
+  slugs: readonly string[],
+): Promise<number> {
+  if (slugs.length === 0) return 0;
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.movements)
+    .where(and(inArray(schema.movements.slug, [...slugs]), movementIsOwned()));
+  return row?.n ?? 0;
+}
+
+/** `seedCatalog`'s counts: the `catalog*` half of `SeedCounts`. */
+export type CatalogSeedCounts = Pick<
+  SeedCounts,
+  'catalogInserted' | 'catalogPresent' | 'catalogHeldByLegacy' | 'catalogDuplicates'
+>;
+
+/**
+ * 🔴 **CAT-3 A2-i: the movement library's writer** (spec E1–E3, E5, rule 7; plan
+ * `docs/plans/cat-3-a2-i-catalog-seed.md`, D2). Writes each entry as a GLOBAL row with its `modality`,
+ * and its equipment and muscle rows, in ONE transaction: a failure part-way leaves nothing.
+ *
+ * - **Never touches a row that already holds the slug** (E2): the insert is `ON CONFLICT DO NOTHING` on
+ *   the global partial index (predicate repeated, the V1-5 lesson), and the join rows are keyed to the
+ *   ids its `RETURNING` gave back, never to a slug lookup, so a held slug gets no join row.
+ * - **Never a household's row** (E3): a household row on the slug sits outside the global index, so it
+ *   neither conflicts nor is touched, and nothing here sets `household_id`. No delete, no update.
+ * - **Never throws on catalog data** (rule 7). Each insert skips itself when it has nothing to write:
+ *   drizzle throws on an empty `values()`, and every production push after A2-ii's first has every
+ *   entry already present. A duplicated slug in the list keeps its first entry and counts the rest.
+ * - **Order:** equipment and secondaries in the entry's authored order (the join rows' identity order
+ *   then records it), the primary first and only when there is one.
+ *
+ * Aliases, the supervision label, instructions and media are never written: no column holds them
+ * (spec rule 11), and the readers take them from the library by slug.
+ */
+export async function seedCatalog(
+  db: NodePgDatabase<typeof schema>,
+  entries: readonly CatalogMovement[],
+): Promise<CatalogSeedCounts> {
+  const bySlug = new Map<string, CatalogMovement>();
+  for (const entry of entries) if (!bySlug.has(entry.slug)) bySlug.set(entry.slug, entry);
+  const catalogDuplicates = entries.length - bySlug.size;
+  if (bySlug.size === 0) {
+    return { catalogInserted: 0, catalogPresent: 0, catalogHeldByLegacy: 0, catalogDuplicates };
+  }
+  const unique = [...bySlug.values()];
+
+  return db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(schema.movements)
+      .values(
+        unique.map((entry) => ({
+          publicId: newId(),
+          slug: entry.slug,
+          name: entry.name,
+          modality: entry.modality,
+          pattern: entry.pattern,
+          trackingType: entry.trackingType,
+          unitDefault: entry.unitDefault,
+          isBodyweight: entry.isBodyweight,
+        })),
+      )
+      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() })
+      .returning({ id: schema.movements.id, slug: schema.movements.slug });
+
+    const equipmentRows = inserted.flatMap(({ id, slug }) =>
+      bySlug.get(slug)!.equipment.map((equipmentCode) => ({ movementId: id, equipmentCode })),
+    );
+    if (equipmentRows.length > 0) {
+      await tx.insert(schema.movementEquipment).values(equipmentRows);
+    }
+
+    const muscleRows = inserted.flatMap(({ id, slug }) => {
+      const entry = bySlug.get(slug)!;
+      return [
+        ...(entry.primaryMuscle
+          ? [{ movementId: id, muscleCode: entry.primaryMuscle, role: MUSCLE_ROLE.primary }]
+          : []),
+        ...entry.secondaryMuscles.map((muscleCode) => ({
+          movementId: id,
+          muscleCode,
+          role: MUSCLE_ROLE.secondary,
+        })),
+      ];
+    });
+    if (muscleRows.length > 0) {
+      await tx.insert(schema.movementMuscles).values(muscleRows);
+    }
+
+    // What already held the other slugs: a catalog row (E2) or a legacy global row. Counts only.
+    const held = unique.length - inserted.length;
+    const catalogPresent =
+      held === 0
+        ? 0
+        : ((
+            await tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(schema.movements)
+              .where(
+                and(
+                  inArray(
+                    schema.movements.slug,
+                    unique.map((entry) => entry.slug),
+                  ),
+                  movementIsCatalog(),
+                ),
+              )
+          )[0]?.n ?? 0) - inserted.length;
+    return {
+      catalogInserted: inserted.length,
+      catalogPresent,
+      catalogHeldByLegacy: held - catalogPresent,
+      catalogDuplicates,
+    };
+  });
 }
 
 /**
@@ -466,22 +627,32 @@ export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{
   return household;
 }
 
-/** The TEN-2c report, last and in both modes (see the note above the movements insert). */
-function reportShadowedMovements(shadowedSlugs: readonly string[]): void {
-  // TEN-2c: the shadow guard's REPORT, LAST (it was a `throw` until 0017 removed its premise — see
-  // the long note above the movements insert). A warning, not an error: the curated row IS inserted
-  // now, so there is nothing to recover from, and `migrate.yml` seeds production on every push to
-  // `main` where a throw would wedge the job permanently.
-  //
-  // ⚠️ Seed slugs only (a public const); NEVER the colliding row's `name`, which is uncontrolled
-  // household free text landing in a world-readable Actions log. `db:verify` asserts both.
-  if (shadowedSlugs.length > 0) {
+/**
+ * The seed's one report line, from its counts (CAT-3 A2-i, spec rule 7, E5), last and in both modes.
+ * 🔴 **Counts only**: it is printed to `migrate.yml`'s world-readable log, and naming a slug a household
+ * also holds says what that household typed. Never a slug, never a `name`. `db:verify` captures every
+ * console method around this and asserts it.
+ *
+ * The household lines are warnings, not errors: the curated row IS inserted (since TEN-2c the two
+ * namespaces are separate and global-first serves it), so nothing is broken, and a throw would wedge
+ * `migrate.yml`, which seeds production on every push to `main`.
+ */
+export function reportSeed(counts: SeedCounts): void {
+  if (counts.catalogInserted + counts.catalogPresent + counts.catalogHeldByLegacy > 0) {
+    console.log(
+      `seed: catalog: ${counts.catalogInserted} inserted, ${counts.catalogPresent} already present, ` +
+        `${counts.catalogHeldByLegacy} held by a legacy row, ${counts.catalogDuplicates} duplicate(s) ` +
+        'in the list.',
+    );
+  }
+  const owned = counts.householdRowsOnSeedSlugs + counts.householdRowsOnCatalogSlugs;
+  if (owned > 0) {
     console.warn(
-      `seed: ${shadowedSlugs.length} seeded movement slug(s) are ALSO owned by a household: ` +
-        `${shadowedSlugs.join(', ')}. The global catalog row(s) were inserted — since TEN-2c the two ` +
-        'namespaces are separate and global-first serves the curated row — so that household’s own ' +
-        'row is now permanently shadowed. Nothing is broken; TEN-2c-1 / TEN-2b-2 tidy those rows. ' +
-        'See docs/runbooks.md → "the seed\'s shadow guard fired".',
+      `seed: ${counts.householdRowsOnSeedSlugs} household-owned movement(s) share a legacy seed slug ` +
+        `and ${counts.householdRowsOnCatalogSlugs} share a library slug. The global row(s) were ` +
+        'inserted beside them and global-first serves the curated one, so those rows are shadowed. ' +
+        'Nothing is broken. To list them, run the query in docs/runbooks.md → "the seed\'s shadow ' +
+        'guard fired" from your own console; never paste its output anywhere tracked.',
     );
   }
 }

@@ -26,7 +26,7 @@ import {
   asPg,
   assertRefTableMatches,
   asTx,
-  captureWarnings,
+  captureOutput,
   db,
   rolledBack,
   rowsOf,
@@ -291,7 +291,7 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
     );
   });
 
-  // B4: the TEN-2c report still fires without fixtures (`329`).
+  // B4: the TEN-2c report still fires without fixtures (`329`), as a count (CAT-3 A2-i).
   await rolledBack(async (tx) => {
     const slug = MOVEMENT_SEED_ROWS[0].slug;
     await insertMovementOwnedBy(asTx(tx), ctx.B_SCOPE, {
@@ -300,10 +300,14 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
       name: 'OPS-2 B4 item',
       isBodyweight: false,
     });
-    const warned = await captureWarnings(() => seed(asDb(tx), { fixtures: false }));
+    const warned = await captureOutput(() => seed(asDb(tx), { fixtures: false }));
     assert.ok(
-      warned.includes(slug),
-      'OPS-2 B4: seed({ fixtures: false }) still reports a seeded slug a household also owns (TEN-2c)',
+      /share a legacy seed slug/.test(warned),
+      'OPS-2 B4: seed({ fixtures: false }) still reports a household row on a seeded slug (TEN-2c)',
+    );
+    assert.ok(
+      !warned.includes(slug),
+      'OPS-2 B4 / CAT-3 A2-i: …as a COUNT: the report names no slug a household holds (spec rule 7)',
     );
   });
 

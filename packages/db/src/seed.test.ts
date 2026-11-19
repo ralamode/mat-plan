@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   assertFixturesTargetAllowed,
@@ -8,6 +8,7 @@ import {
   resolveSeedOptions,
   SEED_FIXTURES_ENV,
   seedFixturesRequested,
+  type SeedCounts,
 } from './seed';
 
 /**
@@ -126,5 +127,30 @@ describe('scripts/seed.ts decides through resolveSeedOptions', () => {
     expect(script).toContain(
       "options.fixtures ? '✓ seed complete (fixtures)' : '✓ seed complete (reference data only)'",
     );
+  });
+});
+
+/**
+ * CAT-3 A2-i: production stays inert until A2-ii. `seed()` hands the catalog writer an EMPTY list (the
+ * plan's D1); A2-ii changes this one argument. Pinned by source, as the fixtures call site is above,
+ * and `db:verify`'s Proof A pins the effect (no `modality`, no join row).
+ */
+describe('seed() gives the catalog writer nothing yet (CAT-3 A2-i)', () => {
+  const source = readFileSync(new URL('./seed.ts', import.meta.url), 'utf8');
+
+  it('calls seedReference with an empty catalog, once', () => {
+    expect(source.match(/await seedReference\(db, \{ catalog: \[\] \}\)/g)).toHaveLength(1);
+    expect(source.match(/seedReference\(db,/g)).toHaveLength(1);
+  });
+});
+
+/**
+ * CAT-3 A2-i (spec rule 7): the seed's report is COUNTS ONLY. Every field of `SeedCounts` is a number,
+ * so printing a slug needs a type change first, which review sees. `satisfies` pins it at compile time,
+ * and the run pins the field list.
+ */
+describe('SeedCounts holds numbers only (CAT-3 A2-i)', () => {
+  it('every field is a number (a type-level pin: a string field fails typecheck)', () => {
+    expectTypeOf<SeedCounts>().toEqualTypeOf<Readonly<Record<keyof SeedCounts, number>>>();
   });
 });

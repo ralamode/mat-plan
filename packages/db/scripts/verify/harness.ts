@@ -193,19 +193,25 @@ export async function constraintDef(conname: string): Promise<string> {
 }
 
 /**
- * Run `fn` with `console.warn` captured, and return what it warned. The seed's TEN-2c shadow guard is
- * a WARNING, not a `throw`, so `assert.rejects` cannot reach it, and what must be true of its text (it
- * names the seed slug; it does NOT name a household's free text) is a privacy proof. Restores the real
- * `console.warn` in a `finally`. Moved here from `verify.ts` at OPS-2 PR 1, its second caller.
+ * Run `fn` with **every** console method that prints captured (`log`, `info`, `warn`, `error`), and
+ * return what it printed, in order. The seed's report is printed to `migrate.yml`'s world-readable log,
+ * and what must NOT be in it (a slug of a row a household owns, a household's free text) is a privacy
+ * proof: capturing `warn` alone would let a line moved to `console.log` pass every "does not include"
+ * assertion while checking nothing (CAT-3 A2-i, privacy P1-2). Restores the real methods in a `finally`.
  */
-export async function captureWarnings(fn: () => Promise<void>): Promise<string> {
-  const real = console.warn;
+export async function captureOutput(fn: () => Promise<void> | void): Promise<string> {
+  const methods = ['log', 'info', 'warn', 'error'] as const;
+  const real = methods.map((m) => console[m]);
   const lines: string[] = [];
-  console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+  for (const m of methods) {
+    console[m] = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+  }
   try {
     await fn();
   } finally {
-    console.warn = real;
+    methods.forEach((m, k) => {
+      console[m] = real[k]!;
+    });
   }
   return lines.join('\n');
 }
