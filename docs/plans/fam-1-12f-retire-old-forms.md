@@ -147,16 +147,20 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 - **No day page changes.** Today the page shows the routine's Life keys minus Wake
   (`page.tsx:125-127`, `life-section.tsx:17-19`). After the trim it shows the routine's Life keys:
 
-  | Stored `routine_config`                                     | Life on the day page today | After |
-  | ----------------------------------------------------------- | -------------------------- | ----- |
-  | none (every athlete added in the app)                       | none                       | none  |
-  | the full routine (`seed.ts:69-89`; the live household)      | practice                   | same  |
-  | Athlete Two's (`seed.ts:92-104`: check-ins, strength, Wake) | none                       | none  |
-  | only keys that left (`life:wake`, any `checkin:*`)          | none                       | none  |
-  | `life:wrestling_practice` alone                             | practice                   | same  |
+  | Stored `routine_config`                                             | Life on the day page today | After |
+  | ------------------------------------------------------------------- | -------------------------- | ----- |
+  | none (every athlete added in the app)                               | none                       | none  |
+  | the full routine (`seed.ts:69-89`)                                  | practice                   | same  |
+  | Athlete Two's (`seed.ts:92-104`: check-ins, strength, Wake)         | none                       | none  |
+  | only keys that left (`life:wake`, any `checkin:*`)                  | none                       | none  |
+  | `strength` and check-in keys, no Life key (found in production, Q5) | none                       | none  |
+  | `life:wrestling_practice` alone                                     | practice                   | same  |
 
-  The table covers the seed's shapes and the default. Q5's second read lists the shapes production
-  holds, and it gates PR 5.
+  The table covers the seed's shapes, the default and the one other shape production holds.
+  **Q5's second read was run on 2026-11-19: production holds three shapes, each a row above**
+  (none; Athlete Two's; `strength` with check-in keys and no Life key). None of them shows a Life
+  item today and none will after the trim, so no athlete's day page changes. The live household's
+  athletes do not hold the full routine, as this plan first assumed.
 
 - **The editor** lists Life items only. What it does not list (`strength`, with its `conditional`
   marker) rides along in the saved order. `savedOrder(initial, listed)` in `lib/routine/catalog.ts`
@@ -370,9 +374,10 @@ prototype's day page has no such card.
   editor tab that still holds check-in keys after PR 5 is refused with the editor's existing message
   (`actions.ts:789-792`); a reload fixes it.
 - **Practice appears for an athlete who should not see it.** The table test covers the neutral default
-  and every shape the seed holds. A correction gave the live household's athletes the full routine
-  (`packages/db/scripts/corrections/registry.ts:495-581`). Q5's second read lists every shape stored
-  in production; a shape the table does not cover gets its own row and test case before PR 5 merges.
+  and every shape the seed holds. Q5's second read (2026-11-19) found three shapes in production. One was not in the table,
+  `strength` with check-in keys and no Life key; it has its own row, and PR 5 gives it a test case.
+  None of the three holds `life:wrestling_practice`, so nobody in production sees practice before
+  or after. If the fresh start runs before PR 5, the read is run again: it replaces the household's athletes.
 - **A routine saved after PR 5 loses its check-in and Wake keys for good.** They have rendered nothing
   since #418, `routine_config` is a setting and not a log, and no export carries it
   (`docs/privacy/data-inventory.md:773`). Accepted.
@@ -429,7 +434,9 @@ prototype's day page has no such card.
   retired under its own row after FAM-1, [`LEGACY-1`](../plan.md#legacy-1), which closes `TEN-2b-1` as
   overtaken (FAM-1 plan decision D51).
 
-**Q5 stays open with the maintainer:** the two read-only checks on production. The second gates PR 5.
+**Q5, answered: the maintainer ran both reads on 2026-11-19.** (a) No live `ramp_targets` row has a
+target above zero, so nobody sees the "This week" card. (b) Three stored shapes, all rows of the
+routine table now; the gate for PR 5 is met, with the new row's test case owed in that PR.
 
 ## Review-response log (adversarial panel)
 
