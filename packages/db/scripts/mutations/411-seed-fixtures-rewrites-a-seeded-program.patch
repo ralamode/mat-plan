@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
-index 4d83d424..08c979e9 100644
+index 7651e523..d5f6291c 100644
 --- a/packages/db/src/writers/program/seed-fixtures.ts
 +++ b/packages/db/src/writers/program/seed-fixtures.ts
-@@ -128,7 +128,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope):
-     const made = new Map<string, string>();
-     for (const program of FIXTURE_WORLD.programs) {
-       const clientId = seedFixtureProgramClientId(program.id);
--      if (await programBlockByClientId(tx, scope, clientId)) continue;
-+      if ((await programBlockByClientId(tx, scope, clientId))?.deleted) continue;
+@@ -202,7 +202,7 @@ async function seedWorld(
+   const made = new Map<string, string>();
+   for (const program of world.programs) {
+     const clientId = clientIdOf(program.id);
+-    if (await programBlockByClientId(tx, scope, clientId)) continue;
++    if ((await programBlockByClientId(tx, scope, clientId))?.deleted) continue;
  
-       // Every item first, so a program whose item cannot be used writes no program at all.
-       const real = new Map<string, { itemPublicId: string; name: string }>();
+     // Every item first, so a program whose item cannot be used writes no program at all.
+     const real = new Map<string, { itemPublicId: string; name: string }>();
