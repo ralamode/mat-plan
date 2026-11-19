@@ -184,119 +184,117 @@ async function seedWorld(
   athletes: Readonly<Record<string, string>>,
   clientIdOf: (programId: string) => string,
 ): Promise<void> {
-  {
-    const itemFor = async (key: keyof World['catalog']) => {
-      const known = items.get(key);
-      if (known) return known;
-      const { name, type } = world.catalog[key];
-      const result = await newItem(tx, scope, { name, trackingType: type });
-      // The household's item cap is state a person can make: skipped, never thrown.
-      if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
-      const made = must(result, `item ${key}`);
-      // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
-      if (made.trackingType !== type) return null;
-      const found = { itemPublicId: made.itemPublicId, name: made.name };
-      items.set(key, found);
-      return found;
-    };
+  const itemFor = async (key: keyof World['catalog']) => {
+    const known = items.get(key);
+    if (known) return known;
+    const { name, type } = world.catalog[key];
+    const result = await newItem(tx, scope, { name, trackingType: type });
+    // The household's item cap is state a person can make: skipped, never thrown.
+    if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
+    const made = must(result, `item ${key}`);
+    // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
+    if (made.trackingType !== type) return null;
+    const found = { itemPublicId: made.itemPublicId, name: made.name };
+    items.set(key, found);
+    return found;
+  };
 
-    const made = new Map<string, string>();
-    for (const program of world.programs) {
-      const clientId = clientIdOf(program.id);
-      if (await programBlockByClientId(tx, scope, clientId)) continue;
+  const made = new Map<string, string>();
+  for (const program of world.programs) {
+    const clientId = clientIdOf(program.id);
+    if (await programBlockByClientId(tx, scope, clientId)) continue;
 
-      // Every item first, so a program whose item cannot be used writes no program at all.
-      const real = new Map<string, { itemPublicId: string; name: string }>();
-      for (const workout of program.workouts) {
-        for (const item of workout.items) {
-          const found = await itemFor(item.iid);
-          if (found) real.set(item.iid, found);
-        }
+    // Every item first, so a program whose item cannot be used writes no program at all.
+    const real = new Map<string, { itemPublicId: string; name: string }>();
+    for (const workout of program.workouts) {
+      for (const item of workout.items) {
+        const found = await itemFor(item.iid);
+        if (found) real.set(item.iid, found);
       }
-      const unusable = program.workouts.flatMap((w) => w.items).find((item) => !real.has(item.iid));
-      if (unusable) {
-        skip(
-          `program ${program.id}`,
-          `item ${unusable.iid} exists with another tracking type, or the household is at its item cap`,
-        );
-        continue;
-      }
-
-      const created = await createProgram(tx, scope, { clientId, name: program.name });
-      // A person's own program already has this name: theirs stays, the fixture is left out.
-      if (!created.ok && created.reason === PROGRAM_REFUSAL.name_taken) {
-        skip(`program ${program.id}`, 'the household has a program of that name');
-        continue;
-      }
-      const { programPublicId } = must(created, `program ${program.id}`);
-
-      const workoutIds = new Map<string, string>();
-      for (const workout of program.workouts) {
-        const draft = workoutDraft(world, program.id, workout.wid);
-        // One statement at a time: a transaction is one connection.
-        const itemsOf = [];
-        for (const [i, item] of workout.items.entries()) {
-          const { itemPublicId, name } = real.get(item.iid)!;
-          itemsOf.push({
-            ...draft.items[i]!,
-            prescriptionClientId: newId(),
-            itemPublicId,
-            itemName: name,
-          });
-        }
-        const { workoutPublicId } = must(
-          await saveWorkout(tx, scope, {
-            ...draft,
-            programPublicId,
-            workoutClientId: newId(),
-            workoutPublicId: null,
-            items: itemsOf,
-          }),
-          `workout ${workout.wid}`,
-        );
-        workoutIds.set(fixtureIds.workout(workout.wid), workoutPublicId);
-      }
-
-      const { week } = programView(world, program.id);
-      const days = emptyWeek();
-      for (const weekday of WEEKDAYS) {
-        days[weekday as Weekday] = week[weekday].map((slot) => ({
-          ...slot,
-          workoutPublicId: workoutIds.get(slot.workoutPublicId)!,
-        }));
-      }
-      must(await saveWeek(tx, scope, { programPublicId, days }), `week of ${program.id}`);
-      made.set(program.id, programPublicId);
+    }
+    const unusable = program.workouts.flatMap((w) => w.items).find((item) => !real.has(item.iid));
+    if (unusable) {
+      skip(
+        `program ${program.id}`,
+        `item ${unusable.iid} exists with another tracking type, or the household is at its item cap`,
+      );
+      continue;
     }
 
-    // Each athlete's programs, in the world's order. `putOn` places each by the Programs list
-    // (D41), and the world lists them in that order, so the seeded order is the world's.
-    // Only onto programs made in this run: a program seeded before keeps the athletes it has now.
-    for (const [athlete, assigned] of Object.entries(world.assign)) {
-      const profilePublicId = athletes[athlete];
-      if (!profilePublicId) continue;
-      // A seed athlete a person archived or removed is not put back on anything.
-      if (!(await liveActive(tx, scope, profilePublicId))) {
-        skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
-        continue;
+    const created = await createProgram(tx, scope, { clientId, name: program.name });
+    // A person's own program already has this name: theirs stays, the fixture is left out.
+    if (!created.ok && created.reason === PROGRAM_REFUSAL.name_taken) {
+      skip(`program ${program.id}`, 'the household has a program of that name');
+      continue;
+    }
+    const { programPublicId } = must(created, `program ${program.id}`);
+
+    const workoutIds = new Map<string, string>();
+    for (const workout of program.workouts) {
+      const draft = workoutDraft(world, program.id, workout.wid);
+      // One statement at a time: a transaction is one connection.
+      const itemsOf = [];
+      for (const [i, item] of workout.items.entries()) {
+        const { itemPublicId, name } = real.get(item.iid)!;
+        itemsOf.push({
+          ...draft.items[i]!,
+          prescriptionClientId: newId(),
+          itemPublicId,
+          itemName: name,
+        });
       }
-      for (const stretch of assigned) {
-        const programPublicId = made.get(stretch.prog);
-        if (!programPublicId) continue;
-        // Every stretch the seeded world holds is open (`to` unset); a closed one would need Take off.
-        if (stretch.to !== undefined) {
-          throw new Error('seedProgramFixtures: a closed stretch needs Take off (step 6d)');
-        }
-        must(
-          await putOn(
-            tx,
-            scope,
-            { programPublicId, profilePublicIds: [profilePublicId], from: stretch.from },
-            stretch.from,
-          ),
-          `${athlete} on ${stretch.prog}`,
-        );
+      const { workoutPublicId } = must(
+        await saveWorkout(tx, scope, {
+          ...draft,
+          programPublicId,
+          workoutClientId: newId(),
+          workoutPublicId: null,
+          items: itemsOf,
+        }),
+        `workout ${workout.wid}`,
+      );
+      workoutIds.set(fixtureIds.workout(workout.wid), workoutPublicId);
+    }
+
+    const { week } = programView(world, program.id);
+    const days = emptyWeek();
+    for (const weekday of WEEKDAYS) {
+      days[weekday as Weekday] = week[weekday].map((slot) => ({
+        ...slot,
+        workoutPublicId: workoutIds.get(slot.workoutPublicId)!,
+      }));
+    }
+    must(await saveWeek(tx, scope, { programPublicId, days }), `week of ${program.id}`);
+    made.set(program.id, programPublicId);
+  }
+
+  // Each athlete's programs, in the world's order. `putOn` places each by the Programs list
+  // (D41), and the world lists them in that order, so the seeded order is the world's.
+  // Only onto programs made in this run: a program seeded before keeps the athletes it has now.
+  for (const [athlete, assigned] of Object.entries(world.assign)) {
+    const profilePublicId = athletes[athlete];
+    if (!profilePublicId) continue;
+    // A seed athlete a person archived or removed is not put back on anything.
+    if (!(await liveActive(tx, scope, profilePublicId))) {
+      skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
+      continue;
+    }
+    for (const stretch of assigned) {
+      const programPublicId = made.get(stretch.prog);
+      if (!programPublicId) continue;
+      // Every stretch the seeded world holds is open (`to` unset); a closed one would need Take off.
+      if (stretch.to !== undefined) {
+        throw new Error('seedProgramFixtures: a closed stretch needs Take off (step 6d)');
       }
+      must(
+        await putOn(
+          tx,
+          scope,
+          { programPublicId, profilePublicIds: [profilePublicId], from: stretch.from },
+          stretch.from,
+        ),
+        `${athlete} on ${stretch.prog}`,
+      );
     }
   }
 }

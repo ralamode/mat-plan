@@ -1,7 +1,6 @@
 import { SEED_PROFILE_4_PUBLIC_ID, type Weekday, WEEKDAYS } from '@mat-plan/shared';
 import {
   DAY_PLAN_FIXTURE_SOURCES,
-  FIXTURE_SWITCH_DAY,
   fixtureIds,
   programOf,
   workoutOf,
@@ -12,7 +11,7 @@ import {
  * **Not a contract fixture.** The test seed's one program for lane C's Change e2e
  * (`apps/web/e2e/day-page.spec.ts`), and nothing else (docs/plans/fam-1-e2e-change-athlete.md).
  *
- * Athlete Four (`SEED_PROFILE_4_PUBLIC_ID`) is on it from `FIXTURE_SWITCH_DAY`, a fixed past day, so
+ * Athlete Four (`SEED_PROFILE_4_PUBLIC_ID`) is on it from `SEED_E2E_START_DAY`, a fixed past day, so
  * no clock is read: on whatever day the suite runs, in any time zone, today and yesterday both hold
  * **Heavy A ("Morning") and then Heavy B ("Evening")**, the fixture world's two superset workouts.
  *
@@ -23,6 +22,12 @@ import {
  */
 
 const FIXTURE_WORLD: World = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+
+/**
+ * The day Athlete Four starts on the e2e program: any fixed day before every e2e run. Its own value,
+ * not the contract world's switch day, which the contract owner may move for a fixture's reason.
+ */
+export const SEED_E2E_START_DAY = '2026-11-02';
 
 /** The e2e program's id inside its own world. */
 export const SEED_E2E_PROGRAM_ID = 'p2001';
@@ -56,7 +61,7 @@ export const SEED_E2E_WORLD: World = {
       ) as Record<Weekday, Array<{ label: string; wid: string }>>,
     },
   ],
-  assign: { a4: [{ prog: SEED_E2E_PROGRAM_ID, from: FIXTURE_SWITCH_DAY }] },
+  assign: { a4: [{ prog: SEED_E2E_PROGRAM_ID, from: SEED_E2E_START_DAY }] },
   entries: [],
 };
 

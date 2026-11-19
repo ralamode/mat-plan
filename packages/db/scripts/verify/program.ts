@@ -107,6 +107,7 @@ import {
   SEED_E2E_PROGRAM_CLIENT_ID,
   SEED_E2E_PROGRAM_NAME,
   SEED_E2E_SLOTS,
+  SEED_E2E_START_DAY,
 } from '../../src/writers/program/seed-e2e';
 import { resolveDayPlan } from '../../src/queries/day/day-plan';
 import { asDb, asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
@@ -3446,8 +3447,8 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       .where(and(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID), isNull(a.deletedAt)));
     assert.deepEqual(
       rows,
-      [{ activeFrom: FIXTURE_SWITCH_DAY, activeTo: null, name: SEED_E2E_PROGRAM_NAME }],
-      'FAM-1 e2e athlete: Athlete Four is on the test program from FIXTURE_SWITCH_DAY, and on nothing else',
+      [{ activeFrom: SEED_E2E_START_DAY, activeTo: null, name: SEED_E2E_PROGRAM_NAME }],
+      'FAM-1 e2e athlete: Athlete Four is on the test program from its start day, and on nothing else',
     );
     const plan = async (day: string, today: string) =>
       (
@@ -3460,7 +3461,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
         })
       )?.workouts.map((w) => ({ label: w.label, name: w.name })) ?? null;
     for (let i = 0; i < 7; i++) {
-      const day = addDays(FIXTURE_SWITCH_DAY, i);
+      const day = addDays(SEED_E2E_START_DAY, i);
       for (const today of [day, addDays(day, 1)]) {
         assert.deepEqual(
           await plan(day, today),
@@ -3470,18 +3471,44 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       }
     }
     assert.deepEqual(
-      await plan(addDays(FIXTURE_SWITCH_DAY, -1), FIXTURE_SWITCH_DAY),
+      await plan(addDays(SEED_E2E_START_DAY, -1), SEED_E2E_START_DAY),
       [],
       'FAM-1 e2e athlete: …and nothing the day before the start',
     );
 
-    // A second run writes nothing.
-    const before = await assignmentRows(tx);
+    // A second run writes nothing: assignments, programs and items.
+    const snapshot = async () => ({
+      rows: await assignmentRows(tx),
+      blocks: await blocksIn(tx, A_SCOPE),
+      movements: (
+        await tx
+          .select({ id: schema.movements.id })
+          .from(schema.movements)
+          .where(movementInHousehold(A_SCOPE))
+      ).length,
+    });
+    const before = await snapshot();
     await seedProgramFixtures(exec, A_SCOPE);
     assert.deepEqual(
-      await assignmentRows(tx),
+      await snapshot(),
       before,
       'FAM-1 e2e athlete: a second seed run writes nothing',
+    );
+
+    // With Athlete Four archived, and the test program gone, a run makes no new one.
+    await tx
+      .update(schema.programBlocks)
+      .set({ clientId: newId(), deletedAt: sql`now()` })
+      .where(eq(schema.programBlocks.clientId, SEED_E2E_PROGRAM_CLIENT_ID));
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID));
+    await seedProgramFixtures(exec, A_SCOPE);
+    assert.equal(
+      await programBlockByClientId(exec, A_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
+      null,
+      'FAM-1 e2e athlete: with Athlete Four archived, no test program is made',
     );
 
     // A household without Athlete Four gets no test program.
@@ -3517,7 +3544,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
     );
   });
   console.log(
-    '✓ FAM-1 e2e athlete: Athlete Four has Heavy A then Heavy B every day from FIXTURE_SWITCH_DAY; a re-run writes nothing; no Athlete Four, no program; the item cap is a skip',
+    '✓ FAM-1 e2e athlete: Athlete Four has Heavy A then Heavy B every day from its start day; a re-run writes nothing; no live, active Athlete Four, no program; the item cap is a skip',
   );
 }
 

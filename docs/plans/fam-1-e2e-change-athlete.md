@@ -52,7 +52,8 @@ So a dedicated athlete on a dedicated program is the smallest change.
      `SEED_FIXTURE_PROGRAM_CLIENT_IDS`);
    - holds two workouts, the world's Heavy A and Heavy B drafts (`w2`, `w3`);
    - has a week with **Heavy A then Heavy B on all seven days**;
-   - puts Athlete Four on from **`FIXTURE_SWITCH_DAY`**, a fixed past day, passed as both `from` and
+   - puts Athlete Four on from **`SEED_E2E_START_DAY`** (as built: its own fixed past day, not the
+     contract world's switch day, which the contract owner may move), passed as both `from` and
      `today`, as the world's starts are. **No clock is read**, so the program is on whatever day the
      suite runs, in any time zone. The e2e browser runs on Los Angeles time and CI's seed on UTC, so
      a "yesterday" taken from the seed's clock would miss the e2e's yesterday for eight hours a day.
@@ -87,7 +88,7 @@ Each was checked with a grep; the counts there are relative or by name, so nothi
 `day-navigation.spec.ts` archives its own athletes for the same reason. Athlete Four counts toward
 `MAX_HOUSEHOLD_ATHLETES` (25), which per-run specs draw on.
 
-**Lane B is told:** once 7b-i lands, `/programs` lists one more program, so its real-data specs must
+**Lane B is told:** 7b-i (#636) is merged and its specs select programs by name (checked); `/programs` lists one more program, so its real-data specs must
 not count programs or compare the list with `programsList`.
 
 ## Production, privacy, erasure
@@ -110,7 +111,7 @@ not count programs or compare the list with `programsList`.
 
 - **Athlete:** `SEED_PROFILE_4_PUBLIC_ID` and `SEED_PROFILE_4_NAME`, from `@mat-plan/db` as the
   others are; no other spec writes this athlete's rows.
-- **Workouts:** Heavy A then Heavy B, on every day of the week since `FIXTURE_SWITCH_DAY`; names from
+- **Workouts:** Heavy A then Heavy B, on every day of the week since `SEED_E2E_START_DAY`; names from
   the world, never re-typed.
 - **Locators:** each workout has its own superset "A", so the page has two lists named "Superset A".
   A locator must be scoped to the workout's region, not `.first()`.
@@ -138,14 +139,14 @@ Lane C's spec uses the new consts in its own PR. This PR does not touch `day-pag
 ## Tests (`db:verify`)
 
 - **Through what the page renders** (`resolveDayPlan`), on literal days: for each of the seven days
-  from `FIXTURE_SWITCH_DAY`, with `today` that day and the next:
+  from `SEED_E2E_START_DAY`, with `today` that day and the next:
   - Athlete Four's plan holds Heavy A then Heavy B, Heavy A's supersets a and b, Heavy B's a;
   - on the day before the start, nothing.
-- `active_from` is `FIXTURE_SWITCH_DAY`.
+- `active_from` is `SEED_E2E_START_DAY`.
 - A second seed run writes nothing (`ctid`).
-- **The lived-in preview:** the world's programs already exist and one of the e2e program's items is
-  retyped, so the e2e program is skipped with a warning and the run succeeds.
-- **No profile:** a household without a live, active Athlete Four gets no e2e program (household B; in the seed household the program already exists, so an archived case would only test the `client_id` skip).
+- **The lived-in preview:** covered through the shared function by the world's proofs (mutations
+  411, 415, 416), not by an e2e-specific case.
+- **No profile:** a household without Athlete Four (household B) gets no e2e program; and in the seed household, with the program retired and Athlete Four archived, a run makes none.
 - The world's deep-equals and counts are unchanged. These proofs come after the world's in
   `verifySeedFixtures`, so 410, 411, 415 and 416 still go red on their own lines.
 - **Mutations** (new):
@@ -177,7 +178,7 @@ before its athlete (correctness 5, privacy 5).
 
 | Lens                                                        | Finding                                                                                | Verdict    | What changed                                                  |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------- |
-| correctness P0, privacy P1, architecture P1                 | "the seed's yesterday" reads a clock in no named zone; the e2e is on Los Angeles time  | **agreed** | a fixed start, `FIXTURE_SWITCH_DAY`; no clock                 |
+| correctness P0, privacy P1, architecture P1                 | "the seed's yesterday" reads a clock in no named zone; the e2e is on Los Angeles time  | **agreed** | a fixed start, `SEED_E2E_START_DAY`; no clock                 |
 | architecture P0, correctness P1                             | owners undecided; `verify.ts`, `verify/schema.ts`, `write-path.md`, `index.ts` missing | **agreed** | the Files table, with owner and grant; four grants asked      |
 | architecture P0 (split) vs correctness and privacy (one PR) | how to ship it                                                                         | **one PR** | the merge-order hazard; each guest edit named                 |
 | architecture P1                                             | test-only data in the contract-fixture module                                          | **agreed** | `seed-e2e.ts`; `seed-fixtures.ts` stays the world's           |
