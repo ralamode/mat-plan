@@ -967,15 +967,13 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(res.ok).toBe(true);
-    expect(logStrengthSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        supersets: [{ clientId: ss }],
-        movements: [
-          expect.objectContaining({ supersetClientId: ss, supersetOrder: 1 }),
-          expect.objectContaining({ supersetClientId: ss, supersetOrder: 2 }),
-        ],
-      }),
-    );
+    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
+      supersets: [{ clientId: ss }],
+      movements: [
+        { supersetClientId: ss, supersetOrder: 1 },
+        { supersetClientId: ss, supersetOrder: 2 },
+      ],
+    });
   });
 
   it('rejects a lone superset member (≥2) with a locatable superset error (V1-8-3d)', async () => {

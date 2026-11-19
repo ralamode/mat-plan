@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from 'node:fs';
+import { globSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { hideEntriesSchema, restoreHiddenSchema } from './hide';
 import { newId, uuidSchema } from './id';
+import { code } from './test-support/source-graph';
 
 /** A fresh id whose two spellings differ (one with no a–f letter would make each case vacuous). */
 function lettered(): string {
@@ -42,23 +43,34 @@ describe('uuidSchema folds case (one spelling after every parse)', () => {
 });
 
 const REPO = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
-const SOURCES = ['packages/*/src/**/*.ts', 'packages/*/scripts/**/*.ts', 'apps/web/**/*.{ts,tsx}'];
+const SOURCES = [
+  'packages/*/src/**/*.{ts,tsx,js,mjs,cjs}',
+  'packages/*/scripts/**/*.{ts,js,mjs,cjs}',
+  'apps/web/**/*.{ts,tsx,js,jsx,mjs,cjs}',
+];
+/** zod's uuid builders, as a call or a method, with or without arguments; a regex named for a uuid;
+ *  and the `uuid` package's own `validate`. Over-matching is the safe direction here. */
+const SECOND_VALIDATOR = [
+  /\bz\s*\.\s*(uuid|uuidv\d|guid)\s*\(/,
+  /\.\s*(uuid|uuidv\d|guid)\s*\(/,
+  /\bimport\s*\{[^}]*\b(uuid|guid|uuidv\d)\b[^}]*\}\s*from\s*['"]zod['"]/,
+  /\bimport\s*\{[^}]*\bvalidate\b[^}]*\}\s*from\s*['"]uuid['"]/,
+  /\b[A-Z_]*UUID[A-Z_]*_RE\b|\buuidRe(gex)?\b/,
+];
 
 describe('🔴 there is one uuid validator', () => {
   it('no source outside id.ts builds its own (it would keep the caller’s spelling)', () => {
     const offenders = SOURCES.flatMap((pattern) =>
       globSync(pattern, {
         cwd: REPO,
-        exclude: (f) => /node_modules|\.next|\.test\.tsx?$/.test(f),
+        exclude: (f) => /node_modules|\.next|\.test\.tsx?$|playwright-report|test-results/.test(f),
       }),
     )
       .filter((f) => f !== 'packages/shared/src/id.ts')
       .filter((f) => {
-        // Comments out: a docblock may name `z.uuid()`.
-        const code = readFileSync(join(REPO, f), 'utf8')
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-          .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-        return /\bz\s*\.\s*(uuid|uuidv\d|guid)\s*\(|\.uuid\s*\(\s*\)/.test(code);
+        // Comments out (a docblock may name `z.uuid()`): the package's one `code()` helper.
+        const source = code(join(REPO, f));
+        return SECOND_VALIDATOR.some((re) => re.test(source));
       })
       .map((f) => relative(REPO, join(REPO, f)));
     expect(offenders).toEqual([]);
