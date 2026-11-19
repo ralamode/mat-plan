@@ -277,6 +277,10 @@ only way a notice about minors' health data is worth anything.
 > closed row stays as history; the weekday rows stay. No new column, processor, log or export. Called
 > by no action until step 15.
 >
+> **§1 re-read 2026-11-19 for FAM-1 step 6d-iii**: `putOn` now places a program in an athlete's
+> order by the household's Programs list (a reopen at its old place). Only `program_assignments.idx`
+> changes; no new column, processor, log or export. Called by no action until step 15.
+>
 > **§1 re-read 2026-11-18 for FAM-1 step 6d-ii**: `reorderPrograms` rewrites `program_assignments.idx`
 > (an athlete's own order of their programs), inside the household only. No new column, processor, log
 > or export. Called by no action until step 15c.
