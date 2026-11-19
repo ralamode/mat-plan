@@ -196,7 +196,7 @@ Its design, whichever mechanism Q5 picks:
   `sentry.edge.config.ts` import. **One DAL module** (`lib/dal/catalog-library.ts`) maps the name to its
   list and one memoised slug index. `picker.ts` (its fixed `LIBRARY` map is deleted), `writes.ts`
   (`newItem`), `getHowTo`, and lane E's `day.ts:60` (lane E's own PR) import it.
-- **The names are shared constants**: `CATALOG_LIBRARY_ENV` and `CATALOG_LIBRARIES` (an `as const`
+- **(B) only — the names are shared constants**: `CATALOG_LIBRARY_ENV` and `CATALOG_LIBRARIES` (an `as const`
   array, zod enum and type) in `packages/shared/src/catalog/`, beside `SEED_FIXTURES_ENV`'s pattern.
 - **(B) only — wiring, if Q5 had kept a variable:**
   - CI: the Playwright smoke step's step-level `env:`, beside `E2E_SESSION_BYPASS_USER_ID`. Not beside
@@ -223,7 +223,7 @@ Its design, whichever mechanism Q5 picks:
   to return the fixture library, and assert it is the argument the read and `newItem` receive. They
   also check `getHowTo` on a fixture-only slug.
 
-- **"Fails the build"** is a test obligation, not a claim. Run
+- **(B) only — "fails the build"** is a test obligation, not a claim. Run
   `CATALOG_LIBRARY=fixture VERCEL_ENV=production DATABASE_URL=postgres://u:p@localhost:5432/db pnpm --filter web build`
   and record that it exits non-zero with the new message. If Next does not evaluate the module at
   build time, the plan says "fails at boot", which fails closed.
@@ -323,7 +323,7 @@ its own vitest file. Its cases:
      fallback.
 
   **Who writes it:** lane P, which owns A2-i _(maintainer, orchestrator's chat, 2026-11-19: "Lane P
-  takes A2-i (Recommended)")_, lands it inside A2-ii or stacked with it. A2-ii's owner takes it as a gate. With (A), the variable, the wiring, the
+  takes A2-i (Recommended)")_, lands it inside A2-ii or stacked with it. It is a precondition of A2-ii's merge. With (A), the variable, the wiring, the
   constants, the containment test and `preview:check` from A1.1 fall away. The shared rule, the
   production pin, the DAL module and the tests that can fail all stay.
 
