@@ -496,7 +496,7 @@ describe('after the program was edited (D7)', () => {
     expect(control.actions.logRow).not.toHaveBeenCalled();
   });
 
-  it('🔴 an un-ticked load logged in another unit never goes back out in the item’s unit', async () => {
+  it('🔴 an un-ticked load logged in another unit must be typed again: never the prescription’s (H9)', async () => {
     const changed = structuredClone(yesterdayHalfDone);
     const bench = changed.workouts
       .find((w) => w.name === 'Heavy A')!
@@ -508,6 +508,55 @@ describe('after the program was edited (D7)', () => {
     await press(setTick(el(), 'DB bench press', 1));
     // The field is in kg: the lb number is not put in it.
     expect(setField(el(), 'DB bench press', 1, unitSpoken('kg')).value).toBe('');
+    // Only the reps fixed, the load left blank: before H9 (12d-ii) this ✓ sent no load and the
+    // writer stored the prescription's 30 kg for a lift logged in lb. Now nothing is sent, and the
+    // row asks for the weight.
+    fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.logRow).not.toHaveBeenCalled();
+    // Both units named, so the old unit's number is not typed into the new unit's field.
+    const load = setField(el(), 'DB bench press', 1, unitSpoken('kg'));
+    expect(within(el()).getByText(DAY_COPY.retypeLoad('27.5 lb', 'kg'))).toBeTruthy();
+    expect(load.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(load);
+    // No prescription shows in the field: an empty ✓ here is refused, not filled.
+    expect(load.getAttribute('placeholder')).toBeNull();
+    // Typed, it is sent as typed, in the item's unit.
+    fireEvent.change(setField(el(), 'DB bench press', 1, unitSpoken('kg')), {
+      target: { value: '12.5' },
+    });
+    await press(setTick(el(), 'DB bench press', 1));
+    const sent = control.actions.logRow.mock.calls[0]![0].values;
+    expect(sent.quantities).toEqual([{ ...lb(12.5), unit: 'kg' }]);
+    expect(sent.reps).toBe(7);
+  });
+
+  it('H9 ends once the row is logged again: a later un-tick, now in the item’s unit, fills as D13 says', async () => {
+    const changed = structuredClone(yesterdayHalfDone);
+    const bench = changed.workouts
+      .find((w) => w.name === 'Heavy A')!
+      .items.find((i) => i.name === 'DB bench press')!;
+    bench.unit = 'kg';
+    bench.target = { ...bench.target, quantities: [{ ...lb(30), unit: 'kg' }] };
+    const control = mount(changed);
+    const el = () => card('Heavy A', 'DB bench press');
+    const load = () => setField(el(), 'DB bench press', 1, unitSpoken('kg'));
+    await press(setTick(el(), 'DB bench press', 1)); // un-tick the lb row
+    fireEvent.change(load(), { target: { value: '12.5' } });
+    await press(setTick(el(), 'DB bench press', 1)); // logged again, in kg
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+    await press(setTick(el(), 'DB bench press', 1)); // un-tick the kg row
+    fireEvent.change(load(), { target: { value: '' } });
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.logRow).toHaveBeenCalledTimes(2);
+    expect(control.actions.logRow.mock.calls[1]![0].values.quantities).toEqual([]);
+  });
+
+  it('a same-unit row still fills an empty load from the prescription after an un-tick (D13 unchanged)', async () => {
+    const control = mount(yesterdayHalfDone);
+    const el = () => card('Heavy A', 'DB bench press');
+    await press(setTick(el(), 'DB bench press', 1));
+    fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.lb), { target: { value: '' } });
     fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
     await press(setTick(el(), 'DB bench press', 1));
     const sent = control.actions.logRow.mock.calls[0]![0].values;

@@ -486,6 +486,9 @@ const STATES = {
   // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
   // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
   'rename-duplicate': null,
+  // FAM-1 7b-i — a program's page. Its address is minted at seed time, so the capture starts on
+  // `/programs` and taps the seeded program open (see INTERACTIONS).
+  'program-open': null,
   // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
   // that the server answers with a match. Three states, because the callout is three different
   // screens and the copy differs in each.
@@ -683,6 +686,11 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();
     // The callout's focus target — waiting on it means the capture cannot race the round trip.
     await page.getByRole('group').waitFor();
+  },
+  /** FAM-1 7b-i — from `/programs`, open the seeded "Family program" (its link also names who is on it) and wait for its heading. */
+  'program-open': async (page) => {
+    await page.getByRole('link', { name: /^Family program/ }).click();
+    await page.getByRole('heading', { level: 1, name: 'Family program' }).waitFor();
   },
   'picker-filter-panel': async (page) => {
     await openPickerFilters(page);

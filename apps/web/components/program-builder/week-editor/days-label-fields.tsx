@@ -12,7 +12,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-import { hasItLabel, WEEK_COPY, weekdayName } from '../builder-text';
+import { dayFullLabel, hasItLabel, WEEK_COPY, weekdayName } from '../builder-text';
 import { NameField } from '../name-field';
 
 /**
@@ -23,6 +23,8 @@ import { NameField } from '../name-field';
  *   360px. Each is named by the full weekday; the visible text is the short one.
  * - **A day that already has the workout is shown ticked and inactive**, with "has it": the
  *   once-a-day rule is visible before the tap, and the skip message is only the backstop.
+ * - **A full day (`MAX_DAY_SLOTS`) is shown unticked and inactive**, with "full" (7b-i), the same
+ *   way: a full day cannot be picked, so no save is refused for it.
  */
 export function DaysLabelFields({
   idPrefix,
@@ -31,6 +33,7 @@ export function DaysLabelFields({
   days,
   onDays,
   hasIt,
+  full,
   daysError,
   labelError,
 }: {
@@ -41,6 +44,8 @@ export function DaysLabelFields({
   onDays: (days: Set<Weekday>) => void;
   /** Days that already have the chosen workout. */
   hasIt: ReadonlySet<Weekday>;
+  /** Days that hold `MAX_DAY_SLOTS` workouts already. */
+  full?: ReadonlySet<Weekday>;
   /** A refusal of the days ("Pick at least one day."), said in the fieldset. */
   daysError: string | null;
   /** A refusal of the label (not one line of plain text), said on the field. */
@@ -54,6 +59,7 @@ export function DaysLabelFields({
         days={days}
         onDays={onDays}
         hasIt={hasIt}
+        full={full}
         error={daysError}
         legend={WEEK_COPY.days}
         hint={WEEK_COPY.oncePerDay}
@@ -72,6 +78,7 @@ export function DaysFieldset({
   days,
   onDays,
   hasIt = new Set(),
+  full = new Set(),
   error = null,
   legend,
   hint,
@@ -80,6 +87,8 @@ export function DaysFieldset({
   days: ReadonlySet<Weekday>;
   onDays: (days: Set<Weekday>) => void;
   hasIt?: ReadonlySet<Weekday>;
+  /** Days that cannot take another workout: unticked and inactive, with "full". */
+  full?: ReadonlySet<Weekday>;
   error?: string | null;
   legend: ReactNode;
   /** Under the days; `null` for none. A refusal (`error`) takes its place. */
@@ -97,7 +106,10 @@ export function DaysFieldset({
       <div className="grid grid-cols-4 gap-2">
         {MONDAY_FIRST.map((day) => {
           const has = hasIt.has(day);
-          const checked = has || days.has(day);
+          // "Has it" wins: a full day that already has the workout is skipped, not refused.
+          const isFull = !has && full.has(day);
+          const inactive = has || isFull;
+          const checked = has || (!isFull && days.has(day));
           return (
             <label
               key={day}
@@ -105,16 +117,16 @@ export function DaysFieldset({
               // side by side.
               className={cn(
                 'flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1 text-sm',
-                has && 'text-muted-foreground',
+                inactive && 'text-muted-foreground',
               )}
             >
               <input
                 type="checkbox"
                 checked={checked}
-                aria-disabled={has || undefined}
-                aria-label={has ? hasItLabel(day) : weekdayName(day)}
+                aria-disabled={inactive || undefined}
+                aria-label={has ? hasItLabel(day) : isFull ? dayFullLabel(day) : weekdayName(day)}
                 onChange={() => {
-                  if (has) return;
+                  if (inactive) return;
                   const next = new Set(days);
                   if (next.has(day)) next.delete(day);
                   else next.add(day);
@@ -125,7 +137,9 @@ export function DaysFieldset({
               />
               <span aria-hidden className="text-center whitespace-nowrap">
                 {weekdayName(day, 'short')}
-                {has ? <span className="block text-xs">{WEEK_COPY.hasIt}</span> : null}
+                {has || isFull ? (
+                  <span className="block text-xs">{has ? WEEK_COPY.hasIt : WEEK_COPY.full}</span>
+                ) : null}
               </span>
             </label>
           );

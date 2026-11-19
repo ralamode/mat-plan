@@ -7,7 +7,7 @@ import { describe, it } from 'vitest';
  * 🔴 **Each lane with a guide keeps its own list in a file it owns**, so deleting a line never owes
  * this directory's guide or another lane's:
  *
- * - lane P: `packages/db/src/writers/program/owed.test.ts`
+ * - lane P: none left (its last line was proved and the file deleted with 6d-ii, #633)
  * - lane E: `packages/db/src/writers/day/owed.test.ts`
  * - lane B: `apps/web/components/program-builder/owed.test.ts`
  * - lane C: `apps/web/components/day/owed.test.ts`

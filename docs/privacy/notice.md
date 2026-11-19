@@ -39,16 +39,20 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **How a session felt** — a free-text box.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
-- **Programs you build yourself** _(coming; the app cannot save one yet)_: a program's name, its
+- **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
+  signed in to your household can create and rename a program, set its week and copy a workout. The
+  screens for writing a workout and adding a movement of your own aren't in the app yet. What is
+  stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
   For each exercise in a workout: its instructions and rest note, the name you give a group of
   exercises done together, and the targets you set (sets, reps, and a weight, time, distance or
   count). These belong to the household, so removing one athlete does not
-  remove them; deleting the household does. A movement name someone in your household types while
-  building a program is added to the list that anyone signed in to your household picks from, and it
+  remove them; deleting the household does. Once adding a movement of your own is in the app, a name someone in your household types there is added to the list that anyone signed in to your household picks from, and it
   stays in that list whether or not any program still uses it. It can't be renamed or removed in the
   app. Please type only the name of an exercise, never a person's name or anything about a child.
+  In the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so, once the workout screen is in the app, will be an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,
+  restore, export or erase them, and they stay until the program or the household is removed.
   **Who is on which program**: which athlete is on it, from which day and through which day, and on
   which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
   an athlete off a program keeps the record that they were on it. If the program only started that day
@@ -60,18 +64,22 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   _(Nothing in the live app logs a workout yet: the day page that does is being built. This line is
   here because the schema is public and you would otherwise find these tables.)_
 
-**Three text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
-and, since the rename and add screens, an **athlete's name**. Whatever goes in is stored exactly as
-typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
+**The text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
+an **athlete's name**; and, in the program builder, a program's name, a workout's name and
+description, each exercise's instructions and rest note, the name of a group of exercises, the label
+of a workout on a day (in the week and when copying), and the name of a movement you add with
+"+ New item". Whatever goes in is stored exactly as typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
 is the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal
 name, and does not ask for a birthdate.
-Worth knowing, because of who is usually typing. A typed movement appears in your export, and so
-does a workout's name once an athlete logs that workout; "How it felt" does not, and neither does the
-athlete's name field — the export is filed under an id, not a name.
+Worth knowing, because of who is usually typing. A typed movement appears in your export only
+through something logged with it, and a workout's name only once an athlete logs that workout; "How
+it felt" does not, the athlete's name field does not (the export is filed under an id, not a name),
+and nothing else typed into the program builder does.
 
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
-browser, and an identifier each device generates per logged item — and now per athlete added — so the
-same entry, or the same athlete, is not saved twice.
+browser, and an identifier each device generates per logged item, per athlete added, and, in the
+program builder, per program, per workout, per copy and per exercise in a workout, so the same thing
+is not saved twice. Each is a random-looking code that also shows when it was made.
 
 **What we never ask for**: no phone number, no address, no payment details, no location, and no date
 of birth. **This app never asks you to type an email address, and no athlete's record contains one.**
@@ -114,6 +122,9 @@ still works.
 - **Your household**, through the shared login.
 - **The maintainer.** The person who runs the app has direct access to the database and can see
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
+- **Everyone signed in to your household sees every program**: who is on each one, from which day
+  and through which day, and, for each athlete, which programs they are on. That includes an adult
+  athlete's own programs. It is the same group of people who can already open every athlete's page.
 - **Nobody else** — no page shows your data to anyone outside your household, there is no advertising,
   no analytics about you, and your data is never sold or shared for anyone else's purposes. Three
   pages can be opened without signing in — the landing page, this notice, and the sign-in screen — and
@@ -236,7 +247,10 @@ field, as above. Two things are worth saying plainly about every clear:
 
 There is still **no way to permanently remove one single logged item on demand**: the finest grain for
 removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
-on request.)
+on request.) If a person's name was typed as a movement and your logs hold it, ask, and it can
+be replaced with a neutral name on that movement and on your household's logs; the logs themselves stay.
+It is not done, and we tell you why, if the same words were also typed into a note or label on those
+logs, or if the new name is already in use.
 
 ## Getting your data out
 
@@ -281,7 +295,7 @@ from the database**. The household owner asks; or an adult athlete may ask about
 which case the owner is told first but **cannot cancel it**: only the adult can, because it is their
 data. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is
 confirmed on their own invitation channel, and their full copy goes to them), and "What remains
-afterwards" below applies too. What stays is the household's: the programs it wrote, any name typed into a program, workout or
+afterwards" below applies too. What stays is the household's: the programs you built, any name typed into a program, workout or
 movement, including copies of that text kept on other athletes' logs, and every sign-in account; an
 adult athlete can ask for their own account to be deleted as well. Before anything is removed we ask
 you about three things, and remove each only if you say so: a program only that athlete was ever on;
@@ -294,6 +308,15 @@ the record of the deletion holds the athlete's internal identifier and no login 
 account went too. An athlete added through the app can be erased today; the athletes the app started with
 cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
 removed together, with the rest of the starting data, when the app is started fresh.
+
+**A program, a workout or a movement you typed can't be deleted in the app, but the household owner
+can ask and it is removed.** First we tell you which athletes it affects, and offer a change that
+touches nobody's data instead: a rename where one is possible; for a program, taking everyone off it; for a workout, taking
+it off the week. If an adult athlete is affected, they are told first, can't cancel it, and are sent their own copy of their record of being on it and their targets; the removal waits until they confirm they have it, for at most 3 days. Otherwise it is removed with no waiting period. A restore point is held for 3 days afterwards. What athletes logged keeps its names: a workout's name as it was on the day, the movement
+names, the targets as they were prescribed and the name of a group of exercises stay on their logs,
+so a movement something logged still uses is not removed. The athletes' record of being on a removed
+program, and the targets set for them on it, are deleted with it, and their logs no longer count toward that program or workout in a per-program report. How it is done is in the public
+runbook, "Remove one program, workout or typed item on request".
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your

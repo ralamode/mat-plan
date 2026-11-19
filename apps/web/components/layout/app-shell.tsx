@@ -61,8 +61,8 @@ export function AppShell({
   nav?: boolean;
   /**
    * A Suspense fallback: keeps its `aria-busy`, and **reserves the rail's column** so the content
-   * does not jump when the page resolves. The three `loading.tsx` files under `app/p/` are its only
-   * callers, one per route whose frame differs.
+   * does not jump when the page resolves. The `loading.tsx` files under `app/p/` and `app/programs/`
+   * are its only callers, one per route whose frame differs.
    */
   busy?: boolean;
 }) {

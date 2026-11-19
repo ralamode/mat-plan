@@ -45,14 +45,14 @@ describe('owed by lane B and lane P: filters and browse (after chunk C0b-2; B2, 
   it.todo('P11: the option read returns taxonomy from the tables and aliases from the const');
   it.todo('P12: two folding sections; kinds and families closed until opened; the old groups gone');
   // B2-i (`movement-picker.test.tsx`, #569) holds part of P13 (the label as text, the same in both
-  // modes, never dropped for a tag) and P16's screen half. What each still owes is listed here.
+  // modes, never dropped for a tag) and P16's screen half. What P13 still owes is listed here;
+  // P16's read by slug is proved by lane B's route, DAL and loader tests (FAM-1 7b, #624).
   it.todo('P13: a supervision label never hides, blocks or reorders an option or a row');
   it.todo('P13: the label’s wording names no age, level, "ready", "safe" or warning mark');
   it.todo(
     'P13: only the option read, the picker row, the day read and the day row read supervision',
   );
   it.todo('P13: the day page’s workout row shows the supervision label (after C32)');
-  it.todo('P16: "How to" reads the steps by slug (P11-i and the page’s loader)');
 });
 
 describe('owed by lane B: the picker (chunks B1 to B3)', () => {

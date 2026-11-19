@@ -4,8 +4,8 @@ owns:
   - apps/web/components/program-builder/
   - apps/web/app/programs/
   - apps/web/lib/dal/program/
-  # Step 7b adds `apps/web/e2e/program-builder.spec.ts`. It is not listed yet: `guides:check` fails
-  # a guide that claims a path which does not exist, so the entry arrives with the file.
+  - apps/web/e2e/program-builder.spec.ts
+  - apps/web/e2e/program-builder.a11y.spec.ts
 ---
 
 # The program builder
@@ -19,22 +19,24 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 10b; 7a-i wires create, rename and save a workout to the database, with no page calling them until 7b.** The Programs list, the program page with its week editor and its
-Copy and Put-on dialogs, and the workout editor with its supersets and its item picker are real
-screens on the preview route. Each
-step below adds its files and its invariants here.
+🚧 **Built through step 10b and wired through 7b-i.** The Programs list and a program's page are
+real pages (`/programs`, `/programs/[programId]`), opened from Home's Programs row, on the
+household's own data; every builder action is registered. The workout editor with its supersets and
+its item picker is still a screen on the preview route until 7b-ii gives it its pages. Each step
+below adds its files and its invariants here.
 
 ## The map
 
-| Step  | Adds                                                                                                                        |
-| ----- | --------------------------------------------------------------------------------------------------------------------------- |
-| 8a    | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.            |
-| 8     | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                                  |
-| 9     | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                           |
-| 10    | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                           |
-| 7a-i  | `apps/web/app/programs/actions.ts`: create, rename and save a workout, with its registry file; `apps/web/lib/dal/program/`. |
-| 7a-ii | The same module: save the week, copy a workout, a new item; and the picker's options read.                                  |
-| 7b    | `apps/web/app/programs/**/page.tsx`; the Programs link on Home. 15: Put on and Take off, wired.                             |
+| Step  | Adds                                                                                                                          |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 8a    | The Programs list and the program page, in `programs-list-screen.tsx` and `program-screen.tsx`, and their parts.              |
+| 8     | The workout editor, in `workout-editor-screen.tsx`, and its parts. 8b: supersets and rest.                                    |
+| 9     | `program-builder/item-picker/`. It also edits `components/movements/movement-picker.tsx`, a seam.                             |
+| 10    | `program-builder/week-editor/`. 10b: the Copy and Put-on dialogs.                                                             |
+| 7a-i  | `apps/web/app/programs/actions.ts`: create, rename and save a workout, with its registry file; `apps/web/lib/dal/program/`.   |
+| 7a-ii | The same module: save the week, copy a workout, a new item; and the picker's options read.                                    |
+| 7b-i  | `app/programs/page.tsx`, `[programId]/page.tsx`, `not-found.tsx`, `loading.tsx`; the list and view reads; Home and rail rows. |
+| 7b-ii | The two workout pages. 15: Put on and Take off, wired.                                                                        |
 
 ### How a screen is put together (8a)
 
@@ -72,7 +74,7 @@ flowchart LR
 | `apps/web/components/program-builder/status-line.tsx`                   | A screen's one status line: `useStatusLine()` (clear, then set a frame later) and `StatusLine` (an `Announcer` and an alert).                                                                                                                                           |
 | `apps/web/components/program-builder/builder-text.ts`                   | The builder's words (the prototype's), the refusal messages, and the small rules that pick between them.                                                                                                                                                                |
 | `apps/web/components/program-builder/routes.ts`                         | The builder's paths. The screens link with them; 7b builds its pages at them, and `howToPath` is the How to read's.                                                                                                                                                     |
-| `apps/web/app/programs/how-to/[optionId]/route.ts`                      | "How to" for one picker option (7b): the session in-process, `getHowTo`, the strict `CatalogHowTo` or one byte-identical 404; `force-dynamic` and `no-store`.                                                                                                           |
+| `apps/web/app/programs/how-to/[optionId]/route.ts`                      | "How to" for one picker option (7b): the session in-process, `getHowTo`, the strict `CatalogHowTo` or one byte-identical 404; `force-dynamic` and `no-store`. Its miss and its `no-store` come from `lib/route-miss.ts`, shared with the export.                        |
 | `apps/web/components/program-builder/how-to-loader.ts`                  | The client loader for that route: a 404 is `null`, any other failure rejects (movement-picker invariant 14).                                                                                                                                                            |
 | `apps/web/components/program-builder/workout-editor-page.tsx`           | The editor as a real page mounts it, with `howToLoader` (a page cannot pass a function to a client screen).                                                                                                                                                             |
 | `apps/web/components/program-builder/group-list.tsx`                    | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                                                                                                                                                       |
@@ -86,10 +88,14 @@ flowchart LR
 | `apps/web/components/program-builder/supersets.ts`                      | `normalizeSupersets`, after every move, remove, link and unlink. The letters are the contract's `supersetLabels`.                                                                                                                                                       |
 | `apps/web/components/program-builder/*.test.ts(x)`                      | Each screen's and module's tests, beside it.                                                                                                                                                                                                                            |
 | `apps/web/components/program-builder/owed.test.ts`                      | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                    |
-| `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. No page imports it until 7b.                                                                                                                          |
+| `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout); each one's steps are in the module's header. Only a page under `app/programs/` imports it (since 7b-i).                                                                                            |
 | `apps/web/app/programs/actions.registry.ts`                             | Each action's refusal set and scope, read by the boundary matrices ([write-path.md](./write-path.md) invariant 1).                                                                                                                                                      |
 | `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through `reportProgramMiss`.                                                                                                    |
-| `apps/web/lib/dal/program/reads.ts`                                     | `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                                                                               |
+| `apps/web/app/programs/page.tsx`                                        | The Programs list (7b-i): `requireSession`, `getProgramList(today)`, `ProgramsListScreen` with `PROGRAM_ACTIONS`; no household goes Home.                                                                                                                               |
+| `apps/web/app/programs/[programId]/page.tsx`                            | A program's page (7b-i): `getProgramView(id, today, tz)`, `ProgramScreen`; a miss is `notFound()`. Title "Program", never its name.                                                                                                                                     |
+| `apps/web/app/programs/not-found.tsx` · `loading.tsx` · `layout.tsx`    | The builder's 404 ("← Programs", its own `AppShell`, since `notFound()` replaces the page) its busy frame, and its `ClerkRoot` (#626: Clerk loads per segment, never in the root layout).                                                                               |
+| `apps/web/e2e/program-builder.spec.ts` · `program-builder.a11y.spec.ts` | From `/p`: create, rename, copy a seeded workout, Copy at 360px, a random id's 404; the two routes' a11y walk at 360px and one desktop axe pass.                                                                                                                        |
+| `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                              |
 | `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`: on a miss only, which id missed the household (program, then workout), reported once through `reportScopeMiss`.                                                                                                                                    |
 
 ## Invariants
@@ -117,8 +123,10 @@ flowchart LR
 7. **A new Server Action module brings its own registry and test files**, so the lane edits no
    shared table ([write-path.md](./write-path.md) invariant 1 names the three files).
 8. **A screen links by `routes.ts`, and 7b's pages live at those paths** _(maintainer, 2026-11-15)_.
-   The props carry only data and actions, so the screens build their own links; until 7b they
-   lead nowhere on the preview route.
+   The props carry only data and actions, so the screens build their own links; on the preview
+   route they lead nowhere. **Until 7b-ii the real program page passes `workoutPagesWired={false}`**:
+   a workout row is its name, not a link, and "+ New workout" is left out, so nothing taps or
+   prefetches into a 404.
 9. **"Used by … Changes apply to …" counts everyone in `athletes`**, someone whose last day is
    today included: they are on it through today, so an edit now still changes their day.
 10. **Focus has somewhere to go after Take off.** The button unmounts: focus moves to the athlete's
@@ -306,25 +314,33 @@ flowchart LR
     - A miss is reported only after a writer or read has said "not here", never on a success, and
       once per request: the program first, then the workout; an item's miss reports nothing. A
       failed check reports nothing and never changes the answer.
-    - No page or component imports `app/programs/actions.ts` or `actions.contract.ts` until 7b,
-      which owes the notice and inventory sentences that test lists (`OWED_AT_7B`). The pin reads
-      both paths: the object holds every action.
+    - **Only a page under `app/programs/` imports `actions.ts` or `actions.contract.ts`** (since
+      7b-i, when the stay-dark pin lifted with the privacy list it owed). A component gets the
+      actions as props; no client component imports lane P's reads or `lib/dal/program/`. The same
+      test holds the notice and inventory to the sentences 7b-i rewrote.
+    - **The page reads** (`getProgramList`, `getProgramView`, 7b-i) take primitives, because
+      `cache()` compares by identity. The view keeps `getWorkoutDraft`'s order: a non-uuid id is
+      `null` with no report; no scope or a miss is reported once. The list names no id, so a missing
+      scope reports nothing and the page sends the caller Home.
     - **The real `ProgramActions` is `PROGRAM_ACTIONS`** (`actions.contract.ts`, 7a-ii), the six
       required members; `putOn` and `takeOff` are left out until step 15, so their controls stay
       hidden. Not in `actions.ts`: a `'use server'` module exports only async functions.
     - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
       DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
       editor reads it as a stale page.
-    - ⏳ **A sixth refusal, `limit_reached` (contract C35, the per-household caps), has no words of
-      its own yet.** Until 7b gives it per-screen copy, each surface falls to its own generic
-      failure line, which is the wrong advice for a cap: `nameRefusal` and `saveRefusal` say
-      "Couldn’t save. Try again.", `weekRefusal` says `WEEK_COPY.failed` ("…The week is back as it
-      was. Try again."), `newItemRefusal` says `ITEM_PICKER_COPY.failed` ("Couldn’t create it. Try
-      again."), and **the copy dialog reads it as stale** (`COPY_COPY.stale`, "This program changed
-      somewhere else…") and refreshes. No screen reaches a real cap before 7b. The week editor does
-      not stop at `MAX_DAY_SLOTS` either; 7b owes that. `saveWeekAction` answers a day past
-      `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before `invalid`, as the
-      preview's fake does.
+    - **The caps stop at their entry points, and `limit_reached` has words per screen** (contract
+      C35; 7b plan §Caps). On the program page (7b-i): "+ New workout" at `MAX_PROGRAM_WORKOUTS` is
+      an `aria-disabled` button with `programFullText` under it; a day's "+ Add" at
+      `MAX_DAY_SLOTS` is `aria-disabled` + `PENDING_CLASS`, a tap says `dayFullText` and opens no
+      form, the hint sits under the header row (`aria-describedby` only while full), and focus stays
+      on it after the 30th add; a full day's checkbox in the add form and in Copy (this program
+      only) is inactive, "Tuesday, full". `weekRefusal(reason, sent)` names the full days and does
+      not refresh; `copyRefusal` names both causes (D13), or only the program's into this program
+      with no day picked, on To (`aria-invalid`, focused). The words come from the shared consts and
+      say "is full … holds at most N". ⏳ 7b-ii owes `saveRefusal`'s and `newItemRefusal`'s words and
+      the "+ New item" stop; until then they fall to their generic failure lines. `saveWeekAction`
+      answers a day past `MAX_DAY_SLOTS` as `limit_reached`, after `once_per_day` and before
+      `invalid`, as the preview's fake does.
     - **Each miss report walks its ids in the writer's order** (`report-miss.ts`, one first-miss
       helper): a week's program, then each workout it names (distinct, every one, looked up in
       one read of the program's live workout ids, lane P's `programWorkoutIds`, 6c-ii); a copy's

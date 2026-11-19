@@ -43,7 +43,7 @@ import {
  *    never the writer's object as it stands, so a field a writer adds later does not reach the
  *    client by accident.
  *
- * Until 7b, no page imports this module or the object, so no action id is served.
+ * Since 7b-i the program pages import `PROGRAM_ACTIONS`, so every action id is served.
  */
 
 const INVALID = { ok: false, reason: PROGRAM_REFUSAL.invalid } as const;
