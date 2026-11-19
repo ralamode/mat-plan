@@ -1,6 +1,7 @@
 import {
   emptyWeek,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_4_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   type ProgramResult,
   type Weekday,
@@ -27,6 +28,12 @@ import { createProgram } from './create-program';
 import { newItem } from './new-item';
 import { saveWeek } from './save-week';
 import { saveWorkout } from './save-workout';
+import {
+  SEED_E2E_ATHLETES,
+  SEED_E2E_COUNTS,
+  SEED_E2E_PROGRAM_CLIENT_ID,
+  SEED_E2E_WORLD,
+} from './seed-e2e';
 
 /**
  * The world the program contract's fixtures are built from (the prototype's `seed()`), as the
@@ -70,6 +77,21 @@ export const SEED_FIXTURE_COUNTS = {
 export const SEED_FIXTURE_PROGRAM_CLIENT_IDS: readonly string[] = FIXTURE_WORLD.programs.map((p) =>
   seedFixtureProgramClientId(p.id),
 );
+
+/**
+ * Every program the test seed writes (the fixture world's and the e2e one), and what they hold: for
+ * a proof that counts every seeded row of the household. The read deep-equals keep the world-only
+ * consts above.
+ */
+export const SEED_PROGRAM_CLIENT_IDS: readonly string[] = [
+  ...SEED_FIXTURE_PROGRAM_CLIENT_IDS,
+  SEED_E2E_PROGRAM_CLIENT_ID,
+];
+export const SEED_PROGRAM_COUNTS = {
+  workouts: SEED_FIXTURE_COUNTS.workouts + SEED_E2E_COUNTS.workouts,
+  prescriptions: SEED_FIXTURE_COUNTS.prescriptions + SEED_E2E_COUNTS.prescriptions,
+  assignments: SEED_FIXTURE_COUNTS.assignments + SEED_E2E_COUNTS.assignments,
+} as const;
 
 /**
  * For a refusal that can only be a bug in this module or a writer. State a person can make through
@@ -116,11 +138,61 @@ function skip(what: string, why: string): void {
 export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): Promise<void> {
   await db.transaction(async (tx) => {
     const items = new Map<string, { itemPublicId: string; name: string }>();
+    await seedWorld(
+      tx,
+      scope,
+      items,
+      FIXTURE_WORLD,
+      SEED_FIXTURE_ATHLETES,
+      seedFixtureProgramClientId,
+    );
+    // The e2e program (`seed-e2e.ts`, not a contract fixture) only with its athlete live and
+    // active: a run before the profile exists never leaves the program with nobody on it.
+    if (await liveActive(tx, scope, SEED_PROFILE_4_PUBLIC_ID)) {
+      await seedWorld(
+        tx,
+        scope,
+        items,
+        SEED_E2E_WORLD,
+        SEED_E2E_ATHLETES,
+        () => SEED_E2E_PROGRAM_CLIENT_ID,
+      );
+    } else {
+      skip('the e2e program', 'its athlete is not a live, active athlete of the household');
+    }
+  });
+}
+
+/** A live, not archived athlete of the household, by public id. */
+async function liveActive(tx: Executor, scope: HouseholdScope, profilePublicId: string) {
+  const [live] = await tx
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(and(isLiveProfile(profilePublicId, scope), isNull(schema.profiles.archivedAt)));
+  return Boolean(live);
+}
+
+/**
+ * One world's programs, workouts, weeks and athletes (the fixture world, or the e2e one), with every
+ * skip the module docblock lists. `items` is shared across worlds, so an item is made once.
+ */
+async function seedWorld(
+  tx: Executor,
+  scope: HouseholdScope,
+  items: Map<string, { itemPublicId: string; name: string }>,
+  world: World,
+  athletes: Readonly<Record<string, string>>,
+  clientIdOf: (programId: string) => string,
+): Promise<void> {
+  {
     const itemFor = async (key: keyof World['catalog']) => {
       const known = items.get(key);
       if (known) return known;
-      const { name, type } = FIXTURE_WORLD.catalog[key];
-      const made = must(await newItem(tx, scope, { name, trackingType: type }), `item ${key}`);
+      const { name, type } = world.catalog[key];
+      const result = await newItem(tx, scope, { name, trackingType: type });
+      // The household's item cap is state a person can make: skipped, never thrown.
+      if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
+      const made = must(result, `item ${key}`);
       // An item found by name keeps its own type; a fixture's quantities fit only the fixture's.
       if (made.trackingType !== type) return null;
       const found = { itemPublicId: made.itemPublicId, name: made.name };
@@ -129,8 +201,8 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
     };
 
     const made = new Map<string, string>();
-    for (const program of FIXTURE_WORLD.programs) {
-      const clientId = seedFixtureProgramClientId(program.id);
+    for (const program of world.programs) {
+      const clientId = clientIdOf(program.id);
       if (await programBlockByClientId(tx, scope, clientId)) continue;
 
       // Every item first, so a program whose item cannot be used writes no program at all.
@@ -143,7 +215,10 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
       }
       const unusable = program.workouts.flatMap((w) => w.items).find((item) => !real.has(item.iid));
       if (unusable) {
-        skip(`program ${program.id}`, `item ${unusable.iid} exists with another tracking type`);
+        skip(
+          `program ${program.id}`,
+          `item ${unusable.iid} exists with another tracking type, or the household is at its item cap`,
+        );
         continue;
       }
 
@@ -157,7 +232,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
 
       const workoutIds = new Map<string, string>();
       for (const workout of program.workouts) {
-        const draft = workoutDraft(FIXTURE_WORLD, program.id, workout.wid);
+        const draft = workoutDraft(world, program.id, workout.wid);
         // One statement at a time: a transaction is one connection.
         const itemsOf = [];
         for (const [i, item] of workout.items.entries()) {
@@ -182,7 +257,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
         workoutIds.set(fixtureIds.workout(workout.wid), workoutPublicId);
       }
 
-      const { week } = programView(FIXTURE_WORLD, program.id);
+      const { week } = programView(world, program.id);
       const days = emptyWeek();
       for (const weekday of WEEKDAYS) {
         days[weekday as Weekday] = week[weekday].map((slot) => ({
@@ -197,15 +272,11 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
     // Each athlete's programs, in the world's order. `putOn` places each by the Programs list
     // (D41), and the world lists them in that order, so the seeded order is the world's.
     // Only onto programs made in this run: a program seeded before keeps the athletes it has now.
-    for (const [athlete, assigned] of Object.entries(FIXTURE_WORLD.assign)) {
-      const profilePublicId = SEED_FIXTURE_ATHLETES[athlete];
+    for (const [athlete, assigned] of Object.entries(world.assign)) {
+      const profilePublicId = athletes[athlete];
       if (!profilePublicId) continue;
       // A seed athlete a person archived or removed is not put back on anything.
-      const [live] = await tx
-        .select({ id: schema.profiles.id })
-        .from(schema.profiles)
-        .where(and(isLiveProfile(profilePublicId, scope), isNull(schema.profiles.archivedAt)));
-      if (!live) {
+      if (!(await liveActive(tx, scope, profilePublicId))) {
         skip(`athlete ${athlete}`, 'not a live, active athlete of the household');
         continue;
       }
@@ -227,5 +298,5 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
         );
       }
     }
-  });
+  }
 }

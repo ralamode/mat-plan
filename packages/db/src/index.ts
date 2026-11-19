@@ -82,8 +82,10 @@ export {
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_3_PUBLIC_ID,
+  SEED_PROFILE_4_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_2_NAME,
+  SEED_PROFILE_4_NAME,
   SEED_FULL_ROUTINE,
   SEED_ATHLETE_TWO_ROUTINE,
   // FAM-1 step 1: the program-fixtures flag, so the local harness and its containment test name it

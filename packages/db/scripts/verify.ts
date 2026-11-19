@@ -268,7 +268,8 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
   );
 }
 // V1-3: the kid profiles, stable by public_id across re-seeds. PROF-1 b added a THIRD, owned by the
-// archive e2e specs — see `SEED_PROFILE_3_PUBLIC_ID`'s docblock for why archive cannot share one.
+// archive e2e specs — see `SEED_PROFILE_3_PUBLIC_ID`'s docblock for why archive cannot share one —
+// and FAM-1 a FOURTH, owned by the Change e2e (`SEED_PROFILE_4_PUBLIC_ID`).
 //
 // 🔴 **PRIV-3 RC, D7: what the seed writes, stated once.** This used to be a hand-written list of the
 // three profile ids; it is now equality with `SEED_PUBLIC_IDS`, the set `household-claim-…` refuses
@@ -285,7 +286,7 @@ assert.deepEqual(
 // SEED_PROFILE_NAME / SEED_PROFILE_2_NAME, which asserting against the consts could never catch.
 assert.deepEqual(
   profiles.map((p) => p.name).sort(),
-  ['Athlete One', 'Athlete Three', 'Athlete Two'],
+  ['Athlete Four', 'Athlete One', 'Athlete Three', 'Athlete Two'],
   'OSS-1: the seeded profile names are role names, not real first names',
 );
 assert.equal(households.length, 1, 'exactly one household after two seed runs');

@@ -30,10 +30,12 @@ import {
   emptyWeek,
   WEEKDAYS,
   weekDaysSchema,
+  SEED_PROFILE_4_PUBLIC_ID,
 } from '@mat-plan/shared';
 import {
   adultProgramWithCopy,
   DAY_PLAN_FIXTURE_SOURCES,
+  FIXTURE_SWITCH_DAY,
   familyProgram,
   familyProgramAfterTakeOff,
   familyProgramArchivedAthlete,
@@ -101,6 +103,12 @@ import {
 import { saveWeek } from '../../src/writers/program/save-week';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
+import {
+  SEED_E2E_PROGRAM_CLIENT_ID,
+  SEED_E2E_PROGRAM_NAME,
+  SEED_E2E_SLOTS,
+} from '../../src/writers/program/seed-e2e';
+import { resolveDayPlan } from '../../src/queries/day/day-plan';
 import { asDb, asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
@@ -142,6 +150,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyCopyWorkout(ctx);
   await verifyPutOn(ctx);
   await verifySeedFixtures(ctx);
+  await verifySeedE2eAthlete(ctx);
   await verifyProgramReads(ctx);
   await verifyTakeOff(ctx);
   await verifyReorderPrograms(ctx);
@@ -3408,6 +3417,107 @@ async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promi
   });
   console.log(
     '✓ FAM-1 6d-ii: reorderPrograms places the listed programs through the band, leaves a program ending today and a row in place untouched, keeps a hidden program’s row after, and its refusals write nothing',
+  );
+}
+
+/**
+ * The test seed's e2e athlete (docs/plans/fam-1-e2e-change-athlete.md): Athlete Four, on the test
+ * program from `FIXTURE_SWITCH_DAY`, has Heavy A then Heavy B on every day of the week, today and
+ * yesterday, as the day page reads it. Fixed dates only: no clock.
+ */
+async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+  const heavy = SEED_E2E_SLOTS.map((slot) => ({
+    label: slot.label,
+    name: world.programs.find((p) => p.id === 'p1')!.workouts.find((w) => w.wid === slot.wid)!.name,
+  }));
+  assert.ok(
+    !SEED_FIXTURE_PROGRAM_CLIENT_IDS.includes(SEED_E2E_PROGRAM_CLIENT_ID),
+    'FAM-1 e2e athlete: the test program’s client_id is no fixture program’s',
+  );
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const a = schema.programAssignments;
+    const rows = await tx
+      .select({ activeFrom: a.activeFrom, activeTo: a.activeTo, name: schema.programBlocks.name })
+      .from(a)
+      .innerJoin(schema.profiles, eq(schema.profiles.id, a.profileId))
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, a.blockId))
+      .where(and(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID), isNull(a.deletedAt)));
+    assert.deepEqual(
+      rows,
+      [{ activeFrom: FIXTURE_SWITCH_DAY, activeTo: null, name: SEED_E2E_PROGRAM_NAME }],
+      'FAM-1 e2e athlete: Athlete Four is on the test program from FIXTURE_SWITCH_DAY, and on nothing else',
+    );
+    const plan = async (day: string, today: string) =>
+      (
+        await resolveDayPlan(exec, {
+          scope: A_SCOPE,
+          profilePublicId: SEED_PROFILE_4_PUBLIC_ID,
+          day,
+          today,
+          catalog: [],
+        })
+      )?.workouts.map((w) => ({ label: w.label, name: w.name })) ?? null;
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(FIXTURE_SWITCH_DAY, i);
+      for (const today of [day, addDays(day, 1)]) {
+        assert.deepEqual(
+          await plan(day, today),
+          heavy,
+          `FAM-1 e2e athlete: Heavy A then Heavy B on every day of the week (${day}, today ${today})`,
+        );
+      }
+    }
+    assert.deepEqual(
+      await plan(addDays(FIXTURE_SWITCH_DAY, -1), FIXTURE_SWITCH_DAY),
+      [],
+      'FAM-1 e2e athlete: …and nothing the day before the start',
+    );
+
+    // A second run writes nothing.
+    const before = await assignmentRows(tx);
+    await seedProgramFixtures(exec, A_SCOPE);
+    assert.deepEqual(
+      await assignmentRows(tx),
+      before,
+      'FAM-1 e2e athlete: a second seed run writes nothing',
+    );
+
+    // A household without Athlete Four gets no test program.
+    await seedProgramFixtures(exec, B_SCOPE);
+    assert.equal(
+      await programBlockByClientId(exec, B_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
+      null,
+      'FAM-1 e2e athlete: a household without Athlete Four gets no test program',
+    );
+  });
+
+  // A household at its item cap: the seed skips what it cannot make, and never throws.
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { scope } = await capsHousehold(tx);
+    for (let i = 0; i < MAX_HOUSEHOLD_ITEMS; i++) {
+      await insertMovementOwnedBy(exec, scope, {
+        publicId: newId(),
+        slug: `seed-cap-item-${i}`,
+        name: `Seed Cap Item ${i}`,
+        isBodyweight: false,
+        trackingType: TRACKING_TYPE.reps,
+      });
+    }
+    const result = await seedProgramFixtures(exec, scope).then(
+      () => 'ok',
+      (e: unknown) => String(e).slice(0, 120),
+    );
+    assert.equal(
+      result,
+      'ok',
+      'FAM-1 e2e athlete: the seed succeeds with the household at its item cap',
+    );
+  });
+  console.log(
+    '✓ FAM-1 e2e athlete: Athlete Four has Heavy A then Heavy B every day from FIXTURE_SWITCH_DAY; a re-run writes nothing; no Athlete Four, no program; the item cap is a skip',
   );
 }
 
