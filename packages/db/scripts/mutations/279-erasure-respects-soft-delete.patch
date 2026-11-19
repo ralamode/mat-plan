@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index 655adcd5..c5148c1f 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -289,7 +289,7 @@ export async function eraseHousehold(
+       const owner = householdColumn(g.table);
+       const gone = rowsOf<{ id: number; hh: number | string | null }>(
+         await tx.execute(
+-          sql`DELETE FROM ${g.table} WHERE ${rowsFor(g, scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
++          sql`DELETE FROM ${g.table} WHERE ${g.table === schema.entries ? sql`(${rowsFor(g, scope)}) AND ${schema.entries.deletedAt} IS NULL` : rowsFor(g, scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
+         ),
+       );
+       if (owner && gone.some((r) => r.hh === null || Number(r.hh) !== Number(householdId))) {

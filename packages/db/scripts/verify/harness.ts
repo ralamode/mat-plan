@@ -66,10 +66,15 @@ class Rollback extends Error {}
  *   propagates unchanged, so a failing proof still fails `db:verify` with its own message.
  * - A statement Postgres rejects aborts the transaction. To assert a rejection and carry on, pass
  *   `tx` to `expectRejectedBy`, which runs the probe in a savepoint.
+ * - Given `parent`, the transaction is a SAVEPOINT of it, rolled back alone: one case of a proof
+ *   that shares a fixture across cases (PRIV-3 2a's P4).
  */
-export async function rolledBack(fn: (tx: VerifyTx) => Promise<void>): Promise<void> {
+export async function rolledBack(
+  fn: (tx: VerifyTx) => Promise<void>,
+  parent?: VerifyTx,
+): Promise<void> {
   try {
-    await db.transaction(async (tx) => {
+    await (parent ?? db).transaction(async (tx) => {
       await fn(tx);
       throw new Rollback();
     });
@@ -205,15 +210,8 @@ export async function captureWarnings(fn: () => Promise<void>): Promise<string> 
   return lines.join('\n');
 }
 
-/** The rows of a raw `execute` result, typed by the caller (the cast lives here once). */
-export function rowsOf<T>(res: unknown): T[] {
-  return (res as { rows: T[] }).rows;
-}
-
-/** The `id` column of a raw `execute` result, as numbers (an audit query's flagged rows). */
-export function idsOf(res: unknown): number[] {
-  return (res as { rows: { id: number | string }[] }).rows.map((r) => Number(r.id));
-}
+// The raw-result readers live once in `src/writers/executor.ts` (`src/erasure/` needs them too).
+export { idsOf, rowsOf } from '../../src/writers/executor';
 
 // CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
 // its shared const (pins the schema CHECKs to the single source of truth — one can't drift
