@@ -1169,6 +1169,54 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   see a left/right difference. Needs a decision on whether a side is a property of the item, of the
   row, or two rows.
 
+- <a id="card-1"></a>**CARD-1 — a streak card an athlete can post.** _(maintainer, 2026-11-19, not
+  scoped. Recorded only: nothing here is built or prototyped before Beta 0 ships.)_ A branded image
+  of an athlete's streak, made for the phone's share sheet, so it can go on a social app and lead
+  people back to us through a short link or a QR code on the card. It is the cheapest growth feature
+  recorded: it is built only from data the household already has, and it shows nobody else's.
+  Needs `MOT-1` (the streak) first. It does not need [`ID-1`](#id-1).
+  **Rules proposed by the plan owner, for the maintainer to confirm when it is scoped:** a first
+  name or a nickname only; never a bodyweight (`ID-1`'s rule), a club, a place or a time of day;
+  the link on the card opens a public page about the app that holds nothing about the athlete.
+  **Open question (maintainer):** may a child share their own card once a parent approves, or do
+  only parents share?
+  **What a plan must say:** a posted card is out of our hands, so PRIV-1's defined deletion cannot
+  reach it; the card can only ever say what the family chose at that moment. Gets the
+  `privacy-reviewer` lens on every PR.
+
+- <a id="swap-1"></a>**SWAP-1 — adapt a day to the equipment at hand.** _(maintainer, 2026-11-19,
+  not scoped. Recorded only.)_ An athlete training somewhere else (a hotel, another gym, home) swaps
+  a movement for one they can do there.
+  **A framework first, not a model.** Once `CAT-3`'s library is in, every movement carries its
+  equipment, its muscles and its lift pattern, so "what can I do here instead" is a filter: the same
+  pattern and primary muscle, limited to the equipment at this place. It is deterministic, and it
+  can say why it offered each candidate.
+  **It never invents a load** ([principles](./principles.md): the model never authors loads, and
+  neither does a filter): a swapped-in movement starts with a blank load, or with the athlete's own
+  last one for that movement.
+  **What it needs:** a list of equipment per place (home, gym, travel), which is also what `CAT-3`'s
+  later "needs nothing beyond these" filter needs; and a way to log a swap for one day without
+  changing the program, which the day's rows cannot do today.
+  A model could later rank or explain the candidates. That is a second step with its own row.
+
+- <a id="import-1"></a>**IMPORT-1 — draft a program from a photo, a screenshot or pasted text, then
+  review it.** _(maintainer, 2026-11-19, not scoped. Recorded only.)_ A parent brings the program
+  they already have: a printed workout sheet, a screenshot from another app, or text pasted from a
+  document or a spreadsheet. A model reads it and drafts the program. **A review screen shows every
+  line beside its source**, each matched to a library movement or flagged as unmatched, and nothing
+  is saved until the parent confirms.
+  It is `ONB-1`'s bring-your-own-program with a faster way in, and `ONB-1`'s scope rule holds: a
+  program, never a family's logged history.
+  **The load rule decides the design** ([principles](./principles.md): the model never authors
+  loads; it may draft definitions a human confirms). A load on the sheet is either shown as
+  transcribed and confirmed one by one, or left blank for the parent to type.
+  **Open question (maintainer):** which of those two.
+  **What it needs settled before any plan:** an upload is processed and discarded, never kept and
+  never used for anything else, because a sheet can carry a child's name and numbers
+  (`privacy-reviewer` lens on every PR); a test set of real sheet formats with the expected result
+  for each, so accuracy is measured and not claimed; and what the screen does with a line it cannot
+  read. Depends on `CAT-3` (the matching) and on FAM-1's builder (the draft is an ordinary program).
+
 - **LIFE-1 — the Wake button on a past day writes TODAY's wake, and can write a second one.**
   _(found by a UX panel during `V1-9b` B1-2, 2026-11-14; not scoped.)_ `logLifeActivitiesAction`
   derives Wake's `entryDay` from `new Date()` regardless of the day being viewed (Wake is a "now"
@@ -1318,6 +1366,11 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   follow, whether approval is required, and whether a notification reveals a schedule pattern
   (_"trained at 3pm every weekday"_ is a time-and-place pattern about a minor). Same privacy posture as
   `COACH-1`: the `privacy-reviewer` lens on every PR.
+  **A lighter first step, recorded 2026-11-19 (maintainer, not scoped):** following sits behind
+  sign-in. A visitor who arrives from a shared card ([`CARD-1`](#card-1)) or a shared program
+  (`SHARE-1`) sees "sign in to follow", and the request goes to the athlete's guardian. The point is
+  that wanting to follow is a reason to join. It still waits for [`ID-1`](#id-1): it is the
+  adult-follows-child path above, and a guardian has to be the one who answers.
 
 - **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
   club coach is granted access to outcomes for athletes in other households, and gets notified of
