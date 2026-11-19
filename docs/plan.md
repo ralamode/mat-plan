@@ -1523,15 +1523,14 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
       refuse unless it's the owner". Once a login can be linked to its own athlete, an adult member
       exports their own athlete's data and nothing else, any other login that is not the owner's
       is refused, and the owner exports everything. **Until then only the household's owner
-      exports**, and every other login is refused (FAM-1's export follow-up, lane E; planned, not
-      built yet).
+      exports**, and every other login is refused (FAM-1's export follow-up, lane E; built in #670, 2026-11-19).
       ⚠️ "If they are an adult" is a permission that turns on age, which keep-open item 5 keeps
       out of every auth chunk until this row. So the adult half arrives **with** this row's one
       policy, never before it, and this row must say what makes a login an adult's and which
       athlete is its own.
       **This row also owes the words in the app** where a login that is not the owner's has no
       export control: until a member login exists, the privacy notice is the only place that says
-      so, once FAM-1's export follow-up (lane E, not merged yet) changes it.
+      so, as it does since #670 (2026-11-19).
       `SETTINGS_COPY.ownerOnly` is the likely pattern.
     - **Bodyweight, feeds and sharing.** "Shouldn't any member of the household be ok to see it?
       This shouldn't go on a child's feed but and adult could choose to publish." Inside the app,
