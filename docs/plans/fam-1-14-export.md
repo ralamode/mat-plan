@@ -413,7 +413,8 @@ lands in exactly one file`.
 **Two follow-ups the maintainer decided, each its own small PR after 14a** (lane E, as the export's
 owner):
 
-- **Bodyweight download, operator only.** The code is made to match `.github/SECURITY.md:134`, with
+- **Bodyweight download, operator only** ([plan](./fam-1-export-owner-only.md), with the export rate
+  limit; two PRs). The code is made to match `.github/SECURITY.md:134`, with
   a boundary test that a non-operator member is refused. The privacy lens reviews it, and the
   inventory and notice change in the same PR.
 - **Spreadsheet formula injection, fixed.** Any cell starting with `=`, `+`, `-`, `@`, a tab or a
