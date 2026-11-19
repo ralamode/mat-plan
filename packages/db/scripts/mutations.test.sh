@@ -253,6 +253,32 @@ printf '%s\n' '{"index":1,"total":2,"patches":["01-drop-scope.patch"]}' >"$T/rep
 run --verify-reports "$T/reports"
 check "--verify-reports: a patch run twice: exit 1" '[ "$(code)" = 1 ] && out_has "run more than once: 01-drop-scope.patch"'
 
+# ── More report and flag cases (review of #675) ────────────────────────────────────────────────
+setup; mkdir -p "$T/r"
+printf '%s\n' '{"index":0,"total":2,"patches":["01-drop-scope.patch","02-drop-second.patch"]}' >"$T/r/a.json"
+printf '%s\n' '{"index":0,"total":2,"patches":[]}' >"$T/r/b.json"
+run --verify-reports "$T/r"
+check "--verify-reports: one shard reported twice, the other never: exit 1" '[ "$(code)" = 1 ] && out_has "shards reported: [0,0]"'
+printf '%s\n' '{"index":1,"total":3,"patches":[]}' >"$T/r/b.json"
+run --verify-reports "$T/r"
+check "--verify-reports: reports disagree on the shard count: exit 1" '[ "$(code)" = 1 ] && out_has "disagree on the shard count"'
+printf '%s\n' '{"index":1,"total":2,"patches":["99-gone.patch"]}' >"$T/r/b.json"
+run --verify-reports "$T/r"
+check "--verify-reports: a patch that is not committed: exit 1" '[ "$(code)" = 1 ] && out_has "not a committed patch: 99-gone.patch"'
+mkdir -p "$T/empty"; run --verify-reports "$T/empty"
+check "--verify-reports: no reports at all: exit 1" '[ "$(code)" = 1 ] && out_has "no shard reports were found"'
+run --verify-reports "$T/missing"
+check "--verify-reports: a missing directory: exit 1" '[ "$(code)" = 1 ]'
+run --shard 1/0; check "--shard 1/0: exit 1" '[ "$(code)" = 1 ] && out_has "--shard takes i/n"'
+run --shard x/y; check "--shard x/y: exit 1" '[ "$(code)" = 1 ] && out_has "--shard takes i/n"'
+
+# A lock written by the runner before DX-18 PR 2 ({pid, startedAt}, no holders) by a LIVE process.
+setup; mode red-right
+printf '{"pid":%s,"startedAt":"2026-11-18T00:00:00Z"}' "$$" >"$GITDIR/mat-plan-mutations.lock"
+MAT_PLAN_HEAVY_SLOT=off node "$R/packages/db/scripts/mutations.mjs" >"$T/out" 2>&1; c=$?
+check "an older runner's live lock is held, not stolen: exit 1" '[ "$c" = 1 ] && out_has "in flight in this worktree" && both_original'
+rm -f "$GITDIR/mat-plan-mutations.lock"
+
 echo
 echo "mutations.test.sh: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

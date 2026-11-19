@@ -20,7 +20,8 @@
  * status check) is not decided here: those steps take no flag.
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Files that cannot change what the app builds or what the smoke sees. Formerly the e2e job's
@@ -51,8 +52,9 @@ const MUTATION_TRIGGERS = [
 const ALL_RUN = { run_mutations: true, run_build: true, run_e2e: true };
 
 /**
- * The flags for one list of changed files. `patchPaths` is every path a mutation patch touches
- * (`mutations.mjs --list-paths`): a change to one of those runs the proof even outside the packages.
+ * The flags for one list of changed files. `patchPaths()` returns every path a mutation patch
+ * touches (`mutations.mjs --list-paths`): a change to one of those runs the proof even outside the
+ * packages. It is called only when no trigger already decided, so it usually does not run.
  */
 export function scopesFor(files, patchPaths) {
   if (files.length === 0) return { ...ALL_RUN };
@@ -60,9 +62,14 @@ export function scopesFor(files, patchPaths) {
   const touchesWorkflowsOrScripts = files.some(
     (f) => f.startsWith('.github/') && !INERT.some((re) => re.test(f)),
   );
+  const triggered =
+    touchesWorkflowsOrScripts || files.some((f) => MUTATION_TRIGGERS.some((re) => re.test(f)));
   const mutations =
-    touchesWorkflowsOrScripts ||
-    files.some((f) => MUTATION_TRIGGERS.some((re) => re.test(f)) || patchPaths.has(f));
+    triggered ||
+    (() => {
+      const paths = patchPaths();
+      return files.some((f) => paths.has(f));
+    })();
   return {
     run_mutations: mutations,
     run_build: touchesWorkflowsOrScripts || !inert,
@@ -83,14 +90,20 @@ function decide() {
   const files = git(['diff', '--name-only', '--no-renames', '-z', base, 'HEAD'])
     .split('\0')
     .filter(Boolean);
-  // HEAD's patches, run from HEAD's runner: they are what the shards would apply.
-  const patchPaths = new Set(
-    execFileSync('node', ['packages/db/scripts/mutations.mjs', '--list-paths'], {
-      encoding: 'utf8',
-    })
-      .split('\n')
-      .filter(Boolean),
-  );
+  // HEAD's patches, listed by HEAD's runner: they are what the shards would apply. That is the PR's
+  // own code, so it gets no GITHUB_OUTPUT to write to and a minute to answer. Any change to the
+  // runner is under packages/db/ and already triggered the shards, so this runs only on a PR that
+  // left it untouched.
+  const patchPaths = () =>
+    new Set(
+      execFileSync('node', ['packages/db/scripts/mutations.mjs', '--list-paths'], {
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_OUTPUT: '' },
+        timeout: 60_000,
+      })
+        .split('\n')
+        .filter(Boolean),
+    );
   return { flags: scopesFor(files, patchPaths), why: `${files.length} changed file(s)` };
 }
 
@@ -110,4 +123,10 @@ function main() {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, lines.join('\n') + '\n');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// Run when executed, not when imported: compared by real path, because the copy CI runs sits in
+// $RUNNER_TEMP and a symlinked temp dir would otherwise never match.
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+)
+  main();

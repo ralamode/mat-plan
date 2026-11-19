@@ -48,22 +48,13 @@ jobs:
           sha="$(bash .github/scripts/resolve-pr-base.sh)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      # ── Scopes: which heavy steps this PR needs (DX-18 D7) ──────────────────
-      # The BASE's copy of the script decides, so a PR cannot reclassify itself. On a push, with no
-      # base copy (the PR that adds the script), or if the script fails, every heavy step runs. A
-      # step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
       - name: Scopes (changed-scopes.mjs)
         id: scopes
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}
-        run: |
-          script="$RUNNER_TEMP/changed-scopes.mjs"
-          if [ -n "$BASE_SHA" ] && git show "$BASE_SHA:.github/scripts/changed-scopes.mjs" >"$script" 2>/dev/null; then
-            node "$script" || printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          else
-            echo "changed-scopes: a push, or no base copy of the script; every heavy step runs"
-            printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/scopes-step.sh
 
       # ── Action pins (SEC-2; .github/SECURITY.md → "Supply chain") ──────────
       # migrate.yml only runs AFTER merge, so GitHub's
@@ -470,6 +461,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the scopes diff against the PR base
+          persist-credentials: false # PR code runs below; nothing here fetches or pushes
 
       - name: Resolve PR base
         id: base
@@ -477,22 +469,13 @@ jobs:
           sha="$(bash .github/scripts/resolve-pr-base.sh)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      # ── Scopes: which heavy steps this PR needs (DX-18 D7) ──────────────────
-      # The BASE's copy of the script decides, so a PR cannot reclassify itself. On a push, with no
-      # base copy (the PR that adds the script), or if the script fails, every heavy step runs. A
-      # step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
       - name: Scopes (changed-scopes.mjs)
         id: scopes
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}
-        run: |
-          script="$RUNNER_TEMP/changed-scopes.mjs"
-          if [ -n "$BASE_SHA" ] && git show "$BASE_SHA:.github/scripts/changed-scopes.mjs" >"$script" 2>/dev/null; then
-            node "$script" || printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          else
-            echo "changed-scopes: a push, or no base copy of the script; every heavy step runs"
-            printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/scopes-step.sh
 
       # The smoke is SKIPPED (heavy steps gated) but the job still SUCCEEDS in two
       # cases — so once `e2e` is a required check (planned at V0/PR-28), neither
@@ -659,6 +642,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the scopes diff against the PR base
+          persist-credentials: false # PR code runs below; nothing here fetches or pushes
 
       - name: Resolve PR base
         id: base
@@ -666,22 +650,13 @@ jobs:
           sha="$(bash .github/scripts/resolve-pr-base.sh)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      # ── Scopes: which heavy steps this PR needs (DX-18 D7) ──────────────────
-      # The BASE's copy of the script decides, so a PR cannot reclassify itself. On a push, with no
-      # base copy (the PR that adds the script), or if the script fails, every heavy step runs. A
-      # step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
       - name: Scopes (changed-scopes.mjs)
         id: scopes
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}
-        run: |
-          script="$RUNNER_TEMP/changed-scopes.mjs"
-          if [ -n "$BASE_SHA" ] && git show "$BASE_SHA:.github/scripts/changed-scopes.mjs" >"$script" 2>/dev/null; then
-            node "$script" || printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          else
-            echo "changed-scopes: a push, or no base copy of the script; every heavy step runs"
-            printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/scopes-step.sh
 
       - name: Setup pnpm
         if: steps.scopes.outputs.run_mutations != 'false'
@@ -714,17 +689,19 @@ jobs:
           name: mutations-ran-${{ strategy.job-index }}
           path: ${{ runner.temp }}/mutations-ran/
           retention-days: 1
+          overwrite: true # a re-run replaces its attempt's report
 
   # Every shard passed, and together they ran every committed patch exactly once.
   mutations-total:
     name: mutations-total
     needs: mutations
-    if: always()
+    if: '!cancelled()' # a cancelled run is not a red proof
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the scopes diff against the PR base
+          persist-credentials: false # PR code runs below; nothing here fetches or pushes
 
       - name: Resolve PR base
         id: base
@@ -732,22 +709,13 @@ jobs:
           sha="$(bash .github/scripts/resolve-pr-base.sh)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      # ── Scopes: which heavy steps this PR needs (DX-18 D7) ──────────────────
-      # The BASE's copy of the script decides, so a PR cannot reclassify itself. On a push, with no
-      # base copy (the PR that adds the script), or if the script fails, every heavy step runs. A
-      # step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
       - name: Scopes (changed-scopes.mjs)
         id: scopes
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}
-        run: |
-          script="$RUNNER_TEMP/changed-scopes.mjs"
-          if [ -n "$BASE_SHA" ] && git show "$BASE_SHA:.github/scripts/changed-scopes.mjs" >"$script" 2>/dev/null; then
-            node "$script" || printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          else
-            echo "changed-scopes: a push, or no base copy of the script; every heavy step runs"
-            printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/scopes-step.sh
 
       - name: Every shard passed
         if: steps.scopes.outputs.run_mutations != 'false'
@@ -777,7 +745,7 @@ jobs:
     name: mutations-red-on-main
     needs: [mutations, mutations-total]
     if: >-
-      always() && github.event_name == 'push' &&
+      !cancelled() && github.event_name == 'push' &&
       (needs.mutations.result == 'failure' || needs.mutations-total.result == 'failure')
     runs-on: ubuntu-latest
     permissions:
@@ -792,7 +760,9 @@ jobs:
         run: |
           title='mutation gate red on main'
           body="The mutation proof failed on $SHA: $RUN_URL"
-          number="$(gh issue list --repo "$REPO" --state open --search "\"$title\" in:title" --json number,title \
+          # The plain listing, not --search: search indexing lags, so two quick red pushes would
+          # each miss the other's issue and open two.
+          number="$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title \
             --jq "map(select(.title == \"$title\")) | .[0].number // empty")"
           if [ -n "$number" ]; then
             gh issue comment "$number" --repo "$REPO" --body "$body"

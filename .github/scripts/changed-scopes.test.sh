@@ -94,11 +94,30 @@ out="$T/gh-output"
 (cd "$R" && GITHUB_OUTPUT="$out" GITHUB_EVENT_NAME=push node .github/scripts/changed-scopes.mjs >/dev/null 2>&1)
 [ "$(cat "$out")" = "$(printf 'run_mutations=true\nrun_build=true\nrun_e2e=true')" ] && ok "writes the flags to GITHUB_OUTPUT" || no "GITHUB_OUTPUT: $(cat "$out")"
 
-# The polarity rule, on the real workflows: a step skips only on a literal 'false'.
-if grep -nE "run_(mutations|build|e2e)[^=]*== *'true'" "$ROOT"/.github/workflows/*.yml; then
-  no "a workflow compares a scope with == 'true' (must be != 'false')"
+# scopes-step.sh, the step every heavy job runs: its fallbacks.
+cp "$HERE/scopes-step.sh" "$R/.github/scripts/"
+step() { : >"$T/out"; (cd "$R" && GITHUB_OUTPUT="$T/out" RUNNER_TEMP="$T" BASE_SHA="$1" GITHUB_EVENT_NAME=pull_request bash .github/scripts/scopes-step.sh >"$T/step.log" 2>&1); tr '\n' ' ' <"$T/out"; }
+ALL="run_mutations=true run_build=true run_e2e=true "
+[ "$(step "")" = "$ALL" ] && ok "scopes-step: no base runs everything" || no "scopes-step no base: $(cat "$T/out")"
+nobase="$(git -C "$R" rev-list --max-parents=0 HEAD)"
+g rm -q --cached .github/scripts/changed-scopes.mjs && g commit -qm "no script" && g checkout -q -- .github/scripts 2>/dev/null; cp "$HERE/changed-scopes.mjs" "$R/.github/scripts/"
+noscript="$(g rev-parse HEAD)"
+[ "$(step "$noscript")" = "$ALL" ] && ok "scopes-step: a base without the script runs everything" || no "scopes-step no script: $(cat "$T/out")"
+printf 'throw new Error("broken");\n' >"$R/.github/scripts/changed-scopes.mjs"; g add -A && g commit -qm broken
+broken="$(g rev-parse HEAD)"
+[ "$(step "$broken")" = "$ALL" ] && ok "scopes-step: a base script that fails runs everything" || no "scopes-step broken: $(cat "$T/out")"
+g reset -q --hard "$BASE"
+printf 'more\n' >>"$R/docs/a.md"; g add docs && g commit -qm docs
+cp "$HERE/scopes-step.sh" "$R/.github/scripts/" # untracked: the step is the PR's own file
+[ "$(step "$BASE")" = "run_mutations=false run_build=false run_e2e=false " ] && ok "scopes-step: the base's script decides a docs-only PR" || no "scopes-step docs: $(cat "$T/out") $(cat "$T/step.log")"
+g reset -q --hard "$BASE"
+
+# The polarity rule, on the real workflows: a step skips only on a literal false. Any comparison of
+# a scope (or an env var carrying one) with true, quoted or not, is refused.
+if grep -nE "(run_(mutations|build|e2e)|RUN_(MUTATIONS|BUILD|E2E))[^#]*(==|=|!=)[[:space:]]*['\"]?true\b" "$ROOT"/.github/workflows/*.yml; then
+  no "a workflow compares a scope with true (must compare with false)"
 else
-  ok "no workflow compares a scope with == 'true'"
+  ok "no workflow compares a scope with true"
 fi
 
 echo

@@ -10,7 +10,7 @@ anything.
 [plan](../../../../docs/plans/dx-18-heavy-runs-to-ci.md) D6): `ci.yml`'s `mutations` matrix runs
 `--shard i/n`, each shard writes a `--report`, and `mutations-total` checks with `--verify-reports`
 that together they ran every patch exactly once. `changed-scopes.mjs` skips the shards on a PR that
-touches nothing a patch reaches (its `--list-paths`, the packages, the lockfile, a manifest or
+touches nothing a patch reaches (its `--list-paths`, the packages, the lockfile, `pnpm-workspace.yaml`, a manifest, a tsconfig or
 `.github/`). Locally, run what you are writing: `pnpm --filter @mat-plan/db db:mutations --only 335`
 (a number, a range such as `330-335`, or text in the file name).
 

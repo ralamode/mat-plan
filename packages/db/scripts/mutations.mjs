@@ -14,8 +14,9 @@
  * left patch 153 in `writers/practice.ts` and patch 150 in a commit, 2026-11-17; plan:
  * `docs/plans/dx-mutations-kill-safe.md`):
  *
- * - **One run per worktree:** a lock in the worktree's git dir; a second run refuses while the first
- *   is alive, and only a lock whose pid is gone is treated as stale.
+ * - **One run per worktree:** a lock in the worktree's git dir (`pid-lock.mjs`); a second run refuses
+ *   while the first is alive. A lock is stale when its pid is gone or now names a process with a
+ *   different start time (a reused pid).
  * - **A journal before every apply** (same git dir, written then renamed): the patched paths, their
  *   pre-patch bytes and hash, the patched hash, and the gate's process group.
  * - **Restore by hash, three states:** a file equal to its snapshot is left alone; a file equal to
@@ -75,21 +76,37 @@ const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),
 
 // ── The lock: one run per worktree (on the shared helper, `.github/scripts/pid-lock.mjs`) ──────────
 let lockPayload = null;
+/** A lock written by the runner before DX-18 PR 2 (`{ pid, startedAt }`, no `holders`), if its pid lives. */
+function oldFormatHolder() {
+  try {
+    const old = JSON.parse(readFileSync(LOCK, 'utf8'));
+    if (Array.isArray(old.holders) || !Number.isInteger(old.pid)) return null;
+    process.kill(old.pid, 0);
+    return old.pid;
+  } catch (error) {
+    return error?.code === 'EPERM' ? 'unknown' : null;
+  }
+}
+function refuse(pid) {
+  console.error(
+    `✗ mutation gate: another db:mutations run is in flight in this worktree (pid ${pid}).\n` +
+      `  Two runs in one worktree apply patches under each other's gate. Wait for it to finish\n` +
+      `  (its lock: ${LOCK}).`,
+  );
+  process.exit(1);
+}
 function acquireLock() {
+  // pid-lock reads a lock without `holders` as stale, so an older runner's live lock is checked
+  // here first: a worktree updated mid-run must not get a second run under the first.
+  const old = oldFormatHolder();
+  if (old) refuse(old);
   const payload = {
     pid: process.pid,
     startedAt: new Date().toISOString(),
     holders: [holder(process.pid)],
   };
   const result = acquire(LOCK, payload);
-  if (!result.held) {
-    console.error(
-      `✗ mutation gate: another db:mutations run is in flight in this worktree (pid ${result.holder.pid}).\n` +
-        `  Two runs in one worktree apply patches under each other's gate. Wait for it to finish\n` +
-        `  (its lock: ${LOCK}).`,
-    );
-    process.exit(1);
-  }
+  if (!result.held) refuse(result.holder.pid);
   lockPayload = payload;
 }
 function releaseLock() {
