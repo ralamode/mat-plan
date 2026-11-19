@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 240dbb23..81ae348f 100644
+index 70491bca..35dc6a15 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -206,7 +206,7 @@ export async function putOn(
+@@ -207,7 +207,7 @@ export async function putOn(
        const endsToday = current.find((row) => row.blockId === block.id);
  
        const order = open.map((row) => row.blockId);
 -      if (endsToday) {
 +      if (endsToday && today === 'never') {
-         // D41 (the maintainer, 2026-11-18): back at its old place, or last if fewer remain. Parked
-         // first, so clearing `active_to` meets no open row on the order index.
-         const at = Math.min(endsToday.idx, order.length);
+         // D41 (the maintainer, 2026-11-18): back at its old place: after the open programs that were
+         // ahead of it (a lower `idx`), so another program taken off today too does not move it.
+         // Parked first, so clearing `active_to` meets no open row on the order index.

@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 240dbb23..5d2dc3e3 100644
+index 70491bca..6eb01a27 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -180,8 +180,7 @@ export async function putOn(
+@@ -181,8 +181,7 @@ export async function putOn(
      const listed = await tx
        .select({ id: schema.programBlocks.id })
        .from(schema.programBlocks)
 -      .where(liveTemplateBlockIn(scope))
--      .orderBy(asc(schema.programBlocks.id));
+-      .orderBy(programListOrder());
 +      .where(liveTemplateBlockIn(scope));
      const listPlace = new Map(listed.map((b, i) => [b.id, i]));
      const rank = (blockId: number) => listPlace.get(blockId) ?? -1;

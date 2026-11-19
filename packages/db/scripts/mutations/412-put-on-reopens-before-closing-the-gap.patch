@@ -1,9 +1,9 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 240dbb23..e4ab13d9 100644
+index 70491bca..fe6a0aa9 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -212,7 +212,7 @@ export async function putOn(
-         const at = Math.min(endsToday.idx, order.length);
+@@ -214,7 +214,7 @@ export async function putOn(
+         const at = open.filter((row) => row.idx < endsToday.idx).length;
          await tx
            .update(a)
 -          .set({ activeTo: null, idx: PARK_IDX, updatedAt: sql`now()` })

@@ -1,10 +1,10 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 240dbb23..f208179e 100644
+index 70491bca..ff2fef01 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
-@@ -183,7 +183,7 @@ export async function putOn(
+@@ -184,7 +184,7 @@ export async function putOn(
        .where(liveTemplateBlockIn(scope))
-       .orderBy(asc(schema.programBlocks.id));
+       .orderBy(programListOrder());
      const listPlace = new Map(listed.map((b, i) => [b.id, i]));
 -    const rank = (blockId: number) => listPlace.get(blockId) ?? -1;
 +    const rank = (blockId: number) => listPlace.get(blockId) ?? Number.MAX_SAFE_INTEGER;
