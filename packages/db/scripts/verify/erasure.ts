@@ -1475,7 +1475,7 @@ async function verifyOneShotErasure(): Promise<void> {
       const kId = await newHousehold(inner, 'r0-preflight-k');
       const K_SCOPE = householdScopeForScript(kId);
       const block = await mkTemplateBlock(asTx(inner), K_SCOPE, 'r0-preflight-k-block');
-      await mkAssignment(inner, { blockId: block, profileId: seedProfile.id });
+      await mkAssignment(inner, { blockId: block, profileId: seedProfile.id, idx: 999 });
       const innerDb = inner as unknown as Database;
       const dryLines = (
         await withEnv({ ...NO_ERASE_ENV, DATABASE_URL_UNPOOLED: REMOTE }, () =>
