@@ -687,8 +687,10 @@ one program, workout or typed item on request" deletes one program the household
 items, targets, week and who was on it, hidden rows included), one workout, or one item the household
 typed that no log names. The logs of athletes who trained on a removed program stay, with the text
 frozen onto them when they were logged. It runs with no pause once the owner, told which athletes it affects, accepts; an adult
-athlete affected is told first, cannot cancel, and is sent their own copy; its restore branch is held 3
-days, not 7 _(maintainer, 2026-11-18)_.
+athlete affected is told first, cannot cancel, and is sent their own copy, and the removal waits until
+they confirm it or 3 days pass; its restore branch is held 3
+days, not 7 _(maintainer, 2026-11-18)_. A typed item that a log names is not removed, but on request, after consent, its name
+is replaced on the item and on the household's own logs, so the typed text is gone and the logs stay.
 
 ## 6. Getting data out — and what the export omits
 

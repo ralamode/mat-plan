@@ -2221,18 +2221,19 @@ Offer the export (step 1) to each athlete listed.
 
 Then offer, as the default, the change that touches nobody's data:
 
-| Target    | The alternative, offered first                                                                                                                                            |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A program | Rename it, or take every athlete off it (the app's take off): it stays, and so does who was on it                                                                         |
-| A workout | Rename it, or take it off the week: it stays in the program, and its logs keep their link                                                                                 |
-| An item   | Rename it. No correction does this yet; one is written when first asked for. A rename, like a refused removal, leaves the name as logged on every log and in every export |
+| Target    | The alternative, offered first                                                                                                                        |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A program | Rename it, or take every athlete off it (the app's take off): it stays, and so does who was on it                                                     |
+| A workout | Rename it, or take it off the week: it stays in the program, and its logs keep their link                                                             |
+| An item   | Rename it, and if a log names it, have the name replaced on those logs too (below, Q12): the logs, sets and numbers stay; only the typed text changes |
 
 **Remove only if the requester, told who, explicitly accepts changing those athletes' data.** If they
 pick the alternative, a stop refuses, or they withdraw, nothing is removed, and **the ledger entry is
 deleted then**. An **adult** athlete
 among those affected is told first, on their own channel, and cannot cancel it (Q9). **Before the apply
 they are sent their own full copy**: their assignment rows and their targets on it, which the in-app
-export does not hold. There is no in-app archive for a program, a workout or an item yet; when one is
+export does not hold. **The apply waits until they confirm they have it, and at most 3 days after it was
+sent** (Q11); record the date sent and the date confirmed (or "not confirmed, 3 days") in the ledger. There is no in-app archive for a program, a workout or an item yet; when one is
 built it is offered first, the same way.
 
 **4. Apply** in one transaction; its **first statement after the `SET LOCAL`s locks the target** (below), so the app's
@@ -2385,8 +2386,8 @@ device that later saves the removed workout gets the writer's `not_found` refusa
 -- STOP 2 (must be 0): a LOG of this household names it. The item is the name those rows show, so it
 -- cannot go while they stay. Live and hidden are counted apart: a row hidden by "Clear this day" is
 -- kept hidden, not erased, and still names it. Tell the household which athletes, and that the item
--- stays; the routes that remove those rows are erasing the athlete or deleting the household. Never
--- delete or repoint the logs to make this pass.
+-- stays; if the text itself must go, offer to replace it on those logs (below, Q12). Never delete or
+-- repoint the logs to make this pass.
 SELECT e.profile_id, (e.deleted_at IS NOT NULL) AS hidden, count(*) FROM entries e
   JOIN profiles p ON p.id = e.profile_id
  WHERE e.movement_id = :M AND p.household_id = :H GROUP BY 1, 2;
@@ -2424,6 +2425,52 @@ WHERE id = :M AND household_id = :H`), never `:M` alone, so a mistyped id cannot
 
 Never answer an abort here by setting `household_id` to NULL: that would publish the household's text
 into the shared catalog (the household delete's step 11 says why).
+
+#### A typed item's name, replaced on its logs (Q12)
+
+When a log names the item (STOP 2 is not 0) and the household wants the **text** gone, for example a
+person's name typed as an exercise, its name can be replaced on the item and on the household's own logs
+_(maintainer, 2026-11-18)_. The logs, sets and numbers stay; only the typed text changes.
+
+- **Consent first:** step 3's list says whose logs change (STOP 2's athletes, live and hidden), and the
+  requester accepts. An adult athlete among them is told first, as above (Q9, Q11).
+- **The new name** is neutral and chosen by the requester (never a person's name). `:old` is the item's
+  current `name`; `:new_slug` comes from `movementSlug(:new)` in `packages/shared`, the function the app
+  uses, never typed by hand.
+- **Stops (must be 0):** STOP 4 (another household's rows on it); `:new_slug` already used in this
+  household or by the shared catalog (pick another name); and any other frozen text of this household
+  that holds `:old`, which this does not rewrite:
+
+```sql
+SELECT 'slug' k, count(*) FROM movements
+ WHERE slug = :new_slug AND (household_id = :H OR household_id IS NULL) AND id <> :M
+UNION ALL SELECT 'snapshot', count(*) FROM entries e JOIN profiles p ON p.id = e.profile_id
+ WHERE e.movement_id = :M AND p.household_id = :H
+   AND position(:old IN coalesce(e.prescribed_snapshot, '')) > 0
+UNION ALL SELECT 'group', count(*) FROM supersets ss
+  JOIN sessions s ON s.id = ss.session_id JOIN profiles p ON p.id = s.profile_id
+ WHERE p.household_id = :H AND position(:old IN coalesce(ss.prescription_group, '')) > 0;
+```
+
+A non-zero `snapshot` or `group` is a new question for the maintainer, not a hand edit.
+
+- **Apply**, in one transaction: lock the item (`SELECT id FROM movements WHERE id = :M AND household_id
+= :H FOR UPDATE`), re-run the stops, then:
+
+```sql
+UPDATE movements SET name = :new, slug = :new_slug, updated_at = now()
+ WHERE id = :M AND household_id = :H;                          -- exactly 1 row
+UPDATE entries e SET movement_name = :new
+  FROM profiles p
+ WHERE p.id = e.profile_id AND p.household_id = :H
+   AND e.movement_id = :M AND e.movement_name = :old;            -- hidden rows included
+```
+
+The second count must equal STOP 2's total of rows holding `:old`; `ROLLBACK` otherwise. A restore
+branch is cut first and held 3 days, as for a removal.
+
+- **The ledger** records "name replaced: yes", the count of athletes whose logs changed and the dates,
+  and **neither the old nor the new text**.
 
 **5. Close out.** Ledger, the restore branch (deleted after 3 days), and tell the household it is done.
 

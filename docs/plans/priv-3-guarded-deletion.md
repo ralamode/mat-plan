@@ -712,11 +712,8 @@ kept from the first draft.
    days _(2026-11-18)_.
 9. **Q9. An adult athlete on a removed program is told first, on their own channel, and cannot cancel**
    _(2026-11-18)_; before the apply they are sent their own full copy (their assignment rows and targets on
-   it, which the in-app export does not hold; privacy lens on #632). How long "told first" lasts before
-   the apply is asked of the maintainer (Q11). Also asked: whether the principle's "unless they are ok
-   with changing the data" allows scrubbing a typed item's frozen name from the household's own logs, with
-   the requester's acceptance; today a name a log holds is removed only by erasing each athlete who
-   logged it (Q12).
+   it, which the in-app export does not hold; privacy lens on #632). **Q11:** the apply waits until the adult
+   confirms they have their copy, at most 3 days after it was sent _(2026-11-18)_.
 10. **Q10. A typed item a log still names is refused, and the household is told which athletes**
     _(2026-11-18)_.
 11. **The principle, for every removal, in the runbook now and in the app later** _(2026-11-18,
@@ -728,6 +725,9 @@ kept from the first draft.
       PR 3b's correction and any in-app removal are held to it. **"Orphan", confirmed** _(2026-11-18)_: clearing a log's link back to a removed
       program is not orphaning, since the log keeps its frozen names and set numbers. A program someone trained on
       can be removed once the requester, told who it affects, accepts.
+12. **Q12. A typed item's frozen name may be replaced on the household's own logs, after consent**
+    _(2026-11-18)_: the owner is told whose logs change and accepts; only the typed text changes, and the
+    logs, sets and numbers stay. The runbook does it by hand; PR 3b scripts it with the removal.
 
 **Board and harness, 2026-11-17.** The fifth module is ruled (above). Lane A has no open PR on its
 two files, so PR 1 is cut now; whichever of it and lane A's `VALIDATE` PR merges second merges `main`.
