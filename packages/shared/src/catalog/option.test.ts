@@ -252,26 +252,43 @@ describe('catalogHowToSchema: what the "How to" read answers, and nothing else (
   });
 });
 
-describe('a kind with no family level (K27): Conditioning lists its movements by name', () => {
-  it('🔴 gives Conditioning one family with no heading, every movement in it by name', () => {
-    expect(BROWSE_FLAT_KINDS).toEqual(['conditioning']);
-    for (const library of [CATALOG_FIXTURE_OPTIONS, optionsOf(CATALOG_MOVEMENTS)]) {
-      const kind = browseTree(library).find((k) => k.kind === 'conditioning')!;
-      const conditioning = library.filter((option) => option.modality === 'conditioning');
-      expect(conditioning.length).toBeGreaterThan(0);
-      expect(kind.families).toHaveLength(1);
-      expect(kind.families[0]).toMatchObject({ family: null, label: null });
-      expect(kind.families[0]!.options).toEqual([...conditioning].sort(byFoldedName));
-      expect(kind.count).toBe(conditioning.length);
+describe('kinds with no family level (K27, K30): Conditioning and Skill list their movements by name', () => {
+  it('🔴 gives each flat kind one family with no heading, every movement in it by name', () => {
+    expect(BROWSE_FLAT_KINDS).toEqual(['conditioning', 'skill']);
+    const libraries = [CATALOG_FIXTURE_OPTIONS, optionsOf(CATALOG_MOVEMENTS)];
+    for (const flat of BROWSE_FLAT_KINDS) {
+      let seen = 0;
+      for (const library of libraries) {
+        const ofKind = library.filter((option) => option.modality === flat);
+        const kind = browseTree(library).find((k) => k.kind === flat);
+        if (ofKind.length === 0) {
+          // Nothing of this kind yet: no heading at all, as for any empty kind.
+          expect(kind, flat).toBeUndefined();
+          continue;
+        }
+        seen += ofKind.length;
+        expect(kind!.families, flat).toHaveLength(1);
+        expect(kind!.families[0]).toMatchObject({ family: null, label: null });
+        expect(kind!.families[0]!.options).toEqual([...ofKind].sort(byFoldedName));
+        expect(kind!.count).toBe(ofKind.length);
+      }
+      // Each flat kind is proved on real rows in at least one library.
+      expect(seen, flat).toBeGreaterThan(0);
+    }
+    // Conditioning is in both libraries, as it was when K27 was decided.
+    for (const library of libraries) {
+      expect(library.some((option) => option.modality === 'conditioning')).toBe(true);
     }
   });
 
   it('leaves every other kind grouped by family', () => {
-    for (const kind of browseTree(optionsOf(CATALOG_MOVEMENTS))) {
-      if (kind.kind === 'conditioning') continue;
-      expect(kind.families.every((family) => family.family !== null && family.label !== null)).toBe(
-        true,
-      );
+    for (const library of [CATALOG_FIXTURE_OPTIONS, optionsOf(CATALOG_MOVEMENTS)]) {
+      for (const kind of browseTree(library)) {
+        if (BROWSE_FLAT_KINDS.includes(kind.kind)) continue;
+        expect(
+          kind.families.every((family) => family.family !== null && family.label !== null),
+        ).toBe(true);
+      }
     }
   });
 });

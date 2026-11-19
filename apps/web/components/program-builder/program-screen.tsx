@@ -1,17 +1,18 @@
 'use client';
 
 import type { ProgramActions, ProgramView } from '@mat-plan/shared';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
 
+import { takeArrival } from './arrival';
 import { BUILDER_COPY, usedByText } from './builder-text';
 import { ProgramHeader } from './program-header';
 import { PROGRAMS_PATH } from './routes';
 import { StatusLine, useStatusLine } from './status-line';
 import { WeekEditor } from './week-editor/week-editor';
 import { WhosOnIt } from './whos-on-it';
-import { WorkoutsList } from './workouts-list';
+import { WORKOUTS_HEADING_ID, WorkoutsList } from './workouts-list';
 import { BuilderLink } from './route-link';
 
 /**
@@ -30,21 +31,28 @@ import { BuilderLink } from './route-link';
  * a bar that appeared, or blinked to nothing between messages, would cover what was just tapped.
  *
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
- * hides its control (plan §6). `takeOff` arrives that way, at step 15.
+ * hides its control (plan §6).
+ *
+ * **Arriving from a workout's Save** (`arrival.ts`): focus goes to the Workouts heading, where the
+ * saved workout is listed, and the bar says it was saved. Only if focus is on `<body>`, where the
+ * editor's unmounted Save left it; a page opened any other way moves nothing.
  */
 export type ProgramScreenProps = {
   program: ProgramView;
   actions: ProgramActions;
-  /**
-   * Whether the workout pages exist (FAM-1 7b-ii). The real page passes `false` in 7b-i, so no
-   * workout row or "+ New workout" links to a 404; the preview keeps the default, `true`.
-   */
-  workoutPagesWired?: boolean;
 };
 
-export function ProgramScreen({ program, actions, workoutPagesWired = true }: ProgramScreenProps) {
+export function ProgramScreen({ program, actions }: ProgramScreenProps) {
   const { status, report } = useStatusLine();
   const barRef = useRef<HTMLDivElement>(null);
+  const { programPublicId } = program;
+  useEffect(() => {
+    const said = takeArrival(programPublicId);
+    if (!said) return;
+    const at = document.activeElement;
+    if (!at || at === document.body) document.getElementById(WORKOUTS_HEADING_ID)?.focus();
+    report(said);
+  }, [programPublicId, report]);
   return (
     // Controls scroll clear of the status bar when focused near the bottom.
     // (7rem: the bar with a two-line message and the iPhone's home bar.)
@@ -73,16 +81,9 @@ export function ProgramScreen({ program, actions, workoutPagesWired = true }: Pr
         program={program}
         copyWorkout={actions.copyWorkout}
         putOnWired={!!actions.putOn}
-        workoutPagesWired={workoutPagesWired}
         onStatus={report}
       />
-      <WeekEditor
-        program={program}
-        saveWeek={actions.saveWeek}
-        onStatus={report}
-        barRef={barRef}
-        workoutPagesWired={workoutPagesWired}
-      />
+      <WeekEditor program={program} saveWeek={actions.saveWeek} onStatus={report} barRef={barRef} />
       {/* The page's one status bar, in view wherever the change was made. */}
       <div
         ref={barRef}

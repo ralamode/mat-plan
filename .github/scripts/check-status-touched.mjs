@@ -6,14 +6,11 @@
  * the diff, not from memory (#156 is what happened when it wasn't). This makes the cheap half
  * mechanical — "is there an entry at all" — and leaves "is it right" to review.
  *
- * What counts as the entry depends on the branch (DX-2, docs/plans/dx-2-changelog-fragments.md):
- * - POST-DX-2 — `docs/changelog/README.md` exists IN THE WORKING TREE. Read from the working tree, not
- *   the merge base, so a legacy branch mid-merge of `main` (keep-mergeable, possibly conflicted and
- *   uncommitted) is already judged by the new rule. The branch must ADD a fragment
+ * The entry (DX-2, docs/plans/dx-2-changelog-fragments.md): the branch must ADD a fragment
  *   `docs/changelog/<YYYY-MM-DD>-<branch with / → ->.md` (committed, staged or untracked). Editing
- *   status.md alone fails. The format lives in docs/changelog/README.md, not here.
- * - LEGACY — no README yet: docs/status.md touched, as before DX-2.
- * - FROZEN HISTORY (post-DX-2, EVERY branch type, before the owes check, STATUS_SKIP can't bypass it):
+ *   status.md alone fails. The format lives in docs/changelog/README.md, not here; a tree without that
+ *   README exits 2 rather than judging by a rule it cannot read.
+ * - FROZEN HISTORY (EVERY branch type, before the owes check, STATUS_SKIP can't bypass it):
  *   adding an ENTRY (a `- ` line, net of edited ones) to status.md's "## Changelog (merged PRs)" or
  *   the skills README's "## Changelog" fails, as does renaming either heading. A docs/chore branch cut before DX-2 owes nothing, yet can merge its entry cleanly into the
  *   closed history; this is what catches it.
@@ -104,7 +101,12 @@ const commitTypes = lines(git('log', '--format=%s', `${mergeBase}..HEAD`))
   .filter(Boolean);
 
 const root = git('rev-parse', '--show-toplevel');
-const postDx2 = existsSync(join(root, CHANGELOG_README));
+if (!existsSync(join(root, CHANGELOG_README))) {
+  console.error(
+    `${CHANGELOG_README} is missing: it is the changelog's format, and this guard's rule.`,
+  );
+  process.exit(2);
+}
 
 // A frozen section's top-level ENTRIES (`- ` bullet lines) from `rev:path`, or from the working tree
 // when rev is null, up to the next `## ` heading. null when the file or the heading is missing, so a
@@ -123,7 +125,7 @@ const sectionEntries = (rev, { file, heading }) => {
   return all.slice(start + 1, end === -1 ? undefined : end).filter((l) => /^- /.test(l));
 };
 
-// Post-DX-2, adding an ENTRY to a frozen changelog fails on every branch type, and STATUS_SKIP does
+// Adding an ENTRY to a frozen changelog fails on every branch type, and STATUS_SKIP does
 // NOT bypass it: the skip means "no entry needed", and an entry that exists can always move to a
 // fragment. Read from the WORKING TREE (committed + staged + unstaged).
 // - Entries, not lines: re-wrapping an old entry adds continuation lines, never a `- ` line.
@@ -133,7 +135,7 @@ const sectionEntries = (rev, { file, heading }) => {
 //   after the branch was cut can't cancel out a genuinely new entry.
 // - Main's own entries arriving mid-merge are on main's tip, so they are never counted as new.
 // - A heading that existed at the merge base but is gone now fails: renaming it would switch this off.
-if (postDx2) {
+{
   const misfiled = FROZEN.flatMap((section) => {
     const where = `${section.file} → "${section.heading}"`;
     const atBase = sectionEntries(mergeBase, section);
@@ -175,9 +177,8 @@ if (owing.length === 0) {
 
 // Committed changes PLUS the index and untracked files, for the same reason as
 // check-feature-guides.mjs: the useful moment to run this is before the last commit.
-let ok;
 let problem = '';
-if (postDx2) {
+{
   // ADDED only (`--diff-filter=A`): editing an old fragment is not writing a new one. `--no-renames`
   // so an add that happens to resemble a deleted file is still seen as an add, not a rename.
   const added = new Set([
@@ -218,34 +219,22 @@ if (postDx2) {
     if (!wanted) return GENERIC_NAME.test(name);
     return DATE_PREFIX.test(name) && name.replace(DATE_PREFIX, '') === wanted;
   };
-  ok = [...added].some(named);
+  if ([...added].some(named)) {
+    console.log(
+      `Status guard OK — a changelog fragment is added on this ${owing.join('/')} branch.`,
+    );
+    process.exit(0);
+  }
   const rejected = [...added].filter((f) => f !== CHANGELOG_README && !named(f));
-  if (!ok && rejected.length > 0) {
+  if (rejected.length > 0) {
     problem = `\nFound, but not a valid entry for this branch: ${rejected.join(', ')}`;
   }
-} else {
-  // `--diff-filter=d` so deleting status.md never counts as updating it.
-  const changed = new Set([
-    ...lines(git('diff', '--name-only', '--diff-filter=d', `${mergeBase}...HEAD`)),
-    ...lines(git('diff', '--name-only', '--diff-filter=d', 'HEAD')),
-    ...lines(git('ls-files', '--others', '--exclude-standard')),
-  ]);
-  ok = changed.has(STATUS_FILE);
-}
-
-if (ok) {
-  console.log(
-    postDx2
-      ? `Status guard OK — a changelog fragment is added on this ${owing.join('/')} branch.`
-      : `Status guard OK — ${STATUS_FILE} is updated on this ${owing.join('/')} branch.`,
-  );
-  process.exit(0);
 }
 
 const skip = process.env[SKIP_ENV]?.trim();
 if (skip) {
   console.log(`Status guard SKIPPED (${SKIP_ENV}): ${skip}
-  Paste this into the PR description: "${postDx2 ? 'no changelog fragment' : 'status.md not updated'} — ${skip}"`);
+  Paste this into the PR description: "no changelog fragment — ${skip}"`);
   process.exit(0);
 }
 
@@ -255,9 +244,7 @@ const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
   .map((n) => String(n).padStart(2, '0'))
   .join('-');
 const expected = `${CHANGELOG_DIR}/${today}-${branch ? fragmentSlug(branch) : '<branch with / → ->'}.md`;
-console.error(
-  postDx2
-    ? `
+console.error(`
 Status guard failed: this is a ${owing.join('/')} branch and it adds no changelog fragment.${problem}
 
 Add ${expected} — the format and link forms are in ${CHANGELOG_README}. If a changelog entry
@@ -268,15 +255,5 @@ If this change genuinely doesn't warrant an entry, say why and re-run:
   ${SKIP_ENV}="<one-line reason>" pnpm status:check
 In CI: add the \`${SKIP_LABEL}\` label, put the reason in the PR description, and PUSH (a re-run does
 not see a newly added label).
-`
-    : `
-Status guard failed: this is a ${owing.join('/')} branch and ${STATUS_FILE} is untouched.
-
-AGENTS.md → "Status rides with the work": update the "Where we are" pointer if this moves it, the
-backlog row, and a Changelog entry — in THIS PR, written from the diff, not from memory (#156).
-
-If this change genuinely doesn't move anything status.md tracks, say why and re-run:
-  ${SKIP_ENV}="<one-line reason>" pnpm status:check
-`,
-);
+`);
 process.exit(1);

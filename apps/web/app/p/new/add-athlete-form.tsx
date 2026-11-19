@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useId, useRef, useState } from 'react';
 
 import { addAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
+import { BUILDER_COPY } from '@/components/program-builder/builder-text';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import {
@@ -81,7 +82,6 @@ import { INITIAL_ACTION_STATE } from '../[profileId]/action-state';
  */
 export function AddAthleteForm({
   clientId,
-  programsAnything,
 }: {
   /**
    * The idempotency key, minted by the server **once per request**, so a double tap and a retry after
@@ -89,12 +89,6 @@ export function AddAthleteForm({
    * granularity and what each case does.
    */
   clientId: string;
-  /**
-   * Whether this household programs anything at all. It selects the WORDING of the child
-   * consequence, never whether one is shown — a first-run household has no program, and claiming one
-   * would be false, but hiding the line made the two options non-parallel.
-   */
-  programsAnything: boolean;
 }) {
   const [state, formAction, pending] = useActionState(addAthleteAction, INITIAL_ACTION_STATE);
   const [name, setName] = useState('');
@@ -128,6 +122,7 @@ export function AddAthleteForm({
   const nameId = `${uid}-name`;
   const nameHintId = `${uid}-name-hint`;
   const kindHintId = `${uid}-kind-hint`;
+  const noProgramId = `${uid}-no-program`;
   const kindErrorId = `${uid}-kind-error`;
   const nameErrorId = `${uid}-name-error`;
   const duplicateMessageId = `${uid}-duplicate`;
@@ -233,28 +228,17 @@ export function AddAthleteForm({
    *
    * 🔴 **ONE COLUMN, not two.** The first version was `flex-wrap` with `min-w-32 flex-1`, which a UX
    * lens measured: at 360px two labels fit (128+8+128 = 264 < 328), so they never wrapped and `flex-1`
-   * grew them to 160px each — leaving a ~108px text column in which "trains on the household's
-   * program" breaks over four lines. The wrap only engaged at 200% text, so the responsive path was
-   * effectively dead code at the width that matters. A full-width row per option gives the
-   * decision-critical text the whole column.
+   * grew them to 160px each — leaving a ~108px text column in which a one-line hint broke over four
+   * lines. The wrap only engaged at 200% text, so the responsive path was effectively dead code at
+   * the width that matters. A full-width row per option keeps every label one tappable line, and
+   * the hints below the radios get the whole column.
    */
   const kindLabelClass =
     'border-input bg-background has-checked:border-foreground has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-3 flex min-h-11 w-full cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-base';
 
   const kindOptions = [
-    {
-      value: PROFILE_KIND.kid,
-      label: 'Child',
-      // Branches the WORDING, never whether a consequence appears — see the prop's docblock.
-      consequence: programsAnything
-        ? ATHLETE_FORM_COPY.kidWithProgram
-        : ATHLETE_FORM_COPY.kidFirstRun,
-    },
-    {
-      value: PROFILE_KIND.adult,
-      label: 'Adult',
-      consequence: ATHLETE_FORM_COPY.adultConsequence,
-    },
+    { value: PROFILE_KIND.kid, label: PROFILE_KIND_LABELS.kid },
+    { value: PROFILE_KIND.adult, label: PROFILE_KIND_LABELS.adult },
   ] as const;
 
   /**
@@ -341,7 +325,7 @@ export function AddAthleteForm({
           // reads "…saved as Adult … You chose Child", and switching the radio rewrites both the
           // sentence and the buttons with no announcement of its own. When the kinds agree the
           // message is about the name, so adding it here would repeat it on the wrong control.
-          aria-describedby={`${kindHintId}${kindInvalid ? ` ${kindErrorId}` : ''}${
+          aria-describedby={`${kindHintId} ${noProgramId}${kindInvalid ? ` ${kindErrorId}` : ''}${
             duplicate && kindsDiffer ? ` ${duplicateMessageId}` : ''
           }`}
           className="flex flex-col gap-2"
@@ -370,15 +354,17 @@ export function AddAthleteForm({
                   onChange={() => setKind(option.value)}
                   className="mt-1 size-4 shrink-0"
                 />
-                <span className="flex flex-col">
-                  <span className="font-medium">{option.label}</span>
-                  {/* The consequence on its OWN line, full-contrast, and present for BOTH options.
-                    It is the only fact that separates them, so it is not muted fine print. */}
-                  <span className="text-sm">{option.consequence}</span>
-                </span>
+                <span className="font-medium">{option.label}</span>
               </label>
             ))}
           </div>
+
+          {/* What a new athlete starts with (FAM-1 15, v12's line): ONE line for both kinds, outside
+            the labels, so it is not read as part of either option's name. It joins the group's
+            description beside the permanence. */}
+          <p id={noProgramId} className="max-w-prose text-sm">
+            {ATHLETE_FORM_COPY.startsWithNoProgram(BUILDER_COPY.programs)}
+          </p>
 
           {/* The kind error sits with the kind, not 250px below beside the name. Both alerts are
             per-field: one shared region cross-wired each input's `aria-describedby` to the other

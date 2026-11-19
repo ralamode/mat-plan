@@ -30,7 +30,7 @@ flowchart TB
   CLERK["Clerk<br/>household auth"]
   CLAUDE["Claude skills<br/>/retro · /daily-plan"]
   SENTRY["Sentry<br/>server + edge errors only"]
-  UPSTASH["Upstash Redis<br/>mutation rate limit"]
+  UPSTASH["Upstash Redis<br/>mutation + export rate limits"]
   GHA["GitHub Actions<br/>migrate.yml"]
 
   UI -->|"Server Action"| ACT
@@ -46,7 +46,8 @@ flowchart TB
   RH -->|"CSV export v1 · MCP+REST v3"| CLAUDE
   ACT -.->|"scrubbed errors"| SENTRY
   RSC -.->|"scrubbed errors"| SENTRY
-  ACT -.->|"Clerk user id, mutations only"| UPSTASH
+  ACT -.->|"Clerk user id, mutations"| UPSTASH
+  RH -.->|"Clerk user id, the zip export"| UPSTASH
   GHA ==>|"prod DDL + seed on every merge<br/>holds PROD_DATABASE_URL_UNPOOLED;<br/>the seed writes reference data only"| NEON
 ```
 
@@ -844,8 +845,13 @@ erDiagram
 flowchart TB
   DEV["feature branch → PR"] --> CI
   subgraph CI["GitHub Actions — on every PR"]
-    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build<br/>+ drift guard + PGlite db:verify"]
-    E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>auto-skips docs-only PRs · ci-skip-e2e label override"]
+    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false"]
+    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drift guard + PGlite db:verify"]
+    E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
+    M["<b>mutations</b> × 8 shards (scoped on a PR)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
+    S --> Q
+    S --> E
+    S --> M
     G["<b>gitleaks</b> (required)"]
   end
   CI --> PREV["Vercel preview<br/>(preview scope: seed-only Neon project,<br/>own Upstash, no prod secret)"]
@@ -854,6 +860,7 @@ flowchart TB
   PREV --> REV["review + squash-merge to main"]
   REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>migrate.yml (prod) + migrate-preview.yml"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
+  REV --> MAIN["push to main: every mutation shard runs<br/>red → one issue, 'mutation gate red on main'"]
   MIG --> NEON[("Neon: production")]
   MIG --> NEONP[("Neon: mat-plan-preview<br/>seed-only, separate project")]
   PROD --> NEON

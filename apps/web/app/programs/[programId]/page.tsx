@@ -35,8 +35,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ progra
   if (!program) notFound();
   return (
     <AppShell athletes={await listProfiles()} current="programs">
-      {/* `false` until 7b-ii builds the workout pages: no link may lead to a 404 meanwhile. */}
-      <ProgramScreen program={program} actions={PROGRAM_ACTIONS} workoutPagesWired={false} />
+      <ProgramScreen program={program} actions={PROGRAM_ACTIONS} />
       <TimeZoneSync serverTimeZone={timeZone} />
     </AppShell>
   );

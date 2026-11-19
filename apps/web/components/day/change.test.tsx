@@ -6,7 +6,7 @@ import {
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
@@ -912,5 +912,189 @@ describe('Change: second-pass fixes', () => {
     };
     act(() => control.setPlan(late)); // the ✓'s refresh, from before both Changes
     expect(set3().value).toBe('40');
+  });
+});
+
+describe('Change: Escape from any control, and a ✕ press that ends elsewhere', () => {
+  /** Past the grace in which the ✕'s click may still come (`CANCEL_CLICK_GRACE_MS`). */
+  const afterGrace = async () => {
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+    });
+  };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Escape from the ✓ while typed over puts the number back, and focus stays on the ✓', () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => benchTick().focus());
+    fireEvent.keyDown(benchTick(), { key: 'Escape' });
+    expect(load().value).toBe('27.5');
+    expect(document.activeElement).toBe(benchTick());
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Escape from the ✕ puts the number back, and focus moves to the ✓ before the ✕ goes', () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => cancelX().focus());
+    fireEvent.keyDown(cancelX(), { key: 'Escape' });
+    expect(load().value).toBe('27.5');
+    expect(document.activeElement).toBe(benchTick());
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Escape on a row that is not being changed is left alone', () => {
+    mount(yesterdayHalfDone, { change: true });
+    act(() => benchTick().focus());
+    // `fireEvent` answers false when the event was prevented.
+    expect(fireEvent.keyDown(benchTick(), { key: 'Escape' })).toBe(true);
+  });
+
+  it.each([
+    ['the ✓', () => benchTick()],
+    ['the ✕', () => cancelX()],
+  ])('the window losing focus from %s sends nothing', async (_label, control) => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => control().focus());
+    // A window blur: the control is still the page's active element.
+    await act(async () => {
+      fireEvent.blur(control());
+    });
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('leaving the row from the ✓ sends the Change once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    act(() => benchTick().focus());
+    await act(async () => benchTick().blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('🔴 a tap on the ✕ in an iPhone’s order cancels, even when the finger lifts past its edge', async () => {
+    // iOS: pointerdown, pointerup (where the finger lifts says nothing: iOS targets the click itself),
+    // the compat mousedown's blur of the field, then the click on the ✕.
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    const x = cancelX();
+    // The finger lifts past the ✕'s edge. jsdom has no layout, so the point is placed by hand: a
+    // rule that read the release point would take this for "elsewhere" (the bug this pins).
+    const restore = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => document.body,
+    });
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+      load().blur();
+    });
+    if (restore) Object.defineProperty(document, 'elementFromPoint', restore);
+    else Reflect.deleteProperty(document, 'elementFromPoint');
+    await act(async () => {
+      fireEvent.click(x);
+    });
+    await afterGrace();
+    expect(load().value).toBe('27.5');
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('a ✕ press dragged off with a mouse in Safari (the field already blurred) is sent after the grace', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      load().blur(); // Safari blurs the field at pointer-down and does not focus the ✕
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    expect(actions.amendRow).not.toHaveBeenCalled(); // the click may still come
+    await afterGrace();
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    // A later, unrelated release sends nothing more: the watch was one-shot.
+    await act(async () => {
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    await afterGrace();
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('an iPhone slide-off (the field still focused) is called off, and leaving the row then sends once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      fireEvent.pointerUp(cancelX(), { pointerId: 1 }); // captured to the ✕; no click follows
+    });
+    await afterGrace();
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+    await leave(load());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ✕ press that becomes a scroll, with focus already out of the row, sends at once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      load().blur();
+      fireEvent.pointerCancel(cancelX(), { pointerId: 1 });
+    });
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('Chrome: a ✕ press released elsewhere with focus on the ✕ keeps the row open, then leaving it sends once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    const x = cancelX();
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      x.focus(); // Chrome focuses a button on mousedown
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    await afterGrace();
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+    await act(async () => x.blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed save, then leaving the row from the ✓, sends exactly once more', async () => {
+    let calls = 0;
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async (input) =>
+          (calls += 1) === 1 ? { ok: false, reason: ROW_REFUSAL.retry } : amendOk(input),
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    act(() => benchTick().focus());
+    await act(async () => benchTick().blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(2);
   });
 });

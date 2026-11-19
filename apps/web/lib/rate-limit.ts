@@ -1,18 +1,22 @@
 import 'server-only';
 
+import * as Sentry from '@sentry/nextjs';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
 import { env } from './env';
 
 /**
- * Rate limiting (V1-14a) — one seam, and **two limiter instances since FAM-1 step 0b** (one from
- * AUTH-1 1d until then):
+ * Rate limiting (V1-14a) — one seam, and **three limiter instances**: two for mutations (FAM-1 step
+ * 0b; one from AUTH-1 1d until then) and one for the zip export (the FAM-1 export follow-up,
+ * [plan](../../../docs/plans/fam-1-export-owner-only.md) PR A). All are keyed on the **Clerk
+ * principal**.
  *
- * **Every mutating Server Action**, through `enterMutation` (`app/p/mutation-entry.ts`), keyed on the
- * **Clerk principal**. The caller names one of the two policies below and gets that policy's own
- * instance; the default is `MUTATION_RATE_LIMIT`, and until a row-write action exists it is the only
- * one any request reaches.
+ * - **Every mutating Server Action**, through `enterMutation` (`app/p/mutation-entry.ts`): the caller
+ *   names one of the two mutation policies and gets that policy's own instance; the default is
+ *   `MUTATION_RATE_LIMIT`.
+ * - **The zip export** (`app/p/[profileId]/export/route.ts`), through `checkExportLimit`, its own
+ *   function with its own budget, so an export never spends a parent's ✓ budget and the reverse.
  *
  * 🔴 **`1d` deleted the other one, and with it this app's only IP-keyed limiter.** It guarded the
  * access gate — an unauthenticated password oracle for `ACCESS_GATE_PASSWORD` — and there is no
@@ -29,9 +33,9 @@ import { env } from './env';
  * constrained **only the household**. 1c-3b is what supplies a principal the caller cannot choose,
  * which is the whole reason the limiter call sits AFTER the session check and BEFORE the zod parse.
  *
- * ⏳ **The zip export route is still unlimited** — the one EXISTING surface `docs/tech-debt.md`
- * counts as owed, and the most expensive single request in the app. Deferred to `1c-4`. (`/api/sync`
- * is the other thing that entry owes, and it is not a surface yet.)
+ * The zip export, the most expensive single request in the app, is limited since the FAM-1 export
+ * follow-up (below). `/api/sync` is the one surface `docs/tech-debt.md` still counts as owed, and it
+ * is not a surface yet.
  *
  * IDENTIFIER: the **Clerk user id**. ⚠️ The long argument that used to sit here was about the gate's
  * IP key — why an IP beat the `mp_gate` cookie, which was a deterministic hash of a shared code and
@@ -88,6 +92,24 @@ export const ROW_WRITE_RATE_LIMIT = { attempts: 600, window: '5 m' } as const;
  * branch in `limiterFor`, in one diff.
  */
 export type MutationLimitPolicy = typeof MUTATION_RATE_LIMIT | typeof ROW_WRITE_RATE_LIMIT;
+
+/**
+ * The per-user **export** limit (FAM-1 export follow-up, PR A): one zip download per tap, counted
+ * only for an export of a profile the caller's household holds.
+ *
+ * **Sized from the household cap, not from a typical family.** An owner taking every athlete's data
+ * out, which the privacy notice tells them to do before deleting anything, taps one link per athlete,
+ * and a household holds up to `MAX_HOUSEHOLD_ATHLETES` (25), archived athletes included (the cap
+ * counts them).
+ * Thirty in ten minutes fits that pass, the headroom covers a retried download or two, and it still
+ * refuses a loop. `rate-limit.test.ts`
+ * pins `attempts >= MAX_HOUSEHOLD_ATHLETES`, so raising the cap fails a test, not a parent.
+ *
+ * ⚠️ **Not a `MutationLimitPolicy`, on purpose.** It has its own checker (`checkExportLimit`, no policy
+ * parameter), so no Server Action can pass it to `enterMutation`, and `limiterFor`'s fallback still
+ * fails toward the stricter mutation limit.
+ */
+export const EXPORT_RATE_LIMIT = { attempts: 30, window: '10 m' } as const;
 
 /**
  * Upstash's own network-failure escape hatch. Its DEFAULT is 5000ms — which on a phone is a five-second
@@ -165,6 +187,12 @@ const mutationLimiter = buildLimiter(MUTATION_RATE_LIMIT, 'mat-plan:mutate');
 const rowWriteLimiter = buildLimiter(ROW_WRITE_RATE_LIMIT, 'mat-plan:row-write');
 
 /**
+ * The export limiter. A SIBLING prefix again (`mat-plan:export`), never a child of another, for the
+ * same reason as the row-write one: its own counter per person, its own window.
+ */
+const exportLimiter = buildLimiter(EXPORT_RATE_LIMIT, 'mat-plan:export');
+
+/**
  * The instance that enforces a policy.
  *
  * 🔴 **By identity, and anything that is not THE row-write const gets the default.** The default is
@@ -181,7 +209,7 @@ function limiterFor(policy: MutationLimitPolicy): Ratelimit | null {
  * 🔴 **REBOUND at `1d` from the deleted gate limiter to `mutationLimiter`.** Not cosmetic: without
  * this the module does not compile, and `docs/plans/ai-1-nl-logging.md` cites this export as a live
  * mitigation, so it had to keep meaning "the limiter this app actually uses is wired".
- * Both instances are built from the same two env vars, so this one answer covers both.
+ * Every instance is built from the same two env vars, so this one answer covers all three.
  */
 export const isRateLimitConfigured = mutationLimiter !== null;
 
@@ -195,7 +223,7 @@ export const isRateLimitConfigured = mutationLimiter !== null;
  * **Fails OPEN**, always: a Redis outage that stops a
  * kid logging a set is worse than an outage that briefly widens a window on a three-person app.
  *
- * 🔴 **ONE caller since `1c-3b`: `enterMutation`.** It is not called from an action directly, and the
+ * 🔴 **ONE caller since `1c-3b`: `enterMutation`** (the export has its own checker, below). It is not called from an action directly, and the
  * guard in `pages-need-a-session.test.ts` asserts it appears there in order, after the session check —
  * because the key is the principal, and fail-open plus an unconfigured limiter under vitest means no
  * behavioural test can see this call misplaced or missing.
@@ -203,11 +231,78 @@ export const isRateLimitConfigured = mutationLimiter !== null;
 export async function checkMutationLimit(
   userId: string,
   policy: MutationLimitPolicy = MUTATION_RATE_LIMIT,
-): Promise<{ allowed: boolean; reason: 'ok' | 'unconfigured' | 'limiter-error' | 'limited' }> {
-  const limiter = limiterFor(policy);
+): Promise<LimitCheck> {
+  return check(limiterFor(policy), userId);
+}
+
+/**
+ * The per-user **export** check (FAM-1 export follow-up, PR A). **No policy parameter**: there is one
+ * export budget, so a call site cannot pass the wrong one or fall back to the ✓ budget by omission.
+ * Fails open, like every check here.
+ *
+ * **One caller: the export route**, AFTER its session check and its profile check, so only an export
+ * of a profile the caller's household holds is counted and a cross-site page cannot spend a parent's
+ * budget with a made-up id. `export/route.test.ts` pins the order.
+ */
+export async function checkExportLimit(userId: string): Promise<LimitCheck> {
+  return check(exportLimiter, userId);
+}
+
+/**
+ * Which limiter FAMILY a caller found dead: the event's one tag besides the outcome. `mutation` covers
+ * both mutation policies (`enterMutation` reports for either); `export` is the export's.
+ */
+export type LimiterName = 'mutation' | 'export';
+
+/** The limiters already reported dead in this process. Two names, so it cannot grow. */
+const reportedUnavailable = new Set<LimiterName>();
+
+/**
+ * **A dead limiter, said out loud** (#665's P2, the board's fix, 2026-11-19). Every check here fails
+ * open, so a limiter that is down for good looks exactly like a healthy one. A breadcrumb alone is not
+ * a signal: Sentry sends breadcrumbs only with a later event, and a request the dead limiter let
+ * through succeeds and sends none. So the caller's `limiter-error` raises one real event, **once per
+ * process per limiter family** (the `session.ts` `auth() unavailable` shape), and keeps the breadcrumb for an
+ * error that does follow.
+ *
+ * What it carries: the fixed message and two tags. No user id, no profile id, no count; the limiter
+ * name is one of two fixed words.
+ */
+export function reportLimiterUnavailable(limiter: LimiterName): void {
+  Sentry.addBreadcrumb({
+    category: 'rate-limit',
+    level: 'warning',
+    message: `${limiter} limiter unavailable`,
+  });
+  if (reportedUnavailable.has(limiter)) return;
+  reportedUnavailable.add(limiter);
+  Sentry.captureMessage('rate limiter unavailable', {
+    level: 'warning',
+    tags: { rate_limit_outcome: 'limiter_unavailable', limiter },
+    // 🔴 **The fingerprint is load-bearing.** Sentry's default Dedupe integration drops an event whose
+    // message, fingerprint and stacktrace match the previous one, ignoring tags. All three limiters
+    // share one Redis, so an outage reports `mutation` first and the `export` event, identical but
+    // for its tag, would be dropped, with this process never trying again. A per-family fingerprint
+    // keeps the two apart, and files them as two issues.
+    fingerprint: ['rate-limiter-unavailable', limiter],
+  });
+}
+
+/** What a limit check answers. `allowed` is true on every reason but `limited` (fail-open). */
+export type LimitCheck = {
+  allowed: boolean;
+  reason: 'ok' | 'unconfigured' | 'limiter-error' | 'limited';
+};
+
+/** One check against one instance: the body both exported checkers share. */
+async function check(limiter: Ratelimit | null, userId: string): Promise<LimitCheck> {
   if (!limiter) return { allowed: true, reason: 'unconfigured' };
   try {
-    const { success } = await limiter.limit(userId);
+    const { success, reason } = await limiter.limit(userId);
+    // 🔴 **A timeout RESOLVES, it does not throw.** With `timeout` set, `@upstash/ratelimit` 2.2.0
+    // races Redis against a timer that answers `{ success: true, reason: 'timeout' }`. Read as `ok`,
+    // a hanging Redis would be indistinguishable from a healthy one; it is the dead-limiter case.
+    if (reason === 'timeout') return { allowed: true, reason: 'limiter-error' };
     return success ? { allowed: true, reason: 'ok' } : { allowed: false, reason: 'limited' };
   } catch {
     return { allowed: true, reason: 'limiter-error' };

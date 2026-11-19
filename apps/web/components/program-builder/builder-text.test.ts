@@ -18,11 +18,15 @@ import {
   dayFullLabel,
   dayFullText,
   dayIsFull,
+  ITEM_PICKER_COPY,
   nameRefusal,
+  newItemRefusal,
   programFullText,
   programIsFull,
+  saveRefusal,
   supersetLetterOf,
   supersetSpoken,
+  lastDayText,
   takenOffText,
   usedByText,
   weekdayName,
@@ -45,8 +49,11 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
     expect(athleteHint(one!, familyProgram.today)).toBe('since Mon, Nov 9 · also on Stretching');
     const two = familyProgramAfterTakeOff.athletes[1]!;
     expect(athleteHint(two, familyProgramAfterTakeOff.today)).toBe(
-      'since Mon, Nov 9 · last day Sat, Nov 14',
+      'since Mon, Nov 9 · last day today',
     );
+    // The one rule: a last day that is not today (no writer makes one) is its date.
+    expect(lastDayText('2026-11-14', '2026-11-14')).toBe('last day today');
+    expect(lastDayText('2026-11-15', '2026-11-14')).toBe('last day Sun, Nov 15');
     expect(athleteHint({ ...two, since: '2026-11-15', lastDay: null }, '2026-11-14')).toBe(
       'starts Sun, Nov 15',
     );
@@ -54,10 +61,10 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
 
   it('Take off says what happens, for someone started and someone not', () => {
     expect(takenOffText('Athlete Two', 'Family program', true)).toBe(
-      'Athlete Two comes off Family program after today. Days already logged keep what they had.',
+      'Athlete Two comes off Family program after today. Until midnight, putting them back on undoes this. What they’ve logged stays.',
     );
     expect(takenOffText('Athlete Two', 'Family program', false)).toBe(
-      'Athlete Two won’t start Family program.',
+      'Athlete Two is off Family program.',
     );
   });
 
@@ -153,5 +160,31 @@ describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N",
     expect(to(true, false)).toBe(
       'This program is full: a program holds at most 50 workouts. Nothing was copied. Create another program to copy it into.',
     );
+  });
+});
+
+describe('the workout editor’s caps (FAM-1 7b-ii): its own words for limit_reached', () => {
+  it('a new workout in a full program says the program is full and nothing was saved', () => {
+    expect(saveRefusal(PROGRAM_REFUSAL.limit_reached)).toBe(
+      'This program is full: a program holds at most 50 workouts. This one wasn’t saved.',
+    );
+  });
+
+  it('a household at MAX_HOUSEHOLD_ITEMS: the stop before typing, and the refusal in the footer', () => {
+    expect(ITEM_PICKER_COPY.householdFull).toBe(
+      'Your household has the most custom items it can keep (500). Pick one from the list instead.',
+    );
+    expect(newItemRefusal(PROGRAM_REFUSAL.limit_reached)).toEqual({
+      field: null,
+      footer:
+        'Your household has the most custom items it can keep (500), so this one wasn’t made. Pick one from the list instead.',
+    });
+  });
+
+  it('every other refusal keeps its own line (no refusal falls to limit_reached’s words)', () => {
+    for (const reason of PROGRAM_REFUSALS.filter((r) => r !== PROGRAM_REFUSAL.limit_reached)) {
+      expect(saveRefusal(reason)).not.toMatch(/is full/);
+      expect(newItemRefusal(reason).footer ?? '').not.toMatch(/custom items/);
+    }
   });
 });

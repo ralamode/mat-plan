@@ -209,7 +209,7 @@ The shapes those lanes agree on, the fakes and the preview route are
 
    🔴 **The caller may pick the limiter's POLICY, never its key (FAM-1 step 0b, D23).**
    `enterMutation(refusal, policy = MUTATION_RATE_LIMIT)` hands the policy to
-   `checkMutationLimit(user.userId, policy)`. `lib/rate-limit.ts` holds two: `MUTATION_RATE_LIMIT`
+   `checkMutationLimit(user.userId, policy)`. `lib/rate-limit.ts` holds two mutation policies: `MUTATION_RATE_LIMIT`
    (120 per 5 minutes, the default) and `ROW_WRITE_RATE_LIMIT` (600 per 5 minutes), for the day
    page's row writes, where a ✓ is one write and a parent logging two athletes' days passes 120
    ([plan](../plans/fam-1-family-program.md) D23). **The row actions pass the second one**
@@ -243,8 +243,14 @@ The shapes those lanes agree on, the fakes and the preview route are
    household's CSV served to another. The Route-Handler guard in `pages-need-a-session.test.ts` narrowed
    with each step and must stay a single named helper, never an alternation.
 
-   📌 **`lib/rate-limit.ts` holds TWO limiters since FAM-1 step 0b** (the policy note above); the
-   second, for row writes, has the row actions as its callers since FAM-1 step 12b; its docblock says so.
+   📌 **`lib/rate-limit.ts` holds THREE limiters**: the two mutation policies (the note above; the row
+   writes' callers are the row actions since FAM-1 step 12b) and, since the FAM-1 export follow-up, the
+   export's (`checkExportLimit`, `mat-plan:export`), which is not a `MutationLimitPolicy` and has the
+   export route as its one caller; its docblock says so. A dead limiter (`limiter-error`, a timeout
+   included) is reported by `reportLimiterUnavailable` in the same file: one id-free Sentry event per
+   process per limiter family (`mutation` covers both mutation policies; `export`), with a per-family
+   fingerprint so Sentry's Dedupe keeps the two apart. A breadcrumb is sent only with a later event,
+   and a request the dead limiter let through raises none.
    **Its MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
    V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since
@@ -764,10 +770,10 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
       athlete's own entry is still exported.
 
 16. **The export's check-ins file, and one bodyweight test** (FAM-1 14b, [plan](../plans/fam-1-14-export.md)):
-    `checkinMonthRows` reads every live entry with no movement that is not `bodyweightEntry()` (the
-    weigh-in activity OR the bodyweight metric), and `bodyweightMonthRows` uses the same conjunct, so
-    each live entry lands in exactly one of the three files (`verify/day.ts`, the 14b proof; mutations
-    368–371). Its `entryId` is for the proof only: `lib/dal/export.ts` maps fields one by one.
+    `checkinMonthRows` reads every live entry with no movement that is not `bodyweightEntry()` (no
+    movement, AND the weigh-in activity OR the bodyweight metric), and `bodyweightMonthRows` uses the
+    same conjunct, so each live entry lands in exactly one of the three files (`verify/day.ts`, the 14b
+    proof; mutations 368–371, 376–379). A weigh-in naming a movement is the strength log's alone. Its `entryId` is for the proof only: `lib/dal/export.ts` maps fields one by one.
 
 ## Traps
 

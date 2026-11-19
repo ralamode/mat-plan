@@ -1,6 +1,7 @@
 import { buildExportZip } from '@/lib/dal/export';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { sessionUserOrNull } from '@/lib/dal/session';
+import { checkExportLimit, reportLimiterUnavailable } from '@/lib/rate-limit';
 import { NO_STORE, notFound } from '@/lib/route-miss';
 import { NextResponse } from 'next/server';
 
@@ -65,13 +66,34 @@ export async function GET(
   //
   // 404, not 401: an un-authed caller learns nothing about whether this profile exists. Unauth, no
   // session, unknown id and another household's profile are byte-identical to a caller (ADR 0006).
-  if (!(await sessionUserOrNull())) return notFound();
+  const user = await sessionUserOrNull();
+  if (!user) return notFound();
 
   const { profileId } = await params;
   // Re-validate the URL-supplied public id server-side — the V1-3 ownership seam. Profile tiles are
   // a UX switch, not a security boundary, so the id is untrusted input here.
   const profile = await getProfileByPublicId(profileId);
   if (!profile) return notFound();
+
+  // 🔴 **The export limit, AFTER the profile check and never before it** (FAM-1 export follow-up,
+  // plan PR A). This is a GET, and a session cookie rides a cross-site top-level navigation. A
+  // limiter in front of the id check would let any page drain a signed-in parent's budget with
+  // `/p/anything/export`; here a drain needs a real, non-enumerable id of the caller's own household,
+  // and a miss above still answers the one 404 with no Redis call. Keyed on the principal, never the
+  // URL's id. `route.test.ts` pins the order.
+  const limit = await checkExportLimit(user.userId);
+  if (!limit.allowed) {
+    // A fixed string: no profile id, no count. Nothing reads `retry-after` on an `<a download>`, and
+    // a second spelling of the window would drift from `EXPORT_RATE_LIMIT`.
+    return new NextResponse('Too many downloads. Try again in a few minutes.', {
+      status: 429,
+      headers: NO_STORE,
+    });
+  }
+  if (limit.reason === 'limiter-error') {
+    // The fail-open limiter's only signal, id-free, once per process, as `enterMutation` does.
+    reportLimiterUnavailable('export');
+  }
 
   const zip = await buildExportZip(profileId);
 

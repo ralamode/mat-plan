@@ -166,7 +166,7 @@ Time:   lib/dal + writers get day + tz as args; only routes/actions (and their p
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
-Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
+Rate limit: @upstash/ratelimit (sliding window) on mutations and the zip export; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
         enableLogs + structured context: NOT wired (ADR 0001).
 ```
@@ -226,6 +226,19 @@ Deletion: [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone
   ([review-pr](./.claude/skills/review-pr/SKILL.md) has the exceptions).
 - **Merge = squash.** PR title is a Conventional Commit → one commit per PR on `main`. Delete the
   branch on merge.
+- **Every PR is tagged when it is opened** _(maintainer, 2026-11-19)_, so the PR list can be read
+  by release and by feature:
+  - **its release, as the GitHub milestone:** `Beta 0` or `Beta 1` (`gh pr create --milestone "Beta 0"`).
+    The GitHub milestone is the release, not a milestone doc under `docs/milestones/`; that doc's
+    id (`FAM-1`) is the feature label;
+  - **its feature, as a label named by the backlog id** (`FAM-1`, `CAT-3`, `PRIV-3`), **or
+    `tech-debt`** when it belongs to no feature. A PR that serves two features takes both. A
+    feature with no label yet gets one of the same shape:
+    `gh label create "<ID>" --color 1d76db --description "Feature: <what it is>"`;
+  - **`bug-fix` as well** (not GitHub's default `bug`) when it fixes a defect.
+  - A plan or docs PR takes the tags of the work it plans. Dependabot's PRs are left as they come.
+  - The tags are read by people, not by CI: adding one does not re-run a check, and they are
+    separate from the skip labels below.
 - **A stacked PR is retargeted to `main` BEFORE its parent merges** — a child merged after its
   parent squashed lands on a dead branch and reports `MERGED` with nothing on `main`. `gh pr edit
 <child> --base main` first, then parent, then child, and **verify the content on `main`** (`git grep
@@ -296,19 +309,21 @@ movement picker.
   [the slot](./.github/scripts/heavy-slot.mjs). Run locally to write code (one file, one probe), debug a CI failure,
   `pnpm probe`, edit CI itself, during an Actions outage, for `pnpm dev`, and for production
   operations (corrections; never tests against production). **Everything else heavy runs on CI:
-  push, and let it gate.** Until DX-18 PR 2 puts the mutation proof in CI, a diff touching
-  `packages/db/**`, `packages/shared/**`, the lockfile or a manifest still runs `db:mutations`
-  locally. The filtered commands (one test, one package, one spec) are in
+  push, and let it gate.** That includes the mutation proof (CI's sharded `mutations` jobs; one
+  patch locally is `db:mutations --only 288`). The filtered commands (one test, one package, one spec) are in
   [debug-ci-failure](./.claude/skills/debug-ci-failure/SKILL.md) and
   [ship-pr](./.claude/skills/ship-pr/SKILL.md).
-- **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does **except
+- **`pnpm verify` — optional before a PR** (CI runs all of it, DX-18). Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it):
   `format:check` → `lint` → `typecheck` → `test` → `eval` → `db:verify` → `db:mutations` → `skills:check`
   (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist; each red flag cites its incident) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
-  test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)); local-only.
+  test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)). In CI it
+  is the `mutations` matrix plus `mutations-total`, skipped on a PR only when
+  [changed-scopes.mjs](./.github/scripts/changed-scopes.mjs) says no patch can be affected, and run in
+  full on every push to `main`.
   **This section is the one list of where each gate runs**; other docs point here rather than
   restating it. `skills:check`, `guards:test` (every guard self-test `package.json` lists) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
@@ -329,7 +344,7 @@ movement picker.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
   `next build` · gitleaks · (DB) drift check + `db:verify` · `audit:check` · `skills:check` ·
-  `guards:test` · `status:check` · **forward-only** + **Squawk** on new migrations · **action pins**
+  `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run
   replays the old event** ([lessons](./docs/lessons.md) → GitHub / PRs). The labels: `ci-skip-e2e`,
@@ -348,8 +363,9 @@ movement picker.
 - **`e2e` (Playwright smoke):** what earns one is the Speed budget in
   [definition-of-done.md](./docs/definition-of-done.md). Runs on every PR, **not yet required**
   (soaks until PR 28). It
-  **auto-skips the smoke, still reporting success, when every changed file is provably inert** (docs,
-  root markdown, `.claude/`, GitHub templates, images; default-to-run). Override with the
+  **auto-skips the smoke, still reporting success, when every changed file is provably inert**
+  (`INERT` in [changed-scopes.mjs](./.github/scripts/changed-scopes.mjs), which also skips `next
+build`; default-to-run). Override with the
   **`ci-skip-e2e` label, then push** — sparingly, a red `e2e` usually means a real bug — or an admin
   merge as last resort. The skip is step-level, never a job-level `if:`, so a required check never
   stalls "pending" ([plan](./docs/plans/ci-e2e-auto-skip.md)).
@@ -416,7 +432,7 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   2 re-verify authZ / resource ownership (IDOR guard).  3 zod-validate ALL input first.
   4 return a minimal DTO, never a raw row.  5 db+auth via the server-only DAL; keep 'use server' thin.
   6 idempotent: body clientId + UNIQUE; replay → one effect, same result.
-  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: export limit; correlation ids.
+  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: correlation ids.
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.
