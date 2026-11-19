@@ -555,7 +555,8 @@ arms, and each `.expect` is confirmed by running `pnpm db:mutations` before it i
 
 ### PR 3b (Q6): `db/priv-3-3b-remove-programs` (about 150 lines)
 
-The program removal (D7): a correction, `blocksOnlyThisAthleteWasOn` and `othersOnTheseBlocks` moved
+The program removal (D7), and from 2026-11-18 the runbook's one-program, workout and item removal and
+the Q12 rename, each with its proof: a correction, `blocksOnlyThisAthleteWasOn` and `othersOnTheseBlocks` moved
 into `preflight.ts` with mutations 204 and 206 regenerated, proof P6b with one mutation, and runbook
 step 4b replaced. An unlisted block's workouts and prescriptions keep the same id sets. A mutation
 that drops the re-check's session arm turns P6b red.
@@ -724,10 +725,13 @@ kept from the first draft.
       first, remove only on explicit acceptance, and never delete or orphan another athlete's log rows.
       PR 3b's correction and any in-app removal are held to it. **"Orphan", confirmed** _(2026-11-18)_: clearing a log's link back to a removed
       program is not orphaning, since the log keeps its frozen names and set numbers. A program someone trained on
-      can be removed once the requester, told who it affects, accepts.
+      can be removed once the requester, told who it affects, accepts. The one exception to "the log keeps its frozen names" is Q12.
 12. **Q12. A typed item's frozen name may be replaced on the household's own logs, after consent**
     _(2026-11-18)_: the owner is told whose logs change and accepts; only the typed text changes, and the
-    logs, sets and numbers stay. The runbook does it by hand; PR 3b scripts it with the removal.
+    logs, sets and numbers stay. Every log of the item changes, whatever its spelling. An adult athlete
+    affected is told (Q9), with no copy and no wait: nothing of theirs is deleted, and a copy would carry
+    the text being removed (privacy lens on #640). The ledger keeps the new, neutral name for replay. The
+    runbook does it by hand; PR 3b scripts it with the removal.
 
 **Board and harness, 2026-11-17.** The fifth module is ruled (above). Lane A has no open PR on its
 two files, so PR 1 is cut now; whichever of it and lane A's `VALIDATE` PR merges second merges `main`.

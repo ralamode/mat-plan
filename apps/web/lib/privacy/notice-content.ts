@@ -1800,7 +1800,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.)"
+        "text": ": the finest grain for\nremoving logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed\non request.) If a person's name was typed as a movement and your logs hold it, ask, and it is\nreplaced with a neutral name on that movement and on your household's logs; the logs themselves stay."
       }
     ]
   },
