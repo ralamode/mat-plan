@@ -17,6 +17,7 @@ import {
   newItemSchema,
   PROGRAM_REFUSAL,
   programOrderSchema,
+  programsByStay,
   renameProgramSchema,
   ROW_REFUSAL,
   rowAmendSchema,
@@ -342,10 +343,8 @@ export function createFakeDayActions(
 
         // A program ending today stays after every one that stays, whatever order was asked for:
         // the day's read sorts it there (ADR 0007 Amendment 5; C37), so the fake does too.
-        const kept = [
-          ...ordered.filter((p) => p.endsToday !== true),
-          ...ordered.filter((p) => p.endsToday === true),
-        ];
+        const { staying, ending } = programsByStay(ordered);
+        const kept = [...staying, ...ending];
         const order = kept.map((p) => p.programPublicId);
         // The athlete's order, then each program's own week order; what left the week stays last.
         const place = (id: string | null) => (id && order.includes(id) ? order.indexOf(id) : null);

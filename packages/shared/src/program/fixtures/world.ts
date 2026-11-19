@@ -33,6 +33,9 @@ export type ProtoValues = {
  * `unit` is a string, not a `Unit`: the prototype's Easy run is prescribed in `mi`, which becomes a
  * unit in FAM-1 step 3. `./build` parses the unit where a fixture needs it, so the run fails loudly
  * if a fixture reaches it before then. None of the named fixtures does.
+ *
+ * The prototype's weights name no unit and are in pounds. A weight carries `unit` only where a
+ * fixture's edit moved it to another one (`unit-edited-after-logging`): that is not the prototype's.
  */
 export type ProtoItem = ProtoValues & {
   iid: FixtureItemKey;

@@ -20,7 +20,7 @@ export const FIXED_WORLD_FIXTURES: readonly FixtureName[] = NAMES.filter(
 );
 
 /** How many fixtures 12a-i deep-equals from a fixed world; the proof asserts it. */
-export const FIXED_WORLD_FIXTURE_COUNT = 11;
+export const FIXED_WORLD_FIXTURE_COUNT = 12;
 
 /**
  * 12a-ii's fixtures: every source with a `before` that is not archive-only, **derived, never typed
@@ -34,4 +34,4 @@ export const REPLAY_FIXTURES: readonly FixtureName[] = NAMES.filter(
 );
 
 /** How many fixtures 12a-ii replays; the proof asserts it, so the filter cannot shrink silently. */
-export const REPLAY_FIXTURE_COUNT = 5;
+export const REPLAY_FIXTURE_COUNT = 6;
