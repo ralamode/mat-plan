@@ -798,7 +798,8 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   same code the app does. Every pin in that WHERE refuses a crafted POST, and the metric pin matters
   most: **without `metric_key = 'bodyweight'` the endpoint rewrites any entry the profile owns** — a
   push-up bout, a sleep reading — into a bodyweight. It is a **constant, never an argument**, because
-  a parameter can be passed wrong by a future caller.
+  a parameter can be passed wrong by a future caller. `updateStrengthSetById` also refuses a program
+  row: that one is `amendRow`'s (`day-writers.md` invariant 23).
 
   Two more rules that WHERE encodes:
   - **The live-profile predicate is `writers/ownership.ts`, and since TEN-1 it carries the household.**
