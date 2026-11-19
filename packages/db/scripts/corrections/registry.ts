@@ -41,6 +41,8 @@ import {
 } from './target-url';
 import {
   eraseHousehold,
+  ErasureCountMismatch,
+  ErasureForeignRow,
   ErasurePreflightRefused,
   ErasureTargetNotFound,
   type ErasureReport,
@@ -1012,6 +1014,34 @@ function asOwnerScope(scope: HouseholdScope): OwnerScope {
   return owner;
 }
 
+/**
+ * The seeded household's memberships, live and hidden: counts only. A hidden membership is the only
+ * database record of an account that was removed from the household; the erasure deletes it, and
+ * step 7 binds only the accounts it is given, so the operator must see that such an account exists
+ * (privacy lens, #708).
+ */
+async function seedMembersNote(db: Database, scope: HouseholdScope): Promise<CorrectionLine> {
+  const rows = await db
+    .select({ deletedAt: schema.householdMembers.deletedAt })
+    .from(schema.householdMembers)
+    .where(inHousehold(scope));
+  const live = rows.filter((r) => r.deletedAt === null).length;
+  return note(`household_members: live ${live}, hidden ${rows.length - live}`);
+}
+
+/** The pre-flights that would refuse `--apply`: letters and counts only. */
+function preflightNotes(report: ErasureReport): CorrectionLine[] {
+  const failing = Object.entries(report.preflights).filter(([, n]) => n > 0);
+  return failing.length === 0
+    ? []
+    : [
+        note(
+          `pre-flight ${failing.map(([c, n]) => `(${c}) ${n}`).join(', ')}: --apply WILL refuse ` +
+            'until another household stops depending on these rows',
+        ),
+      ];
+}
+
 /** Counts only: one CHANGE per table that has rows, then the total as a note. No id of any kind. */
 function erasureLines(report: ErasureReport, verb: 'would erase' | 'erased'): CorrectionLine[] {
   return [
@@ -1038,9 +1068,10 @@ export const ERASE_SEEDED_HOUSEHOLD_NAME = 'erase-seeded-household-2026-11-19';
  * - **Production by elimination** (`erasure-gates.ts`): refused when the direct string is unset, local,
  *   the preview's, names no database or carries a host override; then, on the connection that writes,
  *   unless `current_database()` is the database the URL names and not the preview.
- * - **Tied to this sitting's dry run:** `--apply` needs `EXPECT_ERASED_ROWS`, the dry run's total. The
+ * - **`--apply` restates the dry run's total:** it needs `EXPECT_ERASED_ROWS`, the current total. The
  *   core runs inside this entry's transaction (a savepoint), and a different total throws, which rolls
- *   back everything.
+ *   back everything. A stale number that still equals the count passes: it is a confirmation of the
+ *   size, not a binding to one dry run.
  * - **Once the target is gone:** a dry run notes it and exits 0; `--apply` refuses.
  * - **Counts only:** no Clerk id and no `public_id` in any line, though the core's report carries
  *   Clerk ids (for 2b). The core's typed errors become refusals from their fixed fields; anything else
@@ -1066,6 +1097,8 @@ const eraseSeededHousehold: Correction = {
         const report = await eraseHousehold(db as Executor, asOwnerScope(scope), { apply: false });
         return [
           ...erasureLines(report, 'would erase'),
+          ...preflightNotes(report),
+          await seedMembersNote(db, scope),
           note(`to apply, re-run with ${EXPECT_ERASED_ROWS}=${report.total} and --apply`),
           others,
         ];
@@ -1078,6 +1111,9 @@ const eraseSeededHousehold: Correction = {
         );
       }
       return await db.transaction(async (tx) => {
+        // First, before the entry's own reads: a concurrent ACCESS EXCLUSIVE on `households` must
+        // not leave them waiting unbounded (README rule 7; the core sets the same values again).
+        await setLocalTimeouts(tx, '60s');
         const txDb = tx as unknown as Database;
         const [{ name } = { name: '' }] = rowsOf<{ name: string }>(
           await tx.execute(sql`SELECT current_database() AS name`),
@@ -1102,7 +1138,8 @@ const eraseSeededHousehold: Correction = {
         return [
           ...erasureLines(report, 'erased'),
           note(
-            'erased. Do NOT delete any Clerk user: the accounts are kept (K15), and step 7 binds them.',
+            'erased. Do NOT delete the Clerk users step 7 binds: those accounts are kept (K15). An ' +
+              'account whose only membership was hidden is decided at the go and recorded in the ledger.',
           ),
           await otherHouseholdsNote(txDb),
         ];
@@ -1111,6 +1148,17 @@ const eraseSeededHousehold: Correction = {
       if (err instanceof ErasurePreflightRefused) {
         throw new CorrectionRefusal(
           `pre-flight (${err.check}) found ${err.count} row(s) another household depends on; nothing erased`,
+        );
+      }
+      if (err instanceof ErasureCountMismatch) {
+        throw new CorrectionRefusal(
+          `aborted: ${err.table} expected ${err.expected} row(s), got ${err.actual} (rows changed ` +
+            'during the erasure); rolled back, nothing erased; re-run the dry run',
+        );
+      }
+      if (err instanceof ErasureForeignRow) {
+        throw new CorrectionRefusal(
+          `aborted: a deleted ${err.table} row was not the seeded household's; rolled back, nothing erased`,
         );
       }
       if (err instanceof ErasureTargetNotFound) {

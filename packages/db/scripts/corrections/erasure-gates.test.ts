@@ -26,6 +26,14 @@ describe('the one-shot erasure runs against production only (CAT-3 R0, D1)', () 
       'postgres://u:p@ep-x.aws.neon.tech/mat_plan?%68ost=elsewhere',
       /host override/,
     ],
+    ['an empty host', 'postgres:///mat_plan', /no host|names no database/],
+    ['a socket host', 'postgres://u:p@%2Ftmp/mat_plan', /unix socket/],
+    ['a socket scheme', 'socket:/tmp?db=mat_plan', /not a postgres/],
+    ['LOCALHOST', 'postgres://u:p@LOCALHOST/mat_plan', /local database/],
+    ['127.1', 'postgres://u:p@127.1/mat_plan', /local database/],
+    ['localhost with a trailing dot', 'postgres://u:p@localhost./mat_plan', /local database/],
+    ['an encoded localhost', 'postgres://u:p@%6cocalhost/mat_plan', /local database/],
+    ['a mapped IPv4 loopback', 'postgres://u:p@[::ffff:127.0.0.1]/mat_plan', /local database/],
   ])('refuses %s before connecting', (_what, url, why) => {
     expect(seededHouseholdErasureIssue(url, null)).toMatch(why);
   });

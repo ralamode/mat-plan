@@ -17,8 +17,10 @@ import {
 
 /**
  * The total the dry run printed, which `--apply` must be given back. A number with no personal data.
- * It ties an apply to THIS sitting's dry run: a bare `--apply`, or one with an earlier sitting's
- * number, refuses.
+ * ⚠️ **It makes `--apply` restate the CURRENT total, which is not a binding to one dry run**: a bare
+ * `--apply` refuses, and so does an earlier number once the count has changed since, but a stale
+ * number that still equals the count passes (security lens, #708). It is a "type back the size"
+ * confirmation, run inside the transaction that writes.
  */
 export const EXPECT_ERASED_ROWS = 'EXPECT_ERASED_ROWS';
 
@@ -37,6 +39,8 @@ export function seededHouseholdErasureIssue(
   if (url === undefined || url === '') {
     return 'DATABASE_URL_UNPOOLED is not set: this erasure reads the direct string only; nothing erased';
   }
+  const hostIssue = hostIssueOf(url);
+  if (hostIssue) return hostIssue;
   if (hasHostOverride(url)) {
     return 'the target URL carries a host override (host= or hostaddr=); nothing erased';
   }
@@ -57,6 +61,62 @@ export function seededHouseholdErasureIssue(
     if (observed !== named) {
       return 'the connected database is not the one the URL names; nothing erased';
     }
+  }
+  return null;
+}
+
+/**
+ * Hosts that mean "this machine" however they are spelled. A `postgres:` URL is a non-special scheme,
+ * so `URL` does not normalise its host: `LOCALHOST`, `127.1`, `localhost.` and `%6cocalhost` all reach
+ * `pg` as loopback while reading as remote (security lens, #708).
+ */
+function looksLocal(host: string): boolean {
+  let h: string;
+  try {
+    h = decodeURIComponent(host).toLowerCase().replace(/\.$/, '');
+  } catch {
+    return true; // undecodable: refuse
+  }
+  h = h.replace(/^\[|\]$/g, '');
+  return (
+    h === 'localhost' ||
+    h.endsWith('.localhost') ||
+    h === '0.0.0.0' ||
+    h === '::1' ||
+    /^127(\.\d+){0,3}$/.test(h) ||
+    /^::ffff:(127\.|7f[0-9a-f]{2}:)/.test(h)
+  );
+}
+
+/**
+ * The host must be a named, remote host in a `postgres:` URL. An EMPTY host lets `$PGHOST` (or a local
+ * socket) decide, and a host that decodes to a path (`%2Ftmp`) IS a unix socket: either way the URL
+ * does not say which server is written, which is the same case as a URL with no database name.
+ */
+function hostIssueOf(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'the target URL cannot be parsed; nothing erased';
+  }
+  if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+    return 'the target URL is not a postgres:// URL; nothing erased';
+  }
+  if (parsed.hostname === '') {
+    return 'the target URL names no host, so the environment would choose the server; nothing erased';
+  }
+  let decoded = parsed.hostname;
+  try {
+    decoded = decodeURIComponent(parsed.hostname);
+  } catch {
+    return "the target URL's host cannot be decoded; nothing erased";
+  }
+  if (decoded.includes('/')) {
+    return "the target URL's host is a unix socket path; nothing erased";
+  }
+  if (looksLocal(parsed.hostname)) {
+    return 'the target is a local database: this erasure runs against production only; nothing erased';
   }
   return null;
 }

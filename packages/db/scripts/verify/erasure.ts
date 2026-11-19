@@ -21,6 +21,7 @@ import {
   CREATE_HOUSEHOLD_NAME,
   ERASE_SEEDED_HOUSEHOLD_NAME,
 } from '../corrections/registry';
+import { CREATE_HOUSEHOLD_ACCOUNTS_ENV } from '../corrections/accounts';
 import { EXPECT_ERASED_ROWS } from '../corrections/erasure-gates';
 import { lineText } from '../corrections/summary';
 import {
@@ -1356,7 +1357,45 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 async function verifyOneShotErasure(): Promise<void> {
   const erase = correctionNamed(ERASE_SEEDED_HOUSEHOLD_NAME);
   await rolledBack(async (tx) => {
-    const asDb = tx as unknown as Database;
+    // 🔴 Counts transaction opens, so the proof can tell the core ran INSIDE the entry's transaction
+    // (a savepoint on its `tx`) from the core opening one of its own. Under PGlite both look alike: a
+    // core handed the outer handle opens a savepoint that shadows the entry's, and the entry's
+    // rollback still undoes it, so a total compare that guarded nothing would pass (DB-safety lens,
+    // #708). In production that second transaction would be a second pooled connection that commits.
+    const opens = { outer: 0, nested: 0 };
+    const counted = <T extends object>(target: T, onOpen: () => void, wrapInner: boolean): T =>
+      new Proxy(target, {
+        get(t, key, receiver) {
+          const value = Reflect.get(t, key, receiver) as unknown;
+          if (key !== 'transaction' || typeof value !== 'function') return value;
+          return (fn: (inner: unknown) => Promise<unknown>, ...rest: unknown[]) => {
+            onOpen();
+            return (value as (...a: unknown[]) => Promise<unknown>).call(
+              t,
+              (inner: object) =>
+                fn(
+                  wrapInner
+                    ? counted(
+                        inner,
+                        () => {
+                          opens.nested += 1;
+                        },
+                        false,
+                      )
+                    : inner,
+                ),
+              ...rest,
+            );
+          };
+        },
+      });
+    const asDb = counted(
+      tx,
+      () => {
+        opens.outer += 1;
+      },
+      true,
+    ) as unknown as Database;
     const run = (env: Record<string, string | undefined>, apply: boolean, sink?: string[]) =>
       withEnv(
         { ...NO_ERASE_ENV, DATABASE_URL_UNPOOLED: REMOTE, ...env },
@@ -1376,6 +1415,11 @@ async function verifyOneShotErasure(): Promise<void> {
         `CAT-3 R0: the one-shot erasure refuses ${what}`,
       );
     }
+    await assert.rejects(
+      run({ DATABASE_URL_UNPOOLED: undefined, DATABASE_URL: REMOTE }, false),
+      /not set/,
+      'CAT-3 R0: the erasure reads the direct string only, never a DATABASE_URL fallback',
+    );
 
     // A member in the seeded household, so "no account id is printed" has an account to leak: the
     // core's report carries members' Clerk ids (for 2b), and this entry must print none of them.
@@ -1391,6 +1435,72 @@ async function verifyOneShotErasure(): Promise<void> {
       role: HOUSEHOLD_ROLE.owner,
     });
 
+    // The other-households line must count, not only print: one hidden and one live non-seed
+    // household are planted, and the line must read the baseline plus one each.
+    const othersOf = (lines: readonly string[]) => {
+      const m = /^households not in SEED_PUBLIC_IDS: live (\d+), hidden (\d+)$/.exec(
+        lines.find((l) => l.startsWith('households not in SEED_PUBLIC_IDS')) ?? '',
+      );
+      return m ? { live: Number(m[1]), hidden: Number(m[2]) } : null;
+    };
+    const baseline = othersOf((await run({}, false)).map(lineText));
+    assert.ok(baseline, 'CAT-3 R0: the dry run prints the other households, live and hidden');
+    await newHousehold(tx, 'r0-other-live');
+    const hiddenOther = await newHousehold(tx, 'r0-other-hidden');
+    await tx
+      .update(schema.households)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.households.id, hiddenOther));
+
+    // 🔴 HIDE the seeded household and one of its athletes: the entry must find and erase a
+    // soft-deleted household too (D1), which a live-only lookup would report as "not here".
+    await tx
+      .update(schema.households)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+    const [seedProfile] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.householdId, seedRow.id))
+      .limit(1);
+    assert.ok(seedProfile, 'CAT-3 R0: the seeded household has an athlete to hide');
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.id, seedProfile.id));
+
+    // A pre-flight refusal reaches the operator by its letter, and every table is unchanged: (h), an
+    // assignment of a seeded athlete to another household's program. Nested, so it is undone here.
+    await rolledBack(async (inner) => {
+      const kId = await newHousehold(inner, 'r0-preflight-k');
+      const K_SCOPE = householdScopeForScript(kId);
+      const block = await mkTemplateBlock(asTx(inner), K_SCOPE, 'r0-preflight-k-block');
+      await mkAssignment(inner, { blockId: block, profileId: seedProfile.id });
+      const innerDb = inner as unknown as Database;
+      const dryLines = (
+        await withEnv({ ...NO_ERASE_ENV, DATABASE_URL_UNPOOLED: REMOTE }, () =>
+          erase.run(innerDb, false),
+        )
+      ).map(lineText);
+      assert.ok(
+        dryLines.some((l) => /^pre-flight \(h\) 1: --apply WILL refuse/.test(l)),
+        'CAT-3 R0: the dry run says which pre-flight will refuse --apply',
+      );
+      const total = Number(
+        /total: (\d+)/.exec(dryLines.find((l) => l.startsWith('total: ')) ?? '')?.[1],
+      );
+      const kept = await graphCounts(inner);
+      await assert.rejects(
+        withEnv(
+          { ...NO_ERASE_ENV, DATABASE_URL_UNPOOLED: REMOTE, [EXPECT_ERASED_ROWS]: String(total) },
+          () => erase.run(innerDb, true),
+        ),
+        /pre-flight \(h\) found 1 row/,
+        'CAT-3 R0: a pre-flight refusal names its letter and count',
+      );
+      assert.deepEqual(await graphCounts(inner), kept, 'CAT-3 R0: …and nothing is erased');
+    }, tx);
+
     // The dry run: counts only, the total to give back, and nothing written.
     const before = await graphCounts(tx);
     const dryOut: string[] = [];
@@ -1399,9 +1509,10 @@ async function verifyOneShotErasure(): Promise<void> {
     assert.ok(totalLine, 'CAT-3 R0: the dry run prints the total');
     const total = Number(/total: (\d+)/.exec(totalLine)?.[1]);
     assert.ok(total > 0, 'CAT-3 R0: the dry run finds the seeded household and its rows');
-    assert.ok(
-      dry.some((l) => /^households not in SEED_PUBLIC_IDS: live \d+, hidden \d+$/.test(l)),
-      'CAT-3 R0: the dry run prints the other households, live and hidden',
+    assert.deepEqual(
+      othersOf(dry),
+      { live: baseline.live + 1, hidden: baseline.hidden + 1 },
+      'CAT-3 R0: the other-households line counts a planted live and a planted hidden household',
     );
     assert.deepEqual(await graphCounts(tx), before, 'CAT-3 R0: the dry run writes nothing');
 
@@ -1436,6 +1547,8 @@ async function verifyOneShotErasure(): Promise<void> {
     );
 
     // The erasure: the seeded household is gone, and no line names an account or a public_id.
+    opens.outer = 0;
+    opens.nested = 0;
     const appliedOut: string[] = [];
     const applied = (await run({ [EXPECT_ERASED_ROWS]: String(total) }, true, appliedOut)).map(
       lineText,
@@ -1446,6 +1559,11 @@ async function verifyOneShotErasure(): Promise<void> {
       ),
     );
     assert.equal(left?.n, 0, 'CAT-3 R0: --apply erases the seeded household, hidden or live');
+    assert.deepEqual(
+      opens,
+      { outer: 1, nested: 1 },
+      "CAT-3 R0: the core runs inside the entry's transaction (one transaction, the core's savepoint on its tx)",
+    );
     assert.ok(
       applied.some((l) => l.startsWith(`total: ${total} `)),
       "CAT-3 R0: --apply erases exactly the dry run's total",
@@ -1475,7 +1593,7 @@ async function verifyOneShotErasure(): Promise<void> {
     {
       DATABASE_URL: undefined,
       DATABASE_URL_UNPOOLED: 'postgres://u:p@ep-verify.invalid',
-      CREATE_HOUSEHOLD_CLERK_USER_IDS: 'user_verifyr0nopath',
+      [CREATE_HOUSEHOLD_ACCOUNTS_ENV]: 'user_verifyr0nopath',
     },
     () =>
       assert.rejects(
