@@ -19,12 +19,12 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 10b and wired through 15 PR 2.** The Programs list, a program's page and the
+🚧 **Built through step 10b and wired through 15 PR 3.** The Programs list, a program's page and the
 workout editor are real pages (`/programs`, `/programs/[programId]`, `…/workouts/[workoutId]` and
 `…/workouts/new`), opened from Home's Programs row, on the household's own data; every builder
 action is registered, Put on and Take off included (15 PR 1). The add-athlete form says a new
 athlete starts with no program, and an athlete on none, live and on today or a later day, gets a
-Programs link from their day page (15 PR 2). Home's program lines (15 PR 3) are still to come. Each
+Programs link from their day page (15 PR 2). Home's tiles name each athlete's programs (15 PR 3). Each
 step below adds its files and its invariants here.
 
 ## The map
@@ -40,6 +40,7 @@ step below adds its files and its invariants here.
 | 7b-i  | `app/programs/page.tsx`, `[programId]/page.tsx`, `not-found.tsx`, `loading.tsx`; the list and view reads; Home and rail rows. |
 | 7b-ii | The two workout pages, `getProgramEntry`, the editor's client-minted id and its cap words.                                    |
 | 15    | 15 PR 1: Put on and Take off, wired (`putOnAction`, `takeOffAction`, their DAL and miss report); the dialog on real data.     |
+| 15    | 15 PR 3: `getProgramsByAthlete`, Home's one read for its tiles' programs lines (`components/profiles/profile-tile.tsx`).      |
 
 ### How a screen is put together (8a)
 
@@ -101,7 +102,7 @@ flowchart LR
 | `apps/web/app/programs/[programId]/page.tsx`                            | A program's page (7b-i): `getProgramView(id, today, tz)`, `ProgramScreen`; a miss is `notFound()`. Title "Program", never its name.                                                                                                                                                                                                                                                                                                                |
 | `apps/web/app/programs/not-found.tsx` · `loading.tsx` · `layout.tsx`    | The builder's 404 ("← Programs", its own `AppShell`, since `notFound()` replaces the page) its busy frame, and its `ClerkRoot` (#626: Clerk loads per segment, never in the root layout).                                                                                                                                                                                                                                                          |
 | `apps/web/e2e/program-builder.spec.ts` · `program-builder.a11y.spec.ts` | From `/p`: create, rename, copy a seeded workout, Copy at 360px, a random id's 404; a new workout with two items, Save, then Back (7b-ii); another program's workout is a 404; a new athlete's day page linking to Programs, then put on this run's program, a ✓ logged, Take off and back on (15); the four routes' a11y walk at 360px, the Copy and Put-on dialogs (in-sheet overflow, `expectNoOverflowWithin`), and one desktop axe pass each. |
-| `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`), `getProgramEntry` (7b-ii: one entry of the list, by the id lower-cased) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                                                                                                |
+| `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`), `getProgramEntry` (7b-ii: one entry of the list, by the id lower-cased), `getProgramsByAthlete` (15 PR 3: Home's tiles, `null` with no household) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                      |
 | `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                                                                                                                                                                                                                                                          |
 
 ## Invariants
@@ -368,6 +369,13 @@ flowchart LR
       `cache()` compares by identity. The view keeps `getWorkoutDraft`'s order: a non-uuid id is
       `null` with no report; no scope or a miss is reported once. The list names no id, so a missing
       scope reports nothing and the page sends the caller Home.
+    - **Home's programs lines are ONE read for the page** (`getProgramsByAthlete(today)`, 15 PR 3),
+      never one per tile; Home skips it with no household or no athletes. A tile with no entry
+      shows no line rather than "No program yet". The line uses the day page's words
+      (`PROGRAM_COPY.line`), `startsText` for a program that has not begun (`hasStarted`, the
+      program page's rule) and `NO_PROGRAM_YET_LINE` for none. The tile's link is named by
+      `aria-labelledby` (name and kind) and described by the line, so a program named after an
+      athlete never changes what the link is called.
     - **The real `ProgramActions` is `PROGRAM_ACTIONS`** (`actions.contract.ts`, 7a-ii), the six
       required members, and `putOn` and `takeOff` since step 15. Not in `actions.ts`: a
       `'use server'` module exports only async functions.

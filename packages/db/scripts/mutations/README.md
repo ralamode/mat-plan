@@ -502,6 +502,8 @@ and the gate is what exercises it.
 
 ⚠️ **FAM-1 11b has no patch of its own for three of its rules, by necessity.** (1) The derived quantity `dimension` in `insertEntrySetRows` (plan P13): hard-coding `'mass'` there reddens `verify.ts`'s GAP-3 hold proof (a `sec` strength set) first, as a raw FK error rather than an assertion, so no `.expect` can name `verify/day.ts` 4; that proof and 4 both cover the line. (2) The replay pin's program-row condition (3d): `prescription_set IS NOT NULL` is implied by the prescription pin (`entries_prescription_needs_set_check`), so dropping it changes no answer; 10a and 10b prove it through `programRowOf` in the un-tick and re-tick. (3) Another household's program row through un-tick or re-tick (10d): it is guarded twice, by `programRowOf`'s profile conjunct (mutation 173, whose first failure is 3c) and behind it by `hideEntries` / `restoreHidden`'s own `isLiveProfile` join, so no single-conjunct patch reddens 10d. Plan P20 (step 5's assignment conjunct) is owed with step 5.
 
+⚠️ **FAM-1 15 PR 3 regenerated `499`**: `readProgramsByAthlete`'s entries gained `activeFrom`, which moved the context its hunk matched on. Its claim and `.expect` are unchanged.
+
 ⚠️ **`01` was REGENERATED at `PROF-1 b-s`**, because that chunk added `isOwnerOf` to `ownership.ts` and shifted the context `01`'s hunk matched on. The runner reported it as **"does not apply — regenerate it"** rather than silently passing, which is the gate behaving correctly; its `.expect` is unchanged. Any edit to a mutated file owes the same check.
 
 ⚠️ **`10` also proves a REFUSAL rather than a predicate**, which is why `seed.ts` throws an explicit

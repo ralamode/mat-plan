@@ -136,10 +136,15 @@ export const takingOffLabel = (athlete: string) => `${BUILDER_COPY.takingOff} ${
 export const lastDayText = (day: string, today: string) =>
   `last day ${day === today ? 'today' : formatDayShort(day)}`;
 
+/** A start after today, "starts Fri, Nov 20": the program page's athlete line and Home's tile. */
+export const startsText = (day: string) => `starts ${formatDayShort(day)}`;
+
 /** An athlete's line on the program page: "since Mon, Nov 9 · last day today · also on Stretching". */
 export function athleteHint(athlete: ProgramView['athletes'][number], today: string): string {
   const parts = [
-    `${hasStarted(athlete, today) ? 'since' : 'starts'} ${formatDayShort(athlete.since)}`,
+    hasStarted(athlete, today)
+      ? `since ${formatDayShort(athlete.since)}`
+      : startsText(athlete.since),
   ];
   if (athlete.lastDay) parts.push(lastDayText(athlete.lastDay, today));
   if (athlete.alsoOn.length) parts.push(`also on ${formatList(athlete.alsoOn)}`);
@@ -648,6 +653,12 @@ export const PUT_ON_COPY = {
   stale: 'This program changed somewhere else. It now shows the latest; no one was started.',
   dayChanged: 'The day has changed since this page loaded. It now shows today; no one was started.',
 } as const;
+
+/**
+ * `noProgramYet` as a line of its own, capitalised (Home's tile, FAM-1 15 PR 3): the one exported
+ * form, so the dialog's "keeps no program yet" and Home's "No program yet" cannot drift apart.
+ */
+export const NO_PROGRAM_YET_LINE = `${PUT_ON_COPY.noProgramYet.charAt(0).toUpperCase()}${PUT_ON_COPY.noProgramYet.slice(1)}`;
 
 export const putOnTitle = (program: string) => `Put someone on ${program}`;
 export const keepsText = (programs: readonly string[]) =>
