@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
+index 7651e523..f297b37c 100644
+--- a/packages/db/src/writers/program/seed-fixtures.ts
++++ b/packages/db/src/writers/program/seed-fixtures.ts
+@@ -168,7 +168,7 @@ async function liveActive(tx: Executor, scope: HouseholdScope, profilePublicId:
+   const [live] = await tx
+     .select({ id: schema.profiles.id })
+     .from(schema.profiles)
+-    .where(and(isLiveProfile(profilePublicId, scope), isNull(schema.profiles.archivedAt)));
++    .where(isLiveProfile(profilePublicId, scope));
+   return Boolean(live);
+ }
+ 
