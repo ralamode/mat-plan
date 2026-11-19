@@ -341,7 +341,7 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await putOn.getByRole('button', { name: startLabel(1, program) }).click();
   await expect(putOn).toBeHidden();
 
-  // 3b. Home's tile now names the program, in the day page's words, and fits at 360px (15 PR 3).
+  // 3b. Home's tile now names the program, in the day page's words, with no overflow at 360px (15 PR 3).
   await page.goto(APP_HOME_PATH);
   await expect(homeTile(page, athlete)).toHaveAccessibleDescription(PROGRAM_COPY.line([program]));
   await expectNoOverflowWithin(homeTile(page, athlete), 'Home tile with its programs line');

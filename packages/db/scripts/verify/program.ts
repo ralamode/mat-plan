@@ -2660,7 +2660,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     assert.deepEqual(
       await xOnP(),
       [{ activeFrom: xStart, activeTo: null }],
-      'FAM-1 15 PR 3: …and readProgramsByAthlete gives the reopened program its ORIGINAL first day',
+      'FAM-1 15 PR 3: …and readProgramsByAthlete reports the reopened stretch open (activeTo null), from its row',
     );
     assert.deepEqual(
       await openOrder(x),

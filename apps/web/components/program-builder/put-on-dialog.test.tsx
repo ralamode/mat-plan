@@ -165,6 +165,21 @@ describe('Put someone on (FAM-1 10b)', () => {
     ).toBeTruthy();
   });
 
+  it('someone ticked back on gets no order hint: they go back where they were (invariant 19)', () => {
+    const off = familyProgramAfterTakeOff.candidates.find((c) => c.on)!;
+    const withKeeps: ProgramView = {
+      ...familyProgramAfterTakeOff,
+      candidates: familyProgramAfterTakeOff.candidates.map((c) =>
+        c.profilePublicId === off.profilePublicId ? { ...c, keeps: ['Stretching'] } : c,
+      ),
+    };
+    page({ takeOff: vi.fn() }, withKeeps);
+    openDialog();
+    const lastOff = withKeeps.athletes.find((a) => a.lastDay)!;
+    fireEvent.click(box(lastOff.name));
+    expect(within(dialog()).queryByText(orderHintText(familyProgram.name))).toBeNull();
+  });
+
   it('ticking someone who keeps another program explains the order, and how to switch', () => {
     page({ takeOff: vi.fn() });
     openDialog();
@@ -388,7 +403,7 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     openDialog();
     fireEvent.click(box(adult.name));
     expect(within(dialog()).getByText(orderHintText(familyProgram.name)).textContent).toBe(
-      `On their day page, ${familyProgram.name} takes its place in the order of your Programs list.`,
+      `On their day page, ${familyProgram.name} goes in by the order of your Programs list. Their other programs keep their order.`,
     );
   });
 });
