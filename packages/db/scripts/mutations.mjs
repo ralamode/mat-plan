@@ -14,8 +14,9 @@
  * left patch 153 in `writers/practice.ts` and patch 150 in a commit, 2026-11-17; plan:
  * `docs/plans/dx-mutations-kill-safe.md`):
  *
- * - **One run per worktree:** a lock in the worktree's git dir; a second run refuses while the first
- *   is alive, and only a lock whose pid is gone is treated as stale.
+ * - **One run per worktree:** a lock in the worktree's git dir (`pid-lock.mjs`); a second run refuses
+ *   while the first is alive. A lock is stale when its pid is gone or now names a process with a
+ *   different start time (a reused pid).
  * - **A journal before every apply** (same git dir, written then renamed): the patched paths, their
  *   pre-patch bytes and hash, the patched hash, and the gate's process group.
  * - **Restore by hash, three states:** a file equal to its snapshot is left alone; a file equal to
@@ -30,14 +31,16 @@
  * - **The heavy-run slot** (DX-18 D3, `.github/scripts/heavy-slot.mjs`) is taken first: one heavy
  *   local run machine-wide. `--recover` does not take it.
  *
- * Usage: `node scripts/mutations.mjs` (all patches) · `node scripts/mutations.mjs --recover` (only
- * restore an interrupted run's journal, then exit).
+ * Usage: `node scripts/mutations.mjs` (all patches) · `--recover` (only restore an interrupted run's
+ * journal, then exit) · `--only 271-278` or `--only <text>` (some patches) · `--shard i/n` (CI: every
+ * n-th patch from i, 0-based) · `--report <file>` (write what ran, as JSON) · `--list` (print the
+ * selection, run nothing) · `--list-paths` (every path any patch touches, for `changed-scopes.mjs`) ·
+ * `--verify-reports <dir>` (CI: the shards' reports ran every patch exactly once). DX-18 D6.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
-  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -52,6 +55,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { takeSlot } from '../../../.github/scripts/heavy-slot.mjs';
+import { acquire, holder, release } from '../../../.github/scripts/pid-lock.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = resolve(HERE, '..');
@@ -69,95 +73,47 @@ const JOURNAL = gitPath('mat-plan-mutations-inflight.json');
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 const shaOf = (rel) => sha(readFileSync(join(REPO, rel)));
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-const alive = (pid) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === 'EPERM';
-  }
-};
 
-// ── The lock: one run per worktree ──────────────────────────────────────────────────────────────
-let lockHeld = false;
-/** The lock's holder, if it is a live `mutations.mjs` (a reused pid naming something else is not). */
-function liveHolder(content) {
-  let pid = null;
+// ── The lock: one run per worktree (on the shared helper, `.github/scripts/pid-lock.mjs`) ──────────
+let lockPayload = null;
+/** A lock written by the runner before DX-18 PR 2 (`{ pid, startedAt }`, no `holders`), if its pid lives. */
+function oldFormatHolder() {
   try {
-    pid = JSON.parse(content).pid;
-  } catch {
-    return null;
+    const old = JSON.parse(readFileSync(LOCK, 'utf8'));
+    if (Array.isArray(old.holders) || !Number.isInteger(old.pid)) return null;
+    process.kill(old.pid, 0);
+    return old.pid;
+  } catch (error) {
+    return error?.code === 'EPERM' ? 'unknown' : null;
   }
-  if (!pid || !alive(pid)) return null;
-  try {
-    const command = execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' });
-    return command.includes('mutations.mjs') ? pid : null;
-  } catch {
-    return null;
-  }
+}
+function refuse(pid) {
+  console.error(
+    `✗ mutation gate: another db:mutations run is in flight in this worktree (pid ${pid}).\n` +
+      `  Two runs in one worktree apply patches under each other's gate. Wait for it to finish\n` +
+      `  (its lock: ${LOCK}).`,
+  );
+  process.exit(1);
 }
 function acquireLock() {
-  // Created WITH its content: the pid is written to a private file, then hard-linked onto the lock
-  // path (link fails if the path exists), so no reader ever sees an empty lock.
-  const mine = `${LOCK}.${process.pid}`;
-  writeFileSync(mine, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-  try {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        linkSync(mine, LOCK);
-        lockHeld = true;
-        return;
-      } catch (error) {
-        if (error.code !== 'EEXIST') throw error;
-      }
-      let content = '';
-      try {
-        content = readFileSync(LOCK, 'utf8');
-      } catch {
-        continue; // released between our link and our read: try again
-      }
-      const holder = liveHolder(content);
-      if (holder) {
-        console.error(
-          `✗ mutation gate: another db:mutations run is in flight in this worktree (pid ${holder}).\n` +
-            `  Two runs in one worktree apply patches under each other's gate. Wait for it to finish\n` +
-            `  (its lock: ${LOCK}).`,
-        );
-        process.exit(1);
-      }
-      // Stale. Break it by renaming it away and re-reading what was moved: only a lock that still
-      // holds the same dead content is discarded, so two runs breaking one lock cannot remove a
-      // fresh lock the other has just taken.
-      const moved = `${LOCK}.stale.${process.pid}`;
-      try {
-        renameSync(LOCK, moved);
-      } catch {
-        continue; // someone else moved it first
-      }
-      const movedContent = readFileSync(moved, 'utf8');
-      if (movedContent !== content && liveHolder(movedContent))
-        renameSync(moved, LOCK); // not ours to break
-      else unlinkSync(moved);
-    }
-    throw new Error(
-      `mutation gate: could not take the lock at ${LOCK}; delete it if no run is live`,
-    );
-  } finally {
-    try {
-      unlinkSync(mine);
-    } catch {
-      /* the private file is only the lock's source; the link holds the content */
-    }
-  }
+  // pid-lock reads a lock without `holders` as stale, so an older runner's live lock is checked
+  // here first: a worktree updated mid-run must not get a second run under the first.
+  const old = oldFormatHolder();
+  if (old) refuse(old);
+  const payload = {
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+    holders: [holder(process.pid)],
+  };
+  const result = acquire(LOCK, payload);
+  if (!result.held) refuse(result.holder.pid);
+  lockPayload = payload;
 }
 function releaseLock() {
-  if (!lockHeld) return;
-  lockHeld = false;
-  try {
-    unlinkSync(LOCK);
-  } catch {
-    /* already gone: nothing to release */
-  }
+  if (!lockPayload) return;
+  const payload = lockPayload;
+  lockPayload = null;
+  release(LOCK, payload);
 }
 
 // ── The journal ─────────────────────────────────────────────────────────────────────────────────
@@ -352,24 +308,135 @@ function touchedPaths(path) {
     .map((line) => line.split('\t').slice(2).join('\t'));
 }
 
+// ── Which patches a run takes (DX-18 D6) ──────────────────────────────────────────────────────────
+/** Every committed patch, by file name, in the one order every selection and shard is cut from. */
+export function allPatches(dir = DIR) {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.patch'))
+    .sort();
+}
+
+/**
+ * The patches `--only <spec>` names: a number (`288`) or an inclusive range (`271-278`) of the
+ * leading number, or else any patch whose name contains the text.
+ */
+export function selectOnly(patches, spec) {
+  const range = /^(\d+)(?:-(\d+))?$/.exec(spec);
+  if (!range) return patches.filter((p) => p.includes(spec));
+  const [lo, hi] = [Number(range[1]), Number(range[2] ?? range[1])];
+  return patches.filter((p) => {
+    const n = Number(/^(\d+)/.exec(p)?.[1]);
+    return n >= lo && n <= hi;
+  });
+}
+
+/**
+ * Shard `index` of `total` (0-based, as `strategy.job-index` is): every `total`-th patch from
+ * `index`, so each shard gets a spread of the directory rather than one block of numbers.
+ */
+export function selectShard(patches, index, total) {
+  return patches.filter((_, i) => i % total === index);
+}
+
+function parseShard(value) {
+  const m = /^(\d+)\/(\d+)$/.exec(value ?? '');
+  const [index, total] = m ? [Number(m[1]), Number(m[2])] : [NaN, NaN];
+  if (!(total >= 1 && index >= 0 && index < total)) {
+    console.error(`✗ mutation gate: --shard takes i/n with 0 <= i < n, got ${value}`);
+    process.exit(1);
+  }
+  return { index, total };
+}
+
+function flag(name) {
+  const at = process.argv.indexOf(name);
+  if (at === -1) return undefined;
+  const value = process.argv[at + 1];
+  if (value === undefined || value.startsWith('--')) {
+    console.error(`✗ mutation gate: ${name} needs a value`);
+    process.exit(1);
+  }
+  return value;
+}
+
+/**
+ * `--verify-reports <dir>`: the shards' `--report` files, read together. Exit 0 only when they name
+ * one shard count, every shard of it once, and every committed patch exactly once across them.
+ */
+function verifyReports(dir) {
+  const files = readdirSync(dir, { recursive: true })
+    .map(String)
+    .filter((f) => f.endsWith('.json'));
+  const reports = files.map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')));
+  const problems = [];
+  const totals = new Set(reports.map((r) => r.total));
+  if (reports.length === 0) problems.push('no shard reports were found');
+  if (totals.size > 1) problems.push(`the reports disagree on the shard count: ${[...totals]}`);
+  const total = reports[0]?.total;
+  const shards = reports.map((r) => r.index).sort((x, y) => x - y);
+  const wantShards = Array.from({ length: total ?? 0 }, (_, i) => i);
+  if (JSON.stringify(shards) !== JSON.stringify(wantShards)) {
+    problems.push(`shards reported: [${shards}], expected [${wantShards}]`);
+  }
+  const ran = reports.flatMap((r) => r.patches);
+  const all = allPatches();
+  const twice = ran.filter((p, i) => ran.indexOf(p) !== i);
+  const missing = all.filter((p) => !ran.includes(p));
+  const unknown = ran.filter((p) => !all.includes(p));
+  if (twice.length) problems.push(`run more than once: ${[...new Set(twice)].join(', ')}`);
+  if (missing.length) problems.push(`never run: ${missing.join(', ')}`);
+  if (unknown.length) problems.push(`not a committed patch: ${unknown.join(', ')}`);
+  if (problems.length) {
+    console.error(
+      `✗ mutation gate: the shards did not run every patch exactly once:\n    ${problems.join('\n    ')}`,
+    );
+    process.exit(1);
+  }
+  console.log(`✓ mutation gate: ${total} shards ran all ${all.length} patches, each exactly once`);
+}
+
 async function main() {
+  // Read-only modes first: none of them applies a patch, so none takes the slot or the lock.
+  if (process.argv.includes('--list-paths')) {
+    const paths = new Set(allPatches().flatMap((p) => touchedPaths(join(DIR, p))));
+    for (const path of [...paths].sort()) console.log(path);
+    return;
+  }
+  const reportsDir = flag('--verify-reports');
+  if (reportsDir !== undefined) return verifyReports(reportsDir);
+
+  const only = flag('--only');
+  const shardFlag = flag('--shard');
+  const shard = shardFlag === undefined ? null : parseShard(shardFlag);
+  const reportPath = flag('--report');
+  let selected = allPatches();
+  if (only !== undefined) selected = selectOnly(selected, only);
+  if (shard) selected = selectShard(selected, shard.index, shard.total);
+  if (process.argv.includes('--list')) {
+    for (const p of selected) console.log(p);
+    return;
+  }
+
   const recoverOnly = process.argv.includes('--recover');
   if (!recoverOnly) slot = takeSlot('db:mutations');
   acquireLock();
   if (!recover()) process.exit(1);
   if (recoverOnly) return;
 
-  const patches = readdirSync(DIR)
-    .filter((f) => f.endsWith('.patch'))
-    .sort();
+  const patches = selected;
   if (patches.length === 0) {
-    console.error('mutation gate: no patches found — the gate would pass vacuously');
+    console.error(
+      only !== undefined || shard
+        ? `mutation gate: no patch matches${only !== undefined ? ` --only ${only}` : ''}${shard ? ` --shard ${shardFlag}` : ''} — the gate would pass vacuously`
+        : 'mutation gate: no patches found — the gate would pass vacuously',
+    );
     process.exit(1);
   }
 
   // A patch left applied by a run that wrote no journal (an older runner, a probe, a hand edit):
   // stop before applying anything on top of it.
-  const stillApplied = patches.filter((patch) => {
+  // Every committed patch, not only this run's selection: one left in the tree breaks the others too.
+  const stillApplied = allPatches().filter((patch) => {
     const path = join(DIR, patch);
     try {
       git('apply', '--check', path);
@@ -510,6 +577,13 @@ async function main() {
   if (failed > 0) {
     console.error(`\nmutation gate: ${failed} of ${patches.length} patches did not do their job`);
     process.exit(1);
+  }
+  if (reportPath) {
+    // What this shard ran, for the CI job that checks the shards together (`--verify-reports`).
+    writeFileSync(
+      reportPath,
+      JSON.stringify({ index: shard?.index ?? 0, total: shard?.total ?? 1, patches }) + '\n',
+    );
   }
   console.log(`\n✓ mutation gate: ${patches.length} mutations, all RED`);
 }
