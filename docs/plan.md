@@ -1258,6 +1258,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   behind Beta 0 and ideally SCHED-1.
 
 - **PUB-1 — a public household page, with per-field visibility.** _(captured 2026-10-07, not scoped.)_
+  ⚠️ **Bodyweight has a rule already** ([`ID-1`](#id-1), the maintainer, 2026-11-19): it never
+  appears on a child's feed, and an adult may choose to publish their own. This row's plan says
+  how it keeps that.
   Visit a household at a public, human-meaningful address and see only what it chose to publish —
   a streak, or the movements of a workout without the logged values, or more. Needs its **own
   deliberately-unauthenticated namespace** (`/h/<handle>`), not the private `/p/<profileId>` address;
@@ -1290,6 +1293,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   athletes in other households, get notified of their streaks, and optionally compete on them. The
   cross-household grant and the notification system are **the same mechanism `COACH-1` needs** (below)
   and should be designed once, not twice.
+  ⚠️ **Bodyweight has a rule already** ([`ID-1`](#id-1), the maintainer, 2026-11-19): it never
+  appears on a child's feed, and an adult may choose to publish their own. This row's plan says
+  how it keeps that.
   **What it needs settled before any plan:** a streak becomes **a scoreboard rule people can game** the
   moment it is comparable, which makes [ADR 0007](./decisions/0007-scheduling-model.md)'s nothing-due-day
   rule load-bearing — and that rule has to be settled before the first verdict row is written, because
@@ -1395,6 +1401,28 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
     A plan for AUTH-1 1c, or any later auth chunk, answers these six in its review-response log.
 
+  - **Two rules the maintainer has already set for this row** (2026-11-19, in the orchestrator's
+    chat, on FAM-1's export follow-up). Each is a requirement, not a design:
+    - **Who may export.** "They can only export their own data, if they are an adult, otherwise
+      refuse unless it's the owner". Once a login can be linked to its own athlete, an adult member
+      exports their own athlete's data and nothing else, any other login that is not the owner's
+      is refused, and the owner exports everything. **Until then only the household's owner
+      exports**, and every other login is refused (FAM-1's export follow-up, lane E; planned, not
+      built yet).
+      ⚠️ "If they are an adult" is a permission that turns on age, which keep-open item 5 keeps
+      out of every auth chunk until this row. So the adult half arrives **with** this row's one
+      policy, never before it, and this row must say what makes a login an adult's and which
+      athlete is its own.
+      **This row also owes the words in the app** where a login that is not the owner's has no
+      export control: until a member login exists, the privacy notice is the only place that says
+      so, once FAM-1's export follow-up (lane E, not merged yet) changes it.
+      `SETTINGS_COPY.ownerOnly` is the likely pattern.
+    - **Bodyweight, feeds and sharing.** "Shouldn't any member of the household be ok to see it?
+      This shouldn't go on a child's feed but and adult could choose to publish." Inside the app,
+      any member of the household may see a weigh-in. **Bodyweight never appears on a child's
+      feed.** An adult may choose to publish their own. No feed exists and none has a row yet;
+      SOCIAL-1, PUB-1 and any row that adds a feed or a way to publish take this rule, and their
+      plans say how they keep it.
   - **Depends on** AUTH-1, and comes **before** COACH-1, SOCIAL-1 and PUB-1, which need the same
     relationship. Birthdate is the most sensitive field this app would start using, so the
     `privacy-reviewer` and `security-reviewer` lenses apply to every PR, plus a legal check before
@@ -1896,14 +1924,16 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the test and preview seeds write it, behind `SEED_FIXTURES`. \"Keep `PROGRAM_SEED` reaching prod
   until V1-22\" above no longer holds.
   **Planned 2026-11-13, refreshed 2026-11-16 onto #432 and 2026-11-17 onto `CAT-3`** ([plan](./plans/ops-2-split-the-seed.md)),
-  approved 2026-11-18. **PR 1 in review** (lane A): `seedReference` / `seedFixtures`, the ramp expansion
+  approved 2026-11-18. **PR 1 is merged and applied** (#592, 2026-11-18; lane A): `seedReference` / `seedFixtures`, the ramp expansion
   deleted, the `units` lock fixed, and `migrate.yml` reading a renamed secret, `PROD_DATABASE_URL_UNPOOLED`. Two PRs: 1 moves the seed household and its three fixture profiles under #432's
   `fixtures` branch and takes the ramp expansion out of production, so production's `db:seed` writes
   reference data only, and replaces both runbook preconditions that wait on OPS-2 with a check run
   before each deletion; 2 soft-deletes the fixture athlete `PROF-1 b`'s seed put in production. Decided
   2026-11-16: no tombstones; the fixture athlete is soft-deleted; the ramp expansion is deleted.
   2026-11-17: for the seeded household, `CAT-3`'s fresh start (K7) replaces SEC-6's re-key, and PR 2
-  is unnecessary once it has run.
+  is unnecessary once it has run. **PR 2 is retired** _(2026-11-18,
+  [`priv-3-guarded-deletion.md`](./plans/priv-3-guarded-deletion.md))_: the fresh start runs before
+  anything else could use it, and after it the fixture athlete does not exist.
 - **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
@@ -2383,7 +2413,9 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   📐 **Planned 2026-11-13, refreshed 2026-11-17** ([plan](./plans/priv-3-guarded-deletion.md); a
   six-lens panel; plan only): one proved list of per-household tables, a delete core, and dry-run-first
   `erase-household` and `erase-athlete` corrections over it, with the purge window `N` a deferred
-  section (`N` = 30 days). ⚠️ **The target is read from the environment through a hidden prompt, not
+  section (`N` = 30 days). **The purge window is after Beta 0** _(maintainer, 2026-11-19: "After
+  Beta 0 (Recommended)")_, to be looked at again before any outside family's data is held: its gate,
+  `V1-9b` B1-3, was cut on 2026-11-15, so nothing had said which release it belongs to. ⚠️ **The target is read from the environment through a hidden prompt, not
   the `--household` flag above** _(maintainer, 2026-11-17, Q1)_; PR 2b re-words the paragraph above
   when it lands.
 
