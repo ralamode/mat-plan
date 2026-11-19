@@ -1408,20 +1408,22 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
       refuse unless it's the owner". Once a login can be linked to its own athlete, an adult member
       exports their own athlete's data and nothing else, any other login that is not the owner's
       is refused, and the owner exports everything. **Until then only the household's owner
-      exports**, and every other login is refused (FAM-1's export follow-up, lane E).
+      exports**, and every other login is refused (FAM-1's export follow-up, lane E; planned, not
+      built yet).
       ⚠️ "If they are an adult" is a permission that turns on age, which keep-open item 5 keeps
       out of every auth chunk until this row. So the adult half arrives **with** this row's one
       policy, never before it, and this row must say what makes a login an adult's and which
       athlete is its own.
       **This row also owes the words in the app** where a login that is not the owner's has no
-      export control: until a member login exists, only the privacy notice says so (FAM-1's
-      export follow-up, its question 3). `SETTINGS_COPY.ownerOnly` is the likely pattern.
+      export control: until a member login exists, the privacy notice is the only place that says
+      so, once FAM-1's export follow-up (lane E, not merged yet) changes it.
+      `SETTINGS_COPY.ownerOnly` is the likely pattern.
     - **Bodyweight, feeds and sharing.** "Shouldn't any member of the household be ok to see it?
       This shouldn't go on a child's feed but and adult could choose to publish." Inside the app,
       any member of the household may see a weigh-in. **Bodyweight never appears on a child's
       feed.** An adult may choose to publish their own. No feed exists and none has a row yet;
-      SOCIAL-1, PUB-1, COACH-1 and any row that adds a feed or shares an athlete's data take
-      this rule, and their plans say how they keep it.
+      SOCIAL-1, PUB-1 and any row that adds a feed or a way to publish take this rule, and their
+      plans say how they keep it.
   - **Depends on** AUTH-1, and comes **before** COACH-1, SOCIAL-1 and PUB-1, which need the same
     relationship. Birthdate is the most sensitive field this app would start using, so the
     `privacy-reviewer` and `security-reviewer` lenses apply to every PR, plus a legal check before
