@@ -420,8 +420,12 @@ jobs:
       - name: EVAL-0 gates (accuracy + invariant)
         run: pnpm eval
 
-      - name: DB drift guard + migration/seed verify
+      # `drizzle-kit check` first: it fails (exit 1) when two snapshots claim one parent, the
+      # collision two lanes sharing the migration queue produce. The forward-only guard's inline chain
+      # check above was the only backstop for that (docs/tech-debt.md, closed by this step).
+      - name: DB snapshot chain + drift guard + migration/seed verify
         run: |
+          pnpm --filter @mat-plan/db db:check
           pnpm --filter @mat-plan/db db:generate
           git diff --exit-code packages/db/migrations \
             || (echo '::error::Schema drift — run `pnpm --filter @mat-plan/db db:generate` and commit.' && exit 1)

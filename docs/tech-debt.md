@@ -126,6 +126,11 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
 
+> ✅ **Closed (2026-11-19):** `pnpm --filter @mat-plan/db db:check` runs first in `ci.yml`'s DB step
+> and in `pnpm verify` (`db:check`). Checked on drizzle-kit as pinned: a snapshot given its
+> neighbour's `prevId` makes it exit 1 ("… are pointing to a parent snapshot … which is a
+> collision"), and a clean tree exits 0. The entry is kept for its history.
+
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit
 check`), and AGENTS.md → "Database / migration PR rules" named it first among the CI gates since
   the bootstrap commit. No workflow and no `pnpm verify` step runs it. It is the check that reports a
