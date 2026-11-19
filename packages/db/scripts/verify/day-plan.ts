@@ -102,8 +102,8 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  * an unlogged row ticks through `logRow` with the returned ids, a logged set answers `slot_taken`,
  * and a returned `entryPublicId` un-ticks through `untickRow`.
  *
- * 12a-i proves the eleven fixtures whose `before` is `null`, and in `verifyRules` the two whose only
- * change is an archive. **12a-ii** replays the other four (`verifyReplays`): `before` seeded and
+ * 12a-i proves the twelve fixtures whose `before` is `null`, and in `verifyRules` the two whose only
+ * change is an archive. **12a-ii** replays the other six (`verifyReplays`): `before` seeded and
  * logged, a calibration save, the change made with lane P's writers, then the same comparison; and
  * `verifyReplayRules` proves what only a replay reaches (plan § 12a-ii). The groups are
  * `./fixture-groups.ts`'s, derived from the sources.
