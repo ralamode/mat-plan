@@ -254,9 +254,11 @@ describe('ProgramScreen (FAM-1 8a)', () => {
     render(<ProgramScreen program={familyProgram} actions={actions()} />);
     const who = section(BUILDER_COPY.whosOnIt);
     for (const athlete of familyProgram.athletes) {
-      expect(within(who).getByRole('link', { name: athlete.name }).getAttribute('href')).toBe(
-        athletePath(athlete.profilePublicId),
-      );
+      const link = within(who).getByRole('link', { name: athlete.name });
+      expect(link.getAttribute('href')).toBe(athletePath(athlete.profilePublicId));
+      // 44px wide for a one-letter name: the wrap class's min-w-0 must not win the class merge.
+      expect(link.classList.contains('min-w-11')).toBe(true);
+      expect(link.classList.contains('min-w-0')).toBe(false);
     }
   });
 

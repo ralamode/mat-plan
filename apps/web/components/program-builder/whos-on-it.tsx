@@ -142,8 +142,10 @@ export function WhosOnIt({
                   href={athletePath(athlete.profilePublicId)}
                   className={cn(
                     INLINE_LINK_CLASS,
-                    'min-w-11 max-w-full self-start font-medium hover:decoration-2',
+                    // NAME_WRAP_CLASS first: its min-w-0 would otherwise win the merge and drop the
+                    // 44px minimum width a one-letter name needs.
                     NAME_WRAP_CLASS,
+                    'min-w-11 max-w-full self-start font-medium hover:decoration-2',
                   )}
                 >
                   {athlete.name}

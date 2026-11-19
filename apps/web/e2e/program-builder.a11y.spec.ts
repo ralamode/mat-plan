@@ -1,4 +1,4 @@
-import { PROGRAM_NAME_MAX } from '@mat-plan/shared';
+import { PROGRAM_NAME_MAX, SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
 import { familyProgram } from '@mat-plan/shared/program/fixtures';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -144,17 +144,24 @@ test('all four pages pass axe at desktop width, with the rail', async ({ page })
   await expectNoAxeViolations(page, 'new workout, desktop');
 });
 
-test('on a program others are on, the shared-targets line is in view with Start at 360×640', async ({
+test('when two start together, the shared-targets line is in view with Start at 360×640', async ({
   page,
-}) => {
+}, info) => {
   // A short phone: the line must sit with Start in the pinned footer, not below the fold of the
-  // form, so a parent cannot tap Start without seeing it (UX P1-U1). Nothing is saved.
+  // form, so a parent cannot tap Start without seeing it (UX P1-U1). Its own program, so the two
+  // seeded athletes who are never archived are both candidates whatever else runs. Nothing is put on.
   await page.setViewportSize({ width: 360, height: 640 });
-  await reachProgram(page);
+  const name = `E2E targets ${Date.now().toString(36)}${info.workerIndex}`;
+  await page.goto(PROGRAMS_PATH);
+  await page.getByRole('button', { name: BUILDER_COPY.createProgram }).click();
+  await page.getByLabel(BUILDER_COPY.programName, { exact: true }).fill(name);
+  await page.getByRole('button', { name: BUILDER_COPY.create, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
-  const dialog = page.getByRole('dialog', { name: putOnTitle(familyProgram.name) });
+  const dialog = page.getByRole('dialog', { name: putOnTitle(name) });
   await expect(dialog).toBeVisible();
-  // The real household's athletes, not the design fixture's: any one not on it yet will do.
-  await dialog.getByRole('checkbox', { checked: false, disabled: false }).first().check();
-  await expect(dialog.getByText(sameTargetsText(familyProgram.name))).toBeInViewport();
+  for (const athlete of [SEED_PROFILE_NAME, SEED_PROFILE_2_NAME]) {
+    await dialog.getByRole('checkbox', { name: athlete, exact: true }).check();
+  }
+  await expect(dialog.getByText(sameTargetsText(name))).toBeInViewport();
 });

@@ -322,6 +322,20 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     expect(within(dialog()).getByText(sameTargetsText(familyProgram.name))).toBeTruthy();
   });
 
+  it('the targets line: no one is left to share with when everyone on it comes off today', () => {
+    const allOff: ProgramView = {
+      ...familyProgram,
+      athletes: familyProgram.athletes.map((a) => ({ ...a, lastDay: familyProgram.today })),
+    };
+    page({}, allOff);
+    openDialog();
+    fireEvent.click(box(adult.name));
+    expect(within(dialog()).queryByText(sameTargetsText(familyProgram.name))).toBeNull();
+    // Ticking one of them back on: they stay on, so the newcomer shares with them.
+    fireEvent.click(box(allOff.athletes[0]!.name));
+    expect(within(dialog()).getByText(sameTargetsText(familyProgram.name))).toBeTruthy();
+  });
+
   it('a household with no athlete is sent Home, never told everyone is on it', () => {
     page({}, { ...familyProgram, athletes: [], candidates: [] });
     expect(screen.queryByRole('button', { name: PUT_ON_COPY.open })).toBeNull();

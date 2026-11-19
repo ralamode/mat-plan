@@ -125,8 +125,10 @@ export function PutOn({
   const back = ticked.filter((c) => c.on).map((c) => c.name);
   const fresh = ticked.filter((c) => !c.on).map((c) => c.name);
   const onlyBack = ticked.length > 0 && fresh.length === 0;
-  // Targets are the program's: someone new shares them with whoever is on it, or with each other.
-  const sharesTargets = fresh.length > 0 && (program.athletes.length > 0 || fresh.length > 1);
+  // Targets are the program's: someone new shares them with whoever stays on it (not taken off
+  // today, or ticked back on), or with each other.
+  const staying = program.athletes.some((a) => a.lastDay === null) || back.length > 0;
+  const sharesTargets = fresh.length > 0 && (staying || fresh.length > 1);
   const keeps = [
     ...new Set(ticked.flatMap((c) => c.keeps).filter((name) => name !== program.name)),
   ];
