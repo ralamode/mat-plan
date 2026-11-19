@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index f1bd7685..629cc2f0 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -92,8 +92,7 @@ async function addOrSelect(
+       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
+     })
+     .from(schema.households)
+-    .where(householdRowIs(scope))
+-    .for('key share');
++    .where(householdRowIs(scope));
+   if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
+ 
+   const options = await movementOptions(exec, scope);
