@@ -40,6 +40,7 @@ import {
   isBrowseOpen,
   kindKey,
   seedBrowse,
+  seedKeys,
   toggleBrowse,
   type BrowseKey,
   type BrowseOpenState,
@@ -317,6 +318,8 @@ export function MovementPicker({
   // groups have been opened, so a NEW tick or current row is noticed during render.
   const [browseOpen, setBrowseOpen] = useState<BrowseOpenState>(CLOSED_BROWSE);
   const [seededFor, setSeededFor] = useState<ReadonlySet<string>>(() => new Set());
+  /** Whether Today's program held a ticked row at the last render: its rise is seeded, below. */
+  const [programHeldTicked, setProgramHeldTicked] = useState(false);
   /** The `reveal` revision whose groups have been opened. Not reset on open: a reveal is one-off. */
   const [revealedRevision, setRevealedRevision] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -456,6 +459,7 @@ export function MovementPicker({
       // Every group starts from its default again; the selection's groups are opened next render.
       setBrowseOpen(CLOSED_BROWSE);
       setSeededFor(new Set());
+      setProgramHeldTicked(false);
       reopening = true;
     }
     // The panel never reopens with the sheet: it opens on the list, filters kept (P7).
@@ -743,14 +747,21 @@ export function MovementPicker({
             // Today's program latches open for a multi-mode TICK only: never the current row
             // (single mode), whose card is already there, nor a reveal.
             new Set(fresh.filter((id) => selectedSet.has(id) && programIds.has(id))),
+            view.filtered,
           ),
         );
+    }
+    // 🔴 Today's program that ARRIVES holding a ticked row (its ids came after the tick was
+    // seeded) is latched open the moment it does, the same way: else unticking would fold it.
+    if (programHoldsTicked !== programHeldTicked) {
+      setProgramHeldTicked(programHoldsTicked);
+      if (programHoldsTicked) setBrowseOpen((state) => seedKeys(state, [BROWSE_KEY.program]));
     }
     // The caller's `reveal`: the same seed, for a row whose selection did not change.
     const revealed = reveal ? byId.get(reveal.id) : undefined;
     if (reveal && revealed && reveal.revision !== revealedRevision) {
       setRevealedRevision(reveal.revision);
-      setBrowseOpen((state) => seedBrowse(state, [revealed]));
+      setBrowseOpen((state) => seedBrowse(state, [revealed], undefined, view.filtered));
     }
   }
 
@@ -1271,7 +1282,8 @@ function OptionList({
 }) {
   return (
     // `@container`: a row stacks "How to" under the name when the list is narrower than `@xs`
-    // (20rem), which is large text or a zoomed page on a phone (WCAG 1.4.4), not a 360px phone.
+    // (20rem, against the ROOT font size): any text enlargement on a 360px phone, or a zoomed page
+    // (WCAG 1.4.4). See `OptionRow`.
     <ul className={cn('@container flex flex-col gap-1', className)}>
       {rows.map(({ option, tag }) => (
         <OptionRow
@@ -1305,6 +1317,10 @@ function OptionList({
  *   column keeps 194px in multi mode. At 200% text everything here scales: side by side the name
  *   column would be about 30px, a letter per line; stacked it is about 174px (296px list). On a
  *   page zoomed to 195 CSS px it is about 101px (163px list) instead of a few letters.
+ * - **The threshold moves with the text**, because `@xs` is 20rem and rem resolves against the
+ *   root: measured, a row stacks from about 103% text at 360px, 112% at 390px and 118% at 412px.
+ *   So it is any text enlargement on a 360px phone, which is the right trigger: a px threshold
+ *   would keep the row side by side at 110% text, where the name column has already shrunk.
  */
 function OptionRow({
   option,

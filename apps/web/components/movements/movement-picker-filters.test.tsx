@@ -627,6 +627,23 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(screen.queryByRole('button', { name: /^Garage 1\b/ })).toBeNull();
   });
 
+  it('🔴 a custom item ticked with no filter leaves "not filtered" folded once a filter is on', () => {
+    const mine = Array.from({ length: CUSTOM_OPEN_AT_MOST + 1 }, (_, i) =>
+      householdOption(`Garage ${i + 1}`, `g-${i + 1}`),
+    );
+    render(
+      <Harness multi options={[...OPTIONS.filter((o) => o.owner !== 'household'), ...mine]} />,
+    );
+    open();
+    tickFromSearch('Garage 1');
+    // The tick opened the unfiltered group (it starts folded above five).
+    expect(groupButton(COPY.household, mine.length).getAttribute('aria-expanded')).toBe('true');
+    withLats();
+    expect(groupButton(COPY.householdNotFiltered, mine.length).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+  });
+
   it('🔴 the custom items opened by a tick stay open when the tick is undone', () => {
     render(<Harness multi />);
     open();

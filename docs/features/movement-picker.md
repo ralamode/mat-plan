@@ -162,8 +162,8 @@ path and **creating** the deliberate one.
       filter that leaves `BROWSE_OPEN_AT_MOST` or fewer opens every kind and family. "Your custom
       items (not filtered)" comes first, **folded however few there are** (P9, K25), under a key of its
       own (`customFiltered`), so opening the custom items with no filter does not carry two dozen
-      open rows above the filtered results; a household item names both keys, so a tick opens
-      whichever is drawn. Nothing fits: `COPY.noneFit` with Clear filters.
+      open rows above the filtered results; a tick seeds only the key of the list being drawn (`browseAncestors`'
+      `filtered`), so a tick made with no filter does not carry it open either. Nothing fits: `COPY.noneFit` with Clear filters.
       With no match at all under a filter, the list beneath is this one, custom items included (P10).
     - **Every group is a button inside its heading** (the APG disclosure, `Group`, the picker's only
       one since B3-ii: Today's program and the custom items too), never `<details>`:
@@ -175,7 +175,7 @@ path and **creating** the deliberate one.
       the filter panel, the takeover, a no-match query and clearing the search, and resets only when
       the sheet opens. **Today's program is a group in the same model**: open while any of it is not
       on a card or while it holds a ticked row (read live, so ids that arrive after the tick still
-      open it), and a multi-mode tick in it seeds it, so unticking does not fold it under the thumb
+      open it), and a multi-mode tick in it seeds it (and so does the program ARRIVING holding a tick), so unticking does not fold it under the thumb
       (what `FoldedSection`'s latch did). The current row (single mode) and a `reveal` do not open
       it: their card is already there. **A new selection reopens the groups above it even if the person closed one**
       (its taps are forgotten), adjusted during render, so the row a caller focuses after a create is
@@ -192,12 +192,17 @@ path and **creating** the deliberate one.
       spacer `@max-xs:hidden`). Side by side at 200% text the paddings, box and "How to" all scale,
       and the name column would be about 30px, a letter per line. Stacked it is about 174px at 200%
       text on a 360px phone, and about 101px on a page zoomed to 195 CSS px; at 360px and 100% text
-      the list is 328px, so the row stays one line at 194px.
+      the list is 328px, so the row stays one line at 194px. ⚠️ **`@xs` is 20rem, and rem resolves
+      against the root**, so the threshold moves with the text: a row stacks from about 103% text
+      at 360px, 112% at 390px and 118% at 412px. It is any text enlargement on a 360px phone, not
+      "never on a 360px phone", and rem is still the right unit (a px threshold would keep the row
+      side by side while its name column shrinks).
     - **e2e** (`e2e/movement-picker.a11y.spec.ts`): a kind (from the keyboard) and a family at
-      360px; the filtered tree's headings; and the open Squats family at 200% text and at 195 CSS
-      px: no text-bearing span wider than its box, Goblet squat's name at least 120px (90 at 195),
-      "How to" under the name, the family's label ending before its count, nothing in the dialog
-      wider than its box. (Not `expectNoHorizontalOverflow`: the page under the fixed sheet cannot
+      360px, with Goblet squat's "How to" beside its name at 100% text; the filtered tree's
+      headings; and the open Squats family at 200% text and at 195 CSS px: no text-bearing span
+      wider than its box, Goblet squat's name at least 120px (90 at 195, assuming headless
+      Chromium's hidden scrollbars), "How to" under the name, the family's count inside its
+      button, nothing in the dialog wider than its box. (Not `expectNoHorizontalOverflow`: the page under the fixed sheet cannot
       scroll sideways.) `picker-browse-open` and `picker-filter-browse` are the captures.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a

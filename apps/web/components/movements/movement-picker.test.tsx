@@ -667,13 +667,13 @@ describe("Today's program", () => {
     );
   }
 
-  it('🔴 opens for a ticked row whose program arrives after the tick was seeded', () => {
+  it('🔴 opens for a ticked row whose program arrives after the tick was seeded, and stays open', () => {
+    const allOn = { ids: [prescribed.publicId], onFormIds: new Set([prescribed.publicId]) };
     const { rerender } = render(<ArrivalHarness />);
-    rerender(
-      <ArrivalHarness
-        program={{ ids: [prescribed.publicId], onFormIds: new Set([prescribed.publicId]) }}
-      />,
-    );
+    rerender(<ArrivalHarness program={allOn} />);
+    expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
+    // The untick must not fold it under the thumb: its arrival latched it.
+    rerender(<ArrivalHarness program={allOn} selected={[]} />);
     expect(program(COPY.todaysProgramAllOnForm)?.getAttribute('aria-expanded')).toBe('true');
   });
 

@@ -344,12 +344,14 @@ Today's program, marked `TODO(CAT-3 B3-ii)`) onto `Group`, which deletes `Folded
 - **"Your custom items" has two keys** (review of #715): `BROWSE_KEY.custom` with no filter and
   `BROWSE_KEY.customFiltered` under one, labelled `householdNotFiltered`. With one key, opening two
   dozen custom items with no filter carried them open above the filtered results. The filtered
-  key's default is folded however few (P9, K25); a household item names both keys, so a tick opens
-  whichever is drawn.
+  key's default is folded however few (P9, K25); a tick seeds only the key of the list being drawn
+  (`browseAncestors(…, filtered)`; second review of #715: seeding both carried a no-filter tick
+  into the filtered list, open).
 - **Today's program is a group in the same model** (`BROWSE_KEY.program`). Its default is "open
   while any of it is not on a card, or while it holds a ticked row" (`programAllOnForm`,
   `programHoldsTicked`, the second read live so ids that arrive after the tick still open it). A
-  multi-mode tick in it seeds it, which replaces `FoldedSection`'s latch: unticking a row that is on
+  multi-mode tick in it seeds it, and so does the program arriving holding a tick (`seedKeys`, on
+  `programHoldsTicked`'s rise, during render), which replaces `FoldedSection`'s latch: unticking a row that is on
   another card does not fold it. The current row (single mode) and `reveal` do not seed it, as
   before. `Group`'s count became optional, so its heading is unchanged ("Today's program", no
   count).
@@ -369,9 +371,13 @@ Today's program, marked `TODO(CAT-3 B3-ii)`) onto `Group`, which deletes `Folded
 - **e2e:** the filtered step expects the tree's headings (with "Quads" on, Strength · 3 with Jumps,
   Lunges and Squats, all open by K26). A new step checks the open Squats family at 200% root text
   and again at a 195px viewport: no text-bearing span wider than its box, Goblet squat's name at
-  least 120px (90 at 195), "How to" under the name at 200%, the family label ending before its
-  count, nothing in the dialog wider than its box. Not `expectNoHorizontalOverflow`, which measures
-  the page under the fixed sheet.
+  least 120px (90 at 195, assuming headless Chromium's hidden scrollbars), "How to" under the
+  name at 200%, the family's count inside its button, nothing in the dialog wider than its box. Not
+  `expectNoHorizontalOverflow`, which measures the page under the fixed sheet. The no-filter step
+  pins the other half: at 360px and 100% text, Goblet squat's "How to" is beside its name
+  (Chin-up, the family the step opens, has no steps in the test library). **The threshold moves
+  with the text** (`@xs` is 20rem, against the root): a row stacks from about 103% text at 360px,
+  112% at 390px and 118% at 412px, so any enlargement on a 360px phone stacks it; rem is kept.
 - **What the filtered tree costs on today's data** (review of #715, UX). Until P11-ii lists more of
   the library, a filter usually leaves a handful of rows, so the tree adds a kind and family
   headings with nothing to fold: with "Quads" on, the third row starts about 637px down the sheet,

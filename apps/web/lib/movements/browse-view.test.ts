@@ -157,9 +157,22 @@ describe('browseView under a filter (CAT-3 P12: "Movements that fit your filters
     const unfiltered = browseView(ALL, NO_MOVEMENT_FILTERS);
     expect(isBrowseOpen(BROWSE_KEY.customFiltered, CLOSED_BROWSE, filtered)).toBe(false);
     expect(isBrowseOpen(BROWSE_KEY.custom, CLOSED_BROWSE, unfiltered)).toBe(true);
+    // A seed under the filter opens it.
     expect(
-      isBrowseOpen(BROWSE_KEY.customFiltered, seedBrowse(CLOSED_BROWSE, [MINE[0]!]), filtered),
+      isBrowseOpen(
+        BROWSE_KEY.customFiltered,
+        seedBrowse(CLOSED_BROWSE, [MINE[0]!], undefined, true),
+        filtered,
+      ),
     ).toBe(true);
+  });
+
+  it('🔴 a tick with no filter seeds only the unfiltered key: the filtered list stays folded', () => {
+    const seeded = seedBrowse(CLOSED_BROWSE, [MINE[0]!]);
+    expect(isBrowseOpen(BROWSE_KEY.custom, seeded, browseView(ALL, NO_MOVEMENT_FILTERS))).toBe(
+      true,
+    );
+    expect(isBrowseOpen(BROWSE_KEY.customFiltered, seeded, browseView(ALL, LATS))).toBe(false);
   });
 
   it('🔴 opening them with no filter does not open them under one: two keys', () => {
@@ -202,8 +215,8 @@ describe("Today's program", () => {
   it('🔴 a selection in it opens it, even with all of it on a card (the row is about to be focused)', () => {
     const program = new Set([GOBLET.publicId, MINE[0]!.publicId]);
     expect(browseAncestors(GOBLET, program)).toContain(BROWSE_KEY.program);
-    expect(browseAncestors(MINE[0]!, program)).toEqual([
-      BROWSE_KEY.custom,
+    expect(browseAncestors(MINE[0]!, program)).toEqual([BROWSE_KEY.custom, BROWSE_KEY.program]);
+    expect(browseAncestors(MINE[0]!, program, true)).toEqual([
       BROWSE_KEY.customFiltered,
       BROWSE_KEY.program,
     ]);
@@ -272,7 +285,8 @@ describe('browseAncestors and seedBrowse: a selection opens every group above it
     ]);
     expect(browseAncestors(RUN)).toEqual([BROWSE_KEY.all, kindKey(MODALITY.conditioning)]);
     expect(browseAncestors(BARE[0]!)).toEqual([BROWSE_KEY.all, BROWSE_KEY.notSorted]);
-    expect(browseAncestors(MINE[0]!)).toEqual([BROWSE_KEY.custom, BROWSE_KEY.customFiltered]);
+    expect(browseAncestors(MINE[0]!)).toEqual([BROWSE_KEY.custom]);
+    expect(browseAncestors(MINE[0]!, undefined, true)).toEqual([BROWSE_KEY.customFiltered]);
   });
 
   it('agrees with browseTree for EVERY row: the groups it names are the ones the row is drawn in', () => {

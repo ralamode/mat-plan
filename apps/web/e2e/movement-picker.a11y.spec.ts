@@ -44,7 +44,10 @@ const group = (page: Page, label: string) =>
 
 /** The smallest name column a row may keep at 200 % text at 360px: about 174px stacked, 30 not. */
 const NAME_AT_LARGE_TEXT_MIN = 120;
-/** And on a page zoomed to 195 CSS px at 100 % text: about 101px stacked. */
+/**
+ * And on a page zoomed to 195 CSS px at 100 % text: about 101px stacked. Assumes headless
+ * Chromium's hidden scrollbars; a classic 15px scrollbar would take it from the list.
+ */
 const NAME_AT_ZOOM_MIN = 90;
 
 /**
@@ -87,16 +90,18 @@ async function expectRoomInFamily(page: Page, minName: number, context: string) 
   const name = await goblet.getByText('Goblet squat', { exact: true }).boundingBox();
   expect(name?.width ?? 0, `${context}: the name column`).toBeGreaterThanOrEqual(minName);
 
-  // The family's button holds its chevron, its label, its count and an `sr-only` count.
-  const [label, count] = await squats.evaluate((heading) =>
-    [...heading.querySelectorAll('button > span:not(.sr-only)')].map((el) => {
-      const { left, right } = el.getBoundingClientRect();
-      return { left, right };
-    }),
-  );
-  expect(label && count, `${context}: the family's label and count`).toBeTruthy();
-  expect(label!.right, `${context}: the family's label runs into its count`).toBeLessThanOrEqual(
-    count!.left + 1,
+  // The family's button holds its chevron, its label, its count and an `sr-only` count: the
+  // visible count (the last visible span) must stay inside the button, not be pushed past its edge.
+  const edges = await squats.evaluate((heading) => {
+    const button = heading.querySelector('button');
+    const count = [...(button?.querySelectorAll(':scope > span:not(.sr-only)') ?? [])].at(-1);
+    return button && count
+      ? { button: button.getBoundingClientRect().right, count: count.getBoundingClientRect().right }
+      : null;
+  });
+  expect(edges, `${context}: the family's button and count`).not.toBeNull();
+  expect(edges!.count, `${context}: the family's count leaves its button`).toBeLessThanOrEqual(
+    edges!.button + 1,
   );
   await expectNoOverflowWithin(page.getByRole('dialog'), context);
 }
@@ -125,6 +130,16 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
     await expect(family).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByRole('checkbox', { name: /^Chin-up\b/ })).toBeVisible();
     await check(page, 'browse with a kind and a family open');
+    // At 360px and 100 % text a row is one line: "How to" beside the name, not under it. Chin-up
+    // has no steps in the test library, so this is Goblet squat's, in Squats.
+    await group(page, MOVEMENT_FAMILY_LABELS.squat).click();
+    const pick = page.getByRole('checkbox', { name: /^Goblet squat\b/ });
+    const howTo = page.getByRole('button', { name: COPY.howToFor('Goblet squat'), exact: true });
+    await howTo.scrollIntoViewIfNeeded();
+    const [pickBox, howToBox] = [await pick.boundingBox(), await howTo.boundingBox()];
+    expect(howToBox!.y, '"How to" beside the name at 360px').toBeLessThan(
+      pickBox!.y + pickBox!.height / 2,
+    );
   });
 
   await test.step('the filter panel, with a greyed choice', async () => {

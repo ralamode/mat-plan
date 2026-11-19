@@ -125,17 +125,19 @@ export function browseView(
  * The groups that hold an option, outermost first: what must be open for its row to be on screen.
  * A household item sits in "Your custom items"; a library row in All movements, its kind and (when
  * its kind has families) its family; a built-in with no library data in K24's section. A household
- * item names both custom keys, the filtered list's and the unfiltered one's, so a tick opens it in
- * whichever is drawn. A row in `programIds` (a multi-mode tick in Today's program; never the
- * current row or a reveal) is in that section too.
+ * item names the custom key of the list being drawn (`filtered`) and only that one: seeding both
+ * would carry a tick made with no filter into the filtered list, open (P9, K25). A row in
+ * `programIds` (a multi-mode tick in Today's program; never the current row or a reveal) is in
+ * that section too.
  */
 export function browseAncestors(
   option: MovementOptionDTO,
   programIds: ReadonlySet<string> = new Set(),
+  filtered = false,
 ): readonly BrowseKey[] {
   const program = programIds.has(option.publicId) ? [BROWSE_KEY.program] : [];
   if (option.owner === 'household')
-    return [BROWSE_KEY.custom, BROWSE_KEY.customFiltered, ...program];
+    return [filtered ? BROWSE_KEY.customFiltered : BROWSE_KEY.custom, ...program];
   if (!hasLibraryData(option)) return [BROWSE_KEY.all, BROWSE_KEY.notSorted, ...program];
   const kind = option.modality;
   if (BROWSE_FLAT_KINDS.includes(kind)) return [BROWSE_KEY.all, kindKey(kind), ...program];
@@ -208,8 +210,16 @@ export function seedBrowse(
   state: BrowseOpenState,
   options: readonly MovementOptionDTO[],
   programIds?: ReadonlySet<string>,
+  filtered = false,
 ): BrowseOpenState {
-  const keys = options.flatMap((option) => browseAncestors(option, programIds));
+  return seedKeys(
+    state,
+    options.flatMap((option) => browseAncestors(option, programIds, filtered)),
+  );
+}
+
+/** Opens these groups as a selection does: they join `seeded`, and their taps are forgotten. */
+export function seedKeys(state: BrowseOpenState, keys: readonly BrowseKey[]): BrowseOpenState {
   if (keys.length === 0) return state;
   const userChoice = new Map(state.userChoice);
   for (const key of keys) userChoice.delete(key);
