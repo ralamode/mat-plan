@@ -166,7 +166,7 @@ Time:   lib/dal + writers get day + tz as args; only routes/actions (and their p
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
-Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
+Rate limit: @upstash/ratelimit (sliding window) on mutations and the zip export; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
         enableLogs + structured context: NOT wired (ADR 0001).
 ```
@@ -416,7 +416,7 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   2 re-verify authZ / resource ownership (IDOR guard).  3 zod-validate ALL input first.
   4 return a minimal DTO, never a raw row.  5 db+auth via the server-only DAL; keep 'use server' thin.
   6 idempotent: body clientId + UNIQUE; replay → one effect, same result.
-  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: export limit; correlation ids.
+  7 typed refusal + Sentry; rate-limit expensive ops. NOT wired: correlation ids.
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
   bad body→zod-reject; /api/sync replay→one effect+identical response.
