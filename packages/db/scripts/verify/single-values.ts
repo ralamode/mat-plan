@@ -44,6 +44,7 @@ import {
   expectRejectedBy,
   orFail,
   rolledBack,
+  rowsOf,
   type VerifyContext,
   type VerifyTx,
 } from './harness';
@@ -504,7 +505,7 @@ async function verifyPracticeOnePerDay(): Promise<void> {
       publicId: newId(),
       clientId,
       activityDate: day,
-      unit: 'min',
+      unit: PRACTICE_UNIT,
       valueNum: '90',
       activityTypeId: practiceTypeId,
       metricKey: METRIC_KEYS.practice_minutes,
@@ -683,26 +684,32 @@ async function verifyPracticeOnePerDay(): Promise<void> {
     const FREE_DAY = '2026-10-06';
     const upperHabit = habit(FREE_DAY, newId().toUpperCase());
     const upperPractice = practice(FREE_DAY, newId().toUpperCase());
-    await expectOutcomes(
-      athlete.id,
-      [upperHabit, upperPractice],
-      ['created', 'created'],
-      'an upper-case client_id is created, for a habit and a practice alike',
-    );
-    assert.equal(
+    const upperWhat = 'an upper-case client_id is created, for a habit and a practice alike';
+    const [habitId, practiceId] = [upperHabit, upperPractice].map((v) => v.clientId.toLowerCase());
+    assert.deepEqual(
       (
-        await tx
-          .select({ id: schema.entries.id })
-          .from(schema.entries)
-          .where(
-            inArray(schema.entries.clientId, [
-              upperHabit.clientId.toLowerCase(),
-              upperPractice.clientId.toLowerCase(),
-            ]),
-          )
-      ).length,
-      2,
-      'an upper-case client_id writes one row per item',
+        await orFail(upperWhat, () =>
+          writeCheckinEntries(exec, { profileId: athlete.id, values: [upperHabit, upperPractice] }),
+        )
+      ).map((r) => [r.clientId, r.outcome]),
+      [
+        [habitId, 'created'],
+        [practiceId, 'created'],
+      ],
+      upperWhat,
+    );
+    // Each item's row is its own: the fold must not cross the two ids.
+    const upperRows = await tx
+      .select({ clientId: schema.entries.clientId, metricKey: schema.entries.metricKey })
+      .from(schema.entries)
+      .where(inArray(schema.entries.clientId, [habitId!, practiceId!]));
+    assert.deepEqual(
+      new Map(upperRows.map((r) => [r.clientId, r.metricKey])),
+      new Map([
+        [habitId, upperHabit.metricKey],
+        [practiceId, METRIC_KEYS.practice_minutes],
+      ]),
+      'an upper-case client_id writes its own row, under the folded id',
     );
     // Only a practice can be day_taken: a habit that did not insert, in a batch with a practice on a
     // held day, is still classified by its own holder (here a live row of another metric: conflict).
@@ -1625,7 +1632,7 @@ async function raceFixture(tx: VerifyTx) {
       publicId: newId(),
       clientId: newId(),
       activityDate: RACE_DAY,
-      unit: 'min',
+      unit: PRACTICE_UNIT,
       valueNum,
       activityTypeId: practiceTypeId,
       metricKey: METRIC_KEYS.practice_minutes,
@@ -1810,7 +1817,7 @@ async function verifyRetryLandsOnTakenDay(): Promise<void> {
     };
     const insertStatements = async () =>
       Number(
-        ((await tx.execute(sql`select n from race_inserts`)).rows[0] as { n: number | string }).n,
+        rowsOf<{ n: number | string }>(await tx.execute(sql`select n from race_inserts`))[0]!.n,
       );
 
     // (a) A practice.

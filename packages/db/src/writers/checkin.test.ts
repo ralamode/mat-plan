@@ -1,3 +1,4 @@
+import { ENTRY_STATUS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import { type CheckinInsertValue, writeCheckinEntries } from './checkin';
@@ -26,7 +27,7 @@ const item = (clientId: string): CheckinInsertValue => ({
   valueNum: '1',
   activityTypeId: 1,
   metricKey: null,
-  status: 'done',
+  status: ENTRY_STATUS.done,
 });
 
 const ID = '019826b4-0000-7000-8000-00000000abcd';
@@ -39,5 +40,17 @@ describe('writeCheckinEntries — a repeated client_id', () => {
     await expect(
       writeCheckinEntries(untouched, { profileId: 1, values: [item(ID), item(twin)] }),
     ).rejects.toThrow('check-in client_ids repeat within one submit');
+  });
+});
+
+describe('writeCheckinEntries — an id in another spelling', () => {
+  // Postgres reads both as the same uuid and prints it hyphenated, so the classifier would miss them.
+  it.each([
+    ['in braces', `{${ID}}`],
+    ['without hyphens', ID.replaceAll('-', '')],
+  ])('refuses an id %s, before any statement', async (_label, spelling) => {
+    await expect(
+      writeCheckinEntries(untouched, { profileId: 1, values: [item(spelling)] }),
+    ).rejects.toThrow('check-in client_id is not a hyphenated uuid');
   });
 });

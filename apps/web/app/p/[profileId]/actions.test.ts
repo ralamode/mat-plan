@@ -1166,6 +1166,20 @@ describe('logCheckinsAction — happy path + ownership', () => {
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
+  it('forwards an upper-case clientId folded, so the answer maps back to its field', async () => {
+    const clientId = newId();
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1' },
+        clientIds: { [HABIT.key]: clientId.toUpperCase() },
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0].items).toMatchObject([{ clientId }]);
+  });
+
   it('writes a mixed batch: a habit, a bool metric, and a rated metric', async () => {
     const res = await logCheckinsAction(
       initial,
