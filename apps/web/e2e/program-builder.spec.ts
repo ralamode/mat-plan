@@ -31,7 +31,8 @@ import {
   PROGRAMS_PATH,
   workoutPath,
 } from '../components/program-builder/routes';
-import { APP_HOME_PATH, NOT_FOUND_COPY } from '../lib/constants';
+import { PROGRAM_COPY } from '../components/day/day-copy';
+import { APP_HOME_PATH, MIN_TAP_TARGET_PX, NOT_FOUND_COPY } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
 import { NARROW_VIEWPORT } from './contexts';
 import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from './steps';
@@ -254,6 +255,15 @@ const CHECK_WORKOUT = todayTwoPrograms.workouts.find(
 )!;
 const CHECK_ITEM = CHECK_WORKOUT.items.find((i) => i.trackingType === TRACKING_TYPE.check)!.name;
 
+/**
+ * The day page's Programs link, inside "Not on a program yet" and after its "Put {name} on a
+ * program" sentence: the app shell's own Programs link is elsewhere on the page.
+ */
+const programsLink = (page: Page, athlete: string) =>
+  page
+    .locator('p', { hasText: PROGRAM_COPY.notYetPutOn(athlete) })
+    .getByRole('link', { name: PROGRAM_COPY.programs, exact: true });
+
 /** This run's athletes, archived after each test so the picker does not fill with them. */
 const added: string[] = [];
 
@@ -287,9 +297,26 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await copy.getByRole('button', { name: COPY_COPY.copy, exact: true }).click();
   await expect(copy).toBeHidden();
 
-  // 2. This run's athlete, added as a parent does. They land on their day page.
+  // 2. This run's athlete, added as a parent does. They land on their day page, which is on no
+  //    program yet and links to Programs (15 PR 2); following it reaches the Programs page.
   await addAthlete(page, athlete, PROFILE_KIND.kid, added);
   await expect(page.getByRole('heading', { name: new RegExp(athlete), level: 1 })).toBeVisible();
+  // At 360px: the link is a full tap target and the notice it sits in does not overflow.
+  const link = programsLink(page, athlete);
+  const box = await link.boundingBox();
+  expect(box?.height ?? 0, 'the Programs link is a 44px tap target').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
+  expect(box?.width ?? 0, 'the Programs link is 44px wide').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
+  await expectNoOverflowWithin(
+    page.locator('p', { hasText: PROGRAM_COPY.notYetPutOn(athlete) }),
+    'not-on-a-program notice',
+  );
+  await link.click();
+  await expect(page).toHaveURL(PROGRAMS_PATH);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(BUILDER_COPY.programs);
 
   // 3. Put them on from today. The dialog names who is starting.
   await page.goto(mine);

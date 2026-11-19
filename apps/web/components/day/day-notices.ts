@@ -1,4 +1,4 @@
-import { ON_PROGRAM, showsOnlyLogged, type DayPlan } from '@mat-plan/shared';
+import { isoDayDiff, ON_PROGRAM, showsOnlyLogged, type DayPlan } from '@mat-plan/shared';
 
 import { PROGRAM_COPY } from './day-copy';
 
@@ -90,4 +90,16 @@ export function dayPageView(
  */
 export function lookAheadFallsBack(plan: DayPlan): boolean {
   return plan.future && plan.onProgram !== ON_PROGRAM.yes;
+}
+
+/**
+ * Whether "Not on a program yet" links to Programs (FAM-1 15): only for a live athlete on today or a
+ * later day. A program is put on from today or tomorrow, so on a past day the link would offer
+ * something that cannot change the day on screen; and an archived athlete cannot be put on one (the
+ * writer takes live athletes only, `lockAthletes`).
+ *
+ * ⚠️ **Not `plan.writable`**: that is true for yesterday's open window too.
+ */
+export function offersProgramsLink(plan: DayPlan, page: { archived: boolean }): boolean {
+  return !page.archived && isoDayDiff(plan.day, plan.today) >= 0;
 }

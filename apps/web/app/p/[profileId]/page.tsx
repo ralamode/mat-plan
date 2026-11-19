@@ -4,9 +4,10 @@ import { notFound } from 'next/navigation';
 import { AthleteSwitcher } from '@/components/day/athlete-switcher';
 import { PROGRAM_COPY } from '@/components/day/day-copy';
 import { DayScreen } from '@/components/day/day-screen';
-import { dayPageView, lookAheadFallsBack } from '@/components/day/day-notices';
+import { dayPageView, lookAheadFallsBack, offersProgramsLink } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
+import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
 
@@ -220,7 +221,12 @@ export default async function TodayPage({
       {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
           program yet", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
       <ProgramLine plan={plan} actions={dayActions} />
-      <NotOnAProgram plan={plan} />
+      <NotOnAProgram
+        plan={plan}
+        programsHref={
+          offersProgramsLink(plan, { archived: profile.archived }) ? PROGRAMS_PATH : undefined
+        }
+      />
 
       {/* Not on a future day (maintainer, 2026-11-17, v12): nothing has happened there to show, and
           "Nothing logged." under each would read as a missed day. */}
