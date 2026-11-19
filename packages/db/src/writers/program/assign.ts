@@ -15,7 +15,7 @@ import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
 import { inHousehold, liveTemplateBlockIn } from '../ownership';
 import { refuse } from './refuse';
-import { shiftIntoBand } from './shift-band';
+import { PARK_IDX, shiftIntoBand } from './shift-band';
 
 /**
  * The program an assignment writer works on, locked first (lane guide invariant 12): this
@@ -83,7 +83,8 @@ export async function openAssignments(
  * **The one band writer of an athlete's program order** (ADR 0007 A2 §7). Places their open rows at
  * 0, 1, 2…: the rows of `first`'s programs first, in that order, then every other open row in its
  * current order. Only a row whose place changes is written, through the band (`shiftIntoBand`), so a
- * row already in place keeps its `ctid`. Answers the number of open rows: the next free place.
+ * row already in place keeps its `ctid`. Every open row is placed, so nothing is left in the band or
+ * parked (`PARK_IDX`).
  *
  * A program with a last day has no open row, so it is never moved (Amendment 5: it reads after the
  * ones that stay). Call it after `lockAthletes`, in the caller's transaction.
@@ -92,7 +93,7 @@ export async function placeAssignments(
   tx: Executor,
   profileId: number,
   first: readonly number[],
-): Promise<number> {
+): Promise<void> {
   const a = schema.programAssignments;
   const open = await openAssignments(tx, profileId);
   const rank = new Map(first.map((blockId, i) => [blockId, i]));
@@ -119,7 +120,6 @@ export async function placeAssignments(
         .where(eq(a.id, row.id));
     }
   }
-  return open.length;
 }
 
 /**
@@ -132,13 +132,17 @@ export async function placeAssignments(
  *   is therefore one effect, with no client id (the schema's note on `programAssignments`).
  * - **Their last day on it is today** (Take off was tapped today): **reopened**. The same row's
  *   `active_to` is cleared, whatever `from` says, so they stay on with no gap and one stretch (ADR
- *   0007 Amendment 4, C15). Take off freed the row's place in their order, so it takes the last place
- *   again.
- * - **Otherwise**: a new row from `from`, in the last place of their order, due all seven weekdays
- *   (A2 §7: FAM-1's put-on writes all seven rows).
+ *   0007 Amendment 4, C15). It goes back to **its old place**, or last if fewer programs remain
+ *   (D41, the maintainer, 2026-11-18). That is where it was unless a program earlier in the
+ *   Programs list was put on in between, or the athlete reordered; the reorder fixes it.
+ * - **Otherwise**: a new row from `from`, due all seven weekdays (A2 §7: FAM-1's put-on writes all
+ *   seven rows), **before the first program they keep that comes later in the household's Programs
+ *   list**, or last (D41; A2 §7; the preview fake's rule). "Later" is read against their own order;
+ *   a program not in the list (a hidden one) is never later.
  *
  * **Places go through the band** (`placeAssignments`): the athlete's open programs keep their order and
- * are numbered 0, 1, 2… with the new ones after, so a gap a Take off left is closed in the same write.
+ * are numbered 0, 1, 2…, so a gap a Take off left is closed in the same write. A new or reopened row
+ * waits at `PARK_IDX` until then.
  *
  * Refusals, before anything is written: `invalid` (the schema, or a `from` that is neither today nor
  * tomorrow), `not_found` (the program is not the household's live program, or an athlete is not one
@@ -171,6 +175,16 @@ export async function putOn(
     const athletes = await lockAthletes(tx, scope, draft.profilePublicIds);
     if (!athletes) return refuse(PROGRAM_REFUSAL.not_found);
 
+    // The household's Programs list order (`readProgramList`: live template blocks, by id). A
+    // program not in it (a hidden one whose open row an athlete still holds) ranks -1: never later.
+    const listed = await tx
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(liveTemplateBlockIn(scope))
+      .orderBy(asc(schema.programBlocks.id));
+    const listPlace = new Map(listed.map((b, i) => [b.id, i]));
+    const rank = (blockId: number) => listPlace.get(blockId) ?? -1;
+
     const a = schema.programAssignments;
     for (const athlete of athletes) {
       // Every live row of this athlete still current today: open ones hold a place in their order.
@@ -191,16 +205,26 @@ export async function putOn(
       // Take off writes `active_to = today`; a later last day is no writer's, and is reopened too.
       const endsToday = current.find((row) => row.blockId === block.id);
 
-      // Close any gap in the order, then take the last place. Rows already in place stay put.
-      const last = await placeAssignments(tx, athlete.id, []);
-
+      const order = open.map((row) => row.blockId);
       if (endsToday) {
+        // D41 (the maintainer, 2026-11-18): back at its old place, or last if fewer remain. Parked
+        // first, so clearing `active_to` meets no open row on the order index.
+        const at = Math.min(endsToday.idx, order.length);
         await tx
           .update(a)
-          .set({ activeTo: null, idx: last, updatedAt: sql`now()` })
+          .set({ activeTo: null, idx: PARK_IDX, updatedAt: sql`now()` })
           .where(eq(a.id, endsToday.id));
+        await placeAssignments(tx, athlete.id, [
+          ...order.slice(0, at),
+          block.id,
+          ...order.slice(at),
+        ]);
         continue;
       }
+
+      // D41 (ADR 0007 A2 §7): before the first program they keep that comes later in the list.
+      const later = order.findIndex((blockId) => rank(blockId) > rank(block.id));
+      const at = later < 0 ? order.length : later;
 
       const [made] = await tx
         .insert(a)
@@ -208,13 +232,14 @@ export async function putOn(
           publicId: newId(),
           blockId: block.id,
           profileId: athlete.id,
-          idx: last,
+          idx: PARK_IDX,
           activeFrom: draft.from,
         })
         .returning({ id: a.id });
       await tx
         .insert(schema.programAssignmentWeekdays)
         .values(WEEKDAYS.map((weekday) => ({ assignmentId: made!.id, weekday })));
+      await placeAssignments(tx, athlete.id, [...order.slice(0, at), block.id, ...order.slice(at)]);
     }
 
     return { ok: true as const };

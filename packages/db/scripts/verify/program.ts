@@ -2361,7 +2361,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
         .sort((m, n) => m.idx - n.idx)
         .map((r) => ({ program: r.program, idx: r.idx }));
 
-    // ── A first put on: one row each, from the day given, last in their order, all seven days ──
+    // ── A first put on: one row each, from the day given, first in their order, all seven days ──
     assert.deepEqual(
       await tryIt(A_SCOPE, { programPublicId: P, profilePublicIds: [x, y], from: PUT_ON_TODAY }),
       { ok: true },
@@ -2544,7 +2544,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6c-i: …and every refusal writes nothing',
     );
 
-    // ── Taken off by mistake and straight back on: the order closes up, the program goes last ──
+    // ── Taken off by mistake and straight back on: the program is back at its old place (D41) ──
     const z = await mustAddAthlete(tx, A_SCOPE, 'Put-on Athlete Z');
     for (const program of [P, Q]) {
       assert.deepEqual(
@@ -2577,10 +2577,10 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     assert.deepEqual(
       await openOrder(z),
       [
-        { program: Q, idx: 0 },
-        { program: P, idx: 1 },
+        { program: P, idx: 0 },
+        { program: Q, idx: 1 },
       ],
-      'FAM-1 6c-i: …the order closed up, the reopened program last',
+      'FAM-1 6d-iii: …the reopened program is back at its old place',
     );
     assert.deepEqual(
       (await rowsOf(z))
@@ -2609,7 +2609,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6c-i: …and puts the new one on',
     );
 
-    // ── Take off P, put on R, put on P again: P is reopened, one row, last, no gap ──
+    // ── Take off P, put on R, put on P again: P is reopened, one row, at its old place, no gap ──
     // x's start moves two days back first: a start dated today with nothing logged is REMOVED by
     // Take off (6d-i), and this proof needs a stretch that ends, so it can be reopened.
     const pRow = (await rowsOf(x)).find((r) => r.program === P)!;
@@ -2650,11 +2650,11 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     assert.deepEqual(
       await openOrder(x),
       [
-        { program: Q, idx: 0 },
-        { program: R, idx: 1 },
-        { program: P, idx: 2 },
+        { program: P, idx: 0 },
+        { program: Q, idx: 1 },
+        { program: R, idx: 2 },
       ],
-      'FAM-1 6c-i: …in the last place of their order',
+      'FAM-1 6d-iii: …at its old place, after a later program was put on in between',
     );
 
     // ── A stretch that ended before today is history: a new row, the old one untouched ──
@@ -2688,6 +2688,170 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6c-i: …and starts a new one',
     );
 
+    // ── D41: a new program takes its Programs-list place; a reopen goes back to its old place ──
+    // L1 < L2 < L3 < L4 is the household's Programs-list order (made in that order).
+    const L1 = await mustCreate(tx, A_SCOPE, 'Put-on L1');
+    const L2 = await mustCreate(tx, A_SCOPE, 'Put-on L2');
+    const L3 = await mustCreate(tx, A_SCOPE, 'Put-on L3');
+    const L4 = await mustCreate(tx, A_SCOPE, 'Put-on L4');
+    const H = await mustCreate(tx, A_SCOPE, 'Put-on H');
+    const order = async (who: string) => (await openOrder(who)).map((r) => r.program);
+    const put = async (who: string, program: string, today = PUT_ON_TODAY) =>
+      assert.deepEqual(
+        await tryIt(
+          A_SCOPE,
+          { programPublicId: program, profilePublicIds: [who], from: today },
+          today,
+        ),
+        { ok: true },
+        'FAM-1 6d-iii: the proof puts an athlete on',
+      );
+    const off = async (who: string, program: string) =>
+      assert.ok(
+        (
+          await takeOff(
+            exec,
+            A_SCOPE,
+            { programPublicId: program, profilePublicId: who },
+            PUT_ON_TODAY,
+          )
+        ).ok,
+        'FAM-1 6d-iii: the proof takes an athlete off',
+      );
+    const reorder = async (who: string, programPublicIds: string[]) =>
+      assert.deepEqual(
+        await reorderPrograms(
+          exec,
+          A_SCOPE,
+          { profilePublicId: who, programPublicIds },
+          PUT_ON_TODAY,
+        ),
+        { ok: true },
+        'FAM-1 6d-iii: the proof reorders an athlete',
+      );
+    const earlier = addDays(PUT_ON_TODAY, -2);
+
+    const d1 = await mustAddAthlete(tx, A_SCOPE, 'Put-on List Middle');
+    await put(d1, L1);
+    await put(d1, L3);
+    await put(d1, L2);
+    assert.deepEqual(
+      await order(d1),
+      [L1, L2, L3],
+      'FAM-1 6d-iii: a new program takes its Programs-list place among the ones they keep',
+    );
+    await put(d1, L4);
+    const d1b = await mustAddAthlete(tx, A_SCOPE, 'Put-on List First');
+    await put(d1b, L3);
+    await put(d1b, L1);
+    assert.deepEqual(
+      [await order(d1), await order(d1b)],
+      [
+        [L1, L2, L3, L4],
+        [L1, L3],
+      ],
+      'FAM-1 6d-iii: …a program later than every kept one goes last, an earlier one first',
+    );
+
+    const d2 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reordered');
+    await put(d2, L1);
+    await put(d2, L3);
+    await reorder(d2, [L3, L1]);
+    assert.deepEqual(await order(d2), [L3, L1], 'FAM-1 6d-iii: the proof’s athlete is reordered');
+    await put(d2, L2);
+    assert.deepEqual(
+      await order(d2),
+      [L2, L3, L1],
+      'FAM-1 6d-iii: against their own order, a new program goes before the first one later in the list',
+    );
+
+    const d3 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Hidden');
+    await put(d3, H);
+    await put(d3, L1);
+    await put(d3, L3);
+    await reorder(d3, [H, L1, L3]);
+    await hide(tx, H);
+    await put(d3, L2);
+    assert.deepEqual(
+      await order(d3),
+      [H, L1, L2, L3],
+      'FAM-1 6d-iii: a hidden program is never later, so a new one is not put before it',
+    );
+
+    const d4 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reopen Later');
+    for (const program of [L1, L2, L3]) await put(d4, program, earlier);
+    await off(d4, L2);
+    await put(d4, L4);
+    await put(d4, L2);
+    assert.deepEqual(
+      await order(d4),
+      [L1, L2, L3, L4],
+      'FAM-1 6d-iii: a reopen after a later program was put on is back at its old place',
+    );
+
+    const d5 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reopen Earlier');
+    for (const program of [L2, L3, L4]) await put(d5, program, earlier);
+    await off(d5, L3);
+    await put(d5, L1);
+    await put(d5, L3);
+    assert.deepEqual(
+      await order(d5),
+      [L1, L3, L2, L4],
+      'FAM-1 6d-iii: a reopen after an earlier program was put on takes its old number (accepted, 2026-11-18)',
+    );
+
+    const d6 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reopen Last');
+    for (const program of [L1, L2]) await put(d6, program, earlier);
+    await off(d6, L2);
+    await off(d6, L1);
+    await put(d6, L2);
+    assert.deepEqual(
+      await order(d6),
+      [L2],
+      'FAM-1 6d-iii: a reopen with fewer programs left goes last',
+    );
+
+    const d7 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Removed Start');
+    for (const program of [L1, L2, L3]) await put(d7, program);
+    await reorder(d7, [L3, L2, L1]);
+    await off(d7, L2);
+    assert.deepEqual(
+      (await rowsOf(d7)).filter((r) => r.program === L2 && r.deletedAt === null),
+      [],
+      'FAM-1 6d-iii: the proof’s start dated today is removed',
+    );
+    await put(d7, L2);
+    assert.deepEqual(
+      await order(d7),
+      [L2, L3, L1],
+      'FAM-1 6d-iii: a removed start put back is new, so it takes its Programs-list place',
+    );
+
+    const d8 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Ended Yesterday');
+    for (const program of [L1, L2, L3]) await put(d8, program);
+    const d8l2 = (await rowsOf(d8)).find((r) => r.program === L2)!;
+    await tx
+      .update(schema.programAssignments)
+      .set({ activeFrom: addDays(PUT_ON_TODAY, -5), activeTo: yesterday })
+      .where(eq(schema.programAssignments.id, d8l2.id));
+    await put(d8, L4);
+    assert.deepEqual(
+      await openOrder(d8),
+      [
+        { program: L1, idx: 0 },
+        { program: L3, idx: 1 },
+        { program: L4, idx: 2 },
+      ],
+      'FAM-1 6d-iii: once the day has ended, the gap closes on the next put on',
+    );
+
+    for (const who of [x, y, z, w, d1, d1b, d2, d3, d4, d5, d6, d7, d8]) {
+      assert.ok(
+        (await rowsOf(who)).every((r) => r.idx < SHIFT_BAND),
+        'FAM-1 6d-iii: no row is left parked or in the band',
+      );
+    }
+
     // A today the writer cannot read is the caller's bug, not a refusal: it throws.
     const bad = await tryIt(
       A_SCOPE,
@@ -2700,7 +2864,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     );
   });
   console.log(
-    '✓ FAM-1 6c-i: put on writes one row and seven weekdays, last in the order; a replay adds nothing; refusals write nothing; a take off today is reopened on its row',
+    '✓ FAM-1 6c-i / 6d-iii: put on writes one row and seven weekdays, in its Programs-list place (a reopen at its old place); a replay adds nothing; refusals write nothing; a take off today is reopened on its row',
   );
 }
 
@@ -3048,6 +3212,13 @@ async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promi
     // ── A program with a last day stays where it is, and reads last ──
     const n2 = await athlete('Closing');
     for (const prog of [C, A, B]) await on(n2, prog, addDays(T, -2));
+    // Put on places by the Programs list (6d-iii), so the order C, A, B is the athlete's own.
+    assert.deepEqual(await reorder(n2, [C, A, B]), { ok: true }, 'FAM-1 6d-ii: n2 is reordered');
+    assert.deepEqual(
+      await idxOf(n2),
+      { [C]: 0, [A]: 1, [B]: 2 },
+      'FAM-1 6d-ii: the proof sets n2 up as C, A, B',
+    );
     await off(n2, C);
     const closing = await rows(n2);
     assert.deepEqual(
@@ -3074,7 +3245,13 @@ async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promi
     // ── A hidden program's open row in the middle keeps a place after the listed ones ──
     const n3 = await athlete('Hidden');
     for (const prog of [A, H, B]) await on(n3, prog);
+    assert.deepEqual(await reorder(n3, [A, H, B]), { ok: true }, 'FAM-1 6d-ii: n3 is reordered');
     await hide(tx, H);
+    assert.deepEqual(
+      await idxOf(n3),
+      { [A]: 0, [H]: 1, [B]: 2 },
+      'FAM-1 6d-ii: the proof sets n3 up with the hidden program in the middle',
+    );
     assert.deepEqual(
       await reorder(n3, [B, A]),
       { ok: true },
@@ -3738,7 +3915,9 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
 
     // ── On it from tomorrow: listed, with its start day, before it begins ──
     const later = structuredClone(world) as World;
-    later.assign.a3 = [...(later.assign.a3 ?? []), { prog: 'p2', from: addDays(today, 1) }];
+    // Stretching (p2) comes before p3 in the Programs list, so it goes before it in Adult One's
+    // order (D41), not last.
+    later.assign.a3 = [{ prog: 'p2', from: addDays(today, 1) }, ...(later.assign.a3 ?? [])];
     // The household holds the new program made above, too.
     later.programs.push({ id: 'p1001', name: 'New program', workouts: [], week: emptyWeek() });
     assert.deepEqual(
