@@ -130,35 +130,36 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
 | `docs/features/program-writers.md`, `program-builder.md`, `movement-catalog.md` | a, b | Which rows the read lists; where an option's fields come from; that the tables are read.                                                                                                                                                                                                                                                                                                   |
 | changelog fragment each PR                                                      | a, b |                                                                                                                                                                                                                                                                                                                                                                                            |
 
-## For the roadmap thread (spec owner)
+## Decisions from the roadmap thread (spec owner, 2026-11-19)
 
-- **Q1. Which library a fixtures database is annotated from** (panel B2). From A2-ii, CI, e2e and
-  preview databases hold `CATALOG_FIXTURE` rows (E4), but every reader looks slugs up in
-  `CATALOG_MOVEMENTS`. 13 of the 24 fixture slugs are real entries with different aliases, equipment
-  and instructions, and 11 have none, so the supervised fixture entry loses its label. Recommended:
-  one server-only value in `lib/dal/env.ts` that names the library in effect. It is set beside
-  `SEED_FIXTURES` in `ci.yml` and `migrate-preview.yml` (and the preview's Vercel env), and defaults
-  to `CATALOG_MOVEMENTS`. Every reader takes it: this read, `newItem`, `getHowTo`, and lane E's
-  `dal/day/day.ts:60`, which has the same gap today. Alternative: make the fixture's slugs disjoint
-  from the real catalog. Rejected, because every batch PR could then break the fixture.
-- **Q2. Equipment and secondary-muscle order** (panel S1). `option.ts:33` says "in the entry's
-  authored order"; the tables have no ordinal. A3 writes by difference, so a reorder writes nothing
-  and an added item goes last.
-  - Recommended: the vocabulary's order (`EQUIPMENT`, `MUSCLES`), in the read and in
-    `catalogOptionOf` alike. That is a contract change to `option.ts`.
-  - Alternatives:
-    - id order, plus a line on A3's row that it rewrites a movement's whole set when the order
-      differs;
-    - an ordinal column, which is a migration.
-- **Q3. Spec cells.**
-  - The P11-ii row: "After P11-i and **A2-i**".
-  - The A2-ii row: "after P11-ii-a is deployed".
-  - The P11-ii row's "`apps/web/lib/dal/program/` maps it" becomes "the read maps it; the DAL builds
-    the DTO", which matches criterion P11.
-  - The split into P11-ii-a and P11-ii-b is recorded.
-- **Q4. The stays-dark `describe`** (`program-tables-stay-dark.test.ts:418-460`). S6 holds it only
-  "until P11-ii", and 0032's deploy window has closed. Recommended: P11-ii-b retires it, with lane
-  A's agreement, rather than growing an allowlist that A2-i and A3 must each edit.
+- **Q3, decided: yes to all four.** The spec owner records them in its next docs PR:
+  - P11-ii is two PRs (P11-ii-a and P11-ii-b, above);
+  - its dependency reads "After P11-i and A2-i";
+  - "the read maps it; the DAL builds the DTO";
+  - A2-ii waits for P11-ii-a deployed. The board takes lane A's acknowledgement of this.
+- **Q4, decided: (A).** S6 ends the stays-dark `describe` at P11's second PR, now P11-ii-b, which is
+  the first PR in `apps/` to read the tables. P11-ii-b retires it with lane A's agreement (the test is
+  theirs), and its PR body says what replaces that protection: this read's proofs. No allowlist
+  grows.
+- **Q1, with the maintainer** (it edits CI workflows and needs a Vercel preview variable they set by
+  hand). The spec owner recommends (A): one server-only value in `lib/dal/env.ts` names the library
+  in effect, defaulting to `CATALOG_MOVEMENTS`, and set beside `SEED_FIXTURES` in `ci.yml`,
+  `migrate-preview.yml` and the preview's env. Its one addition: **the value may name the fixture
+  library only off production.** The DAL throws at start (no silent fallback) when the deployment or
+  the database target is production, with a test, so a mis-set variable can never annotate
+  production from the fixture. Rejected: disjoint slugs with a lookup in the union of both lists. It
+  renames 13 fixture slugs (and the contract's fixture world) and ships the fixture list to
+  production. **Nothing is built on Q1 until the maintainer answers.**
+- **Q2, with the maintainer.** The spec owner recommends (A): the vocabulary's order (`EQUIPMENT`,
+  `MUSCLES`), in the read and in `catalogOptionOf`. Measured on main: 14 of 326 entries list
+  equipment out of vocabulary order (so 14 rows would word "what it needs" differently), and 54
+  list secondary muscles out of order (no screen shows those today). The spec gives the authored
+  order no meaning. If chosen, the contract change is the spec owner's (`option.ts:33`,
+  `catalogOptionOf` sorting, `option.test.ts`) and lands **before P11-ii-b**, so (b3)'s comparison
+  with `catalogOptionOf` holds. **Nothing is built on Q2 until the maintainer answers.**
+- **Lane E's `dal/day/day.ts:60`** takes the same library in effect, in lane E's own PR after
+  P11-ii-a merges (it reads `CATALOG_MOVEMENTS` today, so the day page on a fixtures database shows
+  the real library's supervision label on fixture rows). Lane P tells lane E when P11-ii-a lands.
 
 ## Not in this chunk
 
