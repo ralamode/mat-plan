@@ -612,16 +612,15 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   touches either file.
 - **Severity:** low.
 
-### The comment-stripping `code()` test helper has TWO copies left (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis)
+### The comment-stripping `code()` test helper has ONE copy left, in `packages/db` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
 
 - **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in
   **five** places. `AUTH-1` 1b-bis extracted it to **`apps/web/test/source-scan.ts`** and converted the
   three copies it touched — `apps/web/app/pages-need-a-session.test.ts`,
   `apps/web/app/tenancy-is-not-cached.test.ts` and `apps/web/lib/dal/scoped.test.ts`.
 - **What is left, and why each is still standing:**
-  - `apps/web/lib/household-synthetic-is-dark.test.ts` — a straight conversion, but 1b-bis did not
-    touch that file and converting it would have put an unrelated file in an auth PR. **Free for
-    whoever next edits it.**
+  - `apps/web/lib/household-synthetic-is-dark.test.ts` imports the shared helper since 2026-11-19, so
+    every copy inside `apps/web` is gone.
   - `packages/db/src/scope.test.ts` — ⚠️ **not a straight conversion**: it is in another package and
     cannot import `apps/web/test/`. It needs either its own copy (which is the status quo) or a shared
     home under `packages/shared`, which means shipping test support in a published package. **Decide
@@ -630,9 +629,9 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
     is a near-miss rather than a copy.
 - **Impact:** these are the structural guards. A fix to the stripping (a `//` inside a string, a
   template literal) lands in one copy and not the others, so two guards can disagree about what is
-  code. **Narrowed from five to two, so the blast radius is now one package boundary wide.**
-- **Proposed fix:** convert `household-synthetic-is-dark.test.ts` opportunistically; leave
-  `packages/db` alone until a second consumer there justifies the shared module.
+  code. **Narrowed from five to one, so the blast radius is one package boundary wide.**
+- **Proposed fix:** leave `packages/db` alone until a second consumer there justifies the shared
+  module.
 - **Severity:** low.
 
 ### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
