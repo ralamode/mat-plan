@@ -2234,7 +2234,7 @@ deleted then**. The one exception is a typed name replaced on its logs (Q12, bel
 among those affected is told first, on their own channel, and cannot cancel it (Q9). **Before the apply
 they are sent their own full copy**: their assignment rows and their targets on it, which the in-app
 export does not hold. **The apply waits until they confirm they have it, and at most 3 days after it was
-sent** (Q11); record the date sent and the date confirmed (or "not confirmed, 3 days") in the ledger. There is no in-app archive for a program, a workout or an item yet; when one is
+sent** (Q11; for a removal: a Q12 rename sends no copy, below); record the date sent and the date confirmed (or "not confirmed, 3 days") in the ledger. There is no in-app archive for a program, a workout or an item yet; when one is
 built it is offered first, the same way.
 
 **4. Apply** in one transaction; its **first statement after the `SET LOCAL`s locks the target** (below), so the app's
@@ -2435,7 +2435,7 @@ household's own logs of it _(maintainer, 2026-11-18)_. The logs, sets and number
 name changes. It is the one exception to precondition 4: those logs' `movement_name` is rewritten.
 
 **One item has many spellings.** A typed log keeps the text exactly as it was typed, and the item
-matches it by slug, which ignores case and spacing (`writers/movement-catalog.ts:311`,
+matches it by slug, which ignores case and spacing (`writers/movement-catalog.ts`, the typed path,
 `movementSlug` in `packages/shared/src/movements.ts`). So the replacement is keyed on the item, never on
 one spelling:
 
@@ -2447,18 +2447,25 @@ one spelling:
   these checks from a fresh `origin/main` with the `packages/shared` functions the app uses, never by hand:
   - `typedMovementNameIssues(:new)` returns nothing, and `:new` equals its own trim;
   - `:new_slug` is `movementSlug(:new)`;
-  - `existingItem` (`writers/program/new-item.ts`) finds no row other than `:M` among the household's
-    items, the catalog's names and its aliases. A near-twin ("Squats" next to "Squat") is refused, not
-    only an exact slug.
+  - no near-twin: `existingItem` (`packages/shared/src/program/pieces.ts`, fed by `movementOptions` as
+    `writers/program/new-item.ts` does) finds no row other than `:M` among the household's items, the
+    catalog's names and its aliases ("Squats" next to "Squat" is refused, not only an exact slug).
+    **No command runs this yet: `PRIV-3` PR 3b scripts it.** Until then, type the new name into the app's
+    item picker for this household, without saving, and refuse any name it offers as an existing item.
 - **psql history:** `:old` is the text being removed. Run this session with `PSQL_HISTFILE=/dev/null`,
   so it does not land in `~/.psql_history`.
 - **Cut the restore branch first**, held 3 days, as for a removal.
 
-**The stops (must be 0):** STOP 4 (another household's rows on it), and the same words in other free
-text of this household, which this does not rewrite. They are compared case-insensitively against every
+**The stops (must be 0):** STOP 4 (another household's rows on it); the new slug already taken in this
+household or the shared catalog, which `existingItem` alone cannot see for a catalog row outside the
+picker (the second, slug-based step `newItem` takes for the same reason); and the same words in other
+free text on this household's logs, which this does not rewrite. They are compared case-insensitively against every
 spelling the item's logs hold:
 
 ```sql
+SELECT count(*) FROM movements                                         -- must be 0
+ WHERE slug = :new_slug AND (household_id = :H OR household_id IS NULL) AND id <> :M;
+
 WITH spelling AS (
   SELECT DISTINCT lower(e.movement_name) AS s FROM entries e JOIN profiles p ON p.id = e.profile_id
    WHERE e.movement_id = :M AND p.household_id = :H
@@ -2477,11 +2484,18 @@ UNION ALL SELECT 'session', count(*) FROM sessions s JOIN profiles p ON p.id = s
 UNION ALL SELECT 'entry', count(*) FROM entries e JOIN profiles p ON p.id = e.profile_id, spelling
  WHERE p.household_id = :H
    AND (strpos(lower(coalesce(e.notes, '')), spelling.s) > 0
-        OR strpos(lower(coalesce(e.context, '')), spelling.s) > 0);
+        OR strpos(lower(coalesce(e.context, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(e.scheme, '')), spelling.s) > 0
+        OR strpos(lower(coalesce(e.value_text, '')), spelling.s) > 0)
+UNION ALL SELECT 'readiness', count(*) FROM day_readiness r JOIN profiles p ON p.id = r.profile_id,
+  spelling
+ WHERE p.household_id = :H AND strpos(lower(coalesce(r.note, '')), spelling.s) > 0;
 ```
 
 A non-zero count here is a new question for the maintainer, never a hand edit: the household typed those
-words into a note or a label itself.
+words into a note or a label on a log itself. **Program text is not searched**: a program, workout or
+item's name, notes or labels are the household's own words, which it can edit in the app; tell the
+requester to check them.
 
 **Apply**, in one transaction:
 
@@ -2513,7 +2527,8 @@ name** (neutral by construction, so `OPS-3`'s replay can write it again after a 
 athletes whose logs changed, and the dates. **Never the old text.**
 
 **Tell the household** that exports already downloaded, and the restore branch until it is deleted,
-still hold the old name. The app's next export shows the new one.
+still hold the old name, and so does Neon's 6-hour point-in-time window (notice.md, "What remains
+afterwards"). The app's next export shows the new one.
 
 **5. Close out.** Ledger, the restore branch (deleted after 3 days), and tell the household it is done.
 

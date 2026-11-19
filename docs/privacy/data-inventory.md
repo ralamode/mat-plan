@@ -693,8 +693,8 @@ athlete affected is told first, cannot cancel, and is sent their own copy, and t
 they confirm it or 3 days pass; its restore branch is held 3
 days, not 7 _(maintainer, 2026-11-18)_. A typed item that a log names is not removed, but on request, after consent, its name
 is replaced on the item and on every one of the household's logs of it, whatever the spelling. The same
-words typed into a note or a superset label are not rewritten; finding them stops the rename and goes
-to the maintainer.
+words typed into a note or a label on a log are not rewritten; finding them stops the rename and goes
+to the maintainer. Program text the household wrote is its own to edit in the app, and is not searched.
 
 ## 6. Getting data out — and what the export omits
 
