@@ -1,7 +1,7 @@
 # FAM-1 export follow-ups: a rate limit on the export, and the bodyweight file for the owner only
 
 _Lane E, 2026-11-19. One plan, **two PRs**: (A) the rate limit first, then (B) the owner-only
-bodyweight file. Rev 2, reshaped by the panel below. No code is committed before the maintainer
+bodyweight file. Rev 3, reshaped by the panel below. No code is committed before the maintainer
 approves this plan._
 
 ## Where this sits
@@ -84,17 +84,20 @@ inventory and notice change in the same PR."_
   - Sized from the cap: one export of every athlete in a full household (25) fits, which the
     notice's "export before you delete" needs. Thirty in ten minutes still refuses a loop.
   - A test pins `EXPORT_RATE_LIMIT.attempts >= MAX_HOUSEHOLD_ATHLETES`, so raising the cap fails
-    that test rather than the parent.
+    that test rather than the parent. It's a floor, not an exact bound: settings also lists
+    archived athletes' links, so a household can show more than 25; 30 leaves that headroom.
 - **Its own limiter**, built by the existing factory with the sibling prefix `mat-plan:export`.
   It is never a child of `mat-plan:mutate`, per `:122-126`.
 - **`checkExportLimit(userId)`**, a new export with no policy parameter. It and
   `checkMutationLimit` delegate to one private `check(limiter, userId)`.
-  - The `limiter-error` breadcrumb moves into `check`, so both callers keep it and the route
-    doesn't carry its own copy.
-  - `enterMutation` keeps its behaviour.
+  - `enterMutation`'s `limiter-error` breadcrumb stays where it is (`mutation-entry.ts:125-131`),
+    so `mutation-entry.ts` and its tests are untouched. The route adds its own id-free breadcrumb,
+    `'export limiter unavailable'`, on `reason: 'limiter-error'` (rev 3, after architecture and
+    correctness round 2: moving it into `check` would double it or break `mutation-entry.test.ts`).
 - **`MutationLimitPolicy` stays closed** to the two mutation policies. `limiterFor` and its "falls
   toward the stricter limit" docblock stay true, and no Server Action can pass the export budget.
-- **Docblock.** The "one caller" line becomes one caller per function. The ⏳ note at `:32-34` goes.
+- **Docblock.** The "one caller" line becomes one caller per function, the module header (`:9`)
+  says three instances, and the ⏳ note at `:32-34` goes.
 
 **A2. `apps/web/app/p/[profileId]/export/route.ts`** (EDIT). The order:
 
@@ -121,7 +124,10 @@ inventory and notice change in the same PR."_
   - limited → `429` + `no-store`, and `buildExportZip` is not called;
   - signed out, unknown id or foreign id → today's `404`, and `checkExportLimit` is not called;
   - allowed → today's response, with `checkExportLimit` called once with `'u'`, the mocked
-    `userId`.
+    `userId`;
+  - limiter error → today's response, plus one `'export limiter unavailable'` breadcrumb.
+  - 🔴 The "unknown or foreign id → not called" case is the only pin on A2's order. It is not
+    optional.
 - **`rate-limit.test.ts`** (EDIT):
   - the `built` pin lists the third instance and its prefix;
   - the export instance drains at `EXPORT_RATE_LIMIT.attempts`;
@@ -174,23 +180,31 @@ month loop.
 
 - **Owner:** today's three pushes, in today's order.
 - **Member:** the bodyweight read never runs, and the month pushes strength and check-ins. A month
-  whose two files would both be header-only is skipped, so a weigh-in-only month leaves no trace.
+  whose strength and check-in row arrays are both empty is skipped. The decision is made on the
+  arrays, never by comparing file text to a header. By the 14b partition such a month holds only
+  weigh-ins, so it leaves no trace. The skip sits inside the member branch only.
 - **No `reportAuthorityRefusal`:** a member asking for the export is not refused anything they
   asked for by name.
 - The comment at `:139` ("every month's zip holds the same files") becomes "for a given role".
 
 **B3. `db:verify`** (EDIT):
 
-- **The helper.** Hoist `asOwner(scope, what)` from `packages/db/scripts/verify/erasure.ts:630` to
-  `packages/db/scripts/verify/harness.ts`, and import it in `erasure.ts`, `verify.ts` and
-  `verify/day.ts`. No new cast: `scope.test.ts`'s allowlist is unchanged.
+- **The helper.** Add `asOwner(scope, what)` to `packages/db/scripts/verify/harness.ts`, the shape of
+  the file-private one at `verify/erasure.ts:630`, with the message taking its prefix from `what`.
+  Import it in `verify.ts` and `verify/day.ts`.
+  - `erasure.ts` is the PRIV-3 lane's and `docs/features/erasure.md`'s, so its private copy stays.
+    Swapping it to the shared helper goes to the board as a P2 for that lane.
+  - No new file joins `scope.test.ts`'s cast allowlist.
 - **The five existing call sites narrow through `asOwner`:**
   - `verify.ts:3258`, `:5417` and `:10194`;
   - the `TEN1_READS_1C` row at `:5391`, inside its lambda, which keeps the row's household-B
     assertion meaningful;
   - `verify/day.ts:813`, where the shared `args` splits, so the bodyweight read gets an owner scope.
-- **The new proof**, beside the TEN-1 matrix: the owner scope reads the fixture's weigh-in, and
-  `A_MEMBER_SCOPE` (already forged at `verify.ts:431`) cast past the type reads zero rows.
+- **The new proof**, in `verify.ts` beside the TEN-1 matrix (not in a `verify/` module, where a cast
+  is red by design, `verify/harness.ts:281-288`):
+  - the owner scope reads the fixture's weigh-in;
+  - `A_MEMBER_SCOPE` (minted, not forged, at `verify.ts:431`) is cast `as OwnerScope` past the type
+    and reads zero rows. That cast is new, and `verify.ts` is already on the per-file allowlist.
 - **Mutation 610** drops the conjunct, and its first failing assertion is the new proof's.
 - `03-undo-1c-predicates.patch` is re-cut where its `@@ -358,7` hunk meets the conjunct, and
   proved red again.
@@ -203,8 +217,12 @@ month loop.
 - the real `ownerScope` is used;
 - the cases:
   - (a) owner: `entries.map(e => e.path)` equals strength, bodyweight, check-ins for each month;
-  - (b) member: no path matches `bodyweightPath`, and `bodyweightMonthRows` is never called;
-  - (c) member, a weigh-in-only month: no entries for that month.
+  - (b) member, a month with strength rows and no check-ins: the exact path list is strength then
+    check-ins, and `bodyweightMonthRows` is never called. That catches an "either file empty"
+    skip;
+  - (c) member, a weigh-in-only month: no entries for that month;
+  - (d) owner, a weigh-in-only month: all three files, in order. That catches a skip placed outside
+    the member branch.
 
 **B5. Docs.** The privacy lens's list is the floor; every sentence is written in the PR, and the
 lens re-reads it.
@@ -214,7 +232,12 @@ lens re-reads it.
     only when you are signed in as the household's owner; everyone else signed in to the household
     gets the rest. Weigh-ins are still shown, and can be changed, on the athlete's page by anyone
     signed in to the household, and anyone using the owner's signed-in phone can download them. An
-    adult athlete who is not the owner gets their own weigh-ins by asking for the full copy._
+    adult athlete who is not the owner gets their own weigh-ins by asking for the full copy. Today
+    every adult given a sign-in to a household is its owner, so this changes nothing for anyone
+    yet; it applies once people can be invited as members._
+  - The dated "What changed on …" entry describes a rule that now exists, not a reduction in who
+    receives the file, because nobody receives less today. The sign-off line (`:426-432`) is
+    updated with it.
   - Limitation 3 (`:150-153`) is reworded to the same effect.
   - `:109` ("the adult … can export") becomes "the household owner".
   - The archived-athlete export lines (`:272-274`, `:287`) gain the role caveat.
@@ -224,9 +247,12 @@ lens re-reads it.
 - **`docs/privacy/data-inventory.md`:**
   - §4: the export row is corrected ("any member can export any athlete").
   - §4 also gets a new open fact, "the day page shows weigh-ins to any member", owned by Q2's row.
+  - §4 also states that every login bound today is an owner.
   - §6: the per-role contents, and the residual that a member's empty zip still says the athlete
-    has history (tech-debt's empty-zip row).
-  - A dated re-read entry in the header.
+    has history.
+  - A dated re-read entry in the header. PR A adds its own for §4, §7 and §8.
+- **`docs/tech-debt.md`**, the empty-zip row (`:360-362`): a second cause, a member and a
+  weigh-in-only athlete. It stays dark until members exist.
 - **`.github/SECURITY.md` → Sensitive data:**
   - the export enforces it (owner scope, SQL conjunct, proof);
   - the day page does not, yet; Q2 owns that;
@@ -255,8 +281,7 @@ lens re-reads it.
   missing argument compile into the parent's ✓ budget.
 - **A shared `enterPrincipal(policy)` for the action and the route** (reuse S1). Deferred to
   `/api/sync`, the second limited handler. Today's two callers differ in envelope and order (the
-  route limits after the profile read), and the shared `check` already removes the copied
-  breadcrumb.
+  route limits after the profile read). Each keeps its own one-line breadcrumb until then.
 - **10 per 10 minutes.** Rejected (scope, reuse, correctness). An eleven-athlete household's owner
   would be refused mid-export.
 
@@ -286,7 +311,9 @@ lens re-reads it.
 - **Q3:** tell a member their export has no weigh-ins with a line of copy beside the link, or the
   notice only (recommended until `INVITE-1`, when members first exist)?
 - **Q4:** SECURITY.md:134 says "kid bodyweight", but the rule applies to every profile, since
-  `ID-1` item 5 forbids branching on `kind`. Reword it to "bodyweight" (recommended)?
+  `ID-1` item 5 forbids branching on `kind`. Reword it to "bodyweight" (recommended), with a
+  qualifier: the export returns it to owner logins only, and an adult athlete's own access is
+  `ID-1`'s question.
 
 ## Review-response log
 
@@ -310,7 +337,7 @@ lens re-reads it.
 | SEC-S4/A-S7 | Security, Architecture                                        | Add a caller allowlist and an order assertion to the guard                                                    | **rejected** | Scope S4's reasoning: a no-policy function plus the route tests catch what the guard would |
 | SEC-S3      | Security                                                      | Limiter before the id check allows a cross-site budget drain                                                  | **accepted** | A2 order: profile, then limiter                                                            |
 | A-S3        | Architecture, Security S4, Reuse N7                           | Widening `MutationLimitPolicy` breaks `limiterFor` and lets actions spend it                                  | **accepted** | A1 `checkExportLimit`, private shared `check`                                              |
-| R-S1        | Reuse                                                         | Extract session + limiter into one `enterPrincipal`                                                           | **deferred** | Alternatives: at `/api/sync`; the shared `check` carries the breadcrumb now                |
+| R-S1        | Reuse                                                         | Extract session + limiter into one `enterPrincipal`                                                           | **deferred** | Alternatives: at `/api/sync`                                                               |
 | P1/P2       | Privacy (BLOCKING ×2)                                         | Notice and inventory lines go false; the notice overstates the protection                                     | **accepted** | B5 lists each line and writes the sentence, day page and shared phone included             |
 | P3          | Privacy                                                       | An adult member athlete; runbooks offer a partial export before erasure                                       | **accepted** | B5 notice + runbooks; Risks                                                                |
 | P5          | Privacy                                                       | Upstash gets a new key; inventory §7/§8 go false                                                              | **accepted** | A5; prefix `mat-plan:export`                                                               |
@@ -327,3 +354,16 @@ lens re-reads it.
 | 4   | Nothing pins an athlete to a household          | holds   | The Redis key is `mat-plan:export:<clerk user id>`, with no household or profile id. Zip paths stay rooted on `public_id`.                                                                                              |
 | 5   | No age-based permission logic                   | holds   | The rule applies to every profile regardless of `profiles.kind`; branching on `kind` is refused. Hence Q4.                                                                                                              |
 | 6   | Roles stay a shared const plus a CHECK          | holds   | No role is added; `HOUSEHOLD_ROLE.owner` inside `ownerScope()`. A later `guardian` fails closed (no file) until `ID-1` widens item 2's narrowing.                                                                       |
+
+### Re-review (round 2, rev 2 → rev 3, 2026-11-19)
+
+> Privacy, correctness and architecture, one light pass each. Every rev-1 BLOCKING and SHOULD is
+> closed. Architecture accepts the SEC-S4/A-S7 rejection, on the condition recorded in A3.
+
+| #   | Lens                      | Critique (short)                                                                                                                               | Verdict      | Resolution                                                                              |
+| --- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------- |
+| R1  | Architecture, Correctness | Moving the breadcrumb into `check` breaks `mutation-entry.test.ts` or doubles it                                                               | **accepted** | A1: `enterMutation` untouched; the route has its own breadcrumb (A3 tests it)           |
+| R2  | Correctness               | Hoisting `asOwner` edits PRIV-3's `erasure.ts` and its guide                                                                                   | **accepted** | B3: new helper in `harness.ts`; erasure's swap goes to the board as a P2                |
+| R3  | Correctness               | (b) passes on a wrong skip; no owner weigh-in-only case                                                                                        | **accepted** | B4 (b) exact paths; (d) added                                                           |
+| R4  | Privacy                   | Notice sentence implies a restriction nobody is under today                                                                                    | **accepted** | B5: "today every login is the owner" clause; inventory §4; dated entry worded as a rule |
+| N   | all                       | PR A re-read entry; tech-debt empty-zip row; Q4 qualifier; "minted, not forged" cast; skip on arrays; `rate-limit.ts:9` header; cap is a floor | **accepted** | Fixed in this revision (the `:9` header joins A1's docblock edits)                      |
