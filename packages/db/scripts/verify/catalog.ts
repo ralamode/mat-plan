@@ -486,6 +486,17 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
     );
 
     // Rule 7: a second run, every entry already present, resolves and writes nothing (D2's guards).
+    const joinIds = async () => ({
+      equipment: (
+        await tx.select({ id: schema.movementEquipment.id }).from(schema.movementEquipment)
+      )
+        .map((r) => r.id)
+        .sort(),
+      muscles: (await tx.select({ id: schema.movementMuscles.id }).from(schema.movementMuscles))
+        .map((r) => r.id)
+        .sort(),
+    });
+    const idsBefore = await joinIds();
     let again: Awaited<ReturnType<typeof seedReference>> | undefined;
     await assert.doesNotReject(async () => {
       again = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS });
@@ -494,6 +505,11 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
       [again!.catalogInserted, again!.catalogPresent],
       [0, CATALOG_MOVEMENTS.length],
       'CAT-3 A2-i E1: a second run inserts nothing and counts every entry as present',
+    );
+    assert.deepEqual(
+      [await catalogStateOn(tx), await joinIds()],
+      [state, idsBefore],
+      'CAT-3 A2-i E2: …and leaves every present catalog row and its join rows untouched (the same ids)',
     );
 
     // Rule 7: an entry with no equipment and no muscles resolves, and writes the movement only.

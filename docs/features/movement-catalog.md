@@ -65,6 +65,16 @@ in `apps/` reads them until P11-ii (`apps/web/test/program-tables-stay-dark.test
   row is matched by both households" becomes the first failure under mutations `318` and `319`, so
   their `.expect` moves to P7's message (or P7 keeps them out). A2-i's proofs all roll back, so it
   does not happen yet.
+- **Still owed by A2-ii, before the switch** (A2-i's db-safety review):
+  - 🔴 **The `movements-ownership` report classes "curated" by `MOVEMENT_SEED_PUBLIC_IDS`**, so after
+    the switch it would count every catalog row as "TEN-2b-2 input (global, non-curated,
+    unreferenced)", the orphan-removal input. Its "legacy or catalog" discriminator lands with or
+    before the switch, or a correction built on that report would delete the library.
+  - Cut a Neon restore branch, run `db:seed` against it from the operator's console, and confirm the
+    counts line (about 463 inserted, 12 held by a legacy row). `db:verify` runs the real library only
+    on PGlite inside a savepoint; this is its first real-Postgres run.
+  - Run the runbook's shadow query on production first, so the household count is known in advance.
+  - A runbook entry for a seed run that fails on catalog data (fix forward; nothing is left behind).
 - **A proof that a catalog write fails as a whole runs on `db`, outside any transaction.**
   `expectRejectedBy(…, tx)` runs its probe in a savepoint, which rolls the partial rows back itself,
   so a writer with no transaction could not fail it (mutation `502`).

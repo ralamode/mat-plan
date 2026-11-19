@@ -146,8 +146,8 @@ describe('seed() gives the catalog writer nothing yet (CAT-3 A2-i)', () => {
 
 /**
  * CAT-3 A2-i (spec rule 7): the seed's report is COUNTS ONLY. Every field of `SeedCounts` is a number,
- * so printing a slug needs a type change first, which review sees. `satisfies` pins it at compile time,
- * and the run pins the field list.
+ * so printing a slug needs a type change first, which review sees. A typecheck pin (`pnpm typecheck`;
+ * `expectTypeOf` does nothing at runtime).
  */
 describe('SeedCounts holds numbers only (CAT-3 A2-i)', () => {
   it('every field is a number (a type-level pin: a string field fails typecheck)', () => {

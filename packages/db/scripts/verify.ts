@@ -7212,9 +7212,10 @@ console.log(
   const quietMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
-  assert.equal(
-    quietMessage,
-    '',
+  // What the test means, not "prints nothing": since CAT-3 A2-i the seed also prints its catalog
+  // counts, which A2-ii's fixture seed will do on every run.
+  assert.ok(
+    !/share a legacy seed slug|share a library slug/.test(quietMessage),
     'TEN-2c: …and with no shadow the seed warns about NOTHING — the report is a report, not noise on every run',
   );
   assert.equal(

@@ -251,7 +251,10 @@ export interface SeedCounts {
   readonly catalogHeldByLegacy: number;
   /** Library entries left out because an earlier entry in the same list has their slug. */
   readonly catalogDuplicates: number;
-  /** Household-owned rows sitting on a library slug (counted before the write, never touched, E3). */
+  /**
+   * Household-owned rows sitting on a library slug that is not also a legacy slug (counted before the
+   * write, never touched, E3); a row on a shared slug is in `householdRowsOnSeedSlugs` only.
+   */
   readonly householdRowsOnCatalogSlugs: number;
   /** Household-owned rows sitting on a legacy seed slug (TEN-2c's shadow report). */
   readonly householdRowsOnSeedSlugs: number;
@@ -384,9 +387,11 @@ export async function seedReference(
     db,
     MOVEMENT_SEED_ROWS.map((m) => m.slug),
   );
+  // A library slug that is also a legacy slug is counted once, above.
+  const legacySlugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
   const householdRowsOnCatalogSlugs = await countOwnedRowsOn(
     db,
-    catalog.map((entry) => entry.slug),
+    catalog.map((entry) => entry.slug).filter((slug) => !legacySlugs.has(slug)),
   );
 
   // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
@@ -431,9 +436,11 @@ export type CatalogSeedCounts = Pick<
  *   ids its `RETURNING` gave back, never to a slug lookup, so a held slug gets no join row.
  * - **Never a household's row** (E3): a household row on the slug sits outside the global index, so it
  *   neither conflicts nor is touched, and nothing here sets `household_id`. No delete, no update.
- * - **Never throws on catalog data** (rule 7). Each insert skips itself when it has nothing to write:
- *   drizzle throws on an empty `values()`, and every production push after A2-ii's first has every
- *   entry already present. A duplicated slug in the list keeps its first entry and counts the rest.
+ * - **Resolves on every empty shape rule 7 lists**: an empty list, every entry already present, entries
+ *   with no equipment or no muscles. Each insert skips itself when it has nothing to write (drizzle
+ *   throws on an empty `values()`, and every production push after A2-ii's first has every entry
+ *   present). A duplicated slug keeps its first entry and counts the rest. **Any constraint violation
+ *   still throws, and leaves nothing** (one transaction): a bad entry is fixed forward.
  * - **Order:** equipment and secondaries in the entry's authored order (the join rows' identity order
  *   then records it), the primary first and only when there is one.
  *
