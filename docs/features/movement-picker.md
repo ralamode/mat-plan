@@ -140,16 +140,20 @@ path and **creating** the deliberate one.
       family level for a kind in `BROWSE_FLAT_KINDS` (Conditioning and Skill, K27 and K30). The
       picker draws what it is given; a label changes in `MODALITY_LABELS` or
       `MOVEMENT_FAMILY_LABELS`, never here.
-    - **`browseView` partitions once**: `filterMovementOptions`, then `hasLibraryData` (the one test
+    - **`browseView` partitions once**: `filterMovementOptions` over the picker's own `matchable`
+      (`movement-option.ts`, the mapping the search and the filter counts read), then `hasLibraryData` (the one test
       for "has a kind") splits the tree's rows from K24's. **N for "All movements" is the tree plus
       K24's rows**, which is `movementFilterCounts(…).total`, pinned by a test.
-    - ⏳ **K24: the old built-ins with no library entry are "Not sorted yet"**, a folded `h4` after
-      the kinds, sorted by `byFoldedName`. One sibling block tagged `TODO(CAT-3 chunk R)`, so the
+    - ⏳ **K24: the old built-ins with no library entry are "Not sorted yet"**, an `h4` after the
+      kinds, sorted by `byFoldedName`: folded on a long tree, and open by itself while the tree
+      opens itself _(maintainer, 2026-11-19: "Open it while the tree is small")_. One sibling block tagged `TODO(CAT-3 chunk R)`, so the
       post-R2 cleanup deletes it whole. K23's pairs are listed in both places.
     - **The order**: "Your custom items" (open at `CUSTOM_OPEN_AT_MOST` or fewer, K25), Recent,
       Today's program, then All movements (open). A kind or a family starts closed, except that
       **every kind and family opens itself while the tree holds `BROWSE_OPEN_AT_MOST` rows or
-      fewer** (K26), counted on the tree alone. No row carries a group tag (P12).
+      fewer** (K26), counted on the tree alone; never the custom items by that rule. No row carries
+      a group tag (P12). With no match at all and no filter, the list beneath is All movements, with
+      no custom section.
     - **Every group is a button inside its heading** (the APG disclosure), never `<details>`:
       `aria-expanded`, `aria-controls` while open, and a closed group renders nothing. Headings: the
       top sections `h3`, a kind and "Not sorted yet" `h4`, a family `h5`, and "How to" one below its
@@ -161,9 +165,11 @@ path and **creating** the deliberate one.
       (its taps are forgotten), adjusted during render, so the row a caller focuses after a create is
       in that commit; unticking closes nothing. A filter change forgets only the groups the person
       closed. Keys and ids are kind-qualified (`strength/core`, `mobility/core`).
-    - **360px:** only the disclosure buttons indent (a kind `pl-3`, a family `pl-6`); rows sit
-      `ml-3` in, which leaves the name column 182px in multi mode with "How to" (the plan's math). A
-      long family label wraps inside its tap target, its count in a `shrink-0` span.
+    - **360px:** only the disclosure buttons indent (a kind `pl-3`, a family `pl-6`). Rows step in
+      `ml-3` only from 400px (`min-[400px]:ml-3`): at 360px the name column keeps 194px in multi
+      mode with "How to", and at 200% text (195 CSS px) an indent would leave it a few pixels. A long
+      family label wraps inside its tap target, its count in a `shrink-0` span. `e2e/movement-picker.a11y.spec.ts`
+      opens a kind (from the keyboard) and a family at 360px; `picker-browse-open` is the capture.
 
 12. **Multi-select is a second mode, not a change to the first** (FAM-1 step 9). The props are a
     union: `onPick` (single) or `multiple` (multi), never both. In multi mode:
@@ -343,7 +349,7 @@ path and **creating** the deliberate one.
   (`catalogOption`, from `MOVEMENT_SEED_ROWS`) only until F1**; `withoutLibraryData` makes a K24 row.
   A suite over invented options passes while the catalog does something else. The test library
   holds more than `BROWSE_OPEN_AT_MOST` rows, so its tree starts closed: open the groups a test needs
-  (`expandAll` in the suite).
+  (`expandBrowse`, in the fixtures file; the item picker's suite uses it too).
 - ⚠️ **One bounded consequence lives in [write-path.md](./write-path.md) invariant 14, not here.** A
   household row whose slug a global row shadows is reachable by id, and freezes `''` for the
   `prescribed` snapshot. It stays in that guide — the behaviour is `resolveMovementByPublicId`'s, and
@@ -362,7 +368,7 @@ the footer's states and the source scans. They deliberately **do not** claim:
   ⚠️ jsdom settles it synchronously, so invariant 8's bug class is **invisible** here in both
   directions: a regression that re-splits the query would not redden a single test;
 - `enterKeyHint="search"`, `maxLength` on paste, `<summary>` ≥44px, and the browse tree's 360px
-  width math and its disclosure buttons' 44px (B3-ii's e2e steps);
+  width math and its disclosure buttons' 44px (`movement-picker.a11y.spec.ts`);
 - Enter in the portaled input **not** submitting the form.
 
 A test plan that promised these would be claiming coverage it cannot deliver, which is the defect

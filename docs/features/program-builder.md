@@ -224,7 +224,10 @@ flowchart LR
       then what it needs; movement-picker invariant 14), so the item picker passes no `describe`.
     - **With no query the list is the movement picker's browse tree** since CAT-3 B3 (movement-picker
       invariant 11): the preview's list is longer than `BROWSE_OPEN_AT_MOST`, so its kinds and
-      families start closed, and `item-picker.test.tsx`'s `openPicker` opens them all first.
+      families start closed, and `item-picker.test.tsx`'s `openPicker` opens them all first with
+      `expandBrowse` (`test/movement-picker-fixtures.ts`). The create-and-focus test and the Enter
+      test open the sheet plainly (`openSheet`), so only the new selection's seed can open the
+      groups above the row.
     - **Add** appends a card per item in pick order (`newCard`): a fresh `prescriptionClientId`, **no
       numbers**, and the unit the type fixes, else the item's own declared unit when the type allows
       it, else none. Focus goes to the first new card's heading; the status line says how many, from

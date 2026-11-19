@@ -4,7 +4,7 @@ import {
   MOVEMENT_NAME_MAX,
   EQUIPMENT_LABELS,
   MODALITY_LABELS,
-  MOVEMENT_PICKER_GROUPS,
+  byFoldedName,
   requiresNoEquipment,
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
@@ -30,6 +30,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import { ChevronRight } from 'lucide-react';
 
 import {
   BROWSE_KEY,
@@ -48,6 +49,7 @@ import {
 } from '@/lib/movements/browse-view';
 import {
   hasLibraryData,
+  matchable,
   type MovementOptionDTO,
   type MovementPickerData,
 } from '@/lib/movements/movement-option';
@@ -59,7 +61,7 @@ import {
   type FilterChange,
 } from '@/components/movements/movement-filter-panel';
 import { SHEET_COPY, Sheet, sheetStatusId } from '@/components/ui/sheet';
-import { INPUT_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, movementCount } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 /**
@@ -180,22 +182,6 @@ export type MovementPickerProps = {
     }
   | { multiple: MultiPick; onPick?: never }
 );
-
-/**
- * ONE place that turns a `MovementOptionDTO` into what the matcher reads (catalog-first, aliases
- * from the catalog only). Both the list's search and `listedAs` read through it.
- */
-function matchable(options: readonly MovementOptionDTO[]) {
-  return options.map((option) => ({
-    name: option.name,
-    isCatalog: option.owner === 'catalog',
-    aliases: option.owner === 'catalog' ? option.aliases : [],
-    // What a filter reads (P7). A household item has neither, so a filter cannot judge it (P9).
-    equipment: hasLibraryData(option) ? option.equipment : undefined,
-    primaryMuscle: hasLibraryData(option) ? option.primaryMuscle : null,
-    option,
-  }));
-}
 
 /**
  * What the list shows (CAT-3 B1): the library's search, with short forms, part of another name and
@@ -580,7 +566,8 @@ export function MovementPicker({
     const alias = aliasFound.get(option.publicId);
     if (alias !== undefined) return COPY.tagAlsoCalled(alias);
     if (option.publicId === currentId) return COPY.tagCurrent;
-    // No group tag (spec P12): a row's second line is P14's alone. No `household` tag: the row's second line already says "Custom item" (P14), everywhere.
+    // No group tag (spec P12): a row's second line is P14's alone. No `household` tag either: the
+    // row's second line already says "Custom item" (P14), everywhere.
     return null;
   };
 
@@ -742,22 +729,16 @@ export function MovementPicker({
   );
 
   // Browsing with a filter on (P9; P12's heading, B3-ii's tree): the household's items first,
-  // folded to one line and marked "not filtered", then the library movements that fit, in the
-  // legacy groups' order. Recent and Today's program are not shown.
-  const groupIndex = (option: MovementOptionDTO) => {
-    const index =
-      option.owner === 'catalog' && option.group
-        ? MOVEMENT_PICKER_GROUPS.indexOf(option.group)
-        : -1;
-    return index === -1 ? MOVEMENT_PICKER_GROUPS.length : index;
-  };
+  // folded to one line and marked "not filtered", then the library movements that fit, by name
+  // (the tree's comparator). Recent and Today's program are not shown.
   const filteredBrowse =
     filtersOn > 0
       ? (() => {
           const { fitting, custom: own } = filterMovementOptions(matchableOptions, filters);
-          const fits = fitting.map((m) => m.option).sort((a, b) => groupIndex(a) - groupIndex(b));
+          const fits = fitting.map((m) => m.option).sort(byFoldedName);
           return (
             <>
+              {/* TODO(CAT-3 B3-ii): onto `Group`, with the filtered tree; then `FoldedSection` goes. */}
               <FoldedSection
                 headingId={`${headingId}-household-folded`}
                 heading={COPY.householdNotFiltered}
@@ -1248,6 +1229,7 @@ function TodaysProgram({
   // Open while any prescribed movement is NOT yet on a card; the list always shows every prescribed
   // row, so a second card for one stays one tap away — only the summary changes.
   const allOnForm = options.every((o) => program.onFormIds.has(o.publicId));
+  // TODO(CAT-3 B3-ii): onto `Group`, so the picker has one disclosure; then `FoldedSection` goes.
   return (
     <FoldedSection
       headingId={headingId}
@@ -1419,7 +1401,7 @@ function OptionRow({
         {rowMeta(option)}
         {tag ? (
           <>
-            {COPY.rowMetaJoin}
+            {COPY.separator}
             {/*
               ⚠️ `aria-current` on a single row already announces it, so the VISIBLE `current` tag
               is hidden from assistive tech: otherwise the row reads "current, current".
@@ -1621,9 +1603,10 @@ function Section({
  * - **A closed group renders nothing**: Tab walks kind, family, then rows, never hundreds of rows.
  * - **`landmark`** for the top sections only: a region per kind and family floods a screen
  *   reader's landmark list. A kind, a family and "Not sorted yet" are a plain `div`.
- * - **The indent is the button's**, never the rows' beyond `ml-3`: at 360px the name column keeps
- *   182px in multi mode with "How to" (the plan's width math). The label is `min-w-0 flex-1`, so a
- *   long family wraps inside the tap target and its count never sits alone on a line.
+ * - **The indent is the button's.** Rows step in `ml-3` only from 400px (`min-[400px]:ml-3`): at
+ *   360px the name column keeps 194px in multi mode with "How to", and at 200% text (195 CSS px)
+ *   an indent would crush it to a few pixels. The label is `min-w-0 flex-1`, so a long family
+ *   wraps inside the tap target and its count never sits alone on a line.
  * - **The count is said once**: visibly "· 12", hidden; to a screen reader ", 12 movements", the
  *   same words as a filter choice's name (`choiceName`).
  * - **The focus ring is inset**, so the sheet's scroll container cannot clip it at the edges.
@@ -1675,23 +1658,13 @@ function Group({
             indent === 'family' && 'pl-6',
           )}
         >
-          <svg
+          <ChevronRight
             aria-hidden
-            viewBox="0 0 16 16"
             className={cn(
               'size-4 shrink-0 transition-transform motion-reduce:transition-none',
               open && 'rotate-90',
             )}
-          >
-            <path
-              d="M6 3l5 5-5 5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          />
           <span className="min-w-0 flex-1 wrap-anywhere">{label}</span>
           <span aria-hidden className="shrink-0 pr-2 tabular-nums">
             {COPY.separator.trimStart()}
@@ -1699,7 +1672,7 @@ function Group({
           </span>
           <span className="sr-only">
             {COPY.choiceJoin}
-            {COPY.movementCount(count)}
+            {movementCount(count)}
           </span>
         </button>
       </Heading>
@@ -1778,7 +1751,7 @@ function Browse({
                     mode={mode}
                     scope={id}
                     howToLevel={5}
-                    className="ml-3"
+                    className="min-[400px]:ml-3"
                   />
                 );
               }
@@ -1800,7 +1773,7 @@ function Browse({
                     mode={mode}
                     scope={childId}
                     howToLevel={6}
-                    className="ml-3"
+                    className="min-[400px]:ml-3"
                   />
                 </Group>
               );
@@ -1825,7 +1798,7 @@ function Browse({
             mode={mode}
             scope={notSortedId}
             howToLevel={5}
-            className="ml-3"
+            className="min-[400px]:ml-3"
           />
         </Group>
       ) : null}

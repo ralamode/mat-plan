@@ -22,6 +22,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }
 import { householdPickerOptions, pickerOptions } from '@/app/design/program/picker-options';
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY } from '@/lib/movements/movement-picker-copy';
+import { expandBrowse } from '@/test/movement-picker-fixtures';
 
 import {
   addedText,
@@ -91,20 +92,18 @@ const opener = () =>
   [...document.querySelectorAll('button')].find(
     (button) => button.textContent === ITEM_PICKER_COPY.open,
   )!;
+/** Opens the sheet as a person does: the browse tree's groups as they start. */
+const openSheet = () => fireEvent.click(opener());
 /**
  * Opens the picker with every browse group open (CAT-3 B3): the preview's list is longer than
- * `BROWSE_OPEN_AT_MOST`, so its kinds and families start closed, and these tests are about the
+ * `BROWSE_OPEN_AT_MOST`, so its kinds and families start closed, and most tests here are about the
  * selection, not the tree (movement-picker's own suite covers that).
  */
 const openPicker = () => {
-  fireEvent.click(opener());
-  for (;;) {
-    const closed = document.querySelector<HTMLButtonElement>(
-      '[role="dialog"] :is(h3, h4, h5) > button[aria-expanded="false"]',
-    );
-    if (!closed) return;
-    fireEvent.click(closed);
-  }
+  openSheet();
+  // A full workout opens nothing: there is then no sheet to open groups in.
+  const dialog = document.querySelector('[role="dialog"]');
+  if (dialog) expandBrowse(dialog);
 };
 const sheet = () => screen.getByRole('dialog');
 const row = (name: string) =>
@@ -504,7 +503,11 @@ describe('the item picker (FAM-1 9)', () => {
 
     it('after Create, focus is on the item’s row; after Cancel, on the create button', async () => {
       editor();
-      openForm();
+      // A plain open: the custom section holds more than five, so it starts folded, and only the
+      // new selection's seed (CAT-3 B3) can put the row on screen to take focus.
+      openSheet();
+      search('Bear crawl');
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
       fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
         target: { value: TRACKING_TYPE.reps },
       });
@@ -834,7 +837,8 @@ describe('the item picker (FAM-1 9)', () => {
 
     it('Enter in the search ticks the one match and says so', async () => {
       editor();
-      openPicker();
+      // A plain open: the cleared search shows the closed tree, and the tick's seed opens its groups.
+      openSheet();
       search('Wall sit');
       fireEvent.keyDown(within(sheet()).getByRole('searchbox'), { key: 'Enter' });
       await waitFor(() =>

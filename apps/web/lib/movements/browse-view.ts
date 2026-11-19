@@ -6,13 +6,17 @@ import {
   filterMovementOptions,
   movementFamilyOf,
   type BrowseKind,
-  type CatalogOption,
   type Modality,
   type MovementFamily,
   type MovementFilters,
 } from '@mat-plan/shared';
 
-import { hasLibraryData, type MovementOptionDTO } from '@/lib/movements/movement-option';
+import {
+  hasLibraryData,
+  matchable,
+  type LibraryOption,
+  type MovementOptionDTO,
+} from '@/lib/movements/movement-option';
 
 /**
  * The picker's browse list as data (CAT-3 B3, spec P12 and K24): what "Your custom items" and "All
@@ -25,9 +29,6 @@ import { hasLibraryData, type MovementOptionDTO } from '@/lib/movements/movement
  * 2026-11-18): above it, the section is one folded line, so "All movements" is on the first screen.
  */
 export const CUSTOM_OPEN_AT_MOST = 5;
-
-/** A library option: the contract's `CatalogOption`, what `hasLibraryData` narrows to. */
-export type LibraryOption = Extract<MovementOptionDTO, CatalogOption>;
 
 /**
  * The key of one group whose open state is kept. A kind's key is the kind; a family's is
@@ -62,9 +63,9 @@ export type BrowseView = {
   /** "All movements · N": the tree's rows plus `bare`, which is `movementFilterCounts(…).total`. */
   readonly total: number;
   /**
-   * Every kind and family opens itself (spec K26): the tree holds `BROWSE_OPEN_AT_MOST` rows or
-   * fewer, filter or not. Counted on the tree alone, so the custom items and K24's rows never
-   * keep a short tree shut.
+   * Every kind and family, and K24's section, opens itself (spec K26; for K24 the maintainer,
+   * 2026-11-19): the tree holds `BROWSE_OPEN_AT_MOST` rows or fewer, filter or not. Counted on the
+   * tree alone, so the custom items and K24's rows never keep a short tree shut.
    */
   readonly auto: boolean;
 };
@@ -77,15 +78,7 @@ export function browseView(
   options: readonly MovementOptionDTO[],
   filters: MovementFilters,
 ): BrowseView {
-  const { fitting, custom } = filterMovementOptions(
-    options.map((option) => ({
-      option,
-      isCatalog: option.owner === 'catalog',
-      equipment: hasLibraryData(option) ? option.equipment : undefined,
-      primaryMuscle: hasLibraryData(option) ? option.primaryMuscle : null,
-    })),
-    filters,
-  );
+  const { fitting, custom } = filterMovementOptions(matchable(options), filters);
   const library: LibraryOption[] = [];
   const bare: MovementOptionDTO[] = [];
   for (const { option } of fitting) {
@@ -131,8 +124,9 @@ export const CLOSED_BROWSE: BrowseOpenState = { userChoice: new Map(), seeded: n
 
 /**
  * Whether a group is open: the person's tap, else seeded, else its default. All movements starts
- * open; "Your custom items" while it holds `CUSTOM_OPEN_AT_MOST` or fewer; a kind and a family when
- * the tree opens itself (`auto`); K24's section never by default.
+ * open; "Your custom items" while it holds `CUSTOM_OPEN_AT_MOST` or fewer; a kind, a family and
+ * K24's "Not sorted yet" when the tree opens itself (`auto`). Never the custom items by `auto`:
+ * twenty-four of them would bury a short tree.
  */
 export function isBrowseOpen(
   key: BrowseKey,
@@ -147,9 +141,10 @@ export function isBrowseOpen(
       return true;
     case BROWSE_KEY.custom:
       return view.custom.length <= CUSTOM_OPEN_AT_MOST;
-    case BROWSE_KEY.notSorted:
-      return false;
     default:
+      // A kind, a family, and ⏳ K24's "Not sorted yet": folded on a long tree (K24), open with a
+      // short one _(maintainer, 2026-11-19: "Open it while the tree is small")_, since before the
+      // library is seeded most rows live there.
       return view.auto;
   }
 }

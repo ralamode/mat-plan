@@ -23,10 +23,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   hasLibraryData,
+  type LibraryOption,
   type MovementOptionDTO,
   type MovementPickerData,
 } from '@/lib/movements/movement-option';
-import { CUSTOM_OPEN_AT_MOST, type LibraryOption } from '@/lib/movements/browse-view';
+import { CUSTOM_OPEN_AT_MOST } from '@/lib/movements/browse-view';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { SHEET_COPY } from '@/components/ui/sheet';
 
@@ -35,6 +36,7 @@ import {
   householdOption,
   LIBRARY_OPTIONS,
   libraryNamed,
+  expandBrowse,
   pickerTrigger,
   stubSheetHistory,
   withoutLibraryData,
@@ -110,17 +112,6 @@ const groupHeading = (level: number, label: string) =>
   screen.queryByRole('heading', { level, name: startsWith(label) });
 const groupButton = (label: string, n: number) =>
   screen.getByRole('button', { name: COPY.choiceName(label, n) });
-/** Opens every closed browse group, outermost first, until none is left (a How-to button is not one). */
-const expandAll = () => {
-  for (;;) {
-    const closed = document.querySelector<HTMLButtonElement>(
-      ':is(h3, h4, h5) > button[aria-expanded="false"]',
-    );
-    if (!closed) return;
-    act(() => void fireEvent.click(closed));
-  }
-};
-
 describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
   it("orders Your custom items → Recent → Today's program → All movements", () => {
     const recent = catalogOption('Back Squat');
@@ -152,7 +143,7 @@ describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
   it('the tree is browseTree: every kind and family, in its order, each with its count', () => {
     render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
     open();
-    expandAll();
+    expandBrowse();
     const tree = browseTree(LIBRARY_OPTIONS.filter(hasLibraryData));
     const names = (level: number) =>
       screen.getAllByRole('heading', { level }).map((h) => h.querySelector('button'));
@@ -172,10 +163,30 @@ describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
     expect(tree.some(({ families }) => families.length > 2)).toBe(true);
   });
 
+  it("the rows of each family and flat kind are in browseTree's order", () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    expandBrowse();
+    const tree = browseTree(LIBRARY_OPTIONS.filter(hasLibraryData));
+    for (const { kind, count, families } of tree) {
+      const kindGroup = groupButton(MODALITY_LABELS[kind], count).closest('div')!;
+      for (const { label, options } of families) {
+        const group =
+          label === null ? kindGroup : groupButton(label, options.length).closest('div')!;
+        // The group's own list: the first `ul` under its body.
+        const list = group.querySelector(':scope > div > ul')!;
+        const names = [...list.querySelectorAll(':scope > li > div > button:first-child')].map(
+          (b) => b.textContent?.split(',')[0],
+        );
+        expect(names, `${kind}/${label ?? '(flat)'}`).toEqual(options.map((o) => o.name));
+      }
+    }
+  });
+
   it('a kind with no family level (Conditioning, Skill) lists its rows by name under it (K27, K30)', () => {
     render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
     open();
-    expandAll();
+    expandBrowse();
     const conditioning = LIBRARY_OPTIONS.filter(
       (o) => hasLibraryData(o) && BROWSE_FLAT_KINDS.includes(o.modality),
     );
@@ -243,23 +254,37 @@ describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
     }
   });
 
-  it('⏳ the old built-ins with no library entry are "Not sorted yet", folded, after the kinds, by name (K24)', () => {
-    const bare = [catalogOption('Pull-Up'), catalogOption('Back Squat'), catalogOption('Dips')].map(
-      withoutLibraryData,
-    );
-    render(<Harness data={{ options: [...LIBRARY_OPTIONS.slice(0, 3), ...bare] }} />);
+  const BARE_THREE = [
+    catalogOption('Pull-Up'),
+    catalogOption('Back Squat'),
+    catalogOption('Dips'),
+  ].map(withoutLibraryData);
+
+  it('⏳ the old built-ins with no library entry are "Not sorted yet", after the kinds, by name, folded on a long tree (K24)', () => {
+    expect(LIBRARY_OPTIONS.length).toBeGreaterThan(BROWSE_OPEN_AT_MOST);
+    render(<Harness data={{ options: [...LIBRARY_OPTIONS, ...BARE_THREE] }} />);
     open();
-    const section = groupButton(COPY.notSorted, bare.length);
+    const section = groupButton(COPY.notSorted, BARE_THREE.length);
     expect(section.getAttribute('aria-expanded')).toBe('false');
     // An h4 sibling of the kinds, and the last of them.
     expect(screen.getAllByRole('heading', { level: 4 }).at(-1)).toBe(section.parentElement);
     // All movements counts them: N is the tree's rows plus these.
-    expect(groupButton(COPY.allMovements, 3 + bare.length)).toBeTruthy();
+    expect(groupButton(COPY.allMovements, LIBRARY_OPTIONS.length + BARE_THREE.length)).toBeTruthy();
     act(() => void fireEvent.click(section));
     const rows = [...section.closest('div')!.querySelectorAll('li > div > button:first-child')];
     expect(rows.map((b) => b.textContent?.split(',')[0])).toEqual(
-      [...bare].sort(byFoldedName).map((o) => o.name),
+      [...BARE_THREE].sort(byFoldedName).map((o) => o.name),
     );
+  });
+
+  it('⏳ "Not sorted yet" opens by itself while the tree is short (maintainer, 2026-11-19)', () => {
+    render(<Harness data={{ options: [...LIBRARY_OPTIONS.slice(0, 3), ...BARE_THREE] }} />);
+    open();
+    const section = groupButton(COPY.notSorted, BARE_THREE.length);
+    expect(section.getAttribute('aria-expanded')).toBe('true');
+    // A tap still wins.
+    act(() => void fireEvent.click(section));
+    expect(section.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('⏳ K23: a movement that is both an old built-in and a library row is listed in both places', () => {
@@ -271,7 +296,7 @@ describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
     };
     render(<Harness data={{ options: [old, library, ...LIBRARY_OPTIONS] }} />);
     open();
-    expandAll();
+    expandBrowse();
     const notSorted = groupButton(COPY.notSorted, 1).closest('div')!;
     expect(within(notSorted).getByRole('button', { name: /^Push-Ups,/ })).toBeTruthy();
     const inTree = screen.getByRole('button', { name: /^Push-up,/ });
@@ -281,7 +306,7 @@ describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
   it('a library-only option (no legacy group) is reachable by browsing', () => {
     render(<Harness data={{ options: [...ALL_CATALOG, ...LIBRARY_OPTIONS] }} />);
     open();
-    expandAll();
+    expandBrowse();
     expect(screen.getByRole('button', { name: /^Couch stretch,/ })).toBeTruthy();
   });
 
@@ -435,6 +460,65 @@ describe('which groups are open (CAT-3 B3): one model, kept in the picker', () =
     expect(goblet()).toBeNull();
   });
 
+  /** The sheet opened and the selection set by the caller, both as props, so one render does both. */
+  function ControlledHarness({
+    isOpen,
+    selected,
+    options = LIBRARY_OPTIONS,
+  }: {
+    isOpen: boolean;
+    selected: readonly string[];
+    options?: readonly MovementOptionDTO[];
+  }) {
+    const ref = useRef<HTMLButtonElement>(null);
+    return (
+      <main>
+        <button ref={ref} type="button">
+          Open
+        </button>
+        <MovementPicker
+          open={isOpen}
+          onOpenChange={vi.fn()}
+          title="Add items"
+          data={{ options }}
+          returnFocusTo={ref}
+          multiple={{
+            selected,
+            onToggle: vi.fn(),
+            onCreate: vi.fn(),
+            createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+            noMatchHint: 'No item matches.',
+            searchLabel: 'Search items',
+            searchPlaceholder: 'Search items',
+            footerAction: <button type="button">Add</button>,
+          }}
+        />
+      </main>
+    );
+  }
+  const DEAD_HANG = libraryNamed('Dead hang');
+  const deadHang = () => screen.queryByRole('checkbox', { name: /^Dead hang,/ });
+
+  it('🔴 the sheet opening and a new tick in ONE render: both rows have their groups open', () => {
+    const { rerender } = render(<ControlledHarness isOpen={false} selected={[GOBLET.publicId]} />);
+    rerender(<ControlledHarness isOpen selected={[GOBLET.publicId, DEAD_HANG.publicId]} />);
+    expect(goblet()?.getAttribute('aria-checked')).toBe('true');
+    expect(deadHang()?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a row selected before its option arrives has its groups opened once it does', () => {
+    const { rerender } = render(
+      <ControlledHarness
+        isOpen
+        selected={[GOBLET.publicId]}
+        options={LIBRARY_OPTIONS.filter((o) => o.publicId !== GOBLET.publicId)}
+      />,
+    );
+    expect(goblet()).toBeNull();
+    rerender(<ControlledHarness isOpen selected={[GOBLET.publicId]} />);
+    expect(goblet()?.getAttribute('aria-checked')).toBe('true');
+  });
+
   it('a filter change forgets the groups the person closed, and keeps the ones they opened', () => {
     render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
     open();
@@ -574,7 +658,7 @@ describe('one tag per row, by precedence', () => {
     expect(rdl.owner === 'catalog' && rdl.group).toBeTruthy();
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
-    expandAll();
+    expandBrowse();
     expect(tagsFor('Romanian Deadlift')).toBeNull();
     type('romanian deadlift');
     expect(tagsFor('Romanian Deadlift')).toBeNull();
@@ -851,7 +935,7 @@ describe('the rest of the contract', () => {
     // `listbox`/`option` — this is a list of actions, not a select.
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
-    expandAll();
+    expandBrowse();
     // A row's pick control is a button in its list item (beside "How to", when the row has it),
     // and no button sits inside another.
     const items = document.querySelectorAll('section ul > li > div > button:first-child');
@@ -959,7 +1043,7 @@ describe('multi-select', () => {
   it('a row is a checkbox that toggles and keeps the sheet open', () => {
     render(<MultiHarness data={data} />);
     open();
-    expandAll();
+    expandBrowse();
     fireEvent.click(box('Romanian Deadlift'));
     expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
     expect(screen.getByRole('dialog')).toBeTruthy();
@@ -1284,6 +1368,8 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       '@/lib/movements/movement-picker-copy',
       // The browse tree's view model (CAT-3 B3): pure, no DOM.
       '@/lib/movements/browse-view',
+      // The disclosure's chevron (CAT-3 B3): an icon, no I/O.
+      'lucide-react',
     ]);
     for (const { path, source } of sources) {
       const specifiers = [
@@ -1415,7 +1501,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     for (const multi of [false, true]) {
       render(<RowHarness multi={multi} options={[BARE, ROPE]} howTo={vi.fn(async () => STEPS)} />);
       open();
-      expandAll();
+      expandBrowse();
       const text = row('Back Squat').textContent ?? '';
       expect(text, `multi=${multi}`).toBe(`Back Squat, ${TRACKING_TYPE_LABELS.weight_reps}`);
       expect(text).not.toContain(COPY.emptyEquipment);
@@ -1697,7 +1783,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     const ungrouped: MovementOptionDTO = { ...rest, publicId: 'lib-1', name: 'Leg Swing' };
     render(<Harness data={{ options: [...ALL_CATALOG, ungrouped] }} />);
     open();
-    expandAll();
+    expandBrowse();
     expect(screen.getByRole('button', { name: /^Leg Swing/ })).toBeTruthy();
     type('leg swing');
     const found = screen.getByRole('button', { name: /^Leg Swing/ });

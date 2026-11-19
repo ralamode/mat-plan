@@ -50,7 +50,10 @@
    invariant 15).
 
 **Until A2 seeds the library, the real picker's tree is small by design** (spec owner,
-2026-11-18): Strength · 5 and Conditioning · 1, with 29 rows in "Not sorted yet".
+2026-11-18). Counted again on 2026-11-19 by running `browseTree` over the 35 old rows whose slug
+has a `CATALOG_MOVEMENTS` entry (510 entries, batches 1 to 11): Strength · 11 and Conditioning · 1
+(12 in the tree), with 23 rows in "Not sorted yet". At 12 rows the tree opens itself (K26), and so
+does "Not sorted yet" (as built, below).
 
 - The preview shows the test library's tree, **not the real library's**.
 - So the PR description carries the real library's tree (kinds, families, counts and a few names
@@ -216,6 +219,12 @@ open(key) = userChoice.get(key) ?? (auto || seeded.has(key) || defaultOpen(key))
   the picker only renders what it is given.
 - **`defaultOpen`** is true for All movements, and for custom items at ≤ `CUSTOM_OPEN_AT_MOST` (5; H2) and false
   for kinds, families and Not sorted yet.
+- **As built (B3-i):** `auto` opens **kinds and families only**, never "Your custom items": the
+  formula above would open twenty-four custom items whenever the tree was short and bury it, which
+  is what K25 folds them for. **"Not sorted yet" opens with `auto` too** _(maintainer, 2026-11-19,
+  via the board: "Open it while the tree is small")_, which overrides K24's "folded" only while the
+  tree holds `BROWSE_OPEN_AT_MOST` rows or fewer: before the library is seeded most rows live
+  there. On a longer tree it is folded, as K24 says. A tap still wins and the seed still applies.
 - **A new selection reopens its ancestors** (round 2, correctness). When an id enters `selected`
   (the person's tick, or the caller's select or create) or becomes `currentId`, its ancestors are
   added to `seeded` **and their entries are deleted from `userChoice`**. So an earlier close never
@@ -313,6 +322,14 @@ of tests, which is over the 400-line target. If the build confirms that, B3 ship
 - **B3-i:** `browse-view.ts`, the disclosure, the open-state model, the no-filter tree, Not sorted
   yet, custom first, and no group tag.
 - **B3-ii:** the filtered tree, auto-open, the no-match fallback, and the e2e and capture states.
+
+**As built:** B3-i also shipped auto-open (filter or not, in `browseView`), the no-match fallback
+with no filter (All movements, no custom section), the no-filter e2e steps (a kind from the
+keyboard, a kind and a family open, at 360px) and the `picker-browse-open` capture state, with
+`PICKER_STATE_PREFIX`. **B3-ii is now** the filtered tree under "Movements that fit your filters",
+the filtered no-match fallback, the remaining e2e steps (the filtered headings, 200% text on an
+open family), and moving the two remaining `FoldedSection`s (the filtered custom section and
+Today's program, marked `TODO(CAT-3 B3-ii)`) onto `Group`, which deletes `FoldedSection`.
 
 ## Test plan
 

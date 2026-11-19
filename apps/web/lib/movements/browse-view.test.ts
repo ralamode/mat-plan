@@ -20,9 +20,13 @@ import {
   kindKey,
   seedBrowse,
   toggleBrowse,
-  type LibraryOption,
 } from '@/lib/movements/browse-view';
-import { hasLibraryData, type MovementOptionDTO } from '@/lib/movements/movement-option';
+import {
+  hasLibraryData,
+  matchable,
+  type LibraryOption,
+  type MovementOptionDTO,
+} from '@/lib/movements/movement-option';
 import {
   catalogOption,
   householdOption,
@@ -61,17 +65,11 @@ describe('browseView: the partition (CAT-3 P12, K24)', () => {
   });
 
   it('N is movementFilterCounts(...).total, with no filter and with one', () => {
-    // What the filter panel's "Show N movements" reads: the picker's own mapping of an option.
-    const matchable = ALL.map((option) => ({
-      name: option.name,
-      isCatalog: option.owner === 'catalog',
-      aliases: option.owner === 'catalog' ? option.aliases : [],
-      equipment: hasLibraryData(option) ? option.equipment : undefined,
-      primaryMuscle: hasLibraryData(option) ? option.primaryMuscle : null,
-    }));
+    // What the filter panel's "Show N movements" reads, through the same mapping the tree uses.
+    const rows = matchable(ALL);
     for (const filters of [NO_MOVEMENT_FILTERS, LATS]) {
       const view = browseView(ALL, filters);
-      expect(view.total).toBe(movementFilterCounts(matchable, { query: '', filters }).total);
+      expect(view.total).toBe(movementFilterCounts(rows, { query: '', filters }).total);
     }
     // Non-vacuity: the two states differ, and the old built-ins count only with no filter.
     expect(browseView(ALL, NO_MOVEMENT_FILTERS).total).toBe(LIBRARY_OPTIONS.length + BARE.length);
@@ -93,7 +91,7 @@ describe('browseView: the tree opens itself when short (K26)', () => {
     expect(browseView(library(BROWSE_OPEN_AT_MOST + 1), NO_MOVEMENT_FILTERS).auto).toBe(false);
   });
 
-  it('opens kinds and families only: never "Not sorted yet", never Your custom items above five', () => {
+  it('opens kinds, families and "Not sorted yet", never Your custom items above five', () => {
     const view = browseView(
       [
         ...library(2),
@@ -107,7 +105,8 @@ describe('browseView: the tree opens itself when short (K26)', () => {
     expect(view.auto).toBe(true);
     const kind = view.tree[0]!.kind;
     expect(isBrowseOpen(kindKey(kind), CLOSED_BROWSE, view)).toBe(true);
-    expect(isBrowseOpen(BROWSE_KEY.notSorted, CLOSED_BROWSE, view)).toBe(false);
+    // ⏳ The maintainer, 2026-11-19: "Open it while the tree is small" (K24 stays folded otherwise).
+    expect(isBrowseOpen(BROWSE_KEY.notSorted, CLOSED_BROWSE, view)).toBe(true);
     expect(isBrowseOpen(BROWSE_KEY.custom, CLOSED_BROWSE, view)).toBe(false);
   });
 });
@@ -165,6 +164,24 @@ describe('browseAncestors and seedBrowse: a selection opens every group above it
     expect(browseAncestors(RUN)).toEqual([BROWSE_KEY.all, kindKey(MODALITY.conditioning)]);
     expect(browseAncestors(BARE[0]!)).toEqual([BROWSE_KEY.all, BROWSE_KEY.notSorted]);
     expect(browseAncestors(MINE[0]!)).toEqual([BROWSE_KEY.custom]);
+  });
+
+  it('agrees with browseTree for EVERY row: the groups it names are the ones the row is drawn in', () => {
+    const tree = browseView(LIBRARY_OPTIONS, NO_MOVEMENT_FILTERS).tree;
+    let rows = 0;
+    for (const { kind, families } of tree) {
+      for (const { family, options } of families) {
+        for (const option of options) {
+          rows += 1;
+          expect(browseAncestors(option), option.name).toEqual([
+            BROWSE_KEY.all,
+            kindKey(kind),
+            ...(family === null ? [] : [familyKey(kind, family)]),
+          ]);
+        }
+      }
+    }
+    expect(rows).toBe(LIBRARY_OPTIONS.length);
   });
 
   it('🔴 opens them even after the person closed one, and a later tap still closes it', () => {

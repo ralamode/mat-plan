@@ -9,6 +9,7 @@ import {
   type CatalogOptionTaxonomy,
 } from '@mat-plan/shared';
 import { CATALOG_FIXTURE, CATALOG_FIXTURE_IDS } from '@mat-plan/shared/catalog/fixture';
+import { fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
@@ -109,6 +110,22 @@ export const householdOption = (name: string, publicId: string): MovementOptionD
  */
 export const pickerTrigger = () =>
   [...document.querySelectorAll('main > button')].at(-1) as HTMLButtonElement;
+
+/**
+ * Opens every closed group of the picker's browse tree (CAT-3 B3), outermost first, until none is
+ * left. A list longer than `BROWSE_OPEN_AT_MOST` starts with its kinds and families closed; a suite
+ * about something else opens them with this. A "How to" button is not a group (it sits in no
+ * heading). `root` scopes it, to the sheet when the page behind has its own disclosures.
+ */
+export function expandBrowse(root: ParentNode = document) {
+  for (;;) {
+    const closed = root.querySelector<HTMLButtonElement>(
+      ':is(h3, h4, h5) > button[aria-expanded="false"]',
+    );
+    if (!closed) return;
+    fireEvent.click(closed);
+  }
+}
 
 /**
  * The sheet pops its history entry on close, and in jsdom that popstate lands in a LATER test and

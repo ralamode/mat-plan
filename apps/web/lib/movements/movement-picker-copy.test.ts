@@ -108,10 +108,8 @@ describe('the browse tree (CAT-3 B3)', () => {
     expect(COPY.notSorted).toBe('Not sorted yet');
     expect(COPY.separator).toBe(' · ');
     expect(COPY.foldedCount(COPY.allMovements, 35)).toBe('All movements · 35');
-    expect(COPY.movementCount(1)).toBe('1 movement');
-    expect(COPY.movementCount(12)).toBe('12 movements');
-    // One mark everywhere: the row's second line and the Filters control read the same const.
-    expect(COPY.rowMetaJoin).toBe(COPY.separator);
+    expect(COPY.choiceName(COPY.allMovements, 1)).toBe('All movements, 1 movement');
+    expect(COPY.choiceName(COPY.allMovements, 12)).toBe('All movements, 12 movements');
   });
 });
 

@@ -1,3 +1,4 @@
+import { movementCount } from '@/lib/constants';
 import { APP_LOCALE } from '@/lib/i18n/locale';
 import { formatList, plural, quote } from '@/lib/i18n/plural';
 
@@ -6,8 +7,6 @@ const asTypedHintText = (name: string) =>
   `Adds ${quote(name)} to the list for everyone in your household. It can't be deleted, so check the spelling.`;
 
 const statusNoMatches = 'No matches.';
-/** "12 movements": a filter choice's count, and the panel's. */
-const movementCount = (n: number) => plural(n, { one: `${n} movement`, other: `${n} movements` });
 /**
  * The one separator mark: between the parts of a row's second line and before its tag, between
  * "Filters" and how many are on, and between a heading and its count ("All movements · 35").
@@ -89,9 +88,10 @@ export const MOVEMENT_PICKER_COPY = {
    * which reads as a fifth kind beside them. TODO(CAT-3 chunk R): goes with `BuiltInWithoutLibrary`.
    */
   notSorted: 'Not sorted yet',
-  /** "12 movements": a group's count as a screen reader hears it, a filter choice's, the panel's. */
-  movementCount,
-  /** A heading and its count, visibly ("Strength · 12"); the mark is hidden from a screen reader. */
+  /**
+   * The one separator: a row's second line and its tag, and a heading and its count, visibly
+   * ("Strength · 12"; hidden from a screen reader there).
+   */
   separator: SEPARATOR,
 
   // ── Row tags, one per row by precedence (UX2 S2, UX3 4, UX1 8) ──────────────────────────────────
@@ -111,7 +111,6 @@ export const MOVEMENT_PICKER_COPY = {
   equipmentList: (labels: readonly string[]) => formatList(labels, APP_LOCALE, 'unit'),
   /** The row's second line (P14): how it is logged, then what it needs. The tag joins with the same mark. */
   rowMeta: (tracking: string, needs: string) => `${tracking}${SEPARATOR}${needs}`,
-  rowMetaJoin: SEPARATOR,
   /**
    * A household's own item, in place of its equipment. 🔴 **Never "No equipment"**: it has no
    * equipment field at all, and saying it needs none is a claim nobody made (P14).

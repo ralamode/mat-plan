@@ -1,3 +1,4 @@
+import { MODALITY_LABELS, MOVEMENT_FAMILY_LABELS } from '@mat-plan/shared';
 import { expect, test, type Page } from '@playwright/test';
 
 import { previewHref } from '../app/design/program/preview-registry';
@@ -34,12 +35,38 @@ const filtersButton = (page: Page) => page.getByRole('button', { name: /^Filters
 const search = (page: Page) => page.getByRole('searchbox');
 const muscle = (page: Page, label: string) =>
   page.getByRole('checkbox', { name: new RegExp(`^${label}${COPY.choiceJoin}`) });
+/**
+ * A browse group's disclosure (CAT-3 B3), by its label: its name is "Strength, 17 movements". Chrome
+ * may put a space between the label's span and the hidden count's, hence `\s*`.
+ */
+const group = (page: Page, label: string) =>
+  page.getByRole('button', { name: new RegExp(`^${label}\\s*${COPY.choiceJoin.trim()}`) });
 
 test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto(EDITOR);
   await page.getByRole('button', { name: ITEM_PICKER_COPY.open, exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
+
+  // The test library holds more than BROWSE_OPEN_AT_MOST rows, so its kinds start closed.
+  await test.step('browsing with no filter: a kind opens from the keyboard and keeps focus', async () => {
+    await group(page, COPY.allMovements).focus();
+    await page.keyboard.press('Tab');
+    const strength = group(page, MODALITY_LABELS.strength);
+    await expect(strength).toBeFocused();
+    await expect(strength).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('Enter');
+    await expect(strength).toHaveAttribute('aria-expanded', 'true');
+    await expect(strength).toBeFocused();
+  });
+
+  await test.step('browsing with no filter: a kind and a family open', async () => {
+    const family = group(page, MOVEMENT_FAMILY_LABELS.vertical_pull);
+    await family.click();
+    await expect(family).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('checkbox', { name: /^Chin-up\b/ })).toBeVisible();
+    await check(page, 'browse with a kind and a family open');
+  });
 
   await test.step('the filter panel, with a greyed choice', async () => {
     await filtersButton(page).click();
