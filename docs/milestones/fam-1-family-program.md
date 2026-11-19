@@ -353,7 +353,7 @@ gantt
 
 **As of 2026-11-19 every step left in this milestone has an approved plan.** No step left has only a row. The end of this chart is drawn over planned work only. It is still a shape, not a date: one unit is one PR-length. Of the 12 PRs left:
 
-- **Two had a merged plan before the day's approvals**: B2 and step 15's last PR (11c-ii was the third, and merged that evening as #685; 15 PR 3; 15 PR 1 and 15 PR 2 merged as #664 and #679; lane B's plan `docs/plans/fam-1-15-put-on-wired.md`, #650, approved by the maintainer on 2026-11-19).
+- **Two had a merged plan before the day's approvals**: B2 and step 15's last PR (15 PR 3; 15 PR 1 and 15 PR 2 merged as #664 and #679; lane B's plan `docs/plans/fam-1-15-put-on-wired.md`, #650, approved by the maintainer on 2026-11-19). 11c-ii was the third, and merged that evening as #685.
 - **Ten are in the three plans the maintainer approved on 2026-11-19** ("Approve (Recommended)"). Each was drafted by the plan owner from lane C's notes, hardened by a panel and checked by lane C for feasibility. These were the three steps with only a row:
   - [15c, program order on the day page](../plans/fam-1-15c-program-order-wired.md): **three PRs** (15c PR 1 to 3). 15c PR 1 waited for one contract PR, merged as #699 on 2026-11-19. Program names become links, and the order's list is capped at 50 (plan D49).
   - [12c-iii, the collapse](../plans/fam-1-12c-iii-collapse.md): **two PRs** (12c-iii PR 1 and PR 2). The six differences from its prototype are accepted (plan D50).
