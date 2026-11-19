@@ -1,6 +1,7 @@
 import { createDb, createDbPool } from '../src/client';
 import { correctionTargetUrl } from './corrections/target-url';
 import { CORRECTIONS } from './corrections/registry';
+import { summarize } from './corrections/summary';
 
 /**
  * Apply a guarded, idempotent data correction (`pnpm --filter @mat-plan/db db:correct <name>`).
@@ -82,26 +83,11 @@ console.log(
 // throw path needs a readable landing and the pool must close either way; without the `finally` a
 // refusal surfaced as a raw unhandled rejection with the pool still open.
 try {
-  const changes = await correction.run(db, apply);
-
-  if (changes.length === 0) {
-    // Not an error: a guarded correction that matches nothing has almost certainly already run.
-    // A correction that cannot tell "already applied" from "the guard refused" should say so from
-    // inside `run` — see the bodyweight one, which throws rather than returning nothing.
-    console.log(
-      isReport
-        ? 'Nothing to report — this census found no rows in any of the shapes it counts.'
-        : 'No matching rows — already corrected, or the guard did not match. Nothing to do.',
-    );
-  } else {
-    for (const line of changes) console.log(`  ${isReport ? '·' : apply ? '✓' : '·'} ${line}`);
-    console.log(
-      isReport
-        ? `\n${changes.length} line(s) reported. Nothing to apply — this entry only reads.`
-        : apply
-          ? `\n✓ applied ${changes.length} change(s).`
-          : `\n${changes.length} change(s) would be made. Re-run with --apply to write them.`,
-    );
+  // Only changes are counted; a note ("already claimed … no change") is printed and never counted.
+  // A correction that cannot tell "already applied" from "the guard refused" should say so from
+  // inside `run` — see the bodyweight one, which throws rather than returning nothing.
+  for (const line of summarize(await correction.run(db, apply), { isReport, apply })) {
+    console.log(line);
   }
 } catch (err) {
   console.error(

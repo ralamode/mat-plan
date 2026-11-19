@@ -38,6 +38,19 @@ describe('scrubSentryEvent — the gate cookie never leaves the server', () => {
     expect(event.request?.headers?.['user-agent']).toBe('x');
   });
 
+  it('drops the Referer header: under same-origin it names the athlete page and day', () => {
+    const event = scrubSentryEvent({
+      request: {
+        headers: {
+          referer: 'https://app.example/p/018f3c5e-7b1a-7c3e-9d2f-0123456789ab?d=2026-11-19',
+          'user-agent': 'x',
+        },
+      },
+    } as Event);
+    expect(event.request?.headers?.referer).toBeUndefined();
+    expect(event.request?.headers?.['user-agent']).toBe('x');
+  });
+
   it('is case-insensitive on header names', () => {
     const event = scrubSentryEvent({
       request: { headers: { Cookie: 'x', AUTHORIZATION: 'Bearer y' } },
