@@ -8,6 +8,7 @@ import { dayPageView, lookAheadFallsBack } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
 import { AppShell } from '@/components/layout/app-shell';
+import { TimeZoneSync } from '@/components/layout/tz-sync';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import { localDayIso, localWeekStartIso } from '@/lib/date';
@@ -41,7 +42,6 @@ import { BodyweightSection } from './bodyweight-section';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
 import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
-import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
 
 // Route-segment config must be a static inline literal (Next can't follow an

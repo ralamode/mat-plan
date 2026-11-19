@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
-index 9d1a35a1..70db33c8 100644
+index 6fbbfe4b..6a3eca5b 100644
 --- a/packages/db/src/queries/day/day-plan.ts
 +++ b/packages/db/src/queries/day/day-plan.ts
-@@ -408,7 +408,7 @@ async function availableMovements(
-   const rows = await exec
-     .select({ id: m.id, publicId: m.publicId, name: m.name, trackingType: m.trackingType })
+@@ -513,7 +513,7 @@ async function availableMovements(
+       householdId: m.householdId,
+     })
      .from(m)
 -    .where(and(inArray(m.id, [...new Set(ids)]), movementIsAvailableTo(scope)));
 +    .where(inArray(m.id, [...new Set(ids)]));
    for (const r of rows) {
-     found.set(r.id, {
-       publicId: r.publicId,
+     // C32: only a GLOBAL movement (no household) reads the library; a household's own item on
+     // the same slug never carries a label.

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/day/day-plan.ts b/packages/db/src/queries/day/day-plan.ts
+index 6fbbfe4b..7560d09a 100644
+--- a/packages/db/src/queries/day/day-plan.ts
++++ b/packages/db/src/queries/day/day-plan.ts
+@@ -254,7 +254,6 @@ export async function resolveDayPlan(
+     currentPrograms: current.map((p) => ({
+       programPublicId: p.programPublicId,
+       name: p.name,
+-      ...(programEndsToday(p, today) ? { endsToday: true as const } : {}),
+     })),
+     programs: onDay.map((p) => ({
+       programPublicId: p.programPublicId,

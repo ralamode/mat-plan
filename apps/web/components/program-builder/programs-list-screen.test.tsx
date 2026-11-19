@@ -78,10 +78,15 @@ describe('ProgramsListScreen (FAM-1 8a)', () => {
     const field = screen.getByLabelText(BUILDER_COPY.programName) as HTMLInputElement;
     expect(field.maxLength).toBe(PROGRAM_NAME_MAX);
     fireEvent.change(field, { target: { value: 'x'.repeat(PROGRAM_NAME_MAX) } });
-    const counter = document.getElementById(field.getAttribute('aria-describedby')!)!;
-    expect(counter.textContent).toBe(`${PROGRAM_NAME_MAX}/${PROGRAM_NAME_MAX}`);
-    expect(counter.closest('label')).toBeNull();
-    expect(counter.getAttribute('role')).toBeNull();
+    // The permanence hint first (7b-i: said before Create), then the counter.
+    const [hint, counter] = field
+      .getAttribute('aria-describedby')!
+      .split(' ')
+      .map((id) => document.getElementById(id)!);
+    expect(hint!.textContent).toBe(BUILDER_COPY.createHint);
+    expect(counter!.textContent).toBe(`${PROGRAM_NAME_MAX}/${PROGRAM_NAME_MAX}`);
+    expect(counter!.closest('label')).toBeNull();
+    expect(counter!.getAttribute('role')).toBeNull();
   });
 
   it('a refusal says why under the field, focuses it, and a retry reuses the client id', async () => {

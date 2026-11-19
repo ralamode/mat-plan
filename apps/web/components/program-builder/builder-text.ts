@@ -4,6 +4,8 @@ import {
   FREE_TEXT_NOTE_MAX,
   hasStarted,
   LOGGABLE_DIMENSION_LABELS,
+  MAX_DAY_SLOTS,
+  MAX_PROGRAM_WORKOUTS,
   MAX_WORKOUT_ITEMS,
   MONDAY_FIRST,
   MAX_SETS_PER_MOVEMENT,
@@ -30,8 +32,14 @@ import { formatList, plural, quote } from '@/lib/i18n/plural';
  * each sentence is tested without rendering a screen. The wording is the accepted prototype's
  * (`docs/prototypes/beta-0/index.html`: `vPrograms`, `vProgram`, `usedBy`, `usedOn`, `provText`).
  */
+const PROGRAMS = 'Programs';
+
 export const BUILDER_COPY = {
-  programs: 'Programs',
+  programs: PROGRAMS,
+  /** Home's way in (7b-i): the chevron says navigation, as Settings' row does (`SETTINGS_COPY.navLink`). */
+  programsNavLink: `${PROGRAMS} ›`,
+  /** The program page's document title: never the program's name (PROF-1 D8). */
+  programTitle: 'Program',
   home: '← Home',
   backToPrograms: '← Programs',
   noPrograms: 'No programs yet.',
@@ -43,6 +51,13 @@ export const BUILDER_COPY = {
   cancel: 'Cancel',
   programName: 'Program name',
   programNamePlaceholder: 'e.g. Family program',
+  /**
+   * Said before Create, where the permanence starts (7b plan, §Caps). True since H7 (a): the app
+   * cannot delete a program, and the notice says how to ask for one to be removed (runbook "Remove
+   * one program, workout or typed item on request").
+   */
+  createHint:
+    'A program can be renamed but not deleted in the app. To have one removed, ask (see the privacy notice).',
   severalPrograms: 'A person can be on several programs.',
   rename: 'Rename',
   save: 'Save',
@@ -51,6 +66,12 @@ export const BUILDER_COPY = {
   renamed: 'Program renamed',
   whosOnIt: 'Who’s on it',
   noOneOnIt: 'No one yet.',
+  /**
+   * Under "Who's on it" while the route wires no Put on (7b-i until step 15, which deletes it): the
+   * builder is not a dead end by mistake (7b plan, UX1 #4). Says what is true now, not when it comes:
+   * "the next update" would be false once 7b-ii ships first.
+   */
+  putOnComing: 'Putting someone on a program isn’t in the app yet.',
   takeOff: 'Take off',
   takingOff: 'Taking off…',
   workouts: 'Workouts',
@@ -406,6 +427,26 @@ export const pickedText = (names: readonly string[]) =>
 /** Why a tap selected nothing: the workout is full. */
 export const capText = (max: number) => `A workout holds at most ${max} items.`;
 
+/**
+ * The caps the program page stops at (FAM-1 7b-i, plan §Caps). Each says "is full … holds at most
+ * N", from the shared consts, and offers no delete, because none exists.
+ */
+export const programIsFull = (workouts: number) => workouts >= MAX_PROGRAM_WORKOUTS;
+const PROGRAM_FULL = `This program is full: a program holds at most ${MAX_PROGRAM_WORKOUTS} workouts.`;
+/** Under "+ New workout", once the program holds `MAX_PROGRAM_WORKOUTS`. */
+export const programFullText = `${PROGRAM_FULL} To add one, change a workout that’s not on any day, or create another program.`;
+export const dayIsFull = (slots: number) => slots >= MAX_DAY_SLOTS;
+/** Under a full day's header, and what its "+ Add" says when tapped. */
+export const dayFullText = (day: number) =>
+  `${weekdayName(day)} is full: a day holds at most ${MAX_DAY_SLOTS} workouts.`;
+/** Days ticked for a copy that filled while the dialog was open, so were left out; '' for none. */
+export const skippedFullText = (days: readonly number[]) =>
+  days.length
+    ? `${formatList(days.map((day) => weekdayName(day)))} ${days.length > 1 ? 'were' : 'was'} full, so skipped.`
+    : '';
+/** A full day's checkbox, as "has it" is named. */
+export const dayFullLabel = (day: number) => `${weekdayName(day)}, ${WEEK_COPY.full}`;
+
 /** What each type logs, shown under the type chooser once one is picked. */
 export const TRACKING_TYPE_EXAMPLES: Record<TrackingType, string> = {
   check: 'Done or not done.',
@@ -471,6 +512,8 @@ export const WEEK_COPY = {
   labelHint: 'Shown above the workout on the day. It doesn’t change the order; use ↑ ↓.',
   days: 'Days',
   hasIt: 'has it',
+  /** A day at `MAX_DAY_SLOTS`, in the days fieldset. */
+  full: 'full',
   oncePerDay: 'A workout runs at most once a day; days that already have it are skipped.',
   pickADay: 'Pick at least one day that doesn’t have it yet.',
   addButton: 'Add',
@@ -478,6 +521,12 @@ export const WEEK_COPY = {
   addLabel: '+ Label',
   editLabel: 'Edit label',
   noWorkouts: 'Make a workout first, then add it to days.',
+  /**
+   * `noWorkouts` while the workout pages don't exist (7b-i). True whether or not another program has a
+   * workout to copy: a household's first program has none.
+   */
+  noWorkoutsCopyOnly:
+    'Writing a workout isn’t in the app yet. To use one from another program, open that program and choose “Copy to…” on the workout.',
   stale:
     'This week was changed somewhere else. It now shows the latest; your last change wasn’t saved.',
   labelPlaceholder: 'e.g. Morning',
@@ -530,8 +579,17 @@ export const labelSetText = (workout: string, day: number, label: string | null)
 export const isStaleWeek = (reason: ProgramRefusal) =>
   reason === PROGRAM_REFUSAL.once_per_day || reason === PROGRAM_REFUSAL.not_found;
 
-/** What a refused week says: a stale page (the editor never sends a repeat), or a failure. */
-export function weekRefusal(reason: ProgramRefusal): string {
+/**
+ * What a refused week says: a stale page (the editor never sends a repeat), a full day, or a
+ * failure. `limit_reached` names the days of the sent week at or over `MAX_DAY_SLOTS`, Monday
+ * first: the editor stops at the cap, so a day at it is the one a race could have pushed past.
+ */
+export function weekRefusal(reason: ProgramRefusal, sent?: ProgramView['week']): string {
+  if (reason === PROGRAM_REFUSAL.limit_reached) {
+    const full = sent ? MONDAY_FIRST.filter((day) => dayIsFull(sent[day].length)) : [];
+    const days = full.length ? formatList(full.map((day) => weekdayName(day))) : 'A day';
+    return `${days} ${full.length > 1 ? 'are' : 'is'} full: a day holds at most ${MAX_DAY_SLOTS} workouts. Nothing was added; the week is back as it was.`;
+  }
   return isStaleWeek(reason) ? WEEK_COPY.stale : WEEK_COPY.failed;
 }
 
@@ -616,6 +674,9 @@ export const COPY_COPY = {
   optional: '(optional)',
   labelHint: 'Shown above the workout on those days.',
   separate: 'The copy is separate: editing one never changes the other.',
+  /** The copy's permanence, as `BUILDER_COPY.createHint` says the program's (H7 (a)). */
+  permanent:
+    'A copy can’t be deleted in the app. To have one removed, ask (see the privacy notice).',
   copy: 'Copy',
   copying: 'Copying…',
   name: 'Name',
@@ -625,10 +686,29 @@ export const COPY_COPY = {
   stale: 'This program changed somewhere else. It now shows the latest; nothing was copied.',
 } as const;
 
+/**
+ * What a copy refused `limit_reached` says (D13: the refusal carries no cap field, so the words name
+ * both causes). Into this program with no day picked, only the program can be full.
+ */
+export function copyRefusal(
+  reason: ProgramRefusal,
+  copy: { sameProgram: boolean; dayPicked: boolean; target: string },
+): string {
+  if (reason !== PROGRAM_REFUSAL.limit_reached) return COPY_COPY.failed;
+  if (copy.sameProgram && !copy.dayPicked) {
+    return `${PROGRAM_FULL} Nothing was copied. Create another program to copy it into.`;
+  }
+  // Into another program, it is named: "This program" would read as the page the parent is on.
+  const which = copy.sameProgram ? 'This program' : copy.target;
+  return `${which} can’t take another workout, or one of those days is full (${MAX_PROGRAM_WORKOUTS} workouts in a program, ${MAX_DAY_SLOTS} on a day).`;
+}
+
 /** The trigger's name: the visible words first (WCAG 2.5.3), then which workout. */
 export const copyToLabel = (workout: string) => `${COPY_COPY.open} a program: ${workout}`;
 export const copyTitle = (workout: string) => `Copy ${workout}`;
 export const thisProgramOption = (program: string) => `This program: ${program}`;
+/** This program in Copy's To, once it holds `MAX_PROGRAM_WORKOUTS`: a copy here would be refused. */
+export const thisProgramFullOption = (program: string) => `${thisProgramOption(program)} (full)`;
 
 export const copyTakenText = (name: string) =>
   `There’s already a ${name} here. Give the copy another name.`;

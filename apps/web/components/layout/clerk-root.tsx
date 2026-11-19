@@ -9,8 +9,8 @@ import { APP_HOME_PATH, NONCE_HEADER, SIGN_IN_PATH } from '@/lib/constants';
  *
  * It used to sit in the root layout, around every route, so `clerk.browser.js` loaded on `/` and
  * `/privacy` too: a stranger reading the privacy notice had their IP seen by Clerk. Now each
- * non-public top-level segment renders this from its own `layout.tsx` (`p`, `settings`, `sign-in`,
- * `design`), and the public pages render none. `app/pages-need-a-session.test.ts` enforces both
+ * non-public top-level segment renders this from its own `layout.tsx` (`p`, `programs`, `settings`,
+ * `sign-in`, `design`), and the public pages render none. `app/pages-need-a-session.test.ts` enforces both
  * halves, and the next two rules.
  *
  * 🔴 **It takes no props.** A remount (crossing from one segment's layout to another's) finds

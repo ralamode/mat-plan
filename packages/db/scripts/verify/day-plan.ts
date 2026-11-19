@@ -10,6 +10,7 @@ import {
   ENTRY_KIND,
   ENTRY_STATUS,
   ENTRY_UNIT_WITHOUT_QUANTITY,
+  TRACKING_TYPE,
   localWeekday,
   newId,
   ON_PROGRAM,
@@ -38,6 +39,8 @@ import {
   workoutDraft,
   workoutOf as protoWorkoutOf,
 } from '@mat-plan/shared/program/fixtures';
+import type { CatalogMovement } from '@mat-plan/shared';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
@@ -140,6 +143,16 @@ const workoutItemTypeId = (tx: VerifyTx) => activityTypeIdOf(tx, ACTIVITY_TYPE_K
 
 type Seeded = Awaited<ReturnType<typeof seedWorld>>;
 
+/** C32: a library movement's slug in one seeded world (proof-only, so no seeded library row collides). */
+function proofSlug(label: string, slug: string): string {
+  return `verify-12a-${label}-${slug}`;
+}
+
+/** C32: the test library, re-slugged as `seedWorld` slugs its global rows, for the resolver. */
+function proofCatalog(label: string): readonly CatalogMovement[] {
+  return CATALOG_FIXTURE.map((e) => ({ ...e, slug: proofSlug(label, e.slug) }));
+}
+
 /** Write `world` into a new household (see the module header). */
 async function seedWorld(tx: VerifyTx, world: World, label: string, activityTypeId: number) {
   const ids = new Map<string, string>();
@@ -166,13 +179,23 @@ async function seedWorld(tx: VerifyTx, world: World, label: string, activityType
 
   const movements = new Map<FixtureItemKey, number>();
   for (const key of (Object.keys(world.catalog) as FixtureItemKey[]).reverse()) {
+    // C32: an item the world marks `library` is a GLOBAL row (no household) named for the test
+    // library's entry, under a proof-only slug (`proofSlug`), so it can never collide with a seeded
+    // library row; the resolver is handed the test library re-slugged the same way (`proofCatalog`).
+    const library = world.catalog[key].library;
+    const entry =
+      library === undefined ? undefined : CATALOG_FIXTURE.find((e) => e.slug === library);
+    assert.ok(library === undefined || entry, `FAM-1 C32: ${library} is in the test library`);
     const [row] = await tx
       .insert(schema.movements)
       .values({
         publicId: newId(),
-        slug: `verify-12a-${label}-${key}`,
+        slug: entry ? proofSlug(label, entry.slug) : `verify-12a-${label}-${key}`,
         name: world.catalog[key].name,
-        householdId: household.id,
+        householdId: entry ? null : household.id,
+        // A global row needs its library pattern and modality (`movements_global_classified_check`).
+        pattern: entry?.pattern ?? null,
+        modality: entry?.modality ?? null,
         trackingType: world.catalog[key].type,
       })
       .returning({ id: schema.movements.id, publicId: schema.movements.publicId });
@@ -310,6 +333,7 @@ async function seedWorld(tx: VerifyTx, world: World, label: string, activityType
 
   return {
     scope: SEEDED_SCOPE,
+    catalog: proofCatalog(label),
     householdId: household.id,
     ids,
     profiles,
@@ -355,6 +379,7 @@ async function resolve(
     profilePublicId: seeded.profiles.get(athlete)!.publicId,
     day,
     today,
+    catalog: seeded.catalog,
   });
   assert.ok(plan, `FAM-1 12a: ${athlete} resolves on ${day}`);
   // The contract's own schema, so a field the fixtures never reach is still the right shape.
@@ -737,6 +762,7 @@ async function verifyRules(): Promise<void> {
         profilePublicId: fAthlete.publicId,
         day: FIXTURE_TODAY,
         today: FIXTURE_TODAY,
+        catalog: CATALOG_FIXTURE,
       }),
       null,
       'FAM-1 12a ownership: a profile of another household under H’s scope resolves to null',
@@ -747,6 +773,7 @@ async function verifyRules(): Promise<void> {
         profilePublicId: newId(),
         day: FIXTURE_TODAY,
         today: FIXTURE_TODAY,
+        catalog: CATALOG_FIXTURE,
       }),
       null,
       'FAM-1 12a ownership: a missing profile resolves to null, the same answer',
@@ -932,6 +959,53 @@ async function verifyRules(): Promise<void> {
       );
     });
     console.log('✓ FAM-1 12a E2: an item on another household’s movement is absent');
+
+    // ── C32: the coach label is read for a GLOBAL movement only ─────────────────────────────────
+    // Two movements under ONE proof slug the (re-slugged) test library labels `coach`: a global row
+    // and H's own. Only the global row's item carries `supervision`; H's own never does, whatever
+    // its slug. The new fixture's deep-equal proves the label itself; this proves the household rule.
+    await inSavepoint(tx, async (sp) => {
+      const slug = proofSlug('h', 'hang_power_clean');
+      const plant = async (householdId: number | null) => {
+        const [m] = await sp
+          .insert(schema.movements)
+          .values({
+            publicId: newId(),
+            slug,
+            name: 'Planted clean',
+            householdId,
+            pattern: householdId === null ? 'hinge' : null,
+            modality: householdId === null ? 'strength' : null,
+            trackingType: TRACKING_TYPE.check,
+          })
+          .returning({ id: schema.movements.id });
+        const [p] = await sp
+          .insert(schema.prescriptions)
+          .values({
+            publicId: newId(),
+            blockId: H.blocks.get('p1')!,
+            workoutId: H.workouts.get('w1')!,
+            clientId: newId(),
+            movementId: m.id,
+            idx: householdId === null ? 7 : 8,
+          })
+          .returning({ publicId: schema.prescriptions.publicId });
+        return p.publicId;
+      };
+      const globalItem = await plant(null);
+      const ownItem = await plant(H.householdId);
+      const items = workoutOf(await resolve(sp, H, 'a1', FIXTURE_TODAY), H, 'w1')!.items;
+      const keyOf = (publicId: string) => {
+        const it = items.find((i) => i.prescriptionPublicId === publicId)!;
+        return 'supervision' in it ? it.supervision : 'absent';
+      };
+      assert.deepEqual(
+        [keyOf(globalItem), keyOf(ownItem)],
+        ['coach', 'absent'],
+        'FAM-1 C32: a global movement carries the library’s label, a household’s own never does',
+      );
+    });
+    console.log('✓ FAM-1 C32: the coach label is a global movement’s only');
 
     // ── PREVIOUS: never a sibling's or another household's row (S5) ─────────────────────────────
     await inSavepoint(tx, async (sp) => {
@@ -1408,6 +1482,7 @@ async function verifyRules(): Promise<void> {
           profilePublicId: athlete.publicId,
           day: FIXTURE_TODAY,
           today: FIXTURE_TODAY,
+          catalog: CATALOG_FIXTURE,
         }),
         null,
         'FAM-1 12a ownership: a soft-deleted profile resolves to null',
