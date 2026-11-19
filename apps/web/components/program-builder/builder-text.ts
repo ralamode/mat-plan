@@ -67,14 +67,11 @@ export const BUILDER_COPY = {
   renamed: 'Program renamed',
   whosOnIt: 'Who’s on it',
   noOneOnIt: 'No one yet.',
-  /**
-   * Under "Who's on it" while the route wires no Put on (7b-i until step 15, which deletes it): the
-   * builder is not a dead end by mistake (7b plan, UX1 #4). Says what is true now, not when it comes:
-   * "the next update" would be false once 7b-ii ships first.
-   */
-  putOnComing: 'Putting someone on a program isn’t in the app yet.',
   takeOff: 'Take off',
   takingOff: 'Taking off…',
+  /** A Take off answered `not_found`: the page is stale, as Put on's `PUT_ON_COPY.stale` says. */
+  takeOffStale:
+    'This program changed somewhere else. It now shows the latest; no one was taken off.',
   workouts: 'Workouts',
   noWorkouts: 'No workouts yet.',
   newWorkout: '+ New workout',
@@ -132,21 +129,33 @@ export const renameLabel = (program: string) => `${BUILDER_COPY.rename} ${progra
 export const takeOffLabel = (athlete: string) => `${BUILDER_COPY.takeOff} ${athlete}`;
 export const takingOffLabel = (athlete: string) => `${BUILDER_COPY.takingOff} ${athlete}`;
 
-/** An athlete's line on the program page: "since Mon, Nov 9 · last day … · also on Stretching". */
+/**
+ * An athlete's last day, the one rule for "Who's on it" and the Put-on dialog: "last day today" when
+ * it is today (as recorded, C15; Take off only ever writes today), else the date.
+ */
+export const lastDayText = (day: string, today: string) =>
+  `last day ${day === today ? 'today' : formatDayShort(day)}`;
+
+/** An athlete's line on the program page: "since Mon, Nov 9 · last day today · also on Stretching". */
 export function athleteHint(athlete: ProgramView['athletes'][number], today: string): string {
   const parts = [
     `${hasStarted(athlete, today) ? 'since' : 'starts'} ${formatDayShort(athlete.since)}`,
   ];
-  if (athlete.lastDay) parts.push(`last day ${formatDayShort(athlete.lastDay)}`);
+  if (athlete.lastDay) parts.push(lastDayText(athlete.lastDay, today));
   if (athlete.alsoOn.length) parts.push(`also on ${formatList(athlete.alsoOn)}`);
   return parts.join(' · ');
 }
 
-/** What Take off says once it worked. Someone who had not started yet simply never starts. */
+/**
+ * What Take off says once it worked, from its answer (C15): `started` is a last day (today). Without
+ * one the start was removed, which is true both for a start not begun and for one begun today with
+ * nothing logged, so the line says only that they are off (roadmap thread, 2026-11-19). A started
+ * one says how to undo it: a Put on before midnight reopens the same stretch.
+ */
 export function takenOffText(athlete: string, program: string, started: boolean): string {
   return started
-    ? `${athlete} comes off ${program} after today. Days already logged keep what they had.`
-    : `${athlete} won’t start ${program}.`;
+    ? `${athlete} comes off ${program} after today. Until midnight, putting them back on undoes this. What they’ve logged stays.`
+    : `${athlete} is off ${program}.`;
 }
 
 export function takeOffFailedText(athlete: string): string {
@@ -214,6 +223,11 @@ export const EDITOR_COPY = {
   alreadyLast: 'Already last.',
   nameTaken: 'A workout with this name is already in this program.',
 } as const;
+
+/** The program page's bar after a workout's Save, once the editor has gone (`arrival.ts`). */
+export const workoutSavedText = (workout: string) => `${workout} saved.`;
+/** The workout editor's back link: its accessible name; the visible text is "← {program}". */
+export const backToLabel = (program: string) => `Back to ${program}`;
 
 export type MoveDirection = 'up' | 'down';
 
@@ -395,15 +409,6 @@ export function undoneText(linked: boolean): string {
 
 /** The item picker's words (FAM-1 step 9; the prototype's `vPicker2`). */
 const HOUSEHOLD_FULL = `Your household has the most custom items it can keep (${MAX_HOUSEHOLD_ITEMS})`;
-/**
- * Whether the household's own items (never the library's) are at `MAX_HOUSEHOLD_ITEMS`.
- * ⚠️ Must agree with the server's count, `newItem`'s `owner !== 'catalog'`
- * (`packages/db/src/writers/program/new-item.ts`): today every non-catalog option is `household`,
- * but see the TODO(CAT-3 chunk R) in `item-picker/item-picker.tsx`'s `create`.
- */
-export const householdIsFull = (options: readonly { owner: string }[]) =>
-  options.filter((option) => option.owner === 'household').length >= MAX_HOUSEHOLD_ITEMS;
-
 export const ITEM_PICKER_COPY = {
   title: 'Add items',
   open: '+ Add items',
@@ -630,6 +635,12 @@ export const PUT_ON_COPY = {
   starting: 'Starting',
   onIt: 'on it',
   noProgramYet: 'no program yet',
+  /** The Starting fieldset when everyone ticked was taken off today: putting them on reopens it. */
+  stayOnNoGap: 'They stay on, with no gap.',
+  /** No athlete in the household at all: "Home" is the link. */
+  addAthleteBefore: 'Add an athlete from ',
+  addAthleteLink: 'Home',
+  addAthleteAfter: ' first.',
   pickSomeone: 'Pick someone first',
   start: 'Start',
   startPending: 'Starting…',
@@ -641,10 +652,20 @@ export const PUT_ON_COPY = {
 export const putOnTitle = (program: string) => `Put someone on ${program}`;
 export const keepsText = (programs: readonly string[]) =>
   programs.length ? `keeps ${formatList(programs)}` : PUT_ON_COPY.noProgramYet;
-export const lastDayText = (day: string) => `last day ${formatDayShort(day)}`;
 export const candidateOnLabel = (name: string, hint: string) => `${name}, ${hint}`;
 export const startLabel = (count: number, program: string) =>
   count ? `${PUT_ON_COPY.start} ${count} on ${program}` : PUT_ON_COPY.start;
+/** The action when everyone ticked was taken off today: nobody starts, they are kept on. */
+export const keepLabel = (count: number, program: string) => `Keep ${count} on ${program}`;
+/** Above the footer: who is about to start, by name, so the dialog confirms what it will do. */
+export const startingNamesText = (names: readonly string[]) =>
+  `${PUT_ON_COPY.starting}: ${formatList(names)}`;
+/** Mixed ticks: the ones taken off today are kept on, whatever day the others start. */
+export const stayOnEitherWayText = (names: readonly string[]) =>
+  `${formatList(names)} ${names.length > 1 ? 'stay' : 'stays'} on from today either way.`;
+/** Someone new joins a program others are on: the targets are the program's, not per person. */
+export const sameTargetsText = (program: string) =>
+  `Everyone on ${program} gets the same targets. Check them under ${BUILDER_COPY.workouts} before starting.`;
 export const fromText = (when: 'today' | 'tomorrow', day: string) =>
   `${when === 'today' ? 'Today' : 'Tomorrow'}, ${formatDayShort(day)}`;
 
@@ -666,9 +687,12 @@ export function startEffectText(
   return `${day}: nothing from this program.${first}${kept}`;
 }
 
-/** Shown when someone ticked keeps another program: where this one goes in their day's order. */
+/**
+ * Shown when someone ticked keeps another program: where this one goes in their day's order. A Put
+ * on puts it last until lane P's 6d-iii places it, and the day page's Program order control is 15c's.
+ */
 export const orderHintText = (program: string) =>
-  `${program} goes where it sits in the Programs list. Each person can change their order from their day page.`;
+  `${program} goes after their other programs on their day page.`;
 /** Shown when someone ticked keeps another program and Take off is wired: how to switch instead. */
 export const switchHintText = (programs: readonly string[]) =>
   `To switch instead, start tomorrow, then take them off ${formatList(programs)} from that program’s page.`;
