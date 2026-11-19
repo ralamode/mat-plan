@@ -212,12 +212,10 @@ export const MOVEMENT_PICKER_COPY = {
   },
   /** Browsing with nothing that fits (P10). */
   noneFit: 'No movements fit your filters.',
-  /** Browsing with a filter on (P12's heading); B3-ii puts the filtered tree under it. */
+  /** "All movements" under a filter (P12): the same tree, over the rows that fit. */
   fitHeading: 'Movements that fit your filters',
   /** The household's items under a filter: a filter cannot judge them (P9). */
   householdNotFiltered: `${HOUSEHOLD} (not filtered)`,
-  /** A folded section's summary carries its count, so a person can tell whether to open it. */
-  foldedCount: (heading: string, n: number) => `${heading}${SEPARATOR}${n}`,
   /** After a headingless hit (panel row 15): the hit is a match too. */
   moreMatches: 'More matches',
   tagNotInFilters: 'not in your filters',
