@@ -1781,7 +1781,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   ADR 0001's deferred real-user monitoring exactly as its 2026-08-11 amendment requires: production
   only, gated through `lib/env.ts`, CSP updated. **(b)** A client-bundle size budget per route that
   fails CI when exceeded, so a dependency's cost is seen in the PR that adds it. **Before Beta 1.**
-  Needs a plan (touches CI).
+  Needs a plan (touches CI). (b)'s plan: [perf-1-bundle-size.md](./plans/perf-1-bundle-size.md).
 
 - **PERF-2 — Lighthouse CI on the main app pages.** _(maintainer, 2026-11-13.)_ Lab scores for the
   pages V1-12 already scans with axe (`/`, Today, the routine editor), as a trend and a regression
