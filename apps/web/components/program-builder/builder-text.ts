@@ -703,11 +703,12 @@ export function startEffectText(
 }
 
 /**
- * Shown when someone ticked keeps another program: where this one goes in their day's order. A Put
- * on puts it last until lane P's 6d-iii places it, and the day page's Program order control is 15c's.
+ * Shown when someone ticked keeps another program: where this one goes in their day's order. Since
+ * 6d-iii (#641) a Put on places it by the household's Programs-list order (D41), keeping the
+ * athlete's own order of the others; the day page's Program order control is 15c's.
  */
 export const orderHintText = (program: string) =>
-  `${program} goes after their other programs on their day page.`;
+  `On their day page, ${program} takes its place in the order of your Programs list.`;
 /** Shown when someone ticked keeps another program and Take off is wired: how to switch instead. */
 export const switchHintText = (programs: readonly string[]) =>
   `To switch instead, start tomorrow, then take them off ${formatList(programs)} from that program’s page.`;

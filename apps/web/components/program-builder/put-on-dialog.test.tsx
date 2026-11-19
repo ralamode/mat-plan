@@ -383,12 +383,12 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     expect(screen.getByRole('status').textContent).toContain('today');
   });
 
-  it('the order hint says where the program goes until a Put on can place it (6d-iii)', () => {
+  it('the order hint says the program goes by the Programs list order (6d-iii, D41)', () => {
     page({ takeOff: vi.fn() });
     openDialog();
     fireEvent.click(box(adult.name));
     expect(within(dialog()).getByText(orderHintText(familyProgram.name)).textContent).toBe(
-      `${familyProgram.name} goes after their other programs on their day page.`,
+      `On their day page, ${familyProgram.name} takes its place in the order of your Programs list.`,
     );
   });
 });

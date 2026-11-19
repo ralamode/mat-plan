@@ -347,7 +347,7 @@ flowchart LR
       trigger becomes the line and focus returns to it in the same render as the close, not when the
       refresh lands. The success line names the start's day against the **device's** today
       (`deviceToday`), since the page's `today` is stale past midnight and Put on answers no day.
-      `orderHintText` says the program goes after their other programs (last, until 6d-iii).
+      `orderHintText` says the program takes its place by the Programs list's order (6d-iii, D41).
     - Differences from v12, each a decision above: To has no default; who will see a copy; the
       double-workout warning; the label only after a day; Starting as radios with what it changes;
       the hints shown only when they apply; Start's count; "last day …", tickable, in place of "on it";
