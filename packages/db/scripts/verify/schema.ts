@@ -58,8 +58,8 @@ import {
   targetsAcrossHouseholds,
 } from '../../src/erasure/preflight';
 import {
-  SEED_FIXTURE_COUNTS,
-  SEED_FIXTURE_PROGRAM_CLIENT_IDS,
+  SEED_PROGRAM_COUNTS,
+  SEED_PROGRAM_CLIENT_IDS,
 } from '../../src/writers/program/seed-fixtures';
 import {
   assignmentCurrentAsOf,
@@ -510,7 +510,7 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
     .where(
       or(
         isNull(schema.programBlocks.clientId),
-        notInArray(schema.programBlocks.clientId, [...SEED_FIXTURE_PROGRAM_CLIENT_IDS]),
+        notInArray(schema.programBlocks.clientId, [...SEED_PROGRAM_CLIENT_IDS]),
         ne(
           schema.programBlocks.householdId,
           sql`(select ${schema.households.id} from ${schema.households} where ${schema.households.publicId} = ${SEED_HOUSEHOLD_PUBLIC_ID})`,
@@ -1030,7 +1030,7 @@ async function verifyStep1(): Promise<void> {
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.programAssignments)
         .where(inArray(schema.programAssignments.id, assignmentsOf));
-      const fixtureIds = new Set<string>(SEED_FIXTURE_PROGRAM_CLIENT_IDS);
+      const fixtureIds = new Set<string>(SEED_PROGRAM_CLIENT_IDS);
       return {
         blocks: blocks
           .filter((b) => b.clientId === null || !fixtureIds.has(b.clientId))
@@ -1101,10 +1101,10 @@ async function verifyStep1(): Promise<void> {
       // The fixture world's programs, their workouts, and the seed athletes' stretches on them.
       {
         ...expected,
-        fixturePrograms: SEED_FIXTURE_PROGRAM_CLIENT_IDS.length,
-        workouts: SEED_FIXTURE_COUNTS.workouts,
-        fixturePrescriptions: SEED_FIXTURE_COUNTS.prescriptions,
-        assignments: SEED_FIXTURE_COUNTS.assignments,
+        fixturePrograms: SEED_PROGRAM_CLIENT_IDS.length,
+        workouts: SEED_PROGRAM_COUNTS.workouts,
+        fixturePrescriptions: SEED_PROGRAM_COUNTS.prescriptions,
+        assignments: SEED_PROGRAM_COUNTS.assignments,
       },
       'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
     );

@@ -1,7 +1,7 @@
 # CAT-3 P11-ii — the picker lists library movements, with their taxonomy from the database
 
 > Backlog: [plan.md](../plan.md) row `CAT-3`. Spec: [cat-3-movement-library](../specs/cat-3-movement-library.md),
-> criterion P11, K22, K23, S6, rule 2 and the P11-ii row of "Chunks, in order". Lane P. Mutations
+> criterion P11, K22, K23, K29, S6, rule 2 and the P11-ii row of "Chunks, in order". Lane P. Mutations
 > `590`–`609` (the board, 2026-11-19).
 
 ## Where this sits
@@ -11,7 +11,7 @@
 - **This PR:** the plan only. **The code is two PRs** (panel S2, below):
   - **P11-ii-a, the rows:** the read lists every catalog row, with its aliases, supervision label
     and `hasInstructions` from the library in effect, so `newItem`, Enter and search agree on it.
-    It waits for **A2-i** (lane A: `movementIsCatalog()` and the catalog writer) and comes **before
+    It waits for **A2-i** (lane P since 2026-11-19, the maintainer's decision: `movementIsCatalog()` and the catalog writer) and comes **before
     A2-ii** (the switch to `CATALOG_MOVEMENTS`). Without it, A2-ii would put catalog rows on
     production that only `newItem`'s slug step can find, and a re-spelled name would make a
     household duplicate (the ⚠️ in `new-item.ts`, step 2).
@@ -43,7 +43,7 @@ After this chunk:
    `movements`, the equipment set from `movement_equipment`, the primary and secondary muscles from
    `movement_muscles`. An old built-in still gets the library's taxonomy by slug (P11-i's path), or
    none.
-4. **The DAL only builds the DTO**, field by field, and adds `group`.
+4. **The DAL only builds the DTO**, field by field, copying `group` through from the read (Amendment 1).
 
 ## The predicate, written out (panel P1-1)
 
@@ -68,7 +68,7 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
 
 - (a1) **Every catalog row is listed**, as `catalogOptionOf(entry, publicId)` with the row's identity
   (name, tracking type, unit, bodyweight flag) written over it, for the library the seed used.
-- (a2) **Old built-ins are unchanged.** The 35 legacy rows give exactly the options they give today:
+- (a2) **Old built-ins are unchanged at the DTO** (the read itself changes: Amendment 1, A1.2). The 35 legacy rows give exactly the options they give today:
   the expected options are a snapshot taken on main before the change. No table taxonomy is attached
   to any of them.
 - (a3) **No other household changes what the caller sees.** Another household owns items on a
@@ -116,20 +116,21 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
 
 ## Files
 
-| File                                                                                                        | PR   | Change                                                                                                                                                                                                                                                                                                                                                                                     |
-| ----------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/db/src/queries/program/movement-options.ts`                                                       | a, b | The predicate above; the `library` argument; the catalog arm's aliases, supervision and `hasInstructions` from it; `group` optional; (b) `catalogTaxonomyRows` and the assembly; `taxonomy` a required key on the catalog arm, `Pick<CatalogOptionTaxonomy, 'modality' \| 'pattern' \| 'equipment' \| 'primaryMuscle' \| 'secondaryMuscles'> \| null` (panel S4), reusing the shared type. |
-| `packages/db/src/writers/program/new-item.ts`                                                               | a    | Takes the library and passes it to the read; docblock step 2 closed. Its one caller (the DAL's write) passes it.                                                                                                                                                                                                                                                                           |
-| `apps/web/lib/dal/env.ts` (+ its test), `.github/workflows/ci.yml`, `.github/workflows/migrate-preview.yml` | a    | K29's library-in-effect value and its production refusal. The preview deployment's setting is the maintainer's, by hand; the PR body says so.                                                                                                                                                                                                                                              |
-| `apps/web/lib/dal/program/picker.ts`, `writes.ts`                                                           | a, b | Pass the library in effect (Q1); `pickerOptionOf` copies fields one by one and adds `group`.                                                                                                                                                                                                                                                                                               |
-| `apps/web/lib/dal/program/picker.test.ts`                                                                   | a, b | The three arms, the keys, (b5).                                                                                                                                                                                                                                                                                                                                                            |
-| `packages/db/scripts/verify/program.ts`                                                                     | a, b | (a1)–(a7), (b1)–(b4).                                                                                                                                                                                                                                                                                                                                                                      |
-| `packages/db/scripts/mutations/590…`                                                                        | a, b | One per conjunct and source above, each with its README row.                                                                                                                                                                                                                                                                                                                               |
-| `apps/web/test/program-tables-stay-dark.test.ts`                                                            | b    | Q4 below.                                                                                                                                                                                                                                                                                                                                                                                  |
-| `packages/db/src/schema.ts`                                                                                 | b    | The `movementEquipment` docblock's "nothing in `apps/` reads them until P11-ii" (a board guest edit).                                                                                                                                                                                                                                                                                      |
-| `docs/privacy/data-inventory.md`                                                                            | b    | A one-line re-read: the picker's options carry more catalog rows and the tables' taxonomy, all reference data on global rows (the CHECK holds), no new category.                                                                                                                                                                                                                           |
-| `docs/features/program-writers.md`, `program-builder.md`, `movement-catalog.md`                             | a, b | Which rows the read lists; where an option's fields come from; that the tables are read.                                                                                                                                                                                                                                                                                                   |
-| changelog fragment each PR                                                                                  | a, b |                                                                                                                                                                                                                                                                                                                                                                                            |
+| File                                                                                                                                             | PR         | Change                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/db/src/queries/program/movement-options.ts`                                                                                            | a, b       | The predicate above; the `library` argument; the catalog arm's aliases, supervision and `hasInstructions` from it; `group` optional; `taxonomy` a required key (a: from the library entry; b: from the tables, via `catalogTaxonomyRows` and the assembly) on the catalog arm, `Pick<CatalogOptionTaxonomy, 'modality' \| 'pattern' \| 'equipment' \| 'primaryMuscle' \| 'secondaryMuscles'> \| null` (panel S4), reusing the shared type. |
+| `packages/db/src/writers/program/new-item.ts`                                                                                                    | a          | Takes the library and passes it to the read; docblock step 2 closed. Its one caller (the DAL's write) passes it.                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/lib/env.ts`, `packages/shared/src/db-environment.ts`, `packages/db/src/seed.ts`, `apps/web/lib/dal/catalog-library.ts` and their tests | **K29 PR** | Not P11-ii-a: Amendment 1, A1.1 (under (A): no variable, no workflow or harness edits).                                                                                                                                                                                                                                                                                                                                                    |
+| `packages/db/src/queries/program/catalog-arm-option.ts` (+ `.test.ts`)                                                                           | a          | `catalogArmOption`, the one per-row mapping (Amendment 1, A1.2); `joinAliases` moves here from `picker.ts`.                                                                                                                                                                                                                                                                                                                                |
+| `apps/web/lib/dal/program/picker.ts`, `writes.ts`                                                                                                | a, b       | Pass the library in effect (Q1); `pickerOptionOf` copies fields one by one, `group` included.                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/lib/dal/program/picker.test.ts`                                                                                                        | a, b       | The three arms, the keys, (b5).                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `packages/db/scripts/verify/program.ts`                                                                                                          | a, b       | Acceptance (a1)–(a9) (Amendment 1), (b1)–(b4).                                                                                                                                                                                                                                                                                                                                                                                             |
+| `packages/db/scripts/mutations/590…`                                                                                                             | a, b       | One per conjunct and source above, each with its README row.                                                                                                                                                                                                                                                                                                                                                                               |
+| `apps/web/test/program-tables-stay-dark.test.ts`                                                                                                 | b          | Q4 below.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `packages/db/src/schema.ts`                                                                                                                      | b          | The `movementEquipment` docblock's "nothing in `apps/` reads them until P11-ii" (a board guest edit).                                                                                                                                                                                                                                                                                                                                      |
+| `docs/privacy/data-inventory.md`                                                                                                                 | b          | A one-line re-read: the picker's options carry more catalog rows and the tables' taxonomy, all reference data on global rows (the CHECK holds), no new category.                                                                                                                                                                                                                                                                           |
+| `docs/features/program-writers.md`, `program-builder.md`, `movement-catalog.md`                                                                  | a, b       | Which rows the read lists; where an option's fields come from; that the tables are read.                                                                                                                                                                                                                                                                                                                                                   |
+| changelog fragment each PR                                                                                                                       | a, b       |                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## Decisions from the roadmap thread (spec owner, 2026-11-19)
 
@@ -137,20 +138,17 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
   - P11-ii is two PRs (P11-ii-a and P11-ii-b, above);
   - its dependency reads "After P11-i and A2-i";
   - "the read maps it; the DAL builds the DTO";
-  - A2-ii waits for P11-ii-a deployed. The board takes lane A's acknowledgement of this.
+  - A2-ii waits for P11-ii-a deployed. A2-i and A2-ii are lane P's now, so no other lane's acknowledgement is owed.
 - **Q4, decided: (A).** S6 ends the stays-dark `describe` at P11's second PR, now P11-ii-b, which is
-  the first PR in `apps/` to read the tables. P11-ii-b retires it with lane A's agreement (the test is
+  the first PR whose request path reads the tables (the read is in `packages/db`, which the guard also scans). P11-ii-b retires it with lane A's agreement (the test is
   theirs), and its PR body says what replaces that protection: this read's proofs. No allowlist
   grows.
-- **Q1, decided (spec K29; maintainer, 2026-11-19: "Test databases - ok").** P11-ii-a builds one
-  server-only value in `lib/dal/env.ts` naming the library in effect. It defaults to
-  `CATALOG_MOVEMENTS`, and is set beside `SEED_FIXTURES` in `ci.yml` and `migrate-preview.yml`, and
-  in the preview deployment's settings (by the maintainer, by hand). Every reader takes it: this
-  read, `newItem` and "How to". **Production refuses any value but the default**: the app throws at
-  start when the deployment or the database target is production, with a test. Declined: disjoint
-  fixture slugs.
+- **Q1, decided (spec K29; maintainer, 2026-11-19: "Test databases - ok").** A database seeded with
+  the fixture library is read with it, and production refuses anything else. **When and how it is built
+  is Amendment 1, A1.1 and Q5**: its own PR, with A2-ii, not P11-ii-a. Declined by the spec owner:
+  disjoint fixture slugs.
 - **Q2, with the maintainer.** The spec owner recommends (A): the vocabulary's order (`EQUIPMENT`,
-  `MUSCLES`), in the read and in `catalogOptionOf`. Measured on main: 14 of 326 entries list
+  `MUSCLES`), in the read and in `catalogOptionOf`. Measured on main when asked (326 entries then; the library has grown since): 14 entries list
   equipment out of vocabulary order (so 14 rows would word "what it needs" differently), and 54
   list secondary muscles out of order (no screen shows those today). The spec gives the authored
   order no meaning. If chosen, the contract change is the spec owner's (`option.ts:33`,
@@ -159,6 +157,183 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
 - **Lane E's `dal/day/day.ts:60`** takes the same library in effect, in lane E's own PR after
   P11-ii-a merges (it reads `CATALOG_MOVEMENTS` today, so the day page on a fixtures database shows
   the real library's supervision label on fixture rows). Lane P tells lane E when P11-ii-a lands.
+
+## Amendment 1 (2026-11-19, after the post-merge review)
+
+The maintainer merged this plan before its `review-pr` ran. The retroactive review (Opus 5.5, a
+reviewer that wrote none of it, posted on #666) found one P1 and eight P2s. A first draft of this
+amendment was then re-reviewed by the security, correctness, reuse and scope lenses (log below), and
+this is the result. It closes every finding before any P11-ii code is committed.
+
+### A1.1 The library in effect becomes its own PR, with A2-ii (scope P1-1, P1-2; correctness P2-2)
+
+K29's mismatch begins only when a database holds `CATALOG_FIXTURE` rows, and only A2-ii writes them
+(A2-i writes none). Switching CI to the fixture library earlier would annotate the 35 old built-ins
+from a list that has none of them. The 12 built-ins with library entries (`back_squat`,
+`trap-bar_deadlift` and ten more) would silently lose their library aliases and taxonomy on every test
+database, and no e2e covers the database picker's annotations, so CI would stay green on wrong data
+(second pass P1-1: `movement-picker.a11y.spec.ts` runs on the design preview's fixture options, not the
+database). So:
+
+- **P11-ii-a passes `CATALOG_MOVEMENTS`**, as `dal/day/day.ts:60` already does for the day resolver.
+  The read takes the library as an argument (Goal 2), so the switch later is one value.
+- **K29 lands inside A2-ii, or merged with it as one stack** (lane P). Under (A) there is no separate
+  flip: merging K29 is the switch, so landing it earlier opens the very window this section closes.
+  That needs the spec owner to edit K29's "Lane P builds it in P11-ii-a" (Q5 below). The maintainer's
+  decision ("Test databases - ok") is unchanged.
+
+Its design, whichever mechanism Q5 picks:
+
+- **One shared rule, not a second copy.** `seed.ts`' `assertFixturesTargetAllowed` (`:155-170`) already
+  answers "may this database carry fixtures?" (`isLocalDbHost(url) || namesPreviewDatabase(databaseNameOf(url) ?? '')`,
+  with its accepted limits documented). The boolean moves to `packages/shared/src/db-environment.ts` as
+  `isFixturesDatabase(url)`, with that docblock. The seed throws on its negation. The app adds
+  `VERCEL_ENV?.trim() !== 'production'` on top. A `null` database name and an unset `DATABASE_URL` are
+  not fixtures databases.
+- **`apps/web/lib/env.ts` exports only the name** (`catalogLibraryName(): 'catalog' | 'fixture'`),
+  decided once at module scope, outside `SKIP_ENV_VALIDATION`, by equality (the `BYPASS_PRINCIPAL`
+  pattern), never by an object lookup. The lists stay out of `env.ts`, which `proxy.ts` and
+  `sentry.edge.config.ts` import. **One DAL module** (`lib/dal/catalog-library.ts`) maps the name to its
+  list and one memoised slug index. `picker.ts` (its fixed `LIBRARY` map is deleted), `writes.ts`
+  (`newItem`), `getHowTo`, and lane E's `day.ts:60` (lane E's own PR) import it.
+- **(B) only — the names are shared constants**: `CATALOG_LIBRARY_ENV` and `CATALOG_LIBRARIES` (an `as const`
+  array, zod enum and type) in `packages/shared/src/catalog/`, beside `SEED_FIXTURES_ENV`'s pattern.
+- **(B) only — wiring, if Q5 had kept a variable:**
+  - CI: the Playwright smoke step's step-level `env:`, beside `E2E_SESSION_BYPASS_USER_ID`. Not beside
+    `SEED_FIXTURES=1`, which is inline on the seed command and never reaches the app.
+  - Local harnesses: injected into the app env by `e2e-local.ts` and `screenshot-ephemeral.ts`, from
+    the shared constant, beside the bypass injection.
+  - Preview: the Vercel preview scope (the maintainer, by hand), checked by `pnpm preview:check`,
+    which also refuses the variable in a production scope.
+  - Not `migrate-preview.yml`, which runs no app.
+  - A containment test (`seed-fixtures-is-contained.test.ts`, extended): every workflow that seeds
+    fixtures and starts the app names the fixture library, and `migrate.yml` names neither.
+- **Tests that can fail** (security P1-1, correctness P1-1). OPS-1's `assertDatabaseEnvironment` runs
+  first at import, so a case it refuses proves nothing. The predicate is a pure function in
+  `db-environment.ts` with an exported message, asserted by equality:
+  - production with a **local** database (OPS-1 lets it through), refused by the new rule;
+  - no Vercel variables, a remote non-preview database, and `ALLOW_LIVE_DB=1` (the `pnpm dev:prod`
+    case, where the new rule is the only guard), refused;
+  - a local database and a preview-named one off production, accepted;
+  - (B) only: a typo under `SKIP_ENV_VALIDATION`, refused;
+  - a database with no name, and the `?host=` override, both refused.
+
+  The flip from conjunction to disjunction is a one-off probe run in review, with its result in the
+  PR body. It is not a `db:mutations` patch, which never runs vitest. The DAL tests mock the accessor
+  to return the fixture library, and assert it is the argument the read and `newItem` receive. They
+  also check `getHowTo` on a fixture-only slug.
+
+- **(B) only — "fails the build"** is a test obligation, not a claim. Run
+  `CATALOG_LIBRARY=fixture VERCEL_ENV=production DATABASE_URL=postgres://u:p@localhost:5432/db pnpm --filter web build`
+  and record that it exits non-zero with the new message. If Next does not evaluate the module at
+  build time, the plan says "fails at boot", which fails closed.
+
+- **Under (A), which the spec owner chose (Q5):** no variable, so no wiring, no shared env-name
+  constants, no containment test, no `preview:check` change, no typo case and no `CATALOG_LIBRARY` build
+  check. What stays: the shared `isFixturesDatabase` rule; `env.ts` exporting the library's name, now
+  computed from `DATABASE_URL` and `VERCEL_ENV`; the DAL module; the pure-function tests that OPS-1 cannot
+  pre-empt (production with a local database refused; `ALLOW_LIVE_DB=1` with a remote one refused); the
+  proof that every database the rule admits (`embedded-pg`, CI's smoke, the preview) is seeded with
+  fixtures; and the one start-up log line when the fixture library is in effect.
+
+### A1.2 What P11-ii-a's read returns for every catalog-arm row (review P2-3; correctness P1-3, P1-4, P2-1)
+
+Goal 2's "a catalog row" means **every row of the catalog arm**. The per-row mapping is one pure exported
+function in `packages/db`, `catalogArmOption(row, pickerEntry, libraryEntry)`, used by the read, with
+its own vitest file. Its cases:
+
+| Row                       | Library entry on its slug | Option                                                                                                                                                                                                  |
+| ------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| old built-in              | yes                       | the row's identity; aliases = the const's joined with the entry's by the picker's name key (today's `joinAliases`, moved); the entry's taxonomy, supervision and `hasInstructions`; the const's `group` |
+| old built-in              | no                        | the row's identity; the const's aliases; no taxonomy; the const's `group`                                                                                                                               |
+| catalog row               | yes                       | `catalogOptionOf(entry, publicId)` with the row's identity written over it; no `group`                                                                                                                  |
+| catalog row (**a9**, new) | no                        | the row's identity; no aliases; `supervision: null`; `hasInstructions: false`; no taxonomy in (a), the tables' in (b); no `group`. Listed, never dropped (K22).                                         |
+
+- **The read carries `taxonomy`.** In (a) it comes from the library entry; in (b) from the tables. The
+  DAL copies every field, `group` included, and adds nothing. So `newItem` matches over exactly the
+  aliases the picker shows (K23).
+- **`picker.test.ts`'s mapping cases move** to `catalogArmOption`'s test: the row's type winning, the
+  taxonomy attached, two spellings of an alias kept as one. `picker.test.ts` keeps "copies every field,
+  keys pinned". A `db:verify` mutation drops the join.
+- **(a2) restated per library.** With `CATALOG_MOVEMENTS`, the read equals main's DTO for the 35:
+  main's `joinAliases(row, entry)` plus the entry's fields. Measured: 12 old built-ins have entries,
+  bringing 6 aliases the const lacks. With the fixture library (from the K29 PR), the 35 carry the
+  const's aliases only, and no taxonomy, because the fixture shares no slug with them. Risks note that
+  no e2e covers an old built-in's taxonomy, today or then.
+- **(a6) gains two cases** (correctness P2-6, P2-8):
+  - "Hex-bar deadlift", an alias only on the library entry of `trap-bar_deadlift` and a different slug,
+    so step 2 cannot select it. `newItem` answers `existed: true` with the built-in's `publicId`, and
+    no household row is made. The library passed is `CATALOG_MOVEMENTS`.
+  - A household item named "Hex-bar deadlift": an exact name beats an alias on both sides (`bestFirst`).
+- **(a9)** is proved in `db:verify` by planting a catalog row and passing a library without its slug.
+
+### A1.3 Mechanics
+
+- **Existing patches touched:** 304, 305, 306, 382, 397, 398, 496 and 498 patch `movement-options.ts` or
+  `new-item.ts`. Each is re-cut and checked with `git apply --check`, and each changed one is run alone
+  with `--only`.
+- **Size:** after A1.1's split, P11-ii-a is the read, `catalogArmOption`, `newItem`'s argument, (a1)–(a9)
+  and its patches: an estimated 500–600 lines, most of it proofs. If it comes out over that, the
+  built-in alias move (A1.2's first two rows and the "Hex-bar" case) goes to a PR of its own, before
+  A2-ii.
+
+### Test plan
+
+- **`db:verify`:** (a1)–(a9) and (b1)–(b4). Each new or re-cut patch is run locally with
+  `pnpm --filter @mat-plan/db db:mutations --only <n>`, then all of them in CI's sharded gate.
+- **vitest:** `catalogArmOption`'s cases, and `picker.test.ts` (keys, copying, (b5)). In the K29 PR:
+  the predicate's cases above, the DAL's accessor-mock cases, the every-admitted-database-is-seeded proof,
+  and the start-up log line.
+- **e2e:** unchanged by P11-ii-a. The K29 PR's smoke runs with the fixture library on a fixtures database.
+
+### Risks and rollback
+
+- **A parse failure takes the picker and `newItem` down together** ((b4)). This is unreachable while the
+  foreign keys and the CHECK hold. A code leaves the vocabulary only after A3 rewrites its rows.
+- **A catalog row whose entry left the library** is listed bare ((a9)), never dropped.
+- **The K29 rule could pick the fixture library for a hand-seeded local database** without fixtures:
+  wrong annotations there, said aloud by the start-up log line. Production can never get it (the pin).
+  Rollback: revert the K29 PR.
+- **A2-ii before P11-ii-a** would let `newItem` miss catalog rows by alias. The spec gates A2-ii on
+  P11-ii-a deployed (Q3).
+- **Rollback of any of these PRs** is a revert. No migration, no data written.
+
+### For the spec owner
+
+- **Q5. When K29 is built, and by what mechanism** (scope P1-1, P2-1).
+  - (A) Recommended: K29 lands inside A2-ii (or stacked with it), and **the library is
+    worked out from the database** rather than read from a variable: the fixture library exactly when
+    `isFixturesDatabase(DATABASE_URL)` and the deployment is not production. Every database that rule
+    admits is seeded with fixtures: `embedded-pg.ts` forces it, as do `ci.yml` and
+    `migrate-preview.yml`. That removes the variable, its wiring, the Vercel setting the maintainer
+    would set by hand, and the gap before they set it. Production then refuses by construction. The
+    cost: a local database seeded by hand without fixtures would read the fixture library, which is
+    wrong annotations on a developer's own database.
+  - (B) The same timing, with the variable as A1.1 specifies.
+  - Either way, K29's "Lane P builds it in P11-ii-a" becomes "in its own PR, with A2-ii".
+
+  **Spec owner's answer (2026-11-19): (A)**, now with the maintainer, since K29 records their "ok" on a
+  mechanism first described as a setting. Plan on (A). Nothing P11-ii-a builds depends on it. Its two
+  conditions bind the K29 PR:
+  1. The rule's proof names every database it admits (`embedded-pg`, CI's smoke, the preview) and
+     shows each one is seeded with fixtures. A test pins that a production target can never get the
+     fixture library.
+  2. The cost is said where a developer meets it. The app logs one line at start whenever the fixture
+     library is in effect, naming the rule (`isFixturesDatabase`, not production). There is no silent
+     fallback.
+
+  **Who writes it:** lane P, which owns A2-i _(maintainer, orchestrator's chat, 2026-11-19: "Lane P
+  takes A2-i (Recommended)")_, lands it inside A2-ii or stacked with it. It is a precondition of A2-ii's merge. With (A), the variable, the wiring, the
+  constants, the containment test and `preview:check` from A1.1 fall away. The shared rule, the
+  production pin, the DAL module and the tests that can fail all stay.
+
+### Approval
+
+**Approved by the maintainer** _(orchestrator's chat, 2026-11-19, relayed by the board)_, asked
+"Record that you approve lane P's P11-ii plan (#666, the one you merged): the picker lists library
+movements from the database, in two PRs (P11-ii-a before the library seed switch, P11-ii-b after the
+equipment/muscle order answer)?": **"Approve (Recommended)"**. P11-ii-a can be built once A2-i is on
+main; P11-ii-b waits for Q2.
 
 ## Not in this chunk
 
@@ -210,3 +385,53 @@ Panel on the first draft (2026-11-19): correctness, privacy and architecture, on
 | N3, C8           | architecture, correctness | The payload was measured at the wrong size and asserted nothing                                                                                                            | **accepted**: (b5), on the real library and at 500, figures in the PR                                                               |
 | —                | architecture              | Muscles "by role" relies on alphabetical order                                                                                                                             | **accepted**: separate selects (b3)                                                                                                 |
 | —                | architecture              | Outside this plan: `dal/day/day.ts:60` has B2's gap                                                                                                                        | folded into Q1 (lane E owns that file)                                                                                              |
+
+### Re-review of Amendment 1 (2026-11-19)
+
+Four lenses on the amendment's first draft: security, correctness, reuse, scope (Opus 5.5 each; the
+author on Opus 5.5). The post-merge review that prompted it was a fifth reviewer. **Panel cost:** the
+original three lenses, one post-merge reviewer and four re-review lenses. No P0 from any of them.
+
+| #                               | Lens                         | Finding                                                                                                           | Response                                                                               |
+| ------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| PM-P1                           | post-merge                   | K29 was added after the panel and never reviewed                                                                  | **accepted**: this re-review; A1.1                                                     |
+| PM-P2                           | post-merge                   | No reuse or scope lens; no cost or models line                                                                    | **accepted**: both lenses ran here; this header                                        |
+| PM-P2                           | post-merge                   | Old built-ins' library aliases are not seen by `newItem`; `group` contradicts itself                              | **accepted**: A1.2                                                                     |
+| PM-P2                           | post-merge                   | Q4 said "first PR in `apps/`"; no Test plan or Risks; no plan.md link; no K29 in the header                       | **accepted**, all four                                                                 |
+| S-P1-1, C-P1-1                  | security, correctness        | The refusal tests can't fail: OPS-1 throws first                                                                  | **accepted**: A1.1's cases isolate the new rule, with messages asserted by equality    |
+| S-P1-2, R-P1-3, Sc-P1-3, C-P1-2 | all four                     | Wiring beside `SEED_FIXTURES` never reaches the app; `migrate-preview.yml` runs no app; the harnesses are missing | **accepted**: the smoke step, the harnesses from a shared constant, a containment test |
+| R-P1-1                          | reuse                        | `assertFixturesTargetAllowed` already holds the rule                                                              | **accepted**: `isFixturesDatabase` in `db-environment.ts`, used by both                |
+| R-P1-2                          | reuse                        | The variable name and values were bare literals                                                                   | **accepted**: shared constants                                                         |
+| Sc-P1-1                         | scope                        | P11-ii-a held two concerns at ~800 lines                                                                          | **accepted**: K29 gets its own PR (Q5)                                                 |
+| Sc-P1-2, C-P2-2                 | scope, correctness           | Flipping CI before A2-ii annotates the legacy rows from the fixture                                               | **accepted**: the flip lands with A2-ii                                                |
+| C-P1-3                          | correctness                  | A catalog row with no library entry has no shape                                                                  | **accepted**: (a9), listed bare                                                        |
+| C-P1-4                          | correctness                  | Moving the join leaves `picker.test.ts` testing a mock                                                            | **accepted**: `catalogArmOption` and its tests                                         |
+| S-P2-1, R-P2-1, C-P2-4          | security, reuse, correctness | zod is off under `SKIP_ENV_VALIDATION`; the `null` name; the `trim`                                               | **accepted**: equality at module scope; `null` refused                                 |
+| S-P2-2, R-P2-2, C-P2-3          | security, reuse, correctness | Lists in `env.ts` reach the proxy bundle                                                                          | **accepted**: `env.ts` exports the name; one DAL module holds the lists                |
+| R-P2-3                          | reuse                        | Three slug-to-entry maps                                                                                          | **accepted**: one memoised index; `picker.ts`' `LIBRARY` is deleted                    |
+| S-P2-3                          | security                     | "Fails the build" is unproved                                                                                     | **accepted**: a stated build check                                                     |
+| Sc-P2-1                         | scope                        | The library could be derived from the database, with no variable                                                  | **Q5** for the spec owner, recommended                                                 |
+| Sc-P2-2                         | scope                        | Defer the built-in alias move                                                                                     | **partly**: kept, with an explicit split if P11-ii-a goes over                         |
+| Sc-P2-3                         | scope                        | An env probe can't be a `db:mutations` patch                                                                      | **accepted**: a review probe, its result in the PR                                     |
+| C-P2-1                          | correctness                  | "(a2) unchanged" is false for the 12 built-ins with entries                                                       | **accepted**: restated per library                                                     |
+| C-P2-5                          | correctness                  | The "library passed" tests can't fail                                                                             | **accepted**: the accessor mocked to the fixture                                       |
+| C-P2-6, C-P2-8                  | correctness                  | (a6) traps and a collision case                                                                                   | **accepted**: "Hex-bar deadlift" both ways                                             |
+| C-P2-7                          | correctness                  | Eight existing patches will stop applying                                                                         | **accepted**: A1.3                                                                     |
+| R-P2-4                          | reuse                        | Two ranges for the same proofs                                                                                    | **accepted**: the Files row points at Acceptance                                       |
+| Sc-P2-4                         | scope                        | No changelog fragment                                                                                             | **accepted**                                                                           |
+| —                               | correctness, outside         | A seventh K23 pair: Barbell Hip Thrust's "hip thrust" alias vs the library's "Hip thrust"                         | sent to the spec owner                                                                 |
+
+### Second pass on #690 (2026-11-19)
+
+A fresh reviewer that wrote none of the amendment (Opus 5.5). No P0.
+
+| #          | Finding                                                                                                 | Response                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| P1-1       | A1.1 cited the design preview's a11y spec as covering the database picker                               | **accepted**: the reason restated (the 12 built-ins silently lose their annotations, and no e2e covers it) |
+| P1-2       | "Immediately before A2-ii" contradicts "the flip lands with A2-ii"; under (A) merging K29 is the switch | **accepted**: K29 lands inside A2-ii or stacked with it, everywhere                                        |
+| P2-1       | Text left over from (B)                                                                                 | **accepted**: marked "(B) only", plus an "Under (A)" summary; Files, Test plan and Risks rewritten for (A) |
+| P2-2       | The Risks note and `catalogArmOption`'s files were missing                                              | **accepted**: both added                                                                                   |
+| P2-3       | The `taxonomy` key was in PR b only                                                                     | **accepted**: a from the library entry, b from the tables                                                  |
+| P2-4       | The original (a2) was unedited                                                                          | **accepted**: "unchanged at the DTO"                                                                       |
+| P2-5       | Who owns A2-i conflicted                                                                                | **accepted**: lane P, with the decision cited (the spec owner updates the A2 row)                          |
+| P2-6, P2-7 | `:159-170`; the stale "326"                                                                             | **accepted**                                                                                               |

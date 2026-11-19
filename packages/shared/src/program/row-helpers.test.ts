@@ -11,12 +11,14 @@ import {
   heavyADraft,
   PROGRAM_VIEW_FIXTURES,
 } from './fixtures';
+import { programsByStay } from './day-shapes';
 import { slotQuantity, TRACKING_TYPE_FIELDS } from './pieces';
 import { hasStarted } from './program-shapes';
 
 /**
  * The small rules the lanes share rather than each writing its own (FAM-1 contract change C1):
- * which quantity is a tracking type's, and whether an athlete has started on a program.
+ * which quantity is a tracking type's, whether an athlete has started on a program, and which of
+ * an athlete's current programs stay.
  */
 
 describe('slotQuantity: the tracking type’s quantity out of a list', () => {
@@ -128,5 +130,78 @@ describe('hasStarted: an athlete has started when their since is today or earlie
   it('is exported from the root barrel', async () => {
     const barrel = await import('../index');
     expect(barrel.hasStarted).toBe(hasStarted);
+  });
+});
+
+describe('programsByStay: a day’s current programs, split by whether they stay (C37)', () => {
+  type Program = { name: string; endsToday?: boolean };
+  const stays = (name: string): Program => ({ name });
+  const ends = (name: string): Program => ({ name, endsToday: true });
+  const names = (split: ReturnType<typeof programsByStay<Program>>) => ({
+    staying: split.staying.map((p) => p.name),
+    ending: split.ending.map((p) => p.name),
+  });
+
+  it('gives two empty lists for no programs', () => {
+    expect(programsByStay([])).toEqual({ staying: [], ending: [] });
+  });
+
+  it('keeps every program as staying when none ends today', () => {
+    expect(names(programsByStay([stays('a'), stays('b')]))).toEqual({
+      staying: ['a', 'b'],
+      ending: [],
+    });
+  });
+
+  it('splits a mixed list, wherever the ending ones sit', () => {
+    expect(names(programsByStay([ends('a'), stays('b'), ends('c'), stays('d')]))).toEqual({
+      staying: ['b', 'd'],
+      ending: ['a', 'c'],
+    });
+  });
+
+  it('gives every program as ending when all end today', () => {
+    expect(names(programsByStay([ends('a'), ends('b')]))).toEqual({
+      staying: [],
+      ending: ['a', 'b'],
+    });
+  });
+
+  it('keeps the order it was given in both lists, and the members themselves', () => {
+    const list = [stays('c'), ends('z'), stays('a'), ends('m'), stays('b')];
+    const { staying, ending } = programsByStay(list);
+    expect(staying).toEqual([list[0], list[2], list[4]]);
+    expect(ending).toEqual([list[1], list[3]]);
+    // The same objects, not copies: a caller's own fields come back untouched.
+    expect(staying[0]).toBe(list[0]);
+    expect(ending[1]).toBe(list[3]);
+    // And the list it was given is not changed: a fixture's is frozen.
+    expect(list.map((p) => p.name)).toEqual(['c', 'z', 'a', 'm', 'b']);
+  });
+
+  it('🔴 splits on `true` alone: a false or missing flag stays', () => {
+    const loose: Program[] = [
+      { name: 'a', endsToday: false },
+      { name: 'b', endsToday: undefined },
+      ends('c'),
+    ];
+    expect(names(programsByStay(loose))).toEqual({ staying: ['a', 'b'], ending: ['c'] });
+  });
+
+  it('gives a plan’s own list back as staying then ending, in every day fixture', () => {
+    let ending = 0;
+    for (const plan of Object.values(DAY_PLAN_FIXTURES)) {
+      const split = programsByStay(plan.currentPrograms);
+      expect([...split.staying, ...split.ending]).toEqual(plan.currentPrograms);
+      expect(Object.isFrozen(plan.currentPrograms)).toBe(true);
+      ending += split.ending.length;
+    }
+    // Not vacuous: two fixtures hold a program ending today.
+    expect(ending).toBe(2);
+  });
+
+  it('is exported from the root barrel', async () => {
+    const barrel = await import('../index');
+    expect(barrel.programsByStay).toBe(programsByStay);
   });
 });
