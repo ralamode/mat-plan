@@ -131,6 +131,7 @@ import {
   CREATE_HOUSEHOLD_NAME,
   NULL_ROUTINE_TO_FULL_NAME,
 } from './corrections/registry';
+import { isNote, lineText } from './corrections/summary';
 import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -5754,7 +5755,7 @@ assert.ok(
 // The dry run (`apply = false`: nothing is written) must return exactly the NULL-routine profiles
 // that are NOT household B's. Both directions in one assertion — it fails if the correction misses
 // one of its own household's rows, and it fails if it reaches the other household's.
-const nullRoutineDryRun = await nullRoutineCorrection.run(asCorrectionDb, false);
+const nullRoutineDryRun = (await nullRoutineCorrection.run(asCorrectionDb, false)).map(lineText);
 const foundPublicIds = nullRoutineDryRun
   .map((line) => /profile ([0-9a-f-]{36})/.exec(line)?.[1])
   .filter((id): id is string => id !== undefined)
@@ -7540,7 +7541,7 @@ console.log(
       'AUTH-1 1b: the claim correction writes nothing without --apply',
     );
     assert.ok(
-      dry.some((l) => l.includes(CLERK_C)),
+      dry.some((l) => lineText(l).includes(CLERK_C)),
       'AUTH-1 1b: the dry run names the FULL Clerk id — a truncated one cannot be checked',
     );
 
@@ -7553,8 +7554,12 @@ console.log(
     );
     const again = await claim.run(asCorrectionDb, true);
     assert.ok(
-      again.some((l) => l.includes('already claimed')),
+      again.some((l) => lineText(l).includes('already claimed')),
       'AUTH-1 1b: a re-run is an idempotent no-op, not a duplicate-key crash (rule 2)',
+    );
+    assert.ok(
+      again.length > 0 && again.every(isNote),
+      'AUTH-1 1b: …and the re-run returns notes only, so the runner counts no change (2026-11-19)',
     );
 
     // (6e) 🔴 The case `INSERT … WHERE NOT EXISTS` could not have told apart: the SAME Clerk id
@@ -7667,9 +7672,11 @@ console.log(
       // creates exactly one household and one OWNER membership per account, none with a seed id.
       const householdsBefore = await householdCount();
       const membersBefore = await memberCount();
-      const dry = await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
-        create.run(asCorrectionDb, false),
-      );
+      const dry = (
+        await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
+          create.run(asCorrectionDb, false),
+        )
+      ).map(lineText);
       rcOutput.push(...dry);
       assert.ok(
         dry.length === 1 && dry[0]!.startsWith('would create 1 household with 2 account(s)'),
@@ -7681,9 +7688,11 @@ console.log(
         'PRIV-3 RC (6h): the create-household dry run writes nothing',
       );
 
-      const applied = await orFail('PRIV-3 RC (6h): the create-household --apply completes', () =>
-        create.run(asCorrectionDb, true),
-      );
+      const applied = (
+        await orFail('PRIV-3 RC (6h): the create-household --apply completes', () =>
+          create.run(asCorrectionDb, true),
+        )
+      ).map(lineText);
       rcOutput.push(...applied);
       const members = await asPg
         .select({
