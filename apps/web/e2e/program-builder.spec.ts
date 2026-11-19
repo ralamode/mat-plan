@@ -256,7 +256,7 @@ const CHECK_WORKOUT = todayTwoPrograms.workouts.find(
 const CHECK_ITEM = CHECK_WORKOUT.items.find((i) => i.trackingType === TRACKING_TYPE.check)!.name;
 
 /**
- * The day page's Programs link, inside "Not on a program yet" and after its "Put {name} on a
+ * The day page's Programs link, inside "Not on a program." and after its "Put {name} on a
  * program" sentence: the app shell's own Programs link is elsewhere on the page.
  */
 const programsLink = (page: Page, athlete: string) =>
