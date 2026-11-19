@@ -107,7 +107,13 @@ export async function takeOff(
         .from(schema.entries)
         .innerJoin(
           schema.sessions,
-          and(eq(schema.sessions.id, schema.entries.sessionId), isNull(schema.sessions.deletedAt)),
+          and(
+            eq(schema.sessions.id, schema.entries.sessionId),
+            // The session is this athlete's too (defence in depth, as #589 and #601): a row whose
+            // session another athlete holds is a writer bug's shape, never "logged" for this one.
+            eq(schema.sessions.profileId, athlete.id),
+            isNull(schema.sessions.deletedAt),
+          ),
         )
         .innerJoin(schema.workouts, eq(schema.workouts.id, schema.sessions.workoutId))
         .where(

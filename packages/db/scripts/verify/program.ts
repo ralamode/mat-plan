@@ -2695,6 +2695,13 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     const L3 = await mustCreate(tx, A_SCOPE, 'Put-on L3');
     const L4 = await mustCreate(tx, A_SCOPE, 'Put-on L4');
     const H = await mustCreate(tx, A_SCOPE, 'Put-on H');
+    // A rename rewrites L1's row, so the rows' stored order is no longer id order: the writer must
+    // read the Programs list in its own order.
+    assert.deepEqual(
+      await renameProgram(exec, A_SCOPE, { programPublicId: L1, name: 'Put-on L1 renamed' }),
+      { ok: true },
+      'FAM-1 6d-iii: the proof renames L1',
+    );
     const order = async (who: string) => (await openOrder(who)).map((r) => r.program);
     const put = async (who: string, program: string, today = PUT_ON_TODAY) =>
       assert.deepEqual(
@@ -2770,6 +2777,11 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     await put(d3, L1);
     await put(d3, L3);
     await reorder(d3, [H, L1, L3]);
+    assert.deepEqual(
+      await order(d3),
+      [H, L1, L3],
+      'FAM-1 6d-iii: the proof sets d3 up as H, L1, L3',
+    );
     await hide(tx, H);
     await put(d3, L2);
     assert.deepEqual(
@@ -2801,14 +2813,30 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
     );
 
     const d6 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reopen Last');
-    for (const program of [L1, L2]) await put(d6, program, earlier);
+    for (const program of [L1, L2, L3]) await put(d6, program, earlier);
     await off(d6, L2);
     await off(d6, L1);
     await put(d6, L2);
     assert.deepEqual(
       await order(d6),
-      [L2],
+      [L3, L2],
       'FAM-1 6d-iii: a reopen with fewer programs left goes last',
+    );
+
+    const d9 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Reopen Reordered');
+    for (const program of [L1, L2, L3]) await put(d9, program, earlier);
+    await reorder(d9, [L3, L1, L2]);
+    assert.deepEqual(
+      await order(d9),
+      [L3, L1, L2],
+      'FAM-1 6d-iii: the proof sets d9 up as L3, L1, L2',
+    );
+    await off(d9, L3);
+    await put(d9, L3);
+    assert.deepEqual(
+      await order(d9),
+      [L3, L1, L2],
+      'FAM-1 6d-iii: a reordered athlete’s mistaken Take off, undone, is back where they put it',
     );
 
     const d7 = await mustAddAthlete(tx, A_SCOPE, 'Put-on Removed Start');
@@ -2845,7 +2873,7 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       'FAM-1 6d-iii: once the day has ended, the gap closes on the next put on',
     );
 
-    for (const who of [x, y, z, w, d1, d1b, d2, d3, d4, d5, d6, d7, d8]) {
+    for (const who of [x, y, z, w, d1, d1b, d2, d3, d4, d5, d6, d7, d8, d9]) {
       assert.ok(
         (await rowsOf(who)).every((r) => r.idx < SHIFT_BAND),
         'FAM-1 6d-iii: no row is left parked or in the band',
@@ -4330,6 +4358,28 @@ async function verifyTakeOff({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
     );
 
     // ── "Logged" is this athlete's, today's, and this program's ──
+    // A row of theirs under a session another athlete holds (a writer bug's shape) is not theirs.
+    const n17 = await athlete('Take-off Foreign Session');
+    await on(n17, p1, T);
+    const strayEntry = await log(n17, w1);
+    const [stray] = await tx
+      .select({ sessionId: schema.entries.sessionId })
+      .from(schema.entries)
+      .where(eq(schema.entries.publicId, strayEntry));
+    const [otherProfile] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, await athlete('Take-off Session Holder')));
+    await tx
+      .update(schema.sessions)
+      .set({ profileId: otherProfile!.id })
+      .where(eq(schema.sessions.id, stray!.sessionId!));
+    assert.deepEqual(
+      await off(n17),
+      { ok: true, lastDay: null },
+      'FAM-1 6d-i: a row under a session another athlete holds does not keep the start',
+    );
+
     const n5 = await athlete('Take-off Sibling');
     await on(n5, p1, T);
     // n2 logged in w1 today: a sibling's row (n3's, re-ticked, is one too).
