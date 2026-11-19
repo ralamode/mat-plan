@@ -3,6 +3,8 @@
 > Backlog: [plan.md](../plan.md) row FAM-1, step 15 of [the FAM-1 plan](./fam-1-family-program.md)
 > (row 15, `fam-1-family-program.md:606`). Branch for this plan: `docs/fam-1-15-put-on-plan`.
 > Lane B. Three code PRs, named **15 PR 1–3** here so they cannot be confused with row 15c (lane C).
+>
+> **Approved** _(maintainer, 2026-11-19)_. 15 PR 1 starts after 7b-ii (#652) merges.
 
 ## Where this sits
 
@@ -80,11 +82,11 @@ Done when:
 | Path                                                                                 | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web/app/p/new/page.tsx` · `add-athlete-form.tsx` · `apps/web/lib/constants.ts` | EDIT   | v12's line as one `<p>` outside the radio labels, added to the fieldset's `aria-describedby` next to `kindHintId`, built from `BUILDER_COPY.programs`. `ATHLETE_FORM_COPY.kidWithProgram` (`constants.ts:1270`) and the `programsAnything` prop go; the page stops calling `householdProgramsAnything` (`p/new/page.tsx:91`). The three per-kind consequence lines go: `kidWithProgram`, `kidFirstRun` and `adultConsequence`, as the accepted prototype's `vAdd` / `kindSwitch` shows them (`docs/prototypes/beta-0/index.html`). "Set once — the app can't change it afterwards" stays as it is (roadmap thread, N3, 2026-11-19). |
-| `apps/web/app/p/[profileId]/page.tsx`                                                | EDIT   | Pass `programsHref={PROGRAMS_PATH}` (`components/program-builder/routes.ts:14`) to `NotOnAProgram` (`:223`) only when the athlete is not archived and the viewed day is today or later. The page is lane C's (FAM-1 plan, lane C section); this one-line edit goes ahead only with lane C's agreement through the board, otherwise lane C makes it.                                                                                                                                                                                                                                                                                 |
+| `apps/web/app/p/[profileId]/page.tsx`                                                | EDIT   | Pass `programsHref={PROGRAMS_PATH}` (`components/program-builder/routes.ts:14`) to `NotOnAProgram` (`:223`) only when the athlete is not archived and the viewed day is today or later. The page is lane C's; lane C agreed to this edit here (2026-11-19) and reviews it. Not keyed on `plan.writable` (true for yesterday's open window too); a test pins today, a future day, yesterday and an archived athlete. Rewrite `not-on-a-program.tsx:16-18`'s "Until it exists" comment to say when the link shows and why.                                                                                                            |
 | tests                                                                                | EDIT   | `add-athlete-form.test.tsx:110-127` (the new line; no per-kind line; the permanence line kept); the 15 PR 1 e2e opens the new athlete's day page before Put on and follows its Programs link; an archived athlete's day page shows no link.                                                                                                                                                                                                                                                                                                                                                                                         |
 
 `programming.ts`'s docblock is not edited (row 15: "The docblock is not rewritten"). Sentences owed to
-others: `day-page.md:59` (lane C); `program-contract.md:243`, `preview-harness.tsx:211` and
+others: `day-page.md:59` (lane C asks lane B to change it in 15 PR 2, as its guide is owed there); `program-contract.md:243`, `preview-harness.tsx:211` and
 `fam-1-family-program.md:875` ("7b passes `programsHref`") to the roadmap thread.
 
 ### 15 PR 3 — Home's tiles (≈ 140 lines with tests)
@@ -144,8 +146,9 @@ FAM-1 milestone chart in its description.
 None open. Q1 (what Child and Adult say on the add-athlete form) was answered by the accepted
 prototype, through the roadmap thread (N3, 2026-11-19): no per-kind line; the permanence line stays.
 
-**"N logged today" on Home** (the accepted prototype's tile, `index.html:1826`) becomes its own row
-after step 15, held by the roadmap thread. For that row: the count is a read of the day's logs per
+**"N logged today" on Home** (the accepted prototype's tile, `index.html:1826`): left out for now
+_(maintainer, 2026-11-19)_. If it comes back, it is its own row after step 15, held by the roadmap
+thread. For that row: the count is a read of the day's logs per
 athlete, so its query belongs with the day data (lane E's `queries/day/`) and its DAL wrapper beside
 `getProgramsByAthlete` in lane B's `lib/dal/program/reads.ts`, or in `lib/dal/day/` if lane E prefers.
 It should not ride in 15 PR 3: it adds a second read to the app's front door and a query in another
