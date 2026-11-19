@@ -271,12 +271,17 @@ test.describe('a short page still pushes the footer to the bottom', () => {
 
       // Where the footer would sit if `<main>` hugged its content: the whole page's own height,
       // header, padding and footer included. Growth is switched off for one read and restored.
-      const naturalBottom = await page.evaluate(() => {
+      const natural = await page.evaluate(() => {
         const main = document.querySelector('main')!;
         main.style.flexGrow = '0';
-        const bottom = Math.round(document.querySelector('footer')!.getBoundingClientRect().bottom);
+        const box = {
+          footerBottom: Math.round(
+            document.querySelector('footer')!.getBoundingClientRect().bottom,
+          ),
+          mainHeight: Math.round(main.getBoundingClientRect().height),
+        };
         main.style.flexGrow = '';
-        return bottom;
+        return box;
       });
       // 🔴 **The viewport is sized from the page, so the page is always the shorter one.** It was a
       // fixed 2400px, and `/settings` renders one row per athlete on a database the whole suite
@@ -285,19 +290,13 @@ test.describe('a short page still pushes the footer to the bottom', () => {
       // footer could not reach a 2400px bottom edge and the assertion blamed `flex-1`, on both
       // attempts. The old precondition did not catch it: it compared `<main>`'s first child with the
       // viewport, which leaves out the header, `<main>`'s padding and the footer.
-      const viewportHeight = Math.max(TALL_VIEWPORT_MIN, naturalBottom + SHORT_PAGE_GAP);
+      const viewportHeight = Math.max(TALL_VIEWPORT_MIN, natural.footerBottom + SHORT_PAGE_GAP);
       await page.setViewportSize({ width: MOBILE_VIEWPORT.width, height: viewportHeight });
 
-      const { footerBottom, mainHeight, natural } = await page.evaluate(() => {
-        const main = document.querySelector('main')!;
-        return {
-          footerBottom: Math.round(
-            document.querySelector('footer')!.getBoundingClientRect().bottom,
-          ),
-          mainHeight: Math.round(main.getBoundingClientRect().height),
-          natural: Math.round(main.firstElementChild!.getBoundingClientRect().height),
-        };
-      });
+      const { footerBottom, mainHeight } = await page.evaluate(() => ({
+        footerBottom: Math.round(document.querySelector('footer')!.getBoundingClientRect().bottom),
+        mainHeight: Math.round(document.querySelector('main')!.getBoundingClientRect().height),
+      }));
 
       expect(
         footerBottom,
@@ -305,10 +304,10 @@ test.describe('a short page still pushes the footer to the bottom', () => {
       ).toBe(viewportHeight);
       // Stated separately so a failure says WHICH half broke: a collapsed `<main>` reads as its
       // content height, far short of the viewport.
-      // `SHORT_PAGE_GAP` is the room `flex-1` has to fill: a `<main>` that hugged its content
-      // would be at least that much shorter than this.
+      // `SHORT_PAGE_GAP` is the room `flex-1` has to fill, so `<main>` is at least that much taller
+      // than it is with its growth switched off.
       expect(mainHeight, '<main> stretched rather than hugging its content').toBeGreaterThanOrEqual(
-        natural + SHORT_PAGE_GAP,
+        natural.mainHeight + SHORT_PAGE_GAP,
       );
     });
   }
