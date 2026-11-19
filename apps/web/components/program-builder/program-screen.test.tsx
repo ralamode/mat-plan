@@ -8,8 +8,9 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// The week editor refreshes the page on a stale week.
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+// The week editor and Take off refresh the page when it is stale.
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }) }));
 
 import { athletePath, SAVING_LABEL } from '@/lib/constants';
 
@@ -32,7 +33,10 @@ import { noteArrival, takeArrival } from './arrival';
 import { ProgramScreen } from './program-screen';
 import { newWorkoutPath, PROGRAMS_PATH, workoutPath } from './routes';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  refresh.mockClear();
+});
 
 function actions(extra: Partial<ProgramActions> = {}): ProgramActions {
   return {
@@ -230,6 +234,20 @@ describe('ProgramScreen (FAM-1 8a)', () => {
       const each = screen.getByRole('button', { name: takeOffLabel(name) });
       expect(each.getAttribute('aria-disabled')).toBeNull();
     }
+  });
+
+  it('🔴 a Take off answered not_found is a stale page: it refreshes and says so, never "Try again"', async () => {
+    const takeOff = vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.not_found });
+    render(<ProgramScreen program={familyProgram} actions={actions({ takeOff })} />);
+    fireEvent.click(screen.getByRole('button', { name: takeOffLabel('Athlete One') }));
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(BUILDER_COPY.takeOffStale),
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(alerts()).toEqual([]);
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { level: 2, name: BUILDER_COPY.whosOnIt }),
+    );
   });
 
   it('each name under "Who’s on it" links to the athlete’s day page (15)', () => {

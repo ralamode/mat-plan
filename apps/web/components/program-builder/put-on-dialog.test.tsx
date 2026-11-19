@@ -16,6 +16,7 @@ import {
   candidateOnLabel,
   keepLabel,
   keepsText,
+  lastDayText,
   orderHintText,
   PUT_ON_COPY,
   putOnTitle,
@@ -108,7 +109,9 @@ describe('Put someone on (FAM-1 10b)', () => {
     expect(offBox.getAttribute('aria-disabled')).toBeNull();
     // Their last day is today: said in words, as recorded, not as a date.
     expect(off.lastDay).toBe(familyProgramAfterTakeOff.today);
-    expect(within(dialog()).getByText(PUT_ON_COPY.lastDayToday)).toBeTruthy();
+    expect(
+      within(dialog()).getByText(lastDayText(off.lastDay!, familyProgramAfterTakeOff.today)),
+    ).toBeTruthy();
     fireEvent.click(offBox);
     fireEvent.click(keep(1));
     await waitFor(() => expect(all.putOn).toHaveBeenCalled());
@@ -256,7 +259,7 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
   it('names who is starting above the footer, once someone new is ticked', () => {
     page();
     openDialog();
-    expect(within(dialog()).queryByText(/^Starting: /)).toBeNull();
+    expect(within(dialog()).queryByText(startingNamesText([adult.name]))).toBeNull();
     fireEvent.click(box(adult.name));
     expect(within(dialog()).getByText(startingNamesText([adult.name]))).toBeTruthy();
   });
@@ -269,7 +272,7 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     expect(within(dialog()).queryByRole('radio')).toBeNull();
     expect(keep(1)).toBeTruthy();
     // Nobody new: no "Starting:" line and no shared-targets line.
-    expect(within(dialog()).queryByText(/^Starting: /)).toBeNull();
+    expect(within(dialog()).queryByText(startingNamesText([off.name]))).toBeNull();
     expect(within(dialog()).queryByText(sameTargetsText(familyProgram.name))).toBeNull();
   });
 
@@ -281,17 +284,29 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     expect(within(dialog()).getAllByRole('radio')).toHaveLength(2);
     expect(within(dialog()).getByText(new RegExp(stayOnEitherWayText([off.name])))).toBeTruthy();
     expect(within(dialog()).getByText(startingNamesText([adult.name]))).toBeTruthy();
+    // Start counts who STARTS: "Starting: Adult One" over "Start 1 on …", never "Start 2".
     expect(
-      within(dialog()).getByRole('button', { name: startLabel(2, familyProgram.name) }),
+      within(dialog()).getByRole('button', { name: startLabel(1, familyProgram.name) }),
     ).toBeTruthy();
   });
 
-  it('someone joining a program others are on is told the targets are shared; not on an empty one', () => {
+  it('🔴 the shared-targets line is in the footer, under who is starting, and describes Start', () => {
     page();
     openDialog();
     fireEvent.click(box(adult.name));
-    expect(within(dialog()).getByText(sameTargetsText(familyProgram.name))).toBeTruthy();
-    cleanup();
+    const line = within(dialog()).getByText(sameTargetsText(familyProgram.name));
+    // In the pinned footer with Start, not at the bottom of the scrolling form (UX P1-U1).
+    expect(line.closest('form')).toBeNull();
+    const startButton = start(1);
+    const described = (startButton.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain(startingNamesText([adult.name]));
+    expect(described).toContain(sameTargetsText(familyProgram.name));
+  });
+
+  it('the targets line: one newcomer on an empty program has no one to share with; two do', () => {
     const empty: ProgramView = {
       ...familyProgram,
       athletes: [],
@@ -302,6 +317,9 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     fireEvent.click(box(adult.name));
     expect(startOn(empty)).toBeTruthy();
     expect(within(dialog()).queryByText(sameTargetsText(familyProgram.name))).toBeNull();
+    const other = empty.candidates.find((c) => c.profilePublicId !== adult.profilePublicId)!;
+    fireEvent.click(box(other.name));
+    expect(within(dialog()).getByText(sameTargetsText(familyProgram.name))).toBeTruthy();
   });
 
   it('a household with no athlete is sent Home, never told everyone is on it', () => {

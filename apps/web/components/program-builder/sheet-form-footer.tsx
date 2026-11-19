@@ -19,7 +19,8 @@ import { BUILDER_COPY, PENDING_CLASS } from './builder-text';
  *   `children`, so Enter in a field and the button send the same form.
  * - **Inactive is `aria-disabled`**, reachable, and a tap says why through `message`.
  * - **`lead`**, when given, is a line above the message, in view with the action (Put on's
- *   "Starting: names", step 15). The action wraps a long unbroken name (`NAME_WRAP_CLASS`).
+ *   "Starting: names", step 15), and describes the action before the message does. The action
+ *   wraps a long unbroken name (`NAME_WRAP_CLASS`).
  */
 export function SheetFormFooter({
   formId,
@@ -38,9 +39,10 @@ export function SheetFormFooter({
   onCancel: () => void;
   lead?: ReactNode;
 }) {
+  const leadId = `${messageId}-lead`;
   return (
     <div className="flex flex-col gap-2">
-      {lead}
+      {lead ? <div id={leadId}>{lead}</div> : null}
       <Announcer
         id={messageId}
         message={message}
@@ -54,7 +56,7 @@ export function SheetFormFooter({
           size="lg"
           className={cn('w-full text-base', PENDING_CLASS, NAME_WRAP_CLASS)}
           aria-disabled={inactive || undefined}
-          aria-describedby={messageId}
+          aria-describedby={lead ? `${leadId} ${messageId}` : messageId}
         >
           {action}
         </Button>

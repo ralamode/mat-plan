@@ -13,7 +13,12 @@ import { useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
-import { APP_HOME_PATH, FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import {
+  APP_HOME_PATH,
+  FOCUS_TARGET_CLASS,
+  INLINE_LINK_CLASS,
+  NAME_WRAP_CLASS,
+} from '@/lib/constants';
 import { deviceToday } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -120,6 +125,8 @@ export function PutOn({
   const back = ticked.filter((c) => c.on).map((c) => c.name);
   const fresh = ticked.filter((c) => !c.on).map((c) => c.name);
   const onlyBack = ticked.length > 0 && fresh.length === 0;
+  // Targets are the program's: someone new shares them with whoever is on it, or with each other.
+  const sharesTargets = fresh.length > 0 && (program.athletes.length > 0 || fresh.length > 1);
   const keeps = [
     ...new Set(ticked.flatMap((c) => c.keeps).filter((name) => name !== program.name)),
   ];
@@ -202,7 +209,7 @@ export function PutOn({
           {PUT_ON_COPY.addAthleteBefore}
           <BuilderLink
             href={APP_HOME_PATH}
-            className="focus-visible:ring-ring text-foreground inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-3"
+            className={cn(INLINE_LINK_CLASS, 'text-foreground hover:decoration-2')}
           >
             {PUT_ON_COPY.addAthleteLink}
           </BuilderLink>
@@ -245,9 +252,13 @@ export function PutOn({
             message={message}
             lead={
               fresh.length ? (
-                <p className={`text-sm font-medium ${NAME_WRAP_CLASS}`}>
-                  {startingNamesText(fresh)}
-                </p>
+                <div className={`flex flex-col gap-1 text-sm ${NAME_WRAP_CLASS}`}>
+                  <p className="font-medium">{startingNamesText(fresh)}</p>
+                  {/* In the footer, in view with Start: the one thing to check first (UX P1-U1). */}
+                  {sharesTargets ? (
+                    <p className="text-muted-foreground">{sameTargetsText(program.name)}</p>
+                  ) : null}
+                </div>
               ) : null
             }
             action={
@@ -255,7 +266,7 @@ export function PutOn({
                 ? PUT_ON_COPY.startPending
                 : onlyBack
                   ? keepLabel(ticked.length, program.name)
-                  : startLabel(ticked.length, program.name)
+                  : startLabel(fresh.length, program.name)
             }
             inactive={!ticked.length || pending}
             onCancel={() => close(false)}
@@ -281,9 +292,7 @@ export function PutOn({
                 ? PUT_ON_COPY.onIt
                 : c.on
                   ? lastDay
-                    ? lastDay === program.today
-                      ? PUT_ON_COPY.lastDayToday
-                      : lastDayText(lastDay)
+                    ? lastDayText(lastDay, program.today)
                     : PUT_ON_COPY.onIt
                   : keepsText(c.keeps.filter((name) => name !== program.name));
               return (
@@ -366,11 +375,6 @@ export function PutOn({
               </p>
             )}
           </fieldset>
-          {fresh.length > 0 && program.athletes.length > 0 ? (
-            <p className={`text-muted-foreground text-sm ${NAME_WRAP_CLASS}`}>
-              {sameTargetsText(program.name)}
-            </p>
-          ) : null}
           {keeps.length ? (
             <div className={`text-muted-foreground flex flex-col gap-2 text-sm ${NAME_WRAP_CLASS}`}>
               <p>{orderHintText(program.name)}</p>

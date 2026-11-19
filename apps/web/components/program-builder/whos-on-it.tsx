@@ -1,13 +1,20 @@
 'use client';
 
 import { PROGRAM_REFUSAL, type ProgramActions, type ProgramView } from '@mat-plan/shared';
+import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
 import { PutOn } from './put-on-dialog';
 import { BuilderLink } from './route-link';
 
 import { Button } from '@/components/ui/button';
-import { athletePath, FOCUS_TARGET_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import {
+  athletePath,
+  FOCUS_TARGET_CLASS,
+  INLINE_LINK_CLASS,
+  NAME_WRAP_CLASS,
+} from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 import {
   athleteHint,
@@ -44,7 +51,8 @@ const focusStayed = (tapped: HTMLElement | undefined) => {
  *   polite announcement is not cut off by it. Only if focus is still where the tap left it: an
  *   answer that lands after the person moved on leaves their focus alone.
  * - A refusal keeps the button, refocuses it and says so as an alert, and so does a Take off that
- *   throws (a dropped connection), so no button is left pending. While one Take off is pending,
+ *   throws (a dropped connection), so no button is left pending. `not_found` is a stale page
+ *   instead: it refreshes and says nothing was done, since "Try again" would refuse again. While one Take off is pending,
  *   every Take off button is `aria-disabled`.
  */
 export function WhosOnIt({
@@ -60,6 +68,7 @@ export function WhosOnIt({
   /** Reports to the page's status line; `alert` for a refusal the person must act on. */
   onStatus: (message: string, tone?: 'alert') => void;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -80,6 +89,15 @@ export function WhosOnIt({
       result = { ok: false, reason: PROGRAM_REFUSAL.retry };
     }
     setPending(null);
+    if (!result.ok && result.reason === PROGRAM_REFUSAL.not_found) {
+      // The page is stale (they were taken off, the program or the athlete is gone, elsewhere): a
+      // retry would refuse again. Fetch the page, as Put on does, and say nothing was done. Focus
+      // goes to the section, since the row may leave with the refresh.
+      if (focusStayed(tapped)) headingRef.current?.focus();
+      onStatus(BUILDER_COPY.takeOffStale);
+      router.refresh();
+      return;
+    }
     if (!result.ok) {
       if (focusStayed(tapped)) buttons.current.get(athlete.profilePublicId)?.focus();
       onStatus(takeOffFailedText(athlete.name), 'alert');
@@ -122,7 +140,11 @@ export function WhosOnIt({
               >
                 <BuilderLink
                   href={athletePath(athlete.profilePublicId)}
-                  className={`focus-visible:ring-ring inline-flex min-h-11 max-w-full items-center self-start rounded-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-3 ${NAME_WRAP_CLASS}`}
+                  className={cn(
+                    INLINE_LINK_CLASS,
+                    'min-w-11 max-w-full self-start font-medium hover:decoration-2',
+                    NAME_WRAP_CLASS,
+                  )}
                 >
                   {athlete.name}
                 </BuilderLink>

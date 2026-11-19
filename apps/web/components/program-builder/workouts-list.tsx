@@ -24,7 +24,6 @@ import { BuilderLink } from './route-link';
 
 /** The section's heading: where focus lands on the program page after a workout's Save. */
 export const WORKOUTS_HEADING_ID = 'program-workouts';
-const HEADING_ID = WORKOUTS_HEADING_ID;
 const FULL_ID = 'program-workouts-full';
 
 /**
@@ -53,9 +52,9 @@ export function WorkoutsList({
   const [copying, setCopying] = useState<ProgramView['workouts'][number] | null>(null);
   const copyFrom = useRef<HTMLElement | null>(null);
   return (
-    <section aria-labelledby={HEADING_ID} className="flex flex-col gap-3">
+    <section aria-labelledby={WORKOUTS_HEADING_ID} className="flex flex-col gap-3">
       <h2
-        id={HEADING_ID}
+        id={WORKOUTS_HEADING_ID}
         tabIndex={-1}
         className={`rounded-sm text-lg font-semibold ${FOCUS_TARGET_CLASS}`}
       >

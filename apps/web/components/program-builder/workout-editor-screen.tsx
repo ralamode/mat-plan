@@ -520,8 +520,8 @@ export function WorkoutEditorScreen({
             // reopens an editor holding the draft as it was before a save.
             replace
             className={NAV_LINK_CLASS}
-            // "← Family program" reads as "left arrow Family program"; its name says where it goes.
-            // The visible words are inside it (WCAG 2.5.3).
+            // The label names where the link goes ("Back to Family program"), which the program's
+            // name alone does not; the visible words are inside it (WCAG 2.5.3).
             aria-label={program ? backToLabel(program.name) : undefined}
             onClick={(event) => {
               // A new tab (cmd, ctrl or shift) leaves this one as it is.

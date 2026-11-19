@@ -69,6 +69,9 @@ export const BUILDER_COPY = {
   noOneOnIt: 'No one yet.',
   takeOff: 'Take off',
   takingOff: 'Taking off…',
+  /** A Take off answered `not_found`: the page is stale, as Put on's `PUT_ON_COPY.stale` says. */
+  takeOffStale:
+    'This program changed somewhere else. It now shows the latest; no one was taken off.',
   workouts: 'Workouts',
   noWorkouts: 'No workouts yet.',
   newWorkout: '+ New workout',
@@ -126,12 +129,19 @@ export const renameLabel = (program: string) => `${BUILDER_COPY.rename} ${progra
 export const takeOffLabel = (athlete: string) => `${BUILDER_COPY.takeOff} ${athlete}`;
 export const takingOffLabel = (athlete: string) => `${BUILDER_COPY.takingOff} ${athlete}`;
 
-/** An athlete's line on the program page: "since Mon, Nov 9 · last day … · also on Stretching". */
+/**
+ * An athlete's last day, the one rule for "Who's on it" and the Put-on dialog: "last day today" when
+ * it is today (as recorded, C15; Take off only ever writes today), else the date.
+ */
+export const lastDayText = (day: string, today: string) =>
+  `last day ${day === today ? 'today' : formatDayShort(day)}`;
+
+/** An athlete's line on the program page: "since Mon, Nov 9 · last day today · also on Stretching". */
 export function athleteHint(athlete: ProgramView['athletes'][number], today: string): string {
   const parts = [
     `${hasStarted(athlete, today) ? 'since' : 'starts'} ${formatDayShort(athlete.since)}`,
   ];
-  if (athlete.lastDay) parts.push(`last day ${formatDayShort(athlete.lastDay)}`);
+  if (athlete.lastDay) parts.push(lastDayText(athlete.lastDay, today));
   if (athlete.alsoOn.length) parts.push(`also on ${formatList(athlete.alsoOn)}`);
   return parts.join(' · ');
 }
@@ -625,8 +635,6 @@ export const PUT_ON_COPY = {
   starting: 'Starting',
   onIt: 'on it',
   noProgramYet: 'no program yet',
-  /** Someone taken off today, in the list: they can be put back on (recorded wording, C15). */
-  lastDayToday: 'last day today',
   /** The Starting fieldset when everyone ticked was taken off today: putting them on reopens it. */
   stayOnNoGap: 'They stay on, with no gap.',
   /** No athlete in the household at all: "Home" is the link. */
@@ -644,7 +652,6 @@ export const PUT_ON_COPY = {
 export const putOnTitle = (program: string) => `Put someone on ${program}`;
 export const keepsText = (programs: readonly string[]) =>
   programs.length ? `keeps ${formatList(programs)}` : PUT_ON_COPY.noProgramYet;
-export const lastDayText = (day: string) => `last day ${formatDayShort(day)}`;
 export const candidateOnLabel = (name: string, hint: string) => `${name}, ${hint}`;
 export const startLabel = (count: number, program: string) =>
   count ? `${PUT_ON_COPY.start} ${count} on ${program}` : PUT_ON_COPY.start;

@@ -26,6 +26,7 @@ import {
   saveRefusal,
   supersetLetterOf,
   supersetSpoken,
+  lastDayText,
   takenOffText,
   usedByText,
   weekdayName,
@@ -48,8 +49,11 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
     expect(athleteHint(one!, familyProgram.today)).toBe('since Mon, Nov 9 · also on Stretching');
     const two = familyProgramAfterTakeOff.athletes[1]!;
     expect(athleteHint(two, familyProgramAfterTakeOff.today)).toBe(
-      'since Mon, Nov 9 · last day Sat, Nov 14',
+      'since Mon, Nov 9 · last day today',
     );
+    // The one rule: a last day that is not today (no writer makes one) is its date.
+    expect(lastDayText('2026-11-14', '2026-11-14')).toBe('last day today');
+    expect(lastDayText('2026-11-15', '2026-11-14')).toBe('last day Sun, Nov 15');
     expect(athleteHint({ ...two, since: '2026-11-15', lastDay: null }, '2026-11-14')).toBe(
       'starts Sun, Nov 15',
     );
