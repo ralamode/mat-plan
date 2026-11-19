@@ -1,4 +1,4 @@
-import { addDays, isoDaySchema, localWeekday } from '@mat-plan/shared';
+import { addDays, isMinuteOfDay, isoDaySchema, localWeekday } from '@mat-plan/shared';
 
 /**
  * Date helpers for the "declared date" of an entry (activity_date is a plain DATE,
@@ -74,8 +74,11 @@ export function localMinutesSinceMidnight(timeZone: string, now: Date = new Date
  * Format minutes-since-midnight (0–1439) as a local 12-hour clock string ("6:52 AM"). tz-FREE by
  * design: the minutes are anchored at UTC epoch and formatted in UTC, so no zone re-enters (the same
  * discipline as `formatDayLong`) — the caller already projected the local wall time into the number.
+ * A number that is not a minute of one day (`isMinuteOfDay`) comes back as itself, never a wrapped
+ * clock: 1440 would otherwise read `12:00 AM`.
  */
 export function minutesToClock(minutes: number): string {
+  if (!isMinuteOfDay(minutes)) return String(minutes);
   return (
     new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',

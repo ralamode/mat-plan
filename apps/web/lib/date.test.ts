@@ -165,6 +165,14 @@ describe('minutesToClock (V1-7 — tz-free 12-hour clock)', () => {
   });
 });
 
+it.each([
+  [1440, '1440'],
+  [412.5, '412.5'],
+  [-1, '-1'],
+])('returns %s as itself: not a minute of one day, so never a wrapped clock', (min, written) => {
+  expect(minutesToClock(min)).toBe(written);
+});
+
 describe('formatDayLong', () => {
   it('renders a long, human date from a calendar date (tz-invariant, no timeZone param)', () => {
     expect(formatDayLong('2026-07-24')).toBe('Friday, July 24, 2026');
