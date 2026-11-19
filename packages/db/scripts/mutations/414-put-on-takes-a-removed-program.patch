@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
-index 58457d24..ccab0f65 100644
+index 70491bca..5328bc3c 100644
 --- a/packages/db/src/writers/program/assign.ts
 +++ b/packages/db/src/writers/program/assign.ts
 @@ -13,7 +13,7 @@ import {
@@ -7,11 +7,11 @@ index 58457d24..ccab0f65 100644
  import type { HouseholdScope } from '../../scope';
  import type { Executor } from '../executor';
 -import { inHousehold, liveTemplateBlockIn } from '../ownership';
-+import { inHousehold, templateBlockIn } from '../ownership';
++import { inHousehold, liveTemplateBlockIn, templateBlockIn } from '../ownership';
  import { refuse } from './refuse';
- import { shiftIntoBand } from './shift-band';
- 
-@@ -29,7 +29,7 @@ export async function lockProgram(
+ import { programListOrder } from '../../queries/program/program-list';
+ import { PARK_IDX, shiftIntoBand } from './shift-band';
+@@ -30,7 +30,7 @@ export async function lockProgram(
    const [block] = await tx
      .select({ id: schema.programBlocks.id })
      .from(schema.programBlocks)

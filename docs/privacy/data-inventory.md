@@ -7,6 +7,8 @@ walking `packages/db/src/schema.ts` and the third-party call sites — **not fro
 only way a notice about minors' health data is worth anything.
 
 > **Derived at `38f62de`, 2026-10-07** (PRIV-1, [plan](../plans/priv-1-privacy-review.md)).
+> 🔴 **§7 re-read 2026-11-19 for the dead-limiter event**: Sentry now receives one id-free event when a
+> rate limiter is down (two fixed tags), once per process per limiter. No new processor or data.
 > 🔴 **§4 / §7 / §8 re-read 2026-11-19 for the FAM-1 export rate limit** ([plan](../plans/fam-1-export-owner-only.md)
 > PR A): Upstash now also receives the signed-in person's Clerk user id on each zip export, under its own
 > keyspace (`mat-plan:export:`), for up to about 20 minutes (twice its 10-minute window, the library's key TTL). No new column or stored data; the export's
@@ -305,6 +307,10 @@ only way a notice about minors' health data is worth anything.
 > through today, or soft-deletes a start that has not begun (or began today with nothing logged). The
 > closed row stays as history; the weekday rows stay. No new column, processor, log or export. Called
 > by no action until step 15.
+>
+> **§1 re-read 2026-11-19 for FAM-1 step 6d-iii**: `putOn` now places a program in an athlete's
+> order by the household's Programs list (a reopen at its old place). Only `program_assignments.idx`
+> changes; no new column, processor, log or export. Called by no action until step 15.
 >
 > **§1 re-read 2026-11-18 for FAM-1 step 6d-ii**: `reorderPrograms` rewrites `program_assignments.idx`
 > (an athlete's own order of their programs), inside the household only. No new column, processor, log
@@ -860,6 +866,11 @@ query strings, Server-Action form data, stack-frame variables, everything after 
 (the SEC-3 fix), and a database error's `detail` (the row a CHECK or UNIQUE rejected, which can hold
 household text: added before FAM-1's first free-text length CHECKs could be hit). The honest claim is **"designed and tested to carry no personal data", not "cannot"**
 — an unexpected string in an error message is still possible.
+
+**A dead rate limiter is one event with no id** (2026-11-19): `rate limiter unavailable`, tagged
+`rate_limit_outcome: limiter_unavailable` and `limiter: mutation` or `export`, once per server process
+per limiter family (`apps/web/lib/rate-limit.ts` → `reportLimiterUnavailable`), with a fixed fingerprint per family. No user, profile or household
+id, and no count.
 
 **One identifier is sent to Sentry on purpose: the public id in a scope-miss event.** When a
 signed-in request asks for an id and the scoped read finds nothing for it,
