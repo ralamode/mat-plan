@@ -636,7 +636,7 @@ jobs:
     name: mutations-plan
     runs-on: ubuntu-latest
     outputs:
-      run: ${{ steps.scopes.outputs.run_mutations }}
+      run_mutations: ${{ steps.scopes.outputs.run_mutations }} # the scope's own name: the polarity scan reads it
       shards: ${{ steps.shards.outputs.shards }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -665,13 +665,16 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
         run: |
-          if [ "$EVENT" = push ]; then n=8; else n=4; fi
-          echo "shards=$(node -e "console.log(JSON.stringify([...Array(${n}).keys()]))")" >>"$GITHUB_OUTPUT"
+          if [ "$EVENT" = push ]; then
+            echo 'shards=[0,1,2,3,4,5,6,7]' >>"$GITHUB_OUTPUT"
+          else
+            echo 'shards=[0,1,2,3]' >>"$GITHUB_OUTPUT"
+          fi
 
   mutations:
     name: mutations (${{ strategy.job-index }})
     needs: mutations-plan
-    if: needs.mutations-plan.outputs.run != 'false'
+    if: needs.mutations-plan.outputs.run_mutations != 'false'
     runs-on: ubuntu-latest
     env:
       pnpm_config_verify_deps_before_run: 'false' # see `quality`
@@ -717,7 +720,7 @@ jobs:
   mutations-total:
     name: mutations-total
     needs: [mutations-plan, mutations]
-    if: "!cancelled() && needs.mutations-plan.outputs.run != 'false'"
+    if: "!cancelled() && needs.mutations-plan.outputs.run_mutations != 'false'"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

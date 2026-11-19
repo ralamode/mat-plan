@@ -512,7 +512,8 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     // Not a `fieldError`: the name is not invalid, and `aria-invalid` on a correct value is a lie.
     // 🔴 `toEqual`, not `toMatchObject`, on purpose: this pins the envelope's WHOLE shape, so a
     // field added to it has to be a deliberate act. It earned that when `typed`/`chosenKind` were
-    // added for an unhydrated render and then removed again — see `docs/tech-debt.md`.
+    // added for an unhydrated render and then removed again; that render is reachable since the
+    // 2026-11-19 referrer fix, so docs/tech-debt.md owes them back (the narrowed add/rename entry).
     expect(state).toEqual({
       ok: false,
       error: null,

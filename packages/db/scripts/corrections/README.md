@@ -63,6 +63,10 @@ Add an entry to `registry.ts`. A correction is a `name`, a one-line `what`, the 
 fixes the cause, and a `run(db, apply)` that returns what it changed. Nothing else to wire —
 `db:correct` lists what it finds.
 
+A returned line that describes **no write** ("nothing to do", "already claimed … no change") is a
+`note(…)` from `summary.ts`. The runner prints a note and never counts it, so a run that writes
+nothing never ends with "1 change(s) would be made" (`summary.test.ts`).
+
 ## Applied
 
 **`Applied`** is the date `--apply` actually ran, or `pending` — the `Correction` type carries no
