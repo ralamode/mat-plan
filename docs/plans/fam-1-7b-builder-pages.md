@@ -117,7 +117,8 @@ export default async function ProgramsPage() {
   - `getProgramView(programId, today, tz)` (lane B's wrapper with primitive arguments; it passes `{ today, tz }` on to lane P's read, adopted as 6c-ii lands); `null`
     gives `notFound()`.
   - The "Who's on it" section shows an interim line until step 15: "Putting someone on a program
-    comes in the next update." Its owed line in `owed.test.ts` is deleted by 15 (UX1 #4, option b).
+    isn't in the app yet." (7b-i review: "comes in the next update" would be false once 7b-ii ships
+    first.) Its owed line in `owed.test.ts` is deleted by 15 (UX1 #4, option b).
 - **Workout pages:**
   - `getWorkoutDraft` (7a-i order) and `getItemPickerData()` (its first consumer).
   - `program` is found with `list.find(…)` on `getProgramList`, **comparing lower-cased ids**
@@ -231,11 +232,13 @@ S1). No word offers a delete, because none exists. Helpers live in `builder-text
 - The workout editor's existing "+ Add items" stop at `MAX_WORKOUT_ITEMS` gets the same visible
   shape (`PENDING_CLASS`, hint). It looked live when full (a defect from #460).
 - **Permanence, said where it starts:**
-  - `BUILDER_COPY.createHint`: "A program can be renamed, but not deleted yet."
-  - Copy's footer: "…A copy can't be deleted yet."
+  - `BUILDER_COPY.createHint`: "A program can be renamed but not deleted in the app. To have one
+    removed, ask (see the privacy notice)."
+  - Copy's footer (`COPY_COPY.permanent`): "A copy can't be deleted in the app. To have one removed,
+    ask (see the privacy notice)."
 
-  Both depend on H7: if the maintainer picks "ask and it's removed", "yet" stays and the notice
-  says how.
+  H7 picked (a), so neither says "yet" (which would promise a Delete with no row): both say how,
+  and the notice says the rest.
 
 ### Privacy (7b-i; the whole owed list, as the privacy lens widened it)
 
@@ -271,10 +274,12 @@ below names its inventory owner sentence.
    athlete's programs show to every member (`ID-1`). One sentence goes in the notice's "Who can see
    it".
 8. **§7, Sentry:** the new `reportProgramMiss` call sites, How to's no-report rule, and the masking.
-9. **H7, the deletion path (held for the maintainer):** a built program, a workout or a typed item
-   can be removed only with the household. **Both notice paragraphs are drafted in 7b-i's PR
-   description and neither goes into `notice.md` until the maintainer picks** (board, 2026-11-18).
-   7b-i does not merge before that.
+9. **H7, the deletion path (decided (a), maintainer, 2026-11-18):** the app deletes no built
+   program, workout or typed item, and the notice says a household can ask and it is removed. Before
+   removing, the household is told which athletes it affects and offered a rename or taking everyone
+   off instead; there is no waiting period; the restore point is held 3 days; logs keep their names
+   (board, from #632). The notice points at the runbook section "Remove one program, workout or typed
+   item on request" (`docs/runbooks.md`, #627).
 10. **Process:** a dated inventory header entry; the notice's "Last updated"; `notice-content.ts`
     regenerated with `pnpm --filter web privacy:generate`; and `notice.md:290` changed to "the
     programs you built".

@@ -17,8 +17,8 @@ import {
  *
  * ⚠️ **Not in `actions.ts`**: a `'use server'` module may export only async functions. A plain
  * module (no `'server-only'`, no `'use client'`), so 7b's pages can pass it to a client screen:
- * the members are Server Action references. Until 7b no page imports it
- * (`test/program-tables-stay-dark.test.ts` pins that).
+ * the members are Server Action references. Since 7b-i the program pages import it, and only a page
+ * under `app/programs/` may (`test/program-tables-stay-dark.test.ts` pins that).
  */
 export const PROGRAM_ACTIONS = {
   createProgram: createProgramAction,

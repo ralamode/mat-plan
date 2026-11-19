@@ -25,12 +25,17 @@ import {
   cleanName,
   COPY_COPY,
   copiedText,
+  copyRefusal,
   copyTakenElsewhereText,
   copyTakenText,
   copyTitle,
+  dayIsFull,
   doubleText,
   putOnInsteadText,
   targetPeopleText,
+  programIsFull,
+  skippedFullText,
+  thisProgramFullOption,
   thisProgramOption,
   WEEK_COPY,
 } from './builder-text';
@@ -98,6 +103,8 @@ export function CopyWorkout({
   // The other program that refused this copy's name: the Name field shows for it from then on.
   const [refusedIn, setRefusedIn] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  // A `limit_reached` is said on To (the program, or a day of it, is full), as well as in the footer.
+  const [toRefused, setToRefused] = useState(false);
   const [pending, setPending] = useState(false);
   // One attempt's id, reused on a retry; a new opening is a new attempt.
   const [clientId, setClientId] = useState(newId);
@@ -132,12 +139,16 @@ export function CopyWorkout({
       setNameError(null);
       setRefusedIn(null);
       setMessage('');
+      setToRefused(false);
       setPending(false);
       setClientId(newId());
     }
   }
 
   const same = to === program.programPublicId;
+  // Within this program its full days can't be picked (7b-i); another program's week isn't read.
+  const fullHere = new Set(MONDAY_FIRST.filter((d) => dayIsFull(program.week[d].length)));
+  const full = same ? fullHere : new Set<Weekday>();
   const target = options.find((o) => o.programPublicId === to);
   // The Name field: always for a copy here (C15), and for another program once it refused the name.
   const naming = same || (!!refusedIn && refusedIn === to);
@@ -163,7 +174,11 @@ export function CopyWorkout({
     setTo(next);
     changed();
     setMessage('');
+    setToRefused(false);
     setNameError(null);
+    // A full day of this program, ticked for another one, is not picked here.
+    if (next === program.programPublicId)
+      setDays((d) => new Set([...d].filter((x) => !fullHere.has(x))));
     // Replace the label only if it is still the prefill: what the person typed stays theirs.
     if (label === '' || label === prefilled) {
       const fill = prefillFor(next);
@@ -205,10 +220,13 @@ export function CopyWorkout({
       setLabelError(WEEK_COPY.labelInvalid);
       return focusField(document.getElementById(`${ids}-label`));
     }
-    const weekdays = MONDAY_FIRST.filter((d) => days.has(d));
+    // A day of this program that filled while the dialog was open is not sent.
+    const weekdays = MONDAY_FIRST.filter((d) => days.has(d) && !full.has(d));
+    const skipped = MONDAY_FIRST.filter((d) => days.has(d) && full.has(d));
     const mine = begin();
     setPending(true);
     setMessage('');
+    setToRefused(false);
     const result = await attempt({
       clientId,
       workoutPublicId: workout.workoutPublicId,
@@ -221,6 +239,19 @@ export function CopyWorkout({
     setPending(false);
     if (!result.ok) {
       if (result.reason === PROGRAM_REFUSAL.retry) return setMessage(COPY_COPY.failed);
+      if (result.reason === PROGRAM_REFUSAL.limit_reached) {
+        // The page is not stale: say which cap, on To, and leave the choice to the person.
+        setMessage(
+          copyRefusal(result.reason, {
+            sameProgram: same,
+            dayPicked: weekdays.length > 0,
+            target: target.name,
+          }),
+        );
+        setToRefused(true);
+        requestAnimationFrame(() => focusField(document.getElementById(TO_ID)));
+        return;
+      }
       if (result.reason === PROGRAM_REFUSAL.name_taken) {
         // The field shows, prefilled, with what was refused said on it; Copy is pressed again.
         if (!same) setRefusedIn(target.programPublicId);
@@ -234,7 +265,9 @@ export function CopyWorkout({
       return;
     }
     said.current = {
-      text: copiedText(copyAs, target.name, weekdays, same),
+      text: [copiedText(copyAs, target.name, weekdays, same), skippedFullText(skipped)]
+        .filter(Boolean)
+        .join(' '),
       focus: same ? workoutPath(program.programPublicId, result.workoutPublicId) : null,
     };
     onClose();
@@ -287,7 +320,11 @@ export function CopyWorkout({
             id={TO_ID}
             value={to}
             onChange={(event) => choose(event.target.value)}
-            aria-describedby={target ? peopleId : undefined}
+            aria-invalid={toRefused || undefined}
+            aria-describedby={
+              [target ? peopleId : null, toRefused ? messageId : null].filter(Boolean).join(' ') ||
+              undefined
+            }
             className={`${INPUT_CLASS} w-full min-w-0`}
           >
             <option value="" disabled>
@@ -295,7 +332,11 @@ export function CopyWorkout({
             </option>
             {options.map((o) => (
               <option key={o.programPublicId} value={o.programPublicId}>
-                {o.programPublicId === program.programPublicId ? thisProgramOption(o.name) : o.name}
+                {o.programPublicId !== program.programPublicId
+                  ? o.name
+                  : programIsFull(program.workouts.length)
+                    ? thisProgramFullOption(o.name)
+                    : thisProgramOption(o.name)}
               </option>
             ))}
           </select>
@@ -322,9 +363,11 @@ export function CopyWorkout({
         <DaysFieldset
           idPrefix={ids}
           days={days}
+          full={full}
           onDays={(next) => {
             setDays(next);
             setMessage('');
+            setToRefused(false);
             changed();
           }}
           legend={
@@ -359,6 +402,7 @@ export function CopyWorkout({
         ) : null}
         <div className="text-muted-foreground flex flex-col gap-2 text-sm">
           <p>{COPY_COPY.separate}</p>
+          <p>{COPY_COPY.permanent}</p>
           {target && !same && putOnWired ? <p>{putOnInsteadText(program.name)}</p> : null}
         </div>
       </form>

@@ -145,7 +145,9 @@ export function WhosOnIt({
       )}
       {putOn ? (
         <PutOn program={program} putOn={putOn} takeOffWired={!!takeOff} onStatus={onStatus} />
-      ) : null}
+      ) : (
+        <p className="text-muted-foreground text-sm">{BUILDER_COPY.putOnComing}</p>
+      )}
     </section>
   );
 }

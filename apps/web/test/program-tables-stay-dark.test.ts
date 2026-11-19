@@ -1,4 +1,4 @@
-import { globSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -276,20 +276,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   });
 
   /**
-   * FAM-1 7a-i wires the actions and 7a-ii assembles them as `PROGRAM_ACTIONS` (`actions.contract.ts`),
-   * and **no page imports either until 7b**: Next registers a Server
-   * Action only when the module graph reaches it, so until then no request can write a program. The
-   * privacy notice and the data inventory still say so, truthfully. The PR that imports this module
-   * from a page (7b) lifts this pin and owes, in the same PR (privacy lens, 2026-11-16):
+   * FAM-1 7a-i wires the actions and 7a-ii assembles them as `PROGRAM_ACTIONS` (`actions.contract.ts`).
+   * **Since 7b-i the builder's pages import it**, so every action is reachable (Next registers a
+   * Server Action once the module graph reaches it). The pin that held them dark until then lifted in
+   * that PR, with the privacy list it owed (`docs/plans/fam-1-7b-builder-pages.md` §Privacy). What it
+   * still holds: **only a page under `app/programs/` imports the module** (a component gets the
+   * actions as props), and the two privacy sentences that stopped being true stay gone.
    */
-  const OWED_AT_7B = [
-    'notice.md "Programs you build yourself … (coming; the app cannot save one yet)" made true now',
-    'notice.md "Three text boxes have no filter": recount with a prescription\'s notes',
-    'notice.md "Technical bits": a client id per item card (inventory §2, prescriptions.client_id)',
-    'notice.md export omissions: built programs are not in the export (inventory §6)',
-    'notice.md: a swapped item is hidden, not erased (inventory §8, D19)',
-    'data-inventory.md: every "until step 7b" sentence (§1 to §3, §8), rewritten as reachable',
-  ];
   /** The module itself, as a path from the repo root without its extension. */
   const ACTIONS = 'apps/web/app/programs/actions';
   /**
@@ -315,14 +308,82 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
   /** The module and its registry are the module, not a page reaching it; tests are skipped below. */
   const THE_MODULE = new Set([`${ACTIONS}.ts`, `${ACTIONS}.registry.ts`, `${CONTRACT}.ts`]);
 
-  it('no page or component imports the program actions until 7b (see OWED_AT_7B)', () => {
+  /** A page of the program builder: the one kind of file that may import the actions module. */
+  const PROGRAM_PAGE = /^apps\/web\/app\/programs\/(?:.+\/)?page\.tsx$/;
+
+  it('only a page under app/programs/ imports the program actions (since 7b-i)', () => {
     const web = files.filter(
       (f) => f.startsWith('apps/web/') && !/\.test\.tsx?$/.test(f) && !THE_MODULE.has(f),
     );
-    expect(
-      web.filter(importsActions),
-      `lifting this pin owes, in the same PR:\n- ${OWED_AT_7B.join('\n- ')}`,
-    ).toEqual([]);
+    const importing = web.filter(importsActions);
+    expect(importing.filter((f) => !PROGRAM_PAGE.test(f))).toEqual([]);
+    // Non-vacuity: the two 7b-i pages do import it.
+    expect(importing).toEqual(
+      expect.arrayContaining([
+        'apps/web/app/programs/page.tsx',
+        'apps/web/app/programs/[programId]/page.tsx',
+      ]),
+    );
+    expect(PROGRAM_PAGE.test('apps/web/app/programs/[programId]/workouts/new/page.tsx')).toBe(true);
+    expect(PROGRAM_PAGE.test('apps/web/components/program-builder/program-screen.tsx')).toBe(false);
+    expect(PROGRAM_PAGE.test('apps/web/app/programs/actions.form.tsx')).toBe(false);
+  });
+
+  /** The program DAL's directory, as a path from the repo root. */
+  const PROGRAM_DAL_DIR = 'apps/web/lib/dal/program';
+  /**
+   * Does a source at `file` import lane P's package (`@mat-plan/db`, or a subpath of it) or the
+   * program DAL, by the `@/` alias or a relative path, in any form `SPECIFIER` reads?
+   */
+  const readsLaneP = (file: string, source: string) =>
+    [...source.matchAll(SPECIFIER)].some(([, spec]) => {
+      if (spec === '@mat-plan/db' || spec!.startsWith('@mat-plan/db/')) return true;
+      const path = spec!.startsWith('@/')
+        ? `apps/web/${spec!.slice(2)}`
+        : spec!.startsWith('.')
+          ? relative(REPO, resolve(dirname(join(REPO, file)), spec!))
+          : null;
+      return !!path && (path === PROGRAM_DAL_DIR || path.startsWith(`${PROGRAM_DAL_DIR}/`));
+    });
+
+  it("no client component imports lane P's reads or the program DAL", () => {
+    const clients = files.filter(
+      (f) => f.startsWith('apps/web/') && /^\s*['"]use client['"]/.test(code(join(REPO, f))),
+    );
+    // Non-vacuity: the builder's screens are client components.
+    expect(clients).toContain('apps/web/components/program-builder/program-screen.tsx');
+    expect(clients.filter((f) => readsLaneP(f, code(join(REPO, f))))).toEqual([]);
+    // Non-vacuity: every import form, by alias, by relative path and by package subpath.
+    const screen = 'apps/web/components/program-builder/x.tsx';
+    for (const form of [
+      "import { readProgramView } from '@mat-plan/db';",
+      "import { readProgramView } from '@mat-plan/db/queries/program';",
+      "import { getProgramView } from '@/lib/dal/program/reads';",
+      "import { getProgramView } from '@/lib/dal/program';",
+      "import { getProgramView } from '../../lib/dal/program/reads';",
+      "export { getProgramView } from '../../lib/dal/program/reads';",
+      "const m = await import('../../lib/dal/program/reads');",
+      "const m = require('@/lib/dal/program/reads');",
+    ])
+      expect(readsLaneP(screen, form), form).toBe(true);
+    expect(readsLaneP(screen, "import { x } from '@/lib/dal/programs-extra';")).toBe(false);
+    expect(readsLaneP(screen, "import { x } from '@mat-plan/dbx';")).toBe(false);
+    expect(readsLaneP(screen, "import { x } from '../../lib/dal/day/day';")).toBe(false);
+  });
+
+  it('the privacy docs no longer say the builder is coming (the list 7b-i owed)', () => {
+    const notice = readFileSync(join(REPO, 'docs/privacy/notice.md'), 'utf8');
+    expect(notice).not.toContain('(coming; the app cannot save one yet)');
+    // Every "7b" left in the inventory is dated history (its header's blockquote), never a promise.
+    const inventory = readFileSync(join(REPO, 'docs/privacy/data-inventory.md'), 'utf8');
+    const FORWARD =
+      /until (?:step )?7b\b|from 7b\b|\(7b\) owns|reaches it until 7b|no page serves it/;
+    const promises = inventory
+      .split('\n')
+      .filter((line) => !line.startsWith('>') && FORWARD.test(line));
+    expect(promises).toEqual([]);
+    expect(FORWARD.test('no screen reaches them until step 7b')).toBe(true);
+    expect(FORWARD.test('the PR that makes it reachable from a screen (7b) owns it')).toBe(true);
   });
 
   it('the pin sees every form of import, by alias and by relative path (non-vacuity)', () => {
