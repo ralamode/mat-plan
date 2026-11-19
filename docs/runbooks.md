@@ -1388,8 +1388,10 @@ per 5 minutes, keyed on the signed-in Clerk user id.
    still **work** (fail-open, by design — a Redis outage must not stop a kid logging), and a Sentry
    event should carry a `rate-limit` breadcrumb saying the limiter was unavailable. ⚠️ That breadcrumb
    is the ONLY signal of a permanently dead limiter, which is why it exists.
-5. ⏳ **The zip export is not rate-limited at all** — the most expensive single request in the app,
-   and since `1d` the only unlimited surface (`docs/tech-debt.md`).
+5. **The zip export has its own limit** (`checkExportLimit`, `mat-plan:export`); a dead or timing-out limiter
+   leaves a `export limiter unavailable` breadcrumb, which reaches Sentry only with a later error
+   in the same request. What is limited: `.github/SECURITY.md` → Rate
+   limiting.
 
 ### 3. Confirm CI is unaffected
 
