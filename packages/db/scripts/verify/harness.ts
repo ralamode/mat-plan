@@ -193,27 +193,32 @@ export async function constraintDef(conname: string): Promise<string> {
 }
 
 /**
- * Run `fn` with **every** console method that prints captured (`log`, `info`, `warn`, `error`), and
- * return what it printed, in order. The seed's report is printed to `migrate.yml`'s world-readable log,
+ * Run `fn` with **everything the process prints** captured (both of its output streams, so every
+ * console method and any direct write), and return it, in order. The seed's report is printed to `migrate.yml`'s world-readable log,
  * and what must NOT be in it (a slug of a row a household owns, a household's free text) is a privacy
  * proof: capturing `warn` alone would let a line moved to `console.log` pass every "does not include"
  * assertion while checking nothing (CAT-3 A2-i, privacy P1-2). Restores the real methods in a `finally`.
  */
 export async function captureOutput(fn: () => Promise<void> | void): Promise<string> {
-  const methods = ['log', 'info', 'warn', 'error'] as const;
-  const real = methods.map((m) => console[m]);
-  const lines: string[] = [];
-  for (const m of methods) {
-    console[m] = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+  // The process's two streams, not a list of console methods: `debug`, `trace`, `dir` and `table`
+  // are their own properties, and a direct `process.stdout.write` bypasses `console` altogether.
+  const streams = [process.stdout, process.stderr] as const;
+  const real = streams.map((s) => s.write.bind(s));
+  let printed = '';
+  for (const s of streams) {
+    s.write = ((chunk: string | Uint8Array) => {
+      printed += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      return true;
+    }) as typeof s.write;
   }
   try {
     await fn();
   } finally {
-    methods.forEach((m, k) => {
-      console[m] = real[k]!;
+    streams.forEach((s, k) => {
+      s.write = real[k]! as typeof s.write;
     });
   }
-  return lines.join('\n');
+  return printed.replace(/\n$/, '');
 }
 
 // The raw-result readers live once in `src/writers/executor.ts` (`src/erasure/` needs them too).

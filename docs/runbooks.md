@@ -478,11 +478,10 @@ reference data, which is strictly worse than what it replaced. So the filter is 
 ```sql
 -- Slugs and counts only. Never select `name` or a household's `public_id`: a row's name is a
 -- household's free text, and this output must never be pasted into a PR, issue, plan, changelog
--- fragment or commit.
+-- fragment or commit. Soft-deleted rows are included, as the seed's count includes them.
 SELECT m.slug, count(*) AS household_rows
 FROM movements m
 WHERE m.household_id IS NOT NULL
-  AND m.deleted_at IS NULL
   AND EXISTS (SELECT 1 FROM movements g WHERE g.household_id IS NULL AND g.slug = m.slug)
 GROUP BY m.slug
 ORDER BY m.slug;
