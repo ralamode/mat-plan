@@ -1385,12 +1385,13 @@ per 5 minutes, keyed on the signed-in Clerk user id.
 3. The refusal copy is `RATE_LIMITED` (`lib/constants.ts`), returned in the action's envelope — **not**
    an error page. An error page means the limiter is throwing instead of returning.
 4. Sanity-check the fail-open path: temporarily set a bogus `UPSTASH_REDIS_REST_TOKEN`. Logging must
-   still **work** (fail-open, by design — a Redis outage must not stop a kid logging), and a Sentry
-   event should carry a `rate-limit` breadcrumb saying the limiter was unavailable. ⚠️ That breadcrumb
-   is the ONLY signal of a permanently dead limiter, which is why it exists.
-5. **The zip export has its own limit** (`checkExportLimit`, `mat-plan:export`); a dead or timing-out limiter
-   leaves a `export limiter unavailable` breadcrumb, which reaches Sentry only with a later error
-   in the same request. What is limited: `.github/SECURITY.md` → Rate
+   still **work** (fail-open, by design — a Redis outage must not stop a kid logging), and Sentry
+   should receive **one** `rate limiter unavailable` event per server instance, tagged
+   `rate_limit_outcome: limiter_unavailable` and `limiter: mutation` (no id), plus a `rate-limit`
+   breadcrumb on every such request. ⚠️ That event is the ONLY signal of a permanently dead limiter:
+   a request it let through succeeds, so a breadcrumb alone would never be sent.
+5. **The zip export has its own limit** (`checkExportLimit`, `mat-plan:export`); a dead or timing-out
+   limiter raises the same event with `limiter: export`, once per server instance. What is limited: `.github/SECURITY.md` → Rate
    limiting.
 
 ### 3. Confirm CI is unaffected

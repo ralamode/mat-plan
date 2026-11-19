@@ -446,3 +446,48 @@ describe('EXPORT_RATE_LIMIT — the export has its own budget (FAM-1 export foll
     });
   });
 });
+
+/**
+ * #665's P2 (the board's fix): a dead limiter raises one real Sentry event per process per limiter.
+ * A breadcrumb alone is sent only with a later event, so a request the dead limiter let through
+ * would report nothing.
+ */
+describe('reportLimiterUnavailable — a dead limiter is an event, once per process', () => {
+  it('🔴 one event per limiter, then only breadcrumbs; no id in either', async () => {
+    const captureMessage = vi.fn();
+    const addBreadcrumb = vi.fn();
+    vi.doMock('@sentry/nextjs', () => ({ captureMessage, addBreadcrumb }));
+    try {
+      const { reportLimiterUnavailable } = await loadWith({ env: {} });
+      reportLimiterUnavailable('mutation');
+      reportLimiterUnavailable('mutation');
+      reportLimiterUnavailable('export');
+      reportLimiterUnavailable('export');
+      // The exact objects, so an id added to either fails here.
+      expect(captureMessage.mock.calls).toEqual([
+        [
+          'rate limiter unavailable',
+          {
+            level: 'warning',
+            tags: { rate_limit_outcome: 'limiter_unavailable', limiter: 'mutation' },
+          },
+        ],
+        [
+          'rate limiter unavailable',
+          {
+            level: 'warning',
+            tags: { rate_limit_outcome: 'limiter_unavailable', limiter: 'export' },
+          },
+        ],
+      ]);
+      expect(addBreadcrumb.mock.calls.map(([b]) => b)).toEqual([
+        { category: 'rate-limit', level: 'warning', message: 'mutation limiter unavailable' },
+        { category: 'rate-limit', level: 'warning', message: 'mutation limiter unavailable' },
+        { category: 'rate-limit', level: 'warning', message: 'export limiter unavailable' },
+        { category: 'rate-limit', level: 'warning', message: 'export limiter unavailable' },
+      ]);
+    } finally {
+      vi.doUnmock('@sentry/nextjs');
+    }
+  });
+});

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import * as Sentry from '@sentry/nextjs';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
@@ -245,6 +246,37 @@ export async function checkMutationLimit(
  */
 export async function checkExportLimit(userId: string): Promise<LimitCheck> {
   return check(exportLimiter, userId);
+}
+
+/** Which limiter a caller found dead: the event's one tag besides the outcome. */
+export type LimiterName = 'mutation' | 'export';
+
+/** The limiters already reported dead in this process. Two names, so it cannot grow. */
+const reportedUnavailable = new Set<LimiterName>();
+
+/**
+ * **A dead limiter, said out loud** (#665's P2, the board's fix, 2026-11-19). Every check here fails
+ * open, so a limiter that is down for good looks exactly like a healthy one. A breadcrumb alone is not
+ * a signal: Sentry sends breadcrumbs only with a later event, and a request the dead limiter let
+ * through succeeds and sends none. So the caller's `limiter-error` raises one real event, **once per
+ * process per limiter** (the `session.ts` `auth() unavailable` shape), and keeps the breadcrumb for an
+ * error that does follow.
+ *
+ * What it carries: the fixed message and two tags. No user id, no profile id, no count; the limiter
+ * name is one of two fixed words.
+ */
+export function reportLimiterUnavailable(limiter: LimiterName): void {
+  Sentry.addBreadcrumb({
+    category: 'rate-limit',
+    level: 'warning',
+    message: `${limiter} limiter unavailable`,
+  });
+  if (reportedUnavailable.has(limiter)) return;
+  reportedUnavailable.add(limiter);
+  Sentry.captureMessage('rate limiter unavailable', {
+    level: 'warning',
+    tags: { rate_limit_outcome: 'limiter_unavailable', limiter },
+  });
 }
 
 /** What a limit check answers. `allowed` is true on every reason but `limited` (fail-open). */

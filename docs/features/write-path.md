@@ -246,7 +246,9 @@ The shapes those lanes agree on, the fakes and the preview route are
    📌 **`lib/rate-limit.ts` holds THREE limiters**: the two mutation policies (the note above; the row
    writes' callers are the row actions since FAM-1 step 12b) and, since the FAM-1 export follow-up, the
    export's (`checkExportLimit`, `mat-plan:export`), which is not a `MutationLimitPolicy` and has the
-   export route as its one caller; its docblock says so.
+   export route as its one caller; its docblock says so. A dead limiter (`limiter-error`, a timeout
+   included) is reported by `reportLimiterUnavailable` in the same file: one id-free Sentry event per
+   process per limiter, because a request the dead limiter let through sends no breadcrumb.
    **Its MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
    V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since
