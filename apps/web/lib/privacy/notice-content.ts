@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-18. This is a beta."
+            "text": "Last updated: 2026-11-19. This is a beta."
           }
         ]
       }
