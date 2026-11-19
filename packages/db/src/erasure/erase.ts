@@ -34,8 +34,9 @@ import { countOf, householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } f
  * **SAVEPOINT**: the core's work is released into the caller's transaction and commits only when the
  * caller's does, so a caller that compares the returned `total` with an expected one and throws
  * rolls the whole erasure back. A refusal inside the core rolls back to the savepoint and rethrows;
- * the caller's transaction is left usable. ⚠️ The timeouts are `SET LOCAL`: they outlive the
- * savepoint and last until the CALLER's transaction ends.
+ * the caller's transaction is left usable. ⚠️ The timeouts are `SET LOCAL`: when the core succeeds
+ * they outlive the savepoint and last until the CALLER's transaction ends; a refusal rolls them back
+ * with the savepoint.
  *
  * **What it returns:** the per-table counts in graph order (rows that would be erased on a dry run,
  * rows erased under `apply`), their total, the pre-flight counts, and the household's Clerk user ids,
@@ -51,7 +52,8 @@ import { countOf, householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } f
  * 🔴 **The lock order: never against the program writers.** `LOCK_ORDER` takes H's `program_blocks`
  * rows FIRST, then H's `profiles`, the order of the assignment writers (`writers/program/assign.ts`
  * `lockProgram` then `lockAthletes`, lane guide invariant 12), so the core cannot deadlock with
- * `putOn`, `takeOff` or `reorderPrograms`. Then the household row; then `program_blocks` and
+ * `putOn`, `takeOff` or `reorderPrograms` on a program that existed when it started (a program
+ * created while it runs is locked only in the second pass, after the athletes, so `putOn` on it can). Then the household row; then `program_blocks` and
  * `profiles` ONCE MORE, to hold any inserted before the household row was locked (no new one can be
  * inserted after it); then the other parents, parent before child. Every table in id order.
  * ⚠️ **It CAN deadlock with a log write.** The row writer takes `KEY SHARE` on a session (inserting a
@@ -205,12 +207,21 @@ async function members(exec: Executor, scope: OwnerScope): Promise<ErasureReport
   }));
 }
 
+/**
+ * The rows of one graph table the core counts AND deletes: one function for both, so the delete can
+ * never take rows the count did not (and mutation 288 can widen both at once, leaving only the
+ * household-column check to refuse).
+ */
+function rowsFor(g: (typeof HOUSEHOLD_GRAPH)[number], scope: OwnerScope): SQL {
+  return g.householdRows(scope);
+}
+
 async function measure(exec: Executor, scope: OwnerScope) {
   const counts: { table: string; rows: number }[] = [];
   for (const g of HOUSEHOLD_GRAPH) {
     counts.push({
       table: graphTableName(g.table),
-      rows: await countRows(exec, g.table, g.householdRows(scope)),
+      rows: await countRows(exec, g.table, rowsFor(g, scope)),
     });
   }
   return {
@@ -222,7 +233,12 @@ async function measure(exec: Executor, scope: OwnerScope) {
 
 const totalOf = (counts: readonly { rows: number }[]) => counts.reduce((n, c) => n + c.rows, 0);
 
-/** The column that names a row's household, where the table has one (the household row: its id). */
+/**
+ * The column that names a row's household, where the table has one: `households` (its id),
+ * `household_members`, `profiles`, `program_blocks` and `movements`. Every other graph table reaches
+ * the household only through one of those parents, so it has no column to check: a widened predicate
+ * there is caught by the parents' foreign keys or by `db:verify`'s end-state proofs, not here.
+ */
 function householdColumn(t: GraphTable): PgColumn | null {
   if (t === schema.households) return schema.households.id;
   return 'householdId' in t ? (t.householdId as PgColumn) : null;
@@ -273,10 +289,10 @@ export async function eraseHousehold(
       const owner = householdColumn(g.table);
       const gone = rowsOf<{ id: number; hh: number | string | null }>(
         await tx.execute(
-          sql`DELETE FROM ${g.table} WHERE ${g.householdRows(scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
+          sql`DELETE FROM ${g.table} WHERE ${rowsFor(g, scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
         ),
       );
-      if (owner && gone.some((r) => Number(r.hh) !== Number(householdId))) {
+      if (owner && gone.some((r) => r.hh === null || Number(r.hh) !== Number(householdId))) {
         throw new ErasureForeignRow(m.counts[i].table);
       }
       if (gone.length !== m.counts[i].rows) {

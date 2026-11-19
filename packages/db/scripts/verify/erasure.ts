@@ -34,7 +34,7 @@ import {
 } from '../../src/erasure/graph';
 import { PREFLIGHT_CHECKS, type PreflightCheck } from '../../src/erasure/preflight';
 import { ownerScope, type HouseholdScope, type OwnerScope } from '../../src/scope';
-import type { Executor } from '../../src/writers/executor';
+import { setLocalTimeouts, type Executor } from '../../src/writers/executor';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import {
   householdMemberInHousehold,
@@ -89,6 +89,7 @@ export async function verifyErasure(ctx: VerifyContext): Promise<void> {
   await verifyDeleteCountChecked();
   await verifyPreflightsRefuse();
   await verifyHiddenHouseholdErased();
+  await verifyTimeoutsHold();
 }
 
 const GRAPH_NAMES = HOUSEHOLD_GRAPH.map((g) => graphTableName(g.table));
@@ -931,8 +932,9 @@ async function verifyDeleteCountChecked(): Promise<void> {
     const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P3b H'));
     const h = asOwner(H_SCOPE, 'H');
     await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-p3b');
-    // A trigger that silently skips every delete of one leaf table (no FK points into it, so nothing
-    // else notices): only the RETURNING-length check can. Rolled back with the transaction.
+    // A trigger that silently skips every delete of one leaf table. Without the RETURNING-length
+    // check the skipped rows would surface later as an untyped 23503 (day_readiness -> profiles);
+    // the check names the table first, with a correct report. Rolled back with the transaction.
     await tx.execute(sql`
       CREATE FUNCTION verify_priv_3_2a_skip_delete() RETURNS trigger LANGUAGE plpgsql
         AS $$ BEGIN RETURN NULL; END $$`);
@@ -1223,4 +1225,17 @@ async function verifyHiddenHouseholdErased(): Promise<void> {
   const left = await db.transaction(async (tx) => stillThere(tx, planted));
   assert.equal(left, 0, 'PRIV-3 2a: P5 every row of the hidden household is gone, by raw id');
   console.log('✓ PRIV-3 2a: P5 a hidden household is erased like a live one, on a committed run');
+}
+
+// ── the guarded-write timeouts hold inside a transaction, and refuse to run outside one ───────────
+async function verifyTimeoutsHold(): Promise<void> {
+  await rolledBack(async (tx) => {
+    await setLocalTimeouts(tx, '60s'); // displayed as '1min': the check compares intervals
+  });
+  await assert.rejects(
+    setLocalTimeouts(db, '30s'),
+    /did not hold/,
+    'PRIV-3 2a: setLocalTimeouts outside a transaction throws instead of silently setting nothing',
+  );
+  console.log('✓ PRIV-3 2a: setLocalTimeouts holds inside a transaction and throws outside one');
 }

@@ -60,7 +60,8 @@ erasure graph".
 7. **The lock order starts with the program writers' order.** `LOCK_ORDER` (`erase.ts`, whose
    docblock has the reasoning): `program_blocks`, `profiles`, the household row, the two again, then
    the other parents parent-first, all `FOR UPDATE`, each table in id order. It cannot deadlock with
-   the program writers; it **can** with a log write (the row writer takes the session before the
+   the program writers on a program that existed when it started (one created mid-run is locked in
+   the second pass, after the athletes); it **can** with a log write (the row writer takes the session before the
    profile), and Postgres then aborts one side: if that is the erasure, re-run from the dry run.
    Pinned from the source (mutations `285`, `286`, `331`), since PGlite cannot show a wait.
 8. **Locks before the pre-flights, inside the transaction.** At READ COMMITTED a straddling row
@@ -70,7 +71,8 @@ erasure graph".
 9. **The core never commits a caller's transaction.** It works inside `exec.transaction(…)`: given a
    transaction, that is a savepoint, so a caller (R0) can compare the returned `total` and throw to
    roll everything back. P3 proves it. Its `SET LOCAL` timeouts (`setLocalTimeouts`,
-   `writers/executor.ts`) last until the caller's transaction ends.
+   `writers/executor.ts`) last until the caller's transaction ends when the core succeeds; a
+   refusal rolls them back with its savepoint.
 
 ## Traps
 
