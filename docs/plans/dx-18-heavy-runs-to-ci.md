@@ -210,6 +210,11 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
   - on **every push to main, all shards, unconditionally.** A red run then sits on the commit that
     caused it. A final job opens or updates one issue, "mutation gate red on main", in a job that
     holds only `issues: write`.
+- **As built after #700 (2026-11-19, CI runs queued for most of an hour):** a `mutations-plan` job runs
+  the scopes once and outputs `run_mutations` and the shard list, written once in its "Shard count"
+  step: **8 on a push to main, 4 on a PR**. `mutations` and `mutations-total` skip at job level when
+  `run_mutations` is `false`, so a PR that cannot affect a patch takes one runner for the proof, not
+  nine. A failed plan leaves the output empty, which still runs `mutations-total`, and it goes red.
 - **No cron.** A scheduled run tells nobody, and public-repo schedules lapse after 60 days.
 - **Concurrency:** `cancel-in-progress` only for `pull_request`. On `push`, the group is keyed by
   `github.sha`. GitHub keeps only one _pending_ run per group even without cancelling (AGENTS.md
