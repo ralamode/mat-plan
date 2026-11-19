@@ -43,7 +43,7 @@ machine-wide; anything heavy that is not on that list's run-locally side goes to
 gate.
 
 ```bash
-pnpm verify              # the list's `verify` chain (until DX-18 PR 2 puts db:mutations in CI)
+pnpm verify              # optional: CI runs all of it, the mutation shards included (DX-18)
 pnpm guides:check        # feature guide touched with every owned file it covers (a stacked PR compares with its base branch, as CI does)
 bash .claude/skills/hold-the-bar/check.sh   # the diff did not quietly lower the bar
 ```
