@@ -219,7 +219,8 @@ export const MAX_DAY_SLOTS = 30;
  * **Whether a household already has `MAX_HOUSEHOLD_ITEMS` items of its own**, from the item
  * picker's options: the one count the server (`newItem`), the picker's own "full" line and the
  * preview's fake are to share, so the three cannot come to disagree about which options are the
- * household's. The fake asks it now; the other two move to it in PRs of their own.
+ * household's. The fake and the picker ask it (the picker since 15 PR 1); `newItem` moves to it in
+ * a PR of its own.
  * An option is the household's when its `owner` is `household`; a library movement (`catalog`)
  * never counts, an old built-in with no library entry included.
  *
