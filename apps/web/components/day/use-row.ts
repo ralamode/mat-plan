@@ -20,6 +20,7 @@ import {
   EMPTY_TEXT,
   fieldsOf,
   otherUnitLoad,
+  otherUnitOf,
   readTyped,
   sameText,
   sameValues,
@@ -429,6 +430,17 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
    * now ("25 lb"). Such a load is never filled from the prescription: it must be typed again.
    */
   const retypeFrom = !logged && unticked ? otherUnitLoad(item, unticked.values) : null;
+  /**
+   * 12d-iii (D44): the row holds a quantity logged in another unit than the item's now, logged or
+   * un-ticked this visit, so its line can say why the load is text (`OtherUnitLine`). `again`: the
+   * row is un-ticked with a field, where the load must be entered again (H9).
+   */
+  const held = logged ?? (unticked ? unticked.values : null);
+  const heldUnit = held ? otherUnitOf(item, held) : null;
+  const otherUnit =
+    heldUnit !== null && item.unit
+      ? { from: heldUnit, to: item.unit, again: logged === null && hasField }
+      : null;
 
   async function press() {
     if (pending || !canWrite) return;
@@ -470,6 +482,7 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
     setText,
     /** The load must be typed (H9): its field shows no prescription to fill from. */
     mustTypeLoad: retypeFrom !== null,
+    otherUnit,
     error: shownError,
     logged,
     /** An un-ticked row with no field (a Check, a removed prescription) still shows what it held. */

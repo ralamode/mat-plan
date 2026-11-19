@@ -508,6 +508,21 @@ describe('after the program was edited (D7)', () => {
     await press(setTick(el(), 'DB bench press', 1));
     // The field is in kg: the lb number is not put in it.
     expect(setField(el(), 'DB bench press', 1, unitSpoken('kg')).value).toBe('');
+    // 12d-iii: the row's line survives the un-tick and says how to get the lb row back, or that the
+    // load is entered again, in kilograms; the ✓ and the load field point at it.
+    const again = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      load: true,
+      again: true,
+    });
+    const ids =
+      setTick(el(), 'DB bench press', 1).getAttribute('aria-describedby')?.split(' ') ?? [];
+    const line = within(el())
+      .getAllByText(again)
+      .find((p) => ids.includes(p.id));
+    expect(line).toBeTruthy();
+    expect(
+      setField(el(), 'DB bench press', 1, unitSpoken('kg')).getAttribute('aria-describedby'),
+    ).toContain(line!.id);
     // Only the reps fixed, the load left blank: before H9 (12d-ii) this ✓ sent no load and the
     // writer stored the prescription's 30 kg for a lift logged in lb. Now nothing is sent, and the
     // row asks for the weight.
@@ -529,6 +544,10 @@ describe('after the program was edited (D7)', () => {
     const sent = control.actions.logRow.mock.calls[0]![0].values;
     expect(sent.quantities).toEqual([{ ...lb(12.5), unit: 'kg' }]);
     expect(sent.reps).toBe(7);
+    // Logged in kg now: set 1 has no other-unit line any more.
+    expect(setTick(el(), 'DB bench press', 1).getAttribute('aria-describedby') ?? '').not.toMatch(
+      /-unit/,
+    );
   });
 
   it('H9 ends once the row is logged again: a later un-tick, now in the item’s unit, fills as D13 says', async () => {

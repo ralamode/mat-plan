@@ -105,14 +105,43 @@ describe('Change: where it applies', () => {
     expect(within(pullUp).queryAllByRole('textbox')).toHaveLength(0);
   });
 
-  it('🔴 a set logged in another unit than the item is in stays text: no load in the wrong unit', () => {
+  it('🔴 a set logged in another unit offers its reps only: the load stays text in its own unit (12d-iii)', async () => {
     const kg: DayPlan = structuredClone(yesterdayHalfDone);
     const item = kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!;
     item.unit = 'kg';
-    mount(kg, { change: true });
+    const { actions } = mount(kg, { change: true });
     const rowOne = loggedRow();
-    expect(within(rowOne).queryAllByRole('textbox')).toHaveLength(0);
+    // One field, the reps; the load is text with its own unit, never a kg field.
+    expect(within(rowOne).getAllByRole('textbox')).toEqual([reps()]);
     expect(rowOne.textContent).toContain('27.5 lb');
+    // The line says why, asks for no conversion, and the ✓ and the reps field point at it.
+    // Every set logged in pounds has its own line; set 1's is the one its ✓ and field point at.
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      load: true,
+      again: false,
+    });
+    const lines = within(bench()).getAllByText(said);
+    const tickIds = benchTick().getAttribute('aria-describedby')?.split(' ') ?? [];
+    const line = lines.find((el) => tickIds.includes(el.id));
+    expect(line).toBeTruthy();
+    expect(reps().getAttribute('aria-describedby')?.split(' ')).toContain(line!.id);
+
+    type(reps(), '6');
+    await leave(reps());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    // The load goes back exactly as it was logged, in pounds.
+    expect(actions.amendRow.mock.calls[0]![0].values).toEqual({
+      quantities: [{ slot: 'primary', unit: 'lb', value: 27.5 }],
+      reps: 6,
+    });
+    expect(within(bench()).getByText(DAY_COPY.change.changed('8', '6 reps'))).toBeTruthy();
+    expect(loggedRow().textContent).toContain('27.5 lb');
+  });
+
+  it('a set logged in the item’s unit has no other-unit line', () => {
+    mount(yesterdayHalfDone, { change: true });
+    expect(benchTick().getAttribute('aria-describedby') ?? '').not.toMatch(/-unit/);
+    expect(within(bench()).queryByText(/before the workout changed/)).toBeNull();
   });
 });
 

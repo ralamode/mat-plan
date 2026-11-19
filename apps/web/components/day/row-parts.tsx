@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 import { useDay } from './day-context';
 import { DAY_COPY } from './day-copy';
-import { placeholderOf, unitSpoken, unitSuffix, type RowField } from './row-values';
+import { fieldsOf, placeholderOf, unitSpoken, unitSuffix, type RowField } from './row-values';
 import type { RowChange } from './use-change';
 import { useRow } from './use-row';
 
@@ -152,7 +152,11 @@ export function Tick({
         // "Saving…" is the ✓'s DESCRIPTION while it is sent: its name stays "Log …", which
         // `aria-label` sets and content cannot change (12c review).
         aria-describedby={
-          [described ? errorId : null, r.pending ? `${errorId}-saving` : null]
+          [
+            described ? errorId : null,
+            r.otherUnit ? otherUnitLineId(errorId) : null,
+            r.pending ? `${errorId}-saving` : null,
+          ]
             .filter(Boolean)
             .join(' ') || undefined
         }
@@ -310,7 +314,11 @@ export function RowInput({
       placeholder={field === 'quantity' && r.mustTypeLoad ? undefined : placeholderOf(item, field)}
       aria-label={DAY_COPY.fieldLabel(name, spoken)}
       aria-invalid={invalid || undefined}
-      aria-describedby={r.error ? errorId : undefined}
+      aria-describedby={
+        [r.error ? errorId : null, r.otherUnit ? otherUnitLineId(errorId) : null]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
       className={cn(INPUT_CLASS, className)}
     />
   );
@@ -320,4 +328,35 @@ export function fieldHeader(item: DayItem, field: RowField): string {
   if (field === 'reps' || !item.unit) return DAY_COPY.reps;
   if (item.unit === 'sec') return DAY_COPY.secHeader;
   return item.unit === 'min' ? DAY_COPY.minHeader : unitSuffix(item.unit);
+}
+
+/** The id of a row's other-unit line, from the row's message id (`OtherUnitLine`). */
+export const otherUnitLineId = (errorId: string) => `${errorId}-unit`;
+
+/**
+ * 12d-iii (D44): why a row's load is text, on a row whose quantity was logged in another unit than
+ * the item's now. Not a live region: it is there on arrival, and the ✓ and the reps field point at
+ * it (`aria-describedby`) only while it shows. On the tint it takes the tint's secondary text.
+ */
+export function OtherUnitLine({
+  r,
+  item,
+  errorId,
+  onTint,
+}: {
+  r: ReturnType<typeof useRow>;
+  item: DayItem;
+  errorId: string;
+  onTint: boolean;
+}) {
+  if (!r.otherUnit) return null;
+  const { from, to, again } = r.otherUnit;
+  return (
+    <p id={otherUnitLineId(errorId)} className={cn('text-sm', secondaryText(onTint))}>
+      {DAY_COPY.otherUnit(unitSpoken(from), unitSpoken(to), {
+        load: fieldsOf(item).includes('reps'),
+        again,
+      })}
+    </p>
+  );
 }
