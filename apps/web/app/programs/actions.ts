@@ -2,12 +2,14 @@
 
 import * as Sentry from '@sentry/nextjs';
 import {
+  assignDraftSchema,
   copyDraftSchema,
   createProgramSchema,
   newItemSchema,
   PROGRAM_REFUSAL,
   renameProgramSchema,
   saveWorkoutSchema,
+  takeOffSchema,
   TRANSPORT_REFUSALS,
   weekDraftSchema,
   weekExceedsDaySlots,
@@ -17,20 +19,24 @@ import { revalidatePath } from 'next/cache';
 
 import { enterMutation } from '@/app/p/mutation-entry';
 import { PROGRAMS_PATH } from '@/components/program-builder/routes';
+import { getActiveLocalDay } from '@/lib/active-timezone';
+import { APP_HOME_PATH, athletePath } from '@/lib/constants';
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
   newHouseholdItem,
+  putOnHouseholdProgram,
   renameHouseholdProgram,
   saveHouseholdWeek,
   saveHouseholdWorkout,
+  takeOffHouseholdProgram,
   type ProgramAnswer,
 } from '@/lib/dal/program/writes';
 
 /**
- * The program builder's Server Actions (FAM-1 steps 7a-i and 7a-ii): the six required members of
- * `ProgramActions`, assembled in `actions.contract.ts` (a `'use server'` module exports only async
- * functions). Each
+ * The program builder's Server Actions (FAM-1 steps 7a-i, 7a-ii and 15): the six required members of
+ * `ProgramActions`, and Put on and Take off (step 15), assembled in `actions.contract.ts` (a
+ * `'use server'` module exports only async functions). Each
  * is a PUBLIC endpoint, so each re-checks the boundary itself (AGENTS.md → Server conventions):
  *
  * 1. Sentry's wrapper, with NO options: headers and form data never reach a captured event (pinned
@@ -38,7 +44,9 @@ import {
  * 2. `enterMutation(TRANSPORT_REFUSALS)`: the session, then the limiter, refused in the contract's
  *    words (`not_found`, `retry`).
  * 3. The contract's own schema; anything else is `invalid`, and the DAL is not called.
- * 4. One DAL call, through the caller's household (`lib/dal/program/writes.ts`).
+ * 4. One DAL call, through the caller's household (`lib/dal/program/writes.ts`). Put on and Take
+ *    off also read today HERE (`getActiveLocalDay`) and hand it down: the DAL and lane P's writers
+ *    take the day as an argument, and the writer is the one check of `from` (today or tomorrow).
  * 5. On success only, the builder's pages are revalidated, and the answer is built field by field:
  *    never the writer's object as it stands, so a field a writer adds later does not reach the
  *    client by accident.
@@ -166,6 +174,57 @@ export async function newItemAction(input: unknown): Promise<ProgramAnswer<'newI
         trackingType: result.trackingType,
         existed: result.existed,
       };
+    },
+  );
+}
+
+/**
+ * Who is on a program shows on the builder's pages, on Home's tiles (step 15 PR 3) and on each
+ * athlete's day page: a Put on or a Take off changes all three, for every athlete it names.
+ */
+function refreshAssignment(profilePublicIds: readonly string[]) {
+  refreshPrograms();
+  revalidatePath(APP_HOME_PATH);
+  for (const id of profilePublicIds) revalidatePath(athletePath(id));
+}
+
+/**
+ * Put athletes on a program, from today or tomorrow (FAM-1 step 15). No check of `from` here: lane
+ * P's writer refuses any other day as `invalid` against the same today (`writers/program/assign.ts`).
+ */
+export async function putOnAction(draft: unknown): Promise<ProgramAnswer<'putOn'>> {
+  return await Sentry.withServerActionInstrumentation(
+    'putOnAction',
+    async (): Promise<ProgramAnswer<'putOn'>> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = assignDraftSchema.safeParse(draft);
+      if (!parsed.success) return INVALID;
+      const result = await putOnHouseholdProgram(parsed.data, await getActiveLocalDay());
+      if (!result.ok) return { ok: false, reason: result.reason };
+      refreshAssignment(parsed.data.profilePublicIds);
+      return { ok: true };
+    },
+  );
+}
+
+/**
+ * Take an athlete off a program (FAM-1 step 15). The answer's `lastDay` is the writer's (today, or
+ * `null` when the start was removed), so the screen says what happened, never what the dates suggest
+ * (C15).
+ */
+export async function takeOffAction(input: unknown): Promise<ProgramAnswer<'takeOff'>> {
+  return await Sentry.withServerActionInstrumentation(
+    'takeOffAction',
+    async (): Promise<ProgramAnswer<'takeOff'>> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = takeOffSchema.safeParse(input);
+      if (!parsed.success) return INVALID;
+      const result = await takeOffHouseholdProgram(parsed.data, await getActiveLocalDay());
+      if (!result.ok) return { ok: false, reason: result.reason };
+      refreshAssignment([parsed.data.profilePublicId]);
+      return { ok: true, lastDay: result.lastDay };
     },
   );
 }
