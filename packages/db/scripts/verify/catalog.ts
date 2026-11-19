@@ -444,7 +444,10 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
       .where(isNull(schema.movements.householdId));
     assert.equal(before?.n, 0, 'CAT-3 A2-i E1: the proof starts with no global movement');
 
-    const counts = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS });
+    const counts = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS }).catch(
+      (e: unknown) =>
+        assert.fail(`CAT-3 A2-i E1: the catalog seed resolves on a fresh database (${String(e)})`),
+    );
     const state = await catalogStateOn(tx);
 
     // Both directions: no legacy row passes as a catalog row, and no entry is missing.
@@ -609,7 +612,13 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
       tx.select().from(schema.movements).where(eq(schema.movements.id, planted.id));
     const before = await householdRow();
 
-    const counts = await seedReference(asDb(tx), { catalog: [entry] });
+    // Everything the seed run prints, from the write through the report: a slug printed anywhere in
+    // it reaches the same public log.
+    let counts!: Awaited<ReturnType<typeof seedReference>>;
+    const printed = await captureOutput(async () => {
+      counts = await seedReference(asDb(tx), { catalog: [entry] });
+      reportSeed(counts);
+    });
     assert.deepEqual(
       await householdRow(),
       before,
@@ -631,7 +640,6 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
       1,
       'CAT-3 A2-i E5: the household row on a library slug is counted',
     );
-    const printed = await captureOutput(() => reportSeed(counts));
     assert.ok(
       /and 1 share a library slug/.test(printed),
       'CAT-3 A2-i E5: the report prints the count',
