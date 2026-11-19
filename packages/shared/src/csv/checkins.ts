@@ -1,3 +1,4 @@
+import { isMinuteOfDay } from '../date';
 import type { Unit } from '../units';
 
 import { csvToken } from './columns';
@@ -30,12 +31,12 @@ export type CheckinsRow = {
 
 /**
  * **A clock reading, `HH:MM`** (24-hour, zero-padded): what `timing` stores as local minutes since
- * midnight (Wake). A value that is not a whole minute of one day (outside 0..1439, or fractional) is
- * returned as its raw number, never a wrapped clock: the database only enforces `value_num >= 0`.
+ * midnight (Wake). A value that is not a whole minute of one day (`isMinuteOfDay`) is returned as its
+ * raw number, never a wrapped clock: the database only enforces `value_num >= 0`.
  */
 export function minutesToHhMm(raw: string): string {
   const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0 || n > 1439) return formatNumeric(raw);
+  if (!isMinuteOfDay(n)) return formatNumeric(raw);
   return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 }
 
