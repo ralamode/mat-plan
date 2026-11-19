@@ -1,7 +1,6 @@
 import {
   emptyWeek,
   MAX_DAY_SLOTS,
-  MAX_HOUSEHOLD_ITEMS,
   MAX_PROGRAM_WORKOUTS,
   MONDAY_FIRST,
   PROGRAM_REFUSAL,
@@ -19,7 +18,6 @@ import {
   dayFullLabel,
   dayFullText,
   dayIsFull,
-  householdIsFull,
   ITEM_PICKER_COPY,
   nameRefusal,
   newItemRefusal,
@@ -177,14 +175,6 @@ describe('the workout editor’s caps (FAM-1 7b-ii): its own words for limit_rea
       footer:
         'Your household has the most custom items it can keep (500), so this one wasn’t made. Pick one from the list instead.',
     });
-  });
-
-  it('counts the household’s own items only, and stops at the cap, not one before', () => {
-    const own = (n: number) => Array.from({ length: n }, () => ({ owner: 'household' }));
-    const library = Array.from({ length: MAX_HOUSEHOLD_ITEMS }, () => ({ owner: 'catalog' }));
-    expect(householdIsFull(own(MAX_HOUSEHOLD_ITEMS - 1))).toBe(false);
-    expect(householdIsFull(own(MAX_HOUSEHOLD_ITEMS))).toBe(true);
-    expect(householdIsFull([...library, ...own(1)])).toBe(false);
   });
 
   it('every other refusal keeps its own line (no refusal falls to limit_reached’s words)', () => {

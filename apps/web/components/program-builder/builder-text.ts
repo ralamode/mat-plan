@@ -399,15 +399,6 @@ export function undoneText(linked: boolean): string {
 
 /** The item picker's words (FAM-1 step 9; the prototype's `vPicker2`). */
 const HOUSEHOLD_FULL = `Your household has the most custom items it can keep (${MAX_HOUSEHOLD_ITEMS})`;
-/**
- * Whether the household's own items (never the library's) are at `MAX_HOUSEHOLD_ITEMS`.
- * ⚠️ Must agree with the server's count, `newItem`'s `owner !== 'catalog'`
- * (`packages/db/src/writers/program/new-item.ts`): today every non-catalog option is `household`,
- * but see the TODO(CAT-3 chunk R) in `item-picker/item-picker.tsx`'s `create`.
- */
-export const householdIsFull = (options: readonly { owner: string }[]) =>
-  options.filter((option) => option.owner === 'household').length >= MAX_HOUSEHOLD_ITEMS;
-
 export const ITEM_PICKER_COPY = {
   title: 'Add items',
   open: '+ Add items',

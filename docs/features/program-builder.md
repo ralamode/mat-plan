@@ -249,7 +249,7 @@ flowchart LR
       looks stopped (`aria-disabled` + `PENDING_CLASS`) with `workoutFullText` under it (7b-ii; it
       looked live, #460).
     - **A household stops at `MAX_HOUSEHOLD_ITEMS` of its own** (7b-ii, plan §Caps), counted from the
-      options (`householdIsFull`, never the library's): the footer says `ITEM_PICKER_COPY.householdFull`
+      options (the contract's `householdItemsFull`, never the library's): the footer says `ITEM_PICKER_COPY.householdFull`
       before any typing, and the form's Create is inactive except for a name that selects an
       existing item (never capped, contract invariant 30); a tap says why and sends nothing. A race
       the stop did not see answers `limit_reached`, said in the form's footer (`newItemRefusal`).
