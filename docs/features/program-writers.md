@@ -217,7 +217,7 @@ flowchart TD
     program goes before the first program they keep that comes later in the household's Programs
     list (`programBlocks.id` among live templates; a program outside the list, a hidden one, is never
     later), or last; a reopen goes back to its old place, after the open programs that were ahead of it (a lower
-    `idx`; recommended to the maintainer as a refinement of "reopen at old number", 2026-11-19, pending),
+    `idx`; the maintainer's refinement of "reopen at old number", 2026-11-19, option A),
     which is where it was unless a program earlier in the list was put on in between or the athlete
     reordered (accepted by the maintainer, 2026-11-18; the preview fake keeps it where it was). A
     second known difference from the fake, accepted by the contract owner (2026-11-19): "later" is
