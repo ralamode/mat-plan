@@ -58,24 +58,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Severity:** low. Both guards are best-effort and say so; each wrapper has a case in
   `hooks.test.sh`.
 
-### The strength fix-a-set path can change a program row on any day (found 2026-11-17, FAM-1 11c's panel)
-
-- **What & why it's debt:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`)
-  edits any LIVE set of the profile, on any day, through `ownedEntryIds`. A program row of the
-  Weight × reps type passes its shape guards (mass, done, not bodyweight), so a crafted fix-a-set
-  request can change a program row's numbers outside D20's writable window (today and yesterday).
-  The day page's own Change (`amendRow`, 11c-i) keeps the window; this older path does not.
-- **Reach:** within the household only, and on the athlete's own history: `ownedEntryIds` rides
-  `isLiveProfile(profilePublicId, scope)`, so another household's set is never reached. A household member
-  corrects with the same authority as logging and hiding (ADR 0008 Decision 4; revisited after
-  AUTH-1); what is missing is
-  the window, not the ownership.
-- **The fix:** the fix-a-set path refuses a program row (`programRow()`, i.e. `entries.prescription_set IS NOT NULL`, which a
-  purge leaves set) whose day is outside `rowDayOpen`. A `db:verify` boundary proof, a purged row
-  (`prescription_id` NULL) among its cases, and a mutation.
-- **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
-- **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
-
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff) — ✅ CLOSED 2026-11-18
 
 - **Closed by `OPS-2` PR 1:** the expansion and `CALISTHENICS_RAMP_SCHEDULE` are deleted (plan D4, the maintainer's Q6), so no seed writes `ramp_targets`; `verify/seed.ts`'s Proof A counts the table after a production seed.
@@ -600,17 +582,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   then eyeball the residue (`README.md`, `docs/programs/daily-five-default.md` and
   `docs/specs/v1-22-…` are known false positives — they are about other columns).
 - **Severity:** low (docs drift), and now three copies rather than twelve.
-
-### Two load-bearing strings are re-typed next to the const that defines them (found 2026-10-09, TEN-2a reuse panel)
-
-- **What & why:** out of TEN-2a's diff, so recorded rather than fixed. (1) `packages/db/scripts/verify.ts`
-  has `const UQ = 'uq_entries_profile_day_bodyweight'`, re-typing the value `schema.ts` already exports
-  as `BODYWEIGHT_DAY_UNIQUE_INDEX`. (2) `packages/shared/src/seed-ids.ts` hand-types
-  `SEED_PUBLIC_ID_PREFIX`'s value **three** times instead of importing the const.
-- **Impact:** low today; a rename in either place goes green and means nothing.
-- **Proposed fix:** import the const in both. Charged to nobody — a good first slice for whoever next
-  touches either file.
-- **Severity:** low.
 
 ### The comment-stripping `code()` test helper has TWO copies left, outside `apps/web` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
 

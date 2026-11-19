@@ -131,6 +131,7 @@ import {
   CREATE_HOUSEHOLD_NAME,
   NULL_ROUTINE_TO_FULL_NAME,
 } from './corrections/registry';
+import { isNote, lineText } from './corrections/summary';
 import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -3449,7 +3450,7 @@ console.log(
 // `uq_entries_profile_day_bodyweight` keys on (profile_id, activity_date, coalesce(context,'morning'))
 // for live bodyweight rows. Each case uses its own day so the cases cannot interfere.
 {
-  const UQ = 'uq_entries_profile_day_bodyweight';
+  const UQ = schema.BODYWEIGHT_DAY_UNIQUE_INDEX;
   // (a) A second live weigh-in on the same day is rejected.
   await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 80, activityDate: '2026-05-01' });
   await expectRejectedBy(UQ, () =>
@@ -3528,7 +3529,7 @@ console.log(
   let refusal = '';
   try {
     await db.transaction(async (tx) => {
-      await tx.execute(sql`DROP INDEX "uq_entries_profile_day_bodyweight"`);
+      await tx.execute(sql`DROP INDEX ${sql.identifier(schema.BODYWEIGHT_DAY_UNIQUE_INDEX)}`);
       const row = (n: string, profileId: number, activityDate: string, context: string | null) => ({
         publicId: `019826b4-0000-7000-8000-0000000d1d${n}`,
         clientId: `019826b4-0000-7000-8000-0000000d1e${n}`,
@@ -5755,7 +5756,12 @@ assert.ok(
 // The dry run (`apply = false`: nothing is written) must return exactly the NULL-routine profiles
 // that are NOT household B's. Both directions in one assertion — it fails if the correction misses
 // one of its own household's rows, and it fails if it reaches the other household's.
-const nullRoutineDryRun = await nullRoutineCorrection.run(asCorrectionDb, false);
+const nullRoutineRaw = await nullRoutineCorrection.run(asCorrectionDb, false);
+assert.ok(
+  nullRoutineRaw.length > 0 && !nullRoutineRaw.some(isNote),
+  'TEN-1 1d: the routine dry run returns CHANGES, so the runner counts them (2026-11-19)',
+);
+const nullRoutineDryRun = nullRoutineRaw.map(lineText);
 const foundPublicIds = nullRoutineDryRun
   .map((line) => /profile ([0-9a-f-]{36})/.exec(line)?.[1])
   .filter((id): id is string => id !== undefined)
@@ -7541,12 +7547,20 @@ console.log(
       'AUTH-1 1b: the claim correction writes nothing without --apply',
     );
     assert.ok(
-      dry.some((l) => l.includes(CLERK_C)),
+      dry.some((l) => lineText(l).includes(CLERK_C)),
       'AUTH-1 1b: the dry run names the FULL Clerk id — a truncated one cannot be checked',
+    );
+    assert.ok(
+      dry.length > 0 && !dry.some(isNote),
+      'AUTH-1 1b: the claim dry run is a CHANGE, so the runner counts it (2026-11-19)',
     );
 
     // (6d) --apply writes once, and a SECOND run is an idempotent no-op rather than a 23505.
-    await claim.run(asCorrectionDb, true);
+    const claimed = await claim.run(asCorrectionDb, true);
+    assert.ok(
+      claimed.length > 0 && !claimed.some(isNote),
+      'AUTH-1 1b: the claim --apply is a CHANGE, so the runner counts the write (2026-11-19)',
+    );
     assert.equal(
       (await membershipHousehold(asPg, CLERK_C))[0]?.householdId,
       verifyHh.id,
@@ -7554,8 +7568,12 @@ console.log(
     );
     const again = await claim.run(asCorrectionDb, true);
     assert.ok(
-      again.some((l) => l.includes('already claimed')),
+      again.some((l) => lineText(l).includes('already claimed')),
       'AUTH-1 1b: a re-run is an idempotent no-op, not a duplicate-key crash (rule 2)',
+    );
+    assert.ok(
+      again.length > 0 && again.every(isNote),
+      'AUTH-1 1b: …and the re-run returns notes only, so the runner counts no change (2026-11-19)',
     );
 
     // (6e) 🔴 The case `INSERT … WHERE NOT EXISTS` could not have told apart: the SAME Clerk id
@@ -7668,9 +7686,14 @@ console.log(
       // creates exactly one household and one OWNER membership per account, none with a seed id.
       const householdsBefore = await householdCount();
       const membersBefore = await memberCount();
-      const dry = await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
+      const dryRaw = await orFail('PRIV-3 RC (6h): the create-household dry run completes', () =>
         create.run(asCorrectionDb, false),
       );
+      assert.ok(
+        dryRaw.length > 0 && !dryRaw.some(isNote),
+        'PRIV-3 RC (6h): the create-household dry run is a CHANGE, so the runner counts it',
+      );
+      const dry = dryRaw.map(lineText);
       rcOutput.push(...dry);
       assert.ok(
         dry.length === 1 && dry[0]!.startsWith('would create 1 household with 2 account(s)'),
@@ -7682,9 +7705,15 @@ console.log(
         'PRIV-3 RC (6h): the create-household dry run writes nothing',
       );
 
-      const applied = await orFail('PRIV-3 RC (6h): the create-household --apply completes', () =>
-        create.run(asCorrectionDb, true),
+      const appliedRaw = await orFail(
+        'PRIV-3 RC (6h): the create-household --apply completes',
+        () => create.run(asCorrectionDb, true),
       );
+      assert.ok(
+        appliedRaw.length > 0 && !appliedRaw.some(isNote),
+        'PRIV-3 RC (6h): the create-household --apply is a CHANGE, so the runner counts the write',
+      );
+      const applied = appliedRaw.map(lineText);
       rcOutput.push(...applied);
       const members = await asPg
         .select({
@@ -9333,7 +9362,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
   const b0Partial = await db.execute<{ indexname: string; indexdef: string }>(
     sql`select indexname, indexdef from pg_indexes
         where indexname in ('uq_entries_superset_order', 'uq_entry_sets_entry_idx',
-                            'uq_entry_set_quantities_set_slot', 'uq_entries_profile_day_bodyweight')`,
+                            'uq_entry_set_quantities_set_slot', ${schema.BODYWEIGHT_DAY_UNIQUE_INDEX})`,
   );
   const b0PartialRows = (
     b0Partial as unknown as { rows: { indexname: string; indexdef: string }[] }
