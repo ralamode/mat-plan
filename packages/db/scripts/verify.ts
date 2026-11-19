@@ -145,6 +145,7 @@ import {
 import {
   assertGlobalCheckMatchesMigration,
   verifyCatalogMigrationFacts,
+  verifyCatalogSeedOnAFreshDatabase,
   verifyCatalogTables,
 } from './verify/catalog';
 import { verifyDay } from './verify/day';
@@ -238,6 +239,9 @@ console.log('✓ migration applied to PGlite');
 // V1-1b re-add below. HERE for the same reason as the block above: from the V1-1b simulation on, the
 // constraint in the database is this file's, not the migration's.
 const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
+
+// CAT-3 A2-i E1: the catalog writer on a database with no global movement yet, all rolled back.
+await verifyCatalogSeedOnAFreshDatabase();
 
 // OPS-2 Proof A: production's seed on a fork's first run, before any fixture seed below.
 await verifySeedOnAFreshDatabase();

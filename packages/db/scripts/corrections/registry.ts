@@ -670,7 +670,19 @@ const movementsOwnershipReport: Correction = {
     // (4) What `TEN-2d`'s `VALIDATE` will hit. `NOT VALID` scanned nothing, so TEN-2c cannot fail on
     // a pre-existing violation — it would wedge 2d with a `23514`, and `db:verify` cannot see it
     // because it never runs against production.
-    const checkViolations = global.filter((r) => r.pattern === null);
+    // CAT-3 A2-i: counted by the CHECK's OWN predicate (the schema's exported fragment), not by
+    // `pattern IS NULL`: since A1 a non-strength catalog row with no pattern is legal, and a copy of the
+    // rule here had already drifted from the constraint once.
+    const [blockers] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.movements)
+      .where(
+        and(
+          isNull(schema.movements.householdId),
+          sql`NOT (${schema.movementGlobalRowHasPattern(schema.movements)})`,
+        ),
+      );
+    const checkViolations = blockers?.n ?? 0;
 
     return [
       `movements rows: ${rows.length} total — ${global.length} global (household_id IS NULL), ${rows.length - global.length} household-owned`,
@@ -678,7 +690,7 @@ const movementsOwnershipReport: Correction = {
       `TEN-2c-1 input (the read leak's residual): ${residual.length} — of which ${residualShared.length} referenced by MORE THAN ONE household (clone + split), ${residualSingle.length} by exactly one (repoint), ${residualOrphan.length} referenced by NO household`,
       `TEN-2b-2 input (global, non-curated, unreferenced): ${residualOrphan.length}`,
       `runbooks.md pre-flight (d) — references crossing a household boundary: ${crossRefs.total} (${crossRefs.entries} entries, ${crossRefs.prescriptions} prescriptions)`,
-      `TEN-2d blocker — global rows with pattern IS NULL (movements_global_row_has_pattern would reject on VALIDATE): ${checkViolations.length}`,
+      `TEN-2d blocker — global rows movements_global_row_has_pattern rejects (no pattern, and not a non-strength catalog row): ${checkViolations}`,
       'EXPECTED, every line: zero in every residual/blocker count. A non-zero count blocks TEN-2c’s merge (ten-2a measured zero on 2026-10-09, and a dated zero is not an invariant).',
     ];
   },

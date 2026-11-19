@@ -138,6 +138,27 @@ export async function verifySeedOnAFreshDatabase(): Promise<void> {
     );
   }
 
+  // CAT-3 A2-i: production's seed gives the catalog writer NOTHING until A2-ii (plan D1). Checked
+  // FIRST, before the slug comparison below, so a seed that passes library entries on legacy slugs
+  // (mutation 506) fails here. The join tables are classed with `movements` (A1's owed item): they
+  // must hold no row of a global movement, as the list production's seed was given is empty.
+  assert.equal(
+    await countOf(db, schema.movements, sql`${schema.movements.modality} IS NOT NULL`),
+    0,
+    'CAT-3 A2-i: production’s seed writes no catalog row (no movement has a modality)',
+  );
+  for (const table of [schema.movementEquipment, schema.movementMuscles]) {
+    assert.equal(
+      await countOf(
+        db,
+        table,
+        sql`movement_id IN (SELECT id FROM ${schema.movements} WHERE ${schema.movements.householdId} IS NULL)`,
+      ),
+      0,
+      `CAT-3 A2-i: production’s seed writes no ${graphTableName(table)} row`,
+    );
+  }
+
   // Each reference table equals its shared source; that every reference table HAS one is checked
   // late (verifySeedLeavesHouseholdsAlone), after erasure's P1 has classified every table.
   for (const [table, { key, values }] of REFERENCE_SOURCE) {
