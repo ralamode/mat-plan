@@ -374,7 +374,7 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   custom section starts folded (P9) and "Recent" is not shown. **A row carries no heading tag**: its second line is P14's.
   `MOVEMENT_PICKER_ENTRIES`, `group` and the group constants are deleted in the chunk that removes
   their last reader (`RECENT_MOVEMENTS_LIMIT` moves to `movement-search.ts`), which overturns
-  movement-picker invariant 11 by name. **Until the fresh start, the old built-ins with no library entry are one more folded section at the end of "All movements"**, with its count (K24): they have no kind to be grouped under, and with no filter on, a row search can find is never missing from the list. (With a filter on they pass none, so the section is empty and dropped like any empty heading, and they are counted outside the filters: P10.)
+  movement-picker invariant 11 by name. **Until the fresh start, the old built-ins with no library entry are one more section at the end of "All movements"**, with its count, folded unless the tree has opened itself (K24, K26): they have no kind to be grouped under, and with no filter on, a row search can find is never missing from the list. (With a filter on they pass none, so the section is empty and dropped like any empty heading, and they are counted outside the filters: P10.)
 - **P13.** A movement with a supervision value shall show its label as text on its row, the same
   for every athlete, in both picker modes, never dropped for another tag, **and on the day page's
   workout row, where the athlete doing the movement reads it** _(K20; FAM-1 plan D40)_. The label
