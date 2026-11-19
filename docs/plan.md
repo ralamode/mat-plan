@@ -1230,9 +1230,15 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   (R8a, its closed question 4). It also records that verification after import is loads-only, and
   that nothing asks the coach to re-read the whole plan against the paper (R16a, its closed
   question 5). A screen that shows every line beside its source before saving is that re-read. The
-  plan owner reads the 2026-11-19 request ("a screen to review and ensure that we have their
-  programs correct") as reversing R16a for structure and movement matching only, with R8 and R8a
-  still holding for loads. **The maintainer confirms that before any plan.**
+  2026-11-19 request was for "a screen to review and ensure that we have their programs correct".
+  **It can be built two ways, and the maintainer chooses before any plan:**
+  - **Inside R8 (the plan owner's recommendation).** Every risky value the screen shows (which
+    movement a line is, a rep count, a distance) is still fixed source text beside an empty field,
+    filled one tap at a time; the screen is where those taps happen. Loads stay with R8a, at first
+    use. This reverses R8a and R16a for the non-load values only, and leaves R8 whole.
+  - **Reopening R8 as well.** The draft arrives with movements matched and rep counts filled in,
+    and the parent corrects what is wrong. That is a bulk confirm of values R8 calls risky, so it is
+    a third reversal.
 
   **Still open in the PRD (its open question 5, not the closed one):** how long an uploaded image is
   kept, and where. Proposed by the plan owner: processed and discarded, never kept and never used
@@ -1254,7 +1260,8 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     written by the model. The sheet's value is shown as fixed source text beside an **empty** field
     and one tap fills it, one value at a time. There is no "fill all" and no bulk confirm, ever.
   - **R8a:** an imported load is filled at the moment of use, the first day that movement comes up,
-    which is what makes R8's one tap safe. So a review screen is not where loads are accepted.
+    which is what makes R8's one tap safe. So a review screen is never where loads are accepted,
+    and it accepts any other risky value only one tap at a time unless the maintainer reopens R8.
 
 - **LIFE-1 — the Wake button on a past day writes TODAY's wake, and can write a second one.**
   _(found by a UX panel during `V1-9b` B1-2, 2026-11-14; not scoped.)_ `logLifeActivitiesAction`
