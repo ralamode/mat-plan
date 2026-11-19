@@ -115,6 +115,8 @@ export function ItemPicker({
   onReturned?: () => void;
 }) {
   const [notice, setNoticeNow] = useState('');
+  /** The row to bring on screen before focusing it (`MovementPicker`'s `reveal`). */
+  const [reveal, setReveal] = useState<{ id: string; revision: number } | null>(null);
   /** Cleared first and set a frame later, so the same message twice is said twice. */
   const setNotice = (message: string) => {
     setNoticeNow('');
@@ -229,6 +231,10 @@ export function ItemPicker({
     }
     // The tap that closed it: a second tap within `DOUBLE_TAP_MS` lands on what took its place.
     formClosedAt.current = at;
+    // The row may sit in a group the person closed, and a row already ticked, or made but not
+    // ticked (a full workout), changes no selection to open it: the picker opens its groups in the
+    // commit below (CAT-3 B3), so the row is there to focus.
+    if (focusId) setReveal((last) => ({ id: focusId, revision: (last?.revision ?? 0) + 1 }));
     flushSync(() => setForm(null));
     const target =
       (focusId && document.querySelector<HTMLElement>(`[${OPTION_ID_ATTR}="${focusId}"]`)) ||
@@ -480,6 +486,7 @@ export function ItemPicker({
       alreadyIn={{ ids: inWorkout, label: COPY.alreadyIn }}
       returnFocusTo={returnFocusTo}
       onReturned={onReturned}
+      reveal={reveal}
       multiple={{
         selected,
         onToggle: toggle,

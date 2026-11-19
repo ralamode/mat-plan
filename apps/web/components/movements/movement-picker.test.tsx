@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
 import {
-  MOVEMENT_PICKER_ENTRIES,
   MOVEMENT_SEED_ROWS,
   MOVEMENT_NAME_MESSAGES,
   TRACKING_TYPE,
-  type MovementPickerGroup,
   SUPERVISION_LABELS,
   TRACKING_TYPE_LABELS,
   EQUIPMENT_CODE,
   SUPERVISION_KIND,
   type CatalogHowTo,
+  BROWSE_FLAT_KINDS,
+  BROWSE_OPEN_AT_MOST,
+  browseTree,
+  byFoldedName,
+  MODALITY,
+  MODALITY_LABELS,
+  MUSCLE,
 } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -18,18 +23,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   hasLibraryData,
+  type LibraryOption,
   type MovementOptionDTO,
   type MovementPickerData,
 } from '@/lib/movements/movement-option';
+import { CUSTOM_OPEN_AT_MOST } from '@/lib/movements/browse-view';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import { SHEET_COPY } from '@/components/ui/sheet';
 
 import {
   catalogOption,
   householdOption,
+  LIBRARY_OPTIONS,
+  libraryNamed,
+  expandBrowse,
   pickerTrigger,
   stubSheetHistory,
-  TEST_TAXONOMY,
+  withoutLibraryData,
 } from '@/test/movement-picker-fixtures';
 
 import { listedAs, MovementPicker, type TodaysProgramForPicker } from './movement-picker';
@@ -96,56 +106,447 @@ const type = (value: string, name: string = COPY.searchLabel) => {
 const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
 const status = () => document.querySelector('[role="status"]')?.textContent ?? '';
 
-describe('the browse list, with no query', () => {
-  it("orders Recent → Today's program → the groups → Your custom items", () => {
+/** A browse group's heading or button, by its label: its accessible name also says its count. */
+const startsWith = (label: string) => (name: string) => name.startsWith(label);
+const groupHeading = (level: number, label: string) =>
+  screen.queryByRole('heading', { level, name: startsWith(label) });
+const groupButton = (label: string, n: number) =>
+  screen.getByRole('button', { name: COPY.choiceName(label, n) });
+describe('the browse list, with no query (CAT-3 B3: P12, K24 to K27)', () => {
+  it("orders Your custom items → Recent → Today's program → All movements", () => {
     const recent = catalogOption('Back Squat');
     const prescribed = catalogOption('Front Squat');
     render(
       <Harness
         data={{
-          options: [...ALL_CATALOG, householdOption('Ray Special', 'h-1')],
+          options: [...ALL_CATALOG, householdOption('Garage Circuit', 'h-1')],
           recentIds: [recent.publicId],
         }}
         todaysProgram={{ ids: [prescribed.publicId], onFormIds: new Set() }}
       />,
     );
     open();
-    // 🔴 **Today's program IS in this list, and that is the point of the assertion.** This test
-    // first shipped without it, under a comment explaining that a `<summary>` is not an `h3` — which
-    // described the bug rather than the requirement. Heading navigation is how a screen-reader user
-    // skims a sheet this long, and the section it skipped was the day's actual program. The `h3`
-    // now sits inside the `summary`.
-    expect(headings()).toEqual([
-      COPY.recent,
-      COPY.todaysProgram,
-      COPY.groupLabel('push'),
-      COPY.groupLabel('pull'),
-      COPY.groupLabel('legs'),
-      COPY.groupLabel('core'),
-      COPY.household,
-    ]);
+    // 🔴 **Today's program IS in this list**: its `h3` sits inside its `summary`, so a screen-reader
+    // user skimming by heading reaches the day's actual program.
+    const expected = [
+      screen.getByRole('heading', { level: 3, name: COPY.choiceName(COPY.household, 1) }),
+      screen.getByRole('heading', { level: 3, name: COPY.recent }),
+      screen.getByRole('heading', { level: 3, name: COPY.todaysProgram }),
+      screen.getByRole('heading', {
+        level: 3,
+        name: COPY.choiceName(COPY.allMovements, ALL_CATALOG.length),
+      }),
+    ];
+    expect(screen.getAllByRole('heading', { level: 3 })).toEqual(expected);
   });
 
-  it('omits an empty group — `wrestling` is declared and has no rows until C3', () => {
-    render(<Harness data={{ options: ALL_CATALOG }} />);
+  it('the tree is browseTree: every kind and family, in its order, each with its count', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
     open();
-    expect(headings()).not.toContain(COPY.groupLabel('wrestling'));
+    expandBrowse();
+    const tree = browseTree(LIBRARY_OPTIONS.filter(hasLibraryData));
+    const names = (level: number) =>
+      screen.getAllByRole('heading', { level }).map((h) => h.querySelector('button'));
+    expect(names(4)).toEqual(
+      tree.map(({ kind, count }) => groupButton(MODALITY_LABELS[kind], count)),
+    );
+    expect(names(5)).toEqual(
+      tree.flatMap(({ families }) =>
+        families.flatMap(({ label, options }) =>
+          label === null ? [] : [groupButton(label, options.length)],
+        ),
+      ),
+    );
+    // Non-vacuity: more than one kind, a flat kind, and a kind with several families.
+    expect(tree.length).toBeGreaterThan(2);
+    expect(tree.some(({ families }) => families[0]?.family === null)).toBe(true);
+    expect(tree.some(({ families }) => families.length > 2)).toBe(true);
   });
 
-  it('omits Recent without `recentIds`, and when it is empty', () => {
+  it("the rows of each family and flat kind are in browseTree's order", () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    expandBrowse();
+    const tree = browseTree(LIBRARY_OPTIONS.filter(hasLibraryData));
+    for (const { kind, count, families } of tree) {
+      const kindGroup = groupButton(MODALITY_LABELS[kind], count).closest('div')!;
+      for (const { label, options } of families) {
+        const group =
+          label === null ? kindGroup : groupButton(label, options.length).closest('div')!;
+        // The group's own list: the first `ul` under its body.
+        const list = group.querySelector(':scope > div > ul')!;
+        const names = [...list.querySelectorAll(':scope > li > div > button:first-child')].map(
+          (b) => b.textContent?.split(',')[0],
+        );
+        expect(names, `${kind}/${label ?? '(flat)'}`).toEqual(options.map((o) => o.name));
+      }
+    }
+  });
+
+  it('a kind with no family level (Conditioning, Skill) lists its rows by name under it (K27, K30)', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    expandBrowse();
+    const conditioning = LIBRARY_OPTIONS.filter(
+      (o) => hasLibraryData(o) && BROWSE_FLAT_KINDS.includes(o.modality),
+    );
+    expect(conditioning.length).toBeGreaterThan(1);
+    for (const option of conditioning) {
+      const button = screen.getByRole('button', { name: new RegExp(`^${option.name},`) });
+      // Straight under the kind's group: no family heading between them.
+      const group = button.closest('ul')!.parentElement!;
+      expect(group.previousElementSibling?.tagName).toBe('H4');
+    }
+  });
+
+  it('a kind and a family start closed; All movements starts open; a tap opens one and leaves the rest', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    const all = groupButton(COPY.allMovements, LIBRARY_OPTIONS.length);
+    expect(all.getAttribute('aria-expanded')).toBe('true');
+    const strength = LIBRARY_OPTIONS.filter(
+      (o) => hasLibraryData(o) && o.modality === MODALITY.strength,
+    );
+    const kind = groupButton(MODALITY_LABELS.strength, strength.length);
+    expect(kind.getAttribute('aria-expanded')).toBe('false');
+    // A closed group renders nothing: no family heading, no row.
+    expect(screen.queryAllByRole('heading', { level: 5 })).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^Goblet squat,/ })).toBeNull();
+    act(() => void fireEvent.click(kind));
+    expect(kind.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getAllByRole('heading', { level: 5 }).length).toBeGreaterThan(1);
+    expect(
+      groupButton(MODALITY_LABELS.mobility, 2).getAttribute('aria-expanded'),
+      'the other kinds stay as they were',
+    ).toBe('false');
+  });
+
+  it(`opens every kind and family by itself at ${BROWSE_OPEN_AT_MOST} rows, and not at one more (K26)`, () => {
+    for (const [n, expanded] of [
+      [BROWSE_OPEN_AT_MOST, 'true'],
+      [BROWSE_OPEN_AT_MOST + 1, 'false'],
+    ] as const) {
+      render(<Harness data={{ options: LIBRARY_OPTIONS.slice(0, n) }} />);
+      open();
+      const groups = document.querySelectorAll(':is(h4, h5) > button');
+      expect(groups.length, `n=${n}`).toBeGreaterThan(0);
+      for (const group of groups)
+        expect(group.getAttribute('aria-expanded'), `n=${n}`).toBe(expanded);
+      cleanup();
+    }
+  });
+
+  it(`"Your custom items" is open at ${CUSTOM_OPEN_AT_MOST} and one folded line above it (K25)`, () => {
+    const mine = (n: number) =>
+      Array.from({ length: n }, (_, i) => householdOption(`Garage ${i + 1}`, `h-${i + 1}`));
+    for (const [n, expanded] of [
+      [CUSTOM_OPEN_AT_MOST, 'true'],
+      [CUSTOM_OPEN_AT_MOST + 1, 'false'],
+    ] as const) {
+      render(<Harness data={{ options: [...ALL_CATALOG, ...mine(n)] }} />);
+      open();
+      const custom = groupButton(COPY.household, n);
+      expect(custom.getAttribute('aria-expanded'), `n=${n}`).toBe(expanded);
+      expect(!!screen.queryByRole('button', { name: /^Garage 1,/ }), `n=${n}`).toBe(
+        expanded === 'true',
+      );
+      cleanup();
+    }
+  });
+
+  const BARE_THREE = [
+    catalogOption('Pull-Up'),
+    catalogOption('Back Squat'),
+    catalogOption('Dips'),
+  ].map(withoutLibraryData);
+
+  it('⏳ the old built-ins with no library entry are "Not sorted yet", after the kinds, by name, folded on a long tree (K24)', () => {
+    expect(LIBRARY_OPTIONS.length).toBeGreaterThan(BROWSE_OPEN_AT_MOST);
+    render(<Harness data={{ options: [...LIBRARY_OPTIONS, ...BARE_THREE] }} />);
+    open();
+    const section = groupButton(COPY.notSorted, BARE_THREE.length);
+    expect(section.getAttribute('aria-expanded')).toBe('false');
+    // An h4 sibling of the kinds, and the last of them.
+    expect(screen.getAllByRole('heading', { level: 4 }).at(-1)).toBe(section.parentElement);
+    // All movements counts them: N is the tree's rows plus these.
+    expect(groupButton(COPY.allMovements, LIBRARY_OPTIONS.length + BARE_THREE.length)).toBeTruthy();
+    act(() => void fireEvent.click(section));
+    const rows = [...section.closest('div')!.querySelectorAll('li > div > button:first-child')];
+    expect(rows.map((b) => b.textContent?.split(',')[0])).toEqual(
+      [...BARE_THREE].sort(byFoldedName).map((o) => o.name),
+    );
+  });
+
+  it('⏳ "Not sorted yet" opens by itself while the tree is short (maintainer, 2026-11-19)', () => {
+    render(<Harness data={{ options: [...LIBRARY_OPTIONS.slice(0, 3), ...BARE_THREE] }} />);
+    open();
+    const section = groupButton(COPY.notSorted, BARE_THREE.length);
+    expect(section.getAttribute('aria-expanded')).toBe('true');
+    // A tap still wins.
+    act(() => void fireEvent.click(section));
+    expect(section.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('⏳ K23: a movement that is both an old built-in and a library row is listed in both places', () => {
+    const old = withoutLibraryData(catalogOption('Push-Ups'));
+    const library: MovementOptionDTO = {
+      ...libraryNamed('Incline push-up'),
+      publicId: 'lib-push',
+      name: 'Push-up',
+    };
+    render(<Harness data={{ options: [old, library, ...LIBRARY_OPTIONS] }} />);
+    open();
+    expandBrowse();
+    const notSorted = groupButton(COPY.notSorted, 1).closest('div')!;
+    expect(within(notSorted).getByRole('button', { name: /^Push-Ups,/ })).toBeTruthy();
+    const inTree = screen.getByRole('button', { name: /^Push-up,/ });
+    expect(notSorted.contains(inTree)).toBe(false);
+  });
+
+  it('a library-only option (no legacy group) is reachable by browsing', () => {
+    render(<Harness data={{ options: [...ALL_CATALOG, ...LIBRARY_OPTIONS] }} />);
+    open();
+    expandBrowse();
+    expect(screen.getByRole('button', { name: /^Couch stretch,/ })).toBeTruthy();
+  });
+
+  it('omits a kind with no rows, Recent without recentIds, and Your custom items with none', () => {
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
-    expect(headings()).not.toContain(COPY.recent);
+    expect(groupHeading(4, MODALITY_LABELS.mobility)).toBeNull();
+    expect(groupHeading(3, COPY.recent)).toBeNull();
+    expect(groupHeading(3, COPY.household)).toBeNull();
+    // Non-vacuity: the helper finds what is there.
+    expect(groupHeading(4, MODALITY_LABELS.strength)).toBeTruthy();
     cleanup();
     render(<Harness data={{ options: ALL_CATALOG, recentIds: [] }} />);
     open();
-    expect(headings()).not.toContain(COPY.recent);
+    expect(groupHeading(3, COPY.recent)).toBeNull();
   });
 
-  it('omits Your custom items when the household owns nothing', () => {
-    render(<Harness data={{ options: ALL_CATALOG }} />);
+  it('a group is a button in its heading: aria-expanded, aria-controls while open, and focus stays', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
     open();
-    expect(headings()).not.toContain(COPY.household);
+    const kind = groupButton(MODALITY_LABELS.mobility, 2);
+    expect(kind.parentElement?.tagName).toBe('H4');
+    expect(kind.getAttribute('type')).toBe('button');
+    expect(kind.getAttribute('aria-controls')).toBeNull();
+    act(() => kind.focus());
+    // A keyboard's Enter on a button is its click.
+    act(() => void fireEvent.click(kind));
+    expect(kind.getAttribute('aria-expanded')).toBe('true');
+    const body = document.getElementById(kind.getAttribute('aria-controls') ?? '');
+    // Its two families, each closed, as its body.
+    expect(body?.querySelectorAll('h5 > button[aria-expanded="false"]').length).toBe(2);
+    expect(document.activeElement).toBe(kind);
+    act(() => void fireEvent.click(kind));
+    expect(kind.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(kind);
+    // Only the top sections are landmarks: a region per kind floods a screen reader's list.
+    expect(kind.closest('section')?.getAttribute('aria-labelledby')).toBe(
+      groupButton(COPY.allMovements, LIBRARY_OPTIONS.length).parentElement?.id,
+    );
+  });
+
+  it('family ids are kind-qualified: a family code under two kinds never repeats an id', () => {
+    const coreStrength = libraryNamed('Side plank');
+    const coreMobility: MovementOptionDTO = {
+      ...(libraryNamed('Couch stretch') as LibraryOption),
+      publicId: 'lib-core-mobility',
+      name: 'Cat-cow',
+      primaryMuscle: MUSCLE.abdominals,
+    };
+    render(<Harness data={{ options: [coreStrength, coreMobility] }} />);
+    open();
+    const cores = screen.getAllByRole('heading', { level: 5, name: startsWith('Core') });
+    expect(cores).toHaveLength(2);
+    expect(new Set(cores.map((h) => h.id)).size).toBe(2);
+    const ids = [...document.querySelectorAll('[id]')].map((el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('which groups are open (CAT-3 B3): one model, kept in the picker', () => {
+  beforeEach(stubSheetHistory);
+  const GOBLET = libraryNamed('Goblet squat');
+
+  it('🔴 the current row opens every group above it on open (single mode)', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} currentId={GOBLET.publicId} />);
+    open();
+    const row = screen.getByRole('button', { name: /^Goblet squat,/ });
+    expect(row.getAttribute('aria-current')).toBe('true');
+  });
+
+  it('⏳ the current row in "Not sorted yet" opens it', () => {
+    const bare = withoutLibraryData(catalogOption('Pull-Up'));
+    render(<Harness data={{ options: [bare, ...LIBRARY_OPTIONS] }} currentId={bare.publicId} />);
+    open();
+    expect(groupButton(COPY.notSorted, 1).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('survives a no-match search and clearing it; resets when the sheet opens again', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    const mobility = () => groupButton(MODALITY_LABELS.mobility, 2);
+    act(() => void fireEvent.click(mobility()));
+    type('zzzzqx');
+    // The tree under "No matches" keeps what the person opened.
+    expect(mobility().getAttribute('aria-expanded')).toBe('true');
+    type('');
+    expect(mobility().getAttribute('aria-expanded')).toBe('true');
+    act(
+      () => void fireEvent.click(screen.getAllByRole('button', { name: SHEET_COPY.close }).at(-1)!),
+    );
+    open();
+    expect(mobility().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  function SelectHarness({ selected }: { selected: readonly string[] }) {
+    const [isOpen, setOpen] = useState(false);
+    const ref = useRef<HTMLButtonElement>(null);
+    return (
+      <main>
+        <button ref={ref} type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        <MovementPicker
+          open={isOpen}
+          onOpenChange={setOpen}
+          title="Add items"
+          data={{ options: LIBRARY_OPTIONS }}
+          returnFocusTo={ref}
+          multiple={{
+            selected,
+            onToggle: vi.fn(),
+            onCreate: vi.fn(),
+            createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+            noMatchHint: 'No item matches.',
+            searchLabel: 'Search items',
+            searchPlaceholder: 'Search items',
+            footerAction: <button type="button">Add</button>,
+          }}
+        />
+      </main>
+    );
+  }
+  const goblet = () => screen.queryByRole('checkbox', { name: /^Goblet squat,/ });
+  const strength = () =>
+    groupButton(
+      MODALITY_LABELS.strength,
+      LIBRARY_OPTIONS.filter((o) => hasLibraryData(o) && o.modality === MODALITY.strength).length,
+    );
+
+  it('a row ticked when the sheet opens has every group above it open (multi)', () => {
+    render(<SelectHarness selected={[GOBLET.publicId]} />);
+    open();
+    expect(goblet()?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('🔴 a row the caller selects reopens the groups above it, even one the person closed; unticking closes nothing', () => {
+    const { rerender } = render(<SelectHarness selected={[]} />);
+    open();
+    act(() => void fireEvent.click(strength()));
+    act(() => void fireEvent.click(strength()));
+    expect(strength().getAttribute('aria-expanded')).toBe('false');
+    expect(goblet()).toBeNull();
+    // The caller's create selects the new row and focuses it: it must be on screen in this commit.
+    rerender(<SelectHarness selected={[GOBLET.publicId]} />);
+    expect(strength().getAttribute('aria-expanded')).toBe('true');
+    expect(goblet()).toBeTruthy();
+    rerender(<SelectHarness selected={[]} />);
+    expect(goblet(), 'the untick left it on screen').toBeTruthy();
+    // A later tap still closes the group.
+    act(() => void fireEvent.click(strength()));
+    expect(goblet()).toBeNull();
+  });
+
+  /** The sheet opened and the selection set by the caller, both as props, so one render does both. */
+  function ControlledHarness({
+    isOpen,
+    selected,
+    options = LIBRARY_OPTIONS,
+  }: {
+    isOpen: boolean;
+    selected: readonly string[];
+    options?: readonly MovementOptionDTO[];
+  }) {
+    const ref = useRef<HTMLButtonElement>(null);
+    return (
+      <main>
+        <button ref={ref} type="button">
+          Open
+        </button>
+        <MovementPicker
+          open={isOpen}
+          onOpenChange={vi.fn()}
+          title="Add items"
+          data={{ options }}
+          returnFocusTo={ref}
+          multiple={{
+            selected,
+            onToggle: vi.fn(),
+            onCreate: vi.fn(),
+            createLabel: (typed) => (typed ? `New item: ${typed}` : '+ New item'),
+            noMatchHint: 'No item matches.',
+            searchLabel: 'Search items',
+            searchPlaceholder: 'Search items',
+            footerAction: <button type="button">Add</button>,
+          }}
+        />
+      </main>
+    );
+  }
+  const DEAD_HANG = libraryNamed('Dead hang');
+  const deadHang = () => screen.queryByRole('checkbox', { name: /^Dead hang,/ });
+
+  it('🔴 the sheet opening and a new tick in ONE render: both rows have their groups open', () => {
+    const { rerender } = render(<ControlledHarness isOpen={false} selected={[GOBLET.publicId]} />);
+    rerender(<ControlledHarness isOpen selected={[GOBLET.publicId, DEAD_HANG.publicId]} />);
+    expect(goblet()?.getAttribute('aria-checked')).toBe('true');
+    expect(deadHang()?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a row selected before its option arrives has its groups opened once it does', () => {
+    const { rerender } = render(
+      <ControlledHarness
+        isOpen
+        selected={[GOBLET.publicId]}
+        options={LIBRARY_OPTIONS.filter((o) => o.publicId !== GOBLET.publicId)}
+      />,
+    );
+    expect(goblet()).toBeNull();
+    rerender(<ControlledHarness isOpen selected={[GOBLET.publicId]} />);
+    expect(goblet()?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('a filter change forgets the groups the person closed, and keeps the ones they opened', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    const all = () => groupButton(COPY.allMovements, LIBRARY_OPTIONS.length);
+    const mobility = () => groupButton(MODALITY_LABELS.mobility, 2);
+    act(() => void fireEvent.click(mobility()));
+    act(() => void fireEvent.click(all()));
+    expect(all().getAttribute('aria-expanded')).toBe('false');
+    act(() => void fireEvent.click(screen.getByRole('button', { name: COPY.filtersName(0) })));
+    act(
+      () =>
+        void fireEvent.click(
+          screen.getByRole('radio', { name: new RegExp(`^${COPY.emptyEquipment}`) }),
+        ),
+    );
+    act(() => void fireEvent.click(screen.getByRole('button', { name: COPY.clearFilters })));
+    act(() => void fireEvent.click(screen.getByRole('button', { name: COPY.filtersBack })));
+    expect(all().getAttribute('aria-expanded')).toBe('true');
+    expect(mobility().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('survives opening and closing the filter panel', () => {
+    render(<Harness data={{ options: LIBRARY_OPTIONS }} />);
+    open();
+    act(() => void fireEvent.click(groupButton(MODALITY_LABELS.mobility, 2)));
+    act(() => void fireEvent.click(screen.getByRole('button', { name: COPY.filtersName(0) })));
+    act(() => void fireEvent.click(screen.getByRole('button', { name: COPY.filtersBack })));
+    expect(groupButton(MODALITY_LABELS.mobility, 2).getAttribute('aria-expanded')).toBe('true');
   });
 });
 
@@ -236,13 +637,13 @@ describe('one tag per row, by precedence', () => {
     expect(tagsFor('Romanian Deadlift')).toBe(COPY.tagAlsoCalled('RDL'));
   });
 
-  it('…and NOT for an aliased row reached another way — the group label wins there', () => {
-    // The gap the panel found: an unconditional `also called` would outrank the group label for every
-    // aliased row in search results, against UX1 8.
+  it('…and NOT for an aliased row reached another way', () => {
+    // The gap the panel found: an unconditional `also called` would tag every aliased row in search
+    // results, against UX1 8.
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
     type('romanian');
-    expect(tagsFor('Romanian Deadlift')).toBe(COPY.groupLabel('legs'));
+    expect(tagsFor('Romanian Deadlift')).toBeNull();
   });
 
   it("`current` marks the card's movement in the browse list", () => {
@@ -251,13 +652,16 @@ describe('one tag per row, by precedence', () => {
     expect(tagsFor('Front Squat')).toBe(COPY.tagCurrent);
   });
 
-  it('a group label appears in SEARCH RESULTS only, not while browsing', () => {
+  it("no row carries a group tag, browsing or searching: the second line is P14's alone (P12)", () => {
+    // On Romanian Deadlift, which carries a legacy `group`, so the test cannot pass for want of one.
+    const rdl = catalogOption('Romanian Deadlift');
+    expect(rdl.owner === 'catalog' && rdl.group).toBeTruthy();
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
-    // Browsing: the row is already under its group's heading, so repeating it is noise.
-    expect(tagsFor('Front Squat')).toBeNull();
-    type('front squat');
-    expect(tagsFor('Front Squat')).toBe(COPY.groupLabel('legs'));
+    expandBrowse();
+    expect(tagsFor('Romanian Deadlift')).toBeNull();
+    type('romanian deadlift');
+    expect(tagsFor('Romanian Deadlift')).toBeNull();
   });
 
   it('a household item carries no tag: its second line says "Custom item" everywhere (P14)', () => {
@@ -531,6 +935,7 @@ describe('the rest of the contract', () => {
     // `listbox`/`option` — this is a list of actions, not a select.
     render(<Harness data={{ options: ALL_CATALOG }} />);
     open();
+    expandBrowse();
     // A row's pick control is a button in its list item (beside "How to", when the row has it),
     // and no button sits inside another.
     const items = document.querySelectorAll('section ul > li > div > button:first-child');
@@ -580,12 +985,6 @@ describe('the rest of the contract', () => {
       kind: 'existing',
       option: expect.objectContaining({ trackingType: TRACKING_TYPE.weight_reps }),
     });
-  });
-
-  it('every group label comes from the shared map', () => {
-    for (const group of Object.values(MOVEMENT_PICKER_ENTRIES).map((e) => e.group)) {
-      expect(typeof COPY.groupLabel(group as MovementPickerGroup)).toBe('string');
-    }
   });
 });
 
@@ -644,6 +1043,7 @@ describe('multi-select', () => {
   it('a row is a checkbox that toggles and keeps the sheet open', () => {
     render(<MultiHarness data={data} />);
     open();
+    expandBrowse();
     fireEvent.click(box('Romanian Deadlift'));
     expect(box('Romanian Deadlift').getAttribute('aria-checked')).toBe('true');
     expect(screen.getByRole('dialog')).toBeTruthy();
@@ -966,6 +1366,10 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       '@/lib/i18n/locale',
       '@/lib/movements/movement-option',
       '@/lib/movements/movement-picker-copy',
+      // The browse tree's view model (CAT-3 B3): pure, no DOM.
+      '@/lib/movements/browse-view',
+      // The disclosure's chevron (CAT-3 B3): an icon, no I/O.
+      'lucide-react',
     ]);
     for (const { path, source } of sources) {
       const specifiers = [
@@ -1091,14 +1495,13 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
    * ⏳ An old built-in the library has no entry for (7a-ii, until CAT-3 chunk R): the seeded row with
    * its browse group, and none of the taxonomy's keys.
    */
-  const BARE = Object.fromEntries(
-    Object.entries(catalogOption('Back Squat')).filter(([key]) => !(key in TEST_TAXONOMY)),
-  ) as MovementOptionDTO;
+  const BARE = withoutLibraryData(catalogOption('Back Squat'));
 
   it('⏳ a built-in without library data says only how it is logged: no equipment, no label, no "How to" (7a-ii)', () => {
     for (const multi of [false, true]) {
       render(<RowHarness multi={multi} options={[BARE, ROPE]} howTo={vi.fn(async () => STEPS)} />);
       open();
+      expandBrowse();
       const text = row('Back Squat').textContent ?? '';
       expect(text, `multi=${multi}`).toBe(`Back Squat, ${TRACKING_TYPE_LABELS.weight_reps}`);
       expect(text).not.toContain(COPY.emptyEquipment);
@@ -1190,9 +1593,11 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     });
     expect(howTo).toHaveBeenCalledWith(ROPE.publicId);
     expect(button.getAttribute('aria-expanded')).toBe('true');
-    // The heading, then the supervision label ABOVE the steps (K17), then the steps, then Hide.
-    expect(box.querySelector('h4')?.textContent).toBe(COPY.howToFor('Pull-Up'));
-    expect([...box.children].map((el) => el.tagName)).toEqual(['H4', 'P', 'OL', 'BUTTON']);
+    // The heading, then the supervision label ABOVE the steps (K17), then the steps, then Hide. The
+    // row sits under a family's `h5`, so its heading is an `h6`: no level is skipped or repeated.
+    expect(button.closest('ul')?.parentElement?.previousElementSibling?.tagName).toBe('H5');
+    expect(box.querySelector('h6')?.textContent).toBe(COPY.howToFor('Pull-Up'));
+    expect([...box.children].map((el) => el.tagName)).toEqual(['H6', 'P', 'OL', 'BUTTON']);
     expect(box.querySelector('p')?.textContent).toBe(SUPERVISION_LABELS.coach);
     // "Hide" puts focus back on "How to" before its own box goes.
     fireEvent.click(within(box).getByRole('button', { name: COPY.howToHide }));
@@ -1369,7 +1774,7 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     expect(row('Back Squat').parentElement!.children).toHaveLength(1);
   });
 
-  it('a library option with no legacy group is found by search and left out of browse (C0b-2)', () => {
+  it('a library option with no legacy group is found by search and by browsing, with no tag (C0b-2, P12)', () => {
     const { group: _dropped, ...rest } = catalogOption('Pallof Press') as Extract<
       MovementOptionDTO,
       { owner: 'catalog' }
@@ -1378,7 +1783,8 @@ describe('the row: its second line, supervision label and "How to" (CAT-3 B2-i: 
     const ungrouped: MovementOptionDTO = { ...rest, publicId: 'lib-1', name: 'Leg Swing' };
     render(<Harness data={{ options: [...ALL_CATALOG, ungrouped] }} />);
     open();
-    expect(screen.queryByRole('button', { name: /^Leg Swing/ })).toBeNull();
+    expandBrowse();
+    expect(screen.getByRole('button', { name: /^Leg Swing/ })).toBeTruthy();
     type('leg swing');
     const found = screen.getByRole('button', { name: /^Leg Swing/ });
     expect(found.querySelector('[data-row-tag]')).toBeNull();

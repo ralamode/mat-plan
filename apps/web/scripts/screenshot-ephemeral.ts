@@ -61,7 +61,7 @@ import {
   ITEM_PICKER_COPY,
 } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
-import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
+import { MODALITY_LABELS, MOVEMENT_FAMILY_LABELS, MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
 import {
   freePort,
   isLocalDbUrl,
@@ -488,6 +488,8 @@ const STATES = {
   'picker-filter-browse': null,
   'picker-filter-search': null,
   'picker-filter-none': null,
+  // CAT-3 B3 — the picker's browse tree with no filter, a kind and a family open (the e2e spec's step).
+  'picker-browse-open': null,
   // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
   // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
   'rename-duplicate': null,
@@ -618,8 +620,11 @@ async function seedLengthSession(dbUrl: string): Promise<void> {
   }
 }
 
-/** CAT-3 B2-ii: open the workout editor's item picker, then its filter panel. */
-async function openPickerFilters(page: Page) {
+/** Every picker state's name starts with this: they are captured in its sheet, after `load`. */
+const PICKER_STATE_PREFIX = 'picker-';
+
+/** CAT-3 B2-ii: open the workout editor's item picker. */
+async function openItemPicker(page: Page) {
   // Loaded, not idle (`waitUntil: 'load'`), so the first tap may land before hydration and do
   // nothing: tap until the sheet opens, a bounded number of times.
   const open = page.getByRole('button', { name: ITEM_PICKER_COPY.open, exact: true });
@@ -634,6 +639,10 @@ async function openPickerFilters(page: Page) {
       if (tries >= 10) throw error;
     }
   }
+}
+/** CAT-3 B2-ii: open the workout editor's item picker, then its filter panel. */
+async function openPickerFilters(page: Page) {
+  await openItemPicker(page);
   await page.getByRole('button', { name: PICKER_COPY.filtersName(0), exact: true }).click();
   await page.getByRole('heading', { name: PICKER_COPY.filtersHeading, exact: true }).waitFor();
 }
@@ -739,6 +748,17 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page
       .getByRole('heading', { name: PICKER_COPY.householdNotFiltered, exact: true })
       .waitFor();
+  },
+  'picker-browse-open': async (page) => {
+    await openItemPicker(page);
+    // A group's name is "Strength, 17 movements" (`choiceName`); Chrome may space the two spans.
+    const group = (label: string) =>
+      page.getByRole('button', {
+        name: new RegExp(`^${label}\\s*${PICKER_COPY.choiceJoin.trim()}`),
+      });
+    await group(MODALITY_LABELS.strength).click();
+    await group(MOVEMENT_FAMILY_LABELS.vertical_pull).click();
+    await page.getByRole('checkbox', { name: /^Chin-up\b/ }).waitFor();
   },
   'picker-filter-none': async (page) => {
     await openPickerFilters(page);
@@ -1527,8 +1547,8 @@ async function runEphemeral(
       allowConsole,
       // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver. The picker's
       // filter states are in its sheet too.
-      viewportOnly: state.startsWith('sheet-') || state.startsWith('picker-filter-'),
-      waitUntil: state.startsWith('picker-filter-') ? 'load' : undefined,
+      viewportOnly: state.startsWith('sheet-') || state.startsWith(PICKER_STATE_PREFIX),
+      waitUntil: state.startsWith(PICKER_STATE_PREFIX) ? 'load' : undefined,
     });
   } finally {
     if (server) await stopChildProcess(server);
