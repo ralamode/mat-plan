@@ -138,3 +138,27 @@ describe('buildExportEntries — the frozen value wins over the live program', (
     expect(programDayRows).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('buildExportEntries — the check-ins file (FAM-1 14b)', () => {
+  it('writes each logged check-in, and never the read’s entry id', async () => {
+    strengthMonthRows.mockResolvedValue([]);
+    checkinMonthRows.mockResolvedValue([
+      {
+        entryId: 4242,
+        date: '2026-03-02',
+        activity: 'wrestling_practice',
+        metric: 'practice_minutes',
+        valueNum: '90',
+        valueText: null,
+        unit: 'min',
+        notes: null,
+      },
+    ]);
+    const entries = await buildExportEntries('p-1');
+    const file = entries.find((e) => e.path.includes('checkins'))!.content;
+    expect(file).toBe(
+      'date,activity,metric,value,unit,notes\n2026-03-02,wrestling-practice,practice-minutes,90,min,\n',
+    );
+    expect(file).not.toContain('4242');
+  });
+});
