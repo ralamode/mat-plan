@@ -9,6 +9,7 @@ import { CATALOG_BATCH_07 } from './batch-07';
 import { CATALOG_BATCH_08 } from './batch-08';
 import { CATALOG_BATCH_09 } from './batch-09';
 import { CATALOG_BATCH_10 } from './batch-10';
+import { CATALOG_BATCH_11 } from './batch-11';
 
 /**
  * The movement library ([spec](../../../../../docs/specs/cat-3-movement-library.md), rule 3): the
@@ -34,6 +35,7 @@ export const CATALOG_MOVEMENTS: readonly CatalogMovement[] = [
   ...CATALOG_BATCH_08,
   ...CATALOG_BATCH_09,
   ...CATALOG_BATCH_10,
+  ...CATALOG_BATCH_11,
 ];
 
 /** The slug of every entry: what a lookup by slug (an alias, a supervision label) reads. */

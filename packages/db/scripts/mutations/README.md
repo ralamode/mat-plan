@@ -7,8 +7,9 @@ anything.
 ## Where it runs
 
 **In CI, on every pull request that can affect a patch, and on every push to `main`** (DX-18 PR 2,
-[plan](../../../../docs/plans/dx-18-heavy-runs-to-ci.md) D6): `ci.yml`'s `mutations` matrix runs
-`--shard i/n`, each shard writes a `--report`, and `mutations-total` checks with `--verify-reports`
+[plan](../../../../docs/plans/dx-18-heavy-runs-to-ci.md) D6): `ci.yml`'s `mutations-plan` job decides
+whether to run and how many shards (8 on a push to `main`, 4 on a pull request), the `mutations`
+matrix runs `--shard i/n`, each shard writes a `--report`, and `mutations-total` checks with `--verify-reports`
 that together they ran every patch exactly once. `changed-scopes.mjs` skips the shards on a PR that
 touches nothing a patch reaches (its `--list-paths`, the packages, the lockfile, `pnpm-workspace.yaml`, a manifest, a tsconfig or
 `.github/`). Locally, run what you are writing: `pnpm --filter @mat-plan/db db:mutations --only 335`

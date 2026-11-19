@@ -3,7 +3,7 @@ import { everyTypeOnce } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
 import {
-  canChangeValues,
+  changeableFields,
   changedText,
   fieldText,
   formatRowValues,
@@ -246,11 +246,14 @@ describe('readAmend (Change, 13b-ii)', () => {
   });
 
   it('a row missing a number its type has, or over the ceiling, is not changed in place', () => {
-    expect(canChangeValues(bench, { quantities: logged.quantities })).toBe(false); // no reps
+    expect(changeableFields(bench, { quantities: logged.quantities })).toEqual([]); // no reps
     const over = quantityCeiling('lb')! + 1;
     expect(
-      canChangeValues(bench, { quantities: [{ slot: primary, unit: 'lb', value: over }], reps: 8 }),
-    ).toBe(false);
+      changeableFields(bench, {
+        quantities: [{ slot: primary, unit: 'lb', value: over }],
+        reps: 8,
+      }),
+    ).toEqual([]);
   });
 
   it('a load over the unit’s ceiling is kept, not sent', () => {
@@ -261,19 +264,63 @@ describe('readAmend (Change, 13b-ii)', () => {
     });
   });
 
-  it('🔴 a row logged in another unit cannot be changed in place', () => {
-    expect(canChangeValues(bench, logged)).toBe(true);
-    expect(canChangeValues({ ...bench, unit: 'kg' }, logged)).toBe(false);
-    expect(canChangeValues(grip, { quantities: [] })).toBe(false);
+  it('🔴 a row logged in another unit offers its reps only, never its load (12d-iii, D44)', () => {
+    expect(changeableFields(bench, logged)).toEqual(['quantity', 'reps']);
+    expect(changeableFields({ ...bench, unit: 'kg' }, logged)).toEqual(['reps']);
+    expect(changeableFields(grip, { quantities: [] })).toEqual([]);
     // Logged as reps only, on what is now weight × reps: no load to send.
-    expect(canChangeValues(bench, { quantities: [], reps: 8 })).toBe(false);
+    expect(changeableFields(bench, { quantities: [], reps: 8 })).toEqual([]);
     // Logged as another type (reps on what is now a Duration): no numbers it no longer has.
     expect(
-      canChangeValues(splits, {
+      changeableFields(splits, {
         quantities: logged.quantities.map((q) => ({ ...q, unit: 'min' as const })),
         reps: 8,
       }),
-    ).toBe(false);
+    ).toEqual([]);
+    // Over the logged unit's ceiling, judged in that unit as the writer does (C28): nothing.
+    const over = quantityCeiling('lb')! + 1;
+    expect(
+      changeableFields(
+        { ...bench, unit: 'kg' },
+        { quantities: [{ slot: primary, unit: 'lb', value: over }], reps: 8 },
+      ),
+    ).toEqual([]);
+  });
+
+  it('a distance logged in another unit has no reps to offer: it stays text (12d-iii, D44)', () => {
+    const sprint: DayItem = {
+      ...splits,
+      name: 'Sprints',
+      trackingType: 'distance',
+      unit: 'm',
+      target: { reps: null, quantities: [{ slot: QUANTITY_SLOT.distance, unit: 'm', value: 40 }] },
+    };
+    const inYards = {
+      quantities: [{ slot: QUANTITY_SLOT.distance, unit: 'yd' as const, value: 40 }],
+    };
+    expect(changeableFields({ ...sprint, unit: 'yd' }, inYards)).toEqual(['quantity']);
+    expect(changeableFields(sprint, inYards)).toEqual([]);
+  });
+
+  it('🔴 a reps-only Change sends the load as logged, in its own unit, judged in that unit', () => {
+    const benchKg: DayItem = { ...bench, unit: 'kg' };
+    // The load's field is absent (textOf leaves it out): only the reps are read.
+    expect(readAmend(benchKg, { quantity: '', reps: '6' }, logged, ['reps'])).toEqual({
+      send: { quantities: logged.quantities, reps: 6 },
+      kept: [],
+    });
+    // Unchanged reps send nothing; a bad number keeps the logged one, and names only the reps.
+    expect(readAmend(benchKg, { quantity: '', reps: '8' }, logged, ['reps'])).toEqual({
+      send: null,
+      kept: [],
+    });
+    expect(readAmend(benchKg, { quantity: '', reps: 'x' }, logged, ['reps'])).toEqual({
+      send: null,
+      kept: [{ field: 'reps', problem: 'not_a_number', typed: 'x' }],
+    });
+    // Without the fields shown, the hidden load reads as blank and the kg item refuses the lb row:
+    // the typed reps would vanish. That is why the fields are passed.
+    expect(readAmend(benchKg, { quantity: '', reps: '6' }, logged).send).toBeNull();
   });
 
   it('the Changed line prints only what moved', () => {
