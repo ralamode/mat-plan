@@ -1229,13 +1229,56 @@ async function verifyHiddenHouseholdErased(): Promise<void> {
 
 // ── the guarded-write timeouts hold inside a transaction, and refuse to run outside one ───────────
 async function verifyTimeoutsHold(): Promise<void> {
-  await rolledBack(async (tx) => {
-    await setLocalTimeouts(tx, '60s'); // displayed as '1min': the check compares intervals
-  });
-  await assert.rejects(
-    setLocalTimeouts(db, '30s'),
-    /did not hold/,
-    'PRIV-3 2a: setLocalTimeouts outside a transaction throws instead of silently setting nothing',
+  // The last migration and the seed leave the session at lock 5s and statement 60s, the very values
+  // setLocalTimeouts sets, and PGlite has one session. Without the reset below, a setLocalTimeouts
+  // that set nothing would still read them back and pass.
+  const session = async (ex: Pick<typeof db, 'execute'>) =>
+    rowsOf<{ lock: string; statement: string; held: boolean }>(
+      await ex.execute(sql`
+        SELECT current_setting('lock_timeout') AS lock,
+               current_setting('statement_timeout') AS statement,
+               current_setting('lock_timeout')::interval = '5s'::interval
+           AND current_setting('statement_timeout')::interval = '60s'::interval AS held`),
+    )[0]!;
+  const before = await session(db);
+  await db.execute(
+    sql`SELECT set_config('lock_timeout', '0', false), set_config('statement_timeout', '0', false)`,
   );
+  try {
+    await rolledBack(async (tx) => {
+      // The guard for this proof itself: EACH setting starts from a value setLocalTimeouts does not set.
+      const start = await session(tx);
+      assert.deepEqual(
+        [start.lock, start.statement],
+        ['0', '0'],
+        'PRIV-3 2a: the timeouts proof starts from reset settings',
+      );
+      await assert.doesNotReject(
+        setLocalTimeouts(tx, '60s'), // displayed as '1min': the check compares intervals
+        'PRIV-3 2a: setLocalTimeouts sets both timeouts inside a transaction',
+      );
+      assert.equal(
+        (await session(tx)).held,
+        true,
+        'PRIV-3 2a: inside the transaction both timeouts read back as set',
+      );
+    });
+    // The guard for the outside-transaction case: it, too, must start from reset settings.
+    const after = await session(db);
+    assert.deepEqual(
+      [after.lock, after.statement],
+      ['0', '0'],
+      'PRIV-3 2a: the outside-transaction case starts from reset settings',
+    );
+    await assert.rejects(
+      setLocalTimeouts(db, '60s'),
+      /did not hold/,
+      'PRIV-3 2a: setLocalTimeouts outside a transaction throws instead of silently setting nothing',
+    );
+  } finally {
+    await db.execute(
+      sql`SELECT set_config('lock_timeout', ${before.lock}, false), set_config('statement_timeout', ${before.statement}, false)`,
+    );
+  }
   console.log('✓ PRIV-3 2a: setLocalTimeouts holds inside a transaction and throws outside one');
 }

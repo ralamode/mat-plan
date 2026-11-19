@@ -113,9 +113,10 @@ export const BROWSE_OPEN_AT_MOST = 20;
  * The kinds of training listed with NO family level _(maintainer, 2026-11-18, K27)_: their
  * movements by name, directly under the kind. Conditioning's families came from each movement's
  * primary muscle, which put one drill's variants under headings nobody could predict (Bear crawl
- * under "Neck and shoulders", Bear crawl hold under "Core").
+ * under "Neck and shoulders", Bear crawl hold under "Core"). **Skill is listed the same way**
+ * _(maintainer, 2026-11-19, K30: "Flat by name (Recommended)")_.
  */
-export const BROWSE_FLAT_KINDS: readonly Modality[] = [MODALITY.conditioning];
+export const BROWSE_FLAT_KINDS: readonly Modality[] = [MODALITY.conditioning, MODALITY.skill];
 
 export type BrowseFamily<T> = {
   /** `null` (and so is `label`) for the one family of a kind that has no family level. */
