@@ -6,17 +6,15 @@ import { useActionState, useEffect, useState } from 'react';
 
 import { archiveAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
 import { useOnActionSuccess } from '@/app/p/[profileId]/use-on-action-success';
+import { ExportControl } from '@/components/profiles/export-control';
 import { UndoLine } from '@/components/undo-line';
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import {
   ANNOUNCE_AFTER_FOCUS_MS,
   athleteEditPath,
-  athleteExportPath,
   EXPORT_CSV_LABEL,
   NAME_WRAP_CLASS,
-  NAV_LINK_CLASS,
-  NOTHING_TO_EXPORT,
   SETTINGS_COPY,
   SETTINGS_PATH,
   UNDO_BUTTON_ATTR,
@@ -155,10 +153,13 @@ function AthleteRow({
 export function AthleteList({
   athletes,
   canArchive,
+  canExport,
 }: {
   athletes: HouseholdAthleteDTO[];
   /** `canArchiveAthletes` from the DAL — a boolean, never the role and never the scope. */
   canArchive: boolean;
+  /** `canExportAthletes` from the DAL (FAM-1 export follow-up), the same kind of boolean. */
+  canExport: boolean;
 }) {
   const [archiveState, archive, archivePending] = useActionState(
     archiveAthleteAction,
@@ -319,29 +320,16 @@ export function AthleteList({
                       ariaLabel={SETTINGS_COPY.restoreFor(a.name)}
                       pending={pending}
                     />
-                    {a.hasHistory ? (
-                      // A LINK with NAV_LINK_CLASS, not `Button asChild`: the Button base carries
-                      // `whitespace-nowrap shrink-0`, which at 200% text makes this ≈280px against a
-                      // 296px card and clips rather than wraps. The day page renders the same
-                      // artifact the same way.
-                      <a
-                        href={athleteExportPath(a.id)}
-                        download
-                        className={NAV_LINK_CLASS}
-                        // SC 2.5.3: the accessible name must CONTAIN the visible text, so the
-                        // visible string comes first and a voice-control user saying it matches.
-                        aria-label={`${EXPORT_CSV_LABEL} for ${a.name}`}
-                      >
-                        {EXPORT_CSV_LABEL}
-                      </a>
-                    ) : (
-                      // Maintainer decision N3. Without this the route builds an EOCD-only zip that
-                      // iOS Files opens as nothing — indistinguishable from a failed download. A
-                      // disabled control with a stated reason is the whole fix.
-                      <p className="text-muted-foreground flex min-h-11 items-center text-sm">
-                        {NOTHING_TO_EXPORT}
-                      </p>
-                    )}
+                    {/* Maintainer decision N3 (no history → the reason, never an EOCD-only zip) and
+                        the FAM-1 export follow-up (only the owner sees either), in one component. */}
+                    <ExportControl
+                      profileId={a.id}
+                      hasHistory={a.hasHistory}
+                      canExport={canExport}
+                      // SC 2.5.3: the accessible name must CONTAIN the visible text.
+                      ariaLabel={`${EXPORT_CSV_LABEL} for ${a.name}`}
+                      reasonClassName="text-muted-foreground flex min-h-11 items-center text-sm"
+                    />
                   </>
                 }
               />

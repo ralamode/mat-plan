@@ -7,6 +7,7 @@ import { DayScreen } from '@/components/day/day-screen';
 import { dayPageView, lookAheadFallsBack } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
+import { ExportControl } from '@/components/profiles/export-control';
 import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
 
@@ -15,6 +16,7 @@ import { localDayIso, localWeekStartIso } from '@/lib/date';
 import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { getDayPlan } from '@/lib/dal/day/day';
+import { householdState } from '@/lib/dal/household';
 import { lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
@@ -26,16 +28,13 @@ import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   CLOSED_DAY_NOTICE,
-  EXPORT_CSV_LABEL,
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
-  NOTHING_TO_EXPORT,
   NOTICE_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
   athleteEditPath,
-  athleteExportPath,
   athletePath,
 } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
@@ -71,6 +70,9 @@ export default async function TodayPage({
   // profile tiles are a UX switch, not a security boundary). Unknown → 404.
   const profile = await getProfileByPublicId(profileId);
   if (!profile) notFound();
+  // The export control's capability (FAM-1 export follow-up). `getHouseholdScope` is `cache()`d, so
+  // this is no second scope query.
+  const { canExportAthletes } = await householdState();
 
   // "Today" is the LOCAL calendar date in the request's active tz (V1-6c) — the client
   // reports its zone via the `tz` cookie (see TimeZoneSync); the RSC validates + uses it,
@@ -274,14 +276,13 @@ export default async function TodayPage({
           is one row shorter on a phone. A plain <a>, not a <Link>: a file download, which Next's
           client router would try to navigate to; `download` names it, `min-h-11` keeps the bar.
           🔴 Maintainer decision N3 applies to BOTH surfaces: no history → no link (the EOCD-only zip
-          N3 exists to eliminate), the same sentence the settings row shows. */}
-      {profile.hasHistory ? (
-        <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
-          {EXPORT_CSV_LABEL}
-        </a>
-      ) : (
-        <p className={`${NAV_LINK_CLASS} flex items-center`}>{NOTHING_TO_EXPORT}</p>
-      )}
+          N3 exists to eliminate), the same sentence the settings row shows. And only the household's
+          owner sees either (FAM-1 export follow-up, Q1): `ExportControl` holds all three states. */}
+      <ExportControl
+        profileId={profileId}
+        hasHistory={profile.hasHistory}
+        canExport={canExportAthletes}
+      />
       <Link
         href={`${athleteEditPath(profile.id)}?from=${encodeURIComponent(athletePath(profile.id))}`}
         className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}
