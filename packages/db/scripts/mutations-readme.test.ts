@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest';
 const DIR = join(dirname(fileURLToPath(import.meta.url)), 'mutations');
 const patches = readdirSync(DIR).filter((f) => f.endsWith('.patch'));
 const readme = readFileSync(join(DIR, 'README.md'), 'utf8');
-const listed = [...readme.matchAll(/^\|\s*`([^`]+\.patch)`/gm)].map((m) => m[1]!);
+const rows = [...readme.matchAll(/^\|\s*`([^`]+\.patch)`[^|]*\|([^|]*)\|([^|]*)\|/gm)];
+const listed = rows.map((m) => m[1]!);
 
 describe('mutations/README.md lists every patch, and only real ones', () => {
   it('finds both lists (an empty one would pass everything below)', () => {
@@ -27,6 +28,11 @@ describe('mutations/README.md lists every patch, and only real ones', () => {
 
   it('every row names a patch that exists', () => {
     expect(listed.filter((p) => !patches.includes(p))).toEqual([]);
+  });
+
+  it('every row says what must go red', () => {
+    const blank = rows.filter((m) => !/[a-z]/i.test(m[3]!)).map((m) => m[1]);
+    expect(blank).toEqual([]);
   });
 
   it('no patch has two rows', () => {
