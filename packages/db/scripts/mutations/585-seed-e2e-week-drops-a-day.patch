@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/seed-e2e.ts b/packages/db/src/writers/program/seed-e2e.ts
+index f193d6a3..82bc56d7 100644
+--- a/packages/db/src/writers/program/seed-e2e.ts
++++ b/packages/db/src/writers/program/seed-e2e.ts
+@@ -52,7 +52,7 @@ export const SEED_E2E_WORLD: World = {
+       name: SEED_E2E_PROGRAM_NAME,
+       workouts: HEAVY.map((w) => structuredClone(w)),
+       week: Object.fromEntries(
+-        WEEKDAYS.map((weekday) => [weekday, SEED_E2E_SLOTS.map((slot) => ({ ...slot }))]),
++        WEEKDAYS.map((weekday) => [weekday, weekday === 0 ? [] : SEED_E2E_SLOTS.map((slot) => ({ ...slot }))]),
+       ) as Record<Weekday, Array<{ label: string; wid: string }>>,
+     },
+   ],

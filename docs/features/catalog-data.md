@@ -40,6 +40,8 @@ it is approved, one batch PR at a time.
 | 9     | Wrestling drills and mat skills: stance, shots, takedowns, escapes, rides, live      | 53      |
 | 10    | Jumps, hops and throws; calves, shins, hips and neck                                 | 46      |
 | 11    | Upper-body isolation: curls, triceps, raises and flys, shrugs, forearms and grip     | 35      |
+| 12    | Olympic lifts and kettlebell work: cleans, snatches, jerks, thrusters, get-ups       | 31      |
+| 13    | Bodyweight skills: handstands, levers, planche, L-sit, muscle-ups, rolls             | 24      |
 
 ## How a batch arrives
 

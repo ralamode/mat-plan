@@ -7,7 +7,7 @@ import {
   clerkIsConfigured,
   clerkPublishableKey,
 } from '@/lib/clerk';
-import { NONCE_HEADER } from '@/lib/constants';
+import { NONCE_HEADER, REFERRER_POLICY } from '@/lib/constants';
 import { env } from '@/lib/env';
 
 /**
@@ -126,7 +126,7 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
   response.headers.set('Content-Security-Policy', csp);
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY'); // legacy backstop for frame-ancestors
-  response.headers.set('Referrer-Policy', 'no-referrer');
+  response.headers.set('Referrer-Policy', REFERRER_POLICY);
   response.headers.set(
     'Permissions-Policy',
     'camera=(), microphone=(), geolocation=(), browsing-topics=()',
