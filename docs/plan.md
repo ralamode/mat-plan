@@ -1122,8 +1122,11 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   **Fix:** rotate the seeded `public_id`s to real UUIDv7s (a guarded, idempotent `db:correct`
   correction — the ids are referenced by `PROGRAM_SEED`, both screenshot scripts and the e2e
   constants, so this is a sweep, not a column edit), and correct or remove the premise in
-  `rate-limit.ts`'s docblock either way. **Acceptance:** no committed constant equals a live
-  production `public_id`, and the rate-limit rationale states only what is true.
+  `rate-limit.ts`'s docblock either way. **Acceptance** _(narrowed by CAT-3 R0, 2026-11-19)_: no
+  live production **household, profile or movement** carries a committed seed constant as its
+  `public_id`. After the fresh start (R2) that holds by deletion (`erase-seeded-household-…`), and R4
+  checks it. The `rate-limit.ts` docblock clause keeps its owner here: the rationale must state only
+  what is true (a docs-only follow-up).
 
 - **SEC-5b — the daily scheduled audit.** _(maintainer, 2026-10-06; cut out of SEC-5 by its scope
   lens.)_ SEC-5's gate only fires when something is pushed, so an advisory published against a

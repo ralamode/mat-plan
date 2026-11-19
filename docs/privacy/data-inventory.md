@@ -661,6 +661,13 @@ put it back. `CAT-3`'s fresh start (K7) removes the seeded household with everyt
 `runbooks.md` → "A household or athlete with a seed id (`OPS-2`)". This is the row behind the notice's
 "cannot be erased one at a time yet". (`OPS-2` PR 1, 2026-11-18.)
 
+**The fresh start's one-shot erasure** (`erase-seeded-household-2026-11-19`, `CAT-3` R0, built
+2026-11-19, not yet run) is that removal path. It hard-deletes the seeded household and every row in
+it, hidden rows included, through the erasure core, once, against production only, and only with the
+total its own dry run printed. It deletes the household's `household_members` rows but **no sign-in
+account**: the accounts are kept (K15) and bound to the new household at step 7. It prints counts
+only. The notice's sentences change at the fresh start's close-out, not here.
+
 ⚠️ **Updated 2026-11-13 (`V1-9b` B1-1b).** This paragraph said soft delete was "written in exactly
 one place in the app tree (a committed data correction)". There are now **three** writers of
 `entries.deleted_at`, and the distinction between them is what matters here:
