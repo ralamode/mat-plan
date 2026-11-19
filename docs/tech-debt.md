@@ -58,21 +58,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Severity:** low. Both guards are best-effort and say so; each wrapper has a case in
   `hooks.test.sh`.
 
-### picomatch GHSA-fc5q-39xc-vjpf is excepted from the production audit until 2026-12-17 (added 2026-11-17, SEC-5c)
-
-- **What & why it's debt:** a `high` ReDoS in picomatch `<= 4.0.7`, reached through `@sentry/nextjs`'s
-  build-time tooling, has no published fix, so `.github/audit-exceptions.json` excepts it
-  ([plan](./plans/sec-5c-advisory-exceptions.md)). The exposure reasoning is in the entry.
-- **Trigger:** a fixed picomatch is published (check GitHub's `first_patched_version`, never pnpm's
-  inferred range); then bump or override, and delete the entry. **Hard date: 2026-12-17 (UTC).** From
-  the 18th every PR's `quality` job fails at the audit step, before lint and tests, until a reviewed
-  PR renews or removes the entry; the guard warns from seven days out.
-- **Residual, outside the audit:** Next vendors its own older picomatch (`next/dist/compiled/picomatch`),
-  which `pnpm audit` cannot see. It runs at request time only for `images.remotePatterns` /
-  `localPatterns`, which `next.config.ts` does not set. If those are ever added, keep extglobs
-  (`+(…)`) out of them.
-- **Owner:** the FAM-1 board (whoever holds the dependency queue). **Severity:** low today.
-
 ### The strength fix-a-set path can change a program row on any day (found 2026-11-17, FAM-1 11c's panel)
 
 - **What & why it's debt:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`)
