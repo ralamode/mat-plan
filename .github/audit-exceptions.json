@@ -1,18 +1,1 @@
-[
-  {
-    "ghsa": "GHSA-fc5q-39xc-vjpf",
-    "module": "picomatch",
-    "severity": "high",
-    "paths": [
-      "apps__web>@sentry/nextjs>@rollup/plugin-commonjs>@rollup/pluginutils>picomatch",
-      "apps__web>@sentry/nextjs>@rollup/plugin-commonjs>fdir>picomatch",
-      "apps__web>@sentry/nextjs>@rollup/plugin-commonjs>picomatch",
-      "apps__web>@sentry/nextjs>@sentry/cloudflare>vite>picomatch",
-      "apps__web>@sentry/nextjs>@sentry/cloudflare>vite>tinyglobby>fdir>picomatch",
-      "apps__web>@sentry/nextjs>@sentry/cloudflare>vite>tinyglobby>picomatch"
-    ],
-    "reason": "No patched picomatch exists (GitHub: first_patched_version null; npm latest is 4.0.7; pnpm's '>=4.0.8' is inferred). The advisory needs an attacker-supplied glob pattern; on these paths every pattern is committed config or library-internal. None of these modules loads in the deployed server: rollup's commonjs plugin is a build-time webpack loader of @sentry/nextjs, and vite is reached only through @sentry/cloudflare's ./vite subpath, which the app never imports. Scope: the audited copy only (Next's own vendored picomatch is tracked in docs/tech-debt.md). Remove this entry when a fixed picomatch is published and the tree takes it.",
-    "added": "2026-11-17",
-    "expires": "2026-12-17"
-  }
-]
+[]
