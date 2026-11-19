@@ -46,12 +46,13 @@ still needs its own PR. Each correction below names the row that fixes the cause
    no `public_id` at all and mints every one. Reasoning: [the plan](../../../../docs/plans/priv-3-rc-create-household.md),
    D4 and D1.
    **`erase-seeded-household-2026-11-19` (CAT-3 R0) departs from rule 8 beside RC:** its target is a
-   committed constant (`SEED_HOUSEHOLD_PUBLIC_ID`), it takes no input, and the fresh start that runs
+   committed constant (`SEED_HOUSEHOLD_PUBLIC_ID`), it takes no target input (`--apply` takes only the
+   dry run's total), and the fresh start that runs
    it (K7) is public, so naming it publishes nothing about anyone. K15's departures are named in [its
    plan](../../../../docs/plans/priv-3-fresh-start-prep.md), D1: no waiting period, accounts kept, no
-   restore drill, and no export offered by the system (the household takes its export at step 0, or
-   the go records that it declined). The go and its date go in the ledger, not the Applied row. ⚠️ `PRIV-3` is the row that builds the deletion correction, and it is
-   **not** a drop-in entry: `Correction.run` takes no target and the runner ignores positional args,
+   restore drill, and no export offered by the system (at step 0 the household takes each athlete's in-app
+   export and is offered the full copy, hidden rows included, or the go records that it declined). The go and its date go in the ledger, not the Applied row. ⚠️ `PRIV-3` 2b's `erase-household`, the
+   general deletion correction, is **not** a drop-in entry: `Correction.run` takes no target and the runner ignores positional args,
    so it needs a `--household <public_id>` flag — a runner change, with its own plan.
 9. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
    privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue

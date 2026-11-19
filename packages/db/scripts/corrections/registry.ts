@@ -54,7 +54,12 @@ import {
   parseExpectedRows,
   seededHouseholdErasureIssue,
 } from './erasure-gates';
-import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
+import {
+  householdMemberInHousehold,
+  inHousehold,
+  insertHouseholdMember,
+  isLiveProfile,
+} from '../../src/writers/ownership';
 
 /**
  * One guarded, idempotent correction to live data.
@@ -1024,7 +1029,7 @@ async function seedMembersNote(db: Database, scope: HouseholdScope): Promise<Cor
   const rows = await db
     .select({ deletedAt: schema.householdMembers.deletedAt })
     .from(schema.householdMembers)
-    .where(inHousehold(scope));
+    .where(householdMemberInHousehold(scope));
   const live = rows.filter((r) => r.deletedAt === null).length;
   return note(`household_members: live ${live}, hidden ${rows.length - live}`);
 }
