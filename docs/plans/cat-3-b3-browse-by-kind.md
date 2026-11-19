@@ -332,6 +332,37 @@ the filtered no-match fallback, the remaining e2e steps (the filtered headings, 
 open family), and moving the two remaining `FoldedSection`s (the filtered custom section and
 Today's program, marked `TODO(CAT-3 B3-ii)`) onto `Group`, which deletes `FoldedSection`.
 
+**As built (B3-ii):**
+
+- **One view, filter or not.** The picker builds `browseView(options, filters)`, and the one
+  `browse` element renders it at every site: "Movements that fit your filters" is `Browse` with
+  `view.filtered`, the same `BROWSE_KEY.all` key, so a tap carries across a filter change (as
+  `forgetClosed` allows). `auto` was already counted on the filtered tree's library rows. The flat
+  list (`filteredBrowse`'s `filterMovementOptions` partition and its `byFoldedName` sort) is gone;
+  `filteredBrowse` is now the custom group plus the tree, or `COPY.noneFit` when nothing fits, and
+  serves both the empty query and the no-match fallback under a filter (P10).
+- **"Your custom items" is one group, filter or not** (`BROWSE_KEY.custom`), labelled
+  `householdNotFiltered` under a filter. Its default gains `!view.filtered`: under a filter it starts
+  folded however few there are (P9, K25); the seed still opens it for a tick.
+- **Today's program is a group in the same model** (`BROWSE_KEY.program`). Its default is "open
+  while any of it is not on a card" (`BrowseDefaults.programAllOnForm`), and `browseAncestors` takes
+  the program's ids, so a selection in it seeds it. That replaces `FoldedSection`'s tick latch: a
+  tick that puts the last prescribed movement on a card leaves it open. **A deviation, recorded:**
+  the current row (single mode) seeds it too, as it seeds every group on its path (invariant 15);
+  before, only a multi-mode tick latched it. `Group`'s count became optional, so its heading is
+  unchanged ("Today's program", no count).
+- **`FoldedSection` and `COPY.foldedCount` are deleted**: the latter's last reader was the former
+  (§Copy's "kept as is" predates that).
+- **e2e:** the filtered step expects the tree's headings (with "Quads" on, Strength · 3 with Jumps,
+  Lunges and Squats, all open by K26); a new step checks the open Squats
+  family at 200% root text: no two laid-out parts of a flex or grid box overlap, nothing overflows
+  in the dialog, no sideways scroll. **Width at 200% text, 360px:** the family's label column is
+  about 128px (296 − `pl-6` 48 − chevron 32 − two gaps 32 − count ~56); a multi row with "How to"
+  leaves its name column about 30px (296 − gap 8 − "How to" 136 − paddings 48 − border 2 − box 48 −
+  gap 24), which wraps letter by letter but does not overlap. At 100%: 244px and 194px.
+- **Capture:** no new state. `quadsOnThenBack`'s wait now matches the counted fit heading, so
+  `picker-filter-browse` shows the filtered, auto-opened tree.
+
 ## Test plan
 
 - **Vitest** (colocated), as listed in the table above. Each rule gets a test that fails without it.

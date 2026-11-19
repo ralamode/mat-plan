@@ -1,5 +1,5 @@
 import { MODALITY_LABELS, MOVEMENT_FAMILY_LABELS } from '@mat-plan/shared';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { previewHref } from '../app/design/program/preview-registry';
 import { ITEM_PICKER_COPY, newItemLabel } from '../components/program-builder/builder-text';
@@ -42,8 +42,42 @@ const muscle = (page: Page, label: string) =>
 const group = (page: Page, label: string) =>
   page.getByRole('button', { name: new RegExp(`^${label}\\s*${COPY.choiceJoin.trim()}`) });
 
+/**
+ * No two laid-out siblings of a flex or grid box overlap, anywhere under `container`: a group's
+ * chevron, label and count, and a row's box, name and "How to". An `sr-only` span is absolutely
+ * positioned, so it is out of the flow and not compared.
+ */
+async function expectNoOverlapWithin(container: Locator, context: string) {
+  const overlaps = await container.evaluate((root) => {
+    const found: string[] = [];
+    for (const parent of [root, ...root.querySelectorAll('*')]) {
+      if (!/flex|grid/.test(getComputedStyle(parent).display)) continue;
+      const boxes = [...parent.children]
+        .filter((el) => !/absolute|fixed/.test(getComputedStyle(el).position))
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter(({ r }) => r.width > 0 && r.height > 0);
+      for (const [i, a] of boxes.entries()) {
+        for (const b of boxes.slice(i + 1)) {
+          const apart =
+            a.r.right <= b.r.left + 1 ||
+            b.r.right <= a.r.left + 1 ||
+            a.r.bottom <= b.r.top + 1 ||
+            b.r.bottom <= a.r.top + 1;
+          if (!apart) {
+            const name = (el: Element) =>
+              `<${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 30)}"`;
+            found.push(`${name(a.el)} overlaps ${name(b.el)}`);
+          }
+        }
+      }
+    }
+    return found;
+  });
+  expect(overlaps, `${context}: overlapping parts`).toEqual([]);
+}
+
 test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.goto(EDITOR);
   await page.getByRole('button', { name: ITEM_PICKER_COPY.open, exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -88,11 +122,39 @@ test("the movement picker's states meet the a11y bar at 360px (P15)", async ({ p
     await expect(filtersButton(page)).toHaveAccessibleName(COPY.filtersName(1));
   });
 
-  await test.step('browsing with a filter: custom items folded, then what fits', async () => {
-    // Not exact: the folded summary adds its count ("… · 24").
-    await expect(page.getByRole('heading', { name: COPY.householdNotFiltered })).toBeVisible();
-    await expect(page.getByRole('heading', { name: COPY.fitHeading, exact: true })).toBeVisible();
+  await test.step('browsing with a filter: custom items folded, then the tree of what fits', async () => {
+    // Not exact: a group's name adds its count ("…, 24 movements").
+    const custom = page.getByRole('heading', { level: 3, name: COPY.householdNotFiltered });
+    await expect(custom.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+    await expect(group(page, COPY.fitHeading)).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('heading', { level: 3, name: COPY.allMovements })).toHaveCount(0);
+    // "Quads" leaves three library rows (Strength: Jumps, Lunges, Squats), so the whole tree opens
+    // itself (K26): its kind is an h4, its families h5s, each with its count.
+    const strength = page.getByRole('heading', { level: 4, name: MODALITY_LABELS.strength });
+    await expect(strength.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+    for (const family of [MOVEMENT_FAMILY_LABELS.jump, MOVEMENT_FAMILY_LABELS.squat]) {
+      const heading = page.getByRole('heading', { level: 5, name: family });
+      await expect(heading.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+    }
+    await expect(page.getByRole('checkbox', { name: /^Goblet squat\b/ })).toBeVisible();
     await check(page, 'browse with a filter');
+  });
+
+  await test.step('an open family under a filter at 200 % text: no overlap, no sideways scroll', async () => {
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    const squats = page.getByRole('heading', { level: 5, name: MOVEMENT_FAMILY_LABELS.squat });
+    // The family's group: its heading and its rows.
+    const family = squats.locator('xpath=..');
+    await squats.scrollIntoViewIfNeeded();
+    await expect(family.getByRole('checkbox', { name: /^Goblet squat\b/ })).toBeVisible();
+    await expectNoOverlapWithin(family, 'open family at 200 % text');
+    await expectNoOverflowWithin(page.getByRole('dialog'), 'open family at 200 % text');
+    await expectNoHorizontalOverflow(page, 'open family at 200 % text');
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
   });
 
   await test.step('searching with a filter: custom items after the filtered matches', async () => {
