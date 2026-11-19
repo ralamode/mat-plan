@@ -311,8 +311,8 @@ gantt
   7b-i list, program pages     :crit, done, b8, 9, 10
   7b-ii workout pages          :crit, done, b8b, 10, 11
   15 PR 1 put on, take off     :crit, b9, 12, 13
-  15 PR 2 the way in           :crit, b9b, 13, 14
-  15 PR 3 Home's tiles         :crit, b9c, 14, 15
+  15 PR 2 the way in           :b9b, 13, 14
+  15 PR 3 Home's tiles         :b9c, 14, 15
 
   section C · day page
   13 rows and ✓                :done, c1, 1, 2
@@ -337,7 +337,7 @@ gantt
 
   section Slices
   1 · walking skeleton on preview (after 12c) :milestone, m1, 10, 10
-  2 · the family can switch (after 12d, then all of 15) :milestone, m2, 15, 15
+  2 · the family can switch (after 12d, then 15 PR 1) :milestone, m2, 13, 13
   3 · order, Clear this day, clean-up         :milestone, m3, 14, 14
 ```
 
@@ -347,7 +347,7 @@ The end of this chart is firm only for the steps planned in detail. Of the 11 PR
 
 - **Eight are planned in detail.** Six have a merged plan of their own: 6d-iii (#634), 11c-ii, B2 and step 15's three (15 PR 1 to 3; lane B's plan `docs/plans/fam-1-15-put-on-wired.md`, #650, approved by the maintainer on 2026-11-19). Two are small enough that the row is the whole design, with every file and the proof named and no open question: 12d-iii (from the file table in the comparison of forms) and 12c-ii (one heading).
 - **Three have only a row in the plan** and may split when planned, as 6c, 6d, 7b and 15 did: 15c, 12f and 12c-iii. None is on the critical path. Their rows name files too, but each is large or has a question its lane must answer first: how the order's action reaches the day page (15c), a deletion across several lanes' guides (12f), and where the collapsed state lives and what a screen reader hears (12c-iii).
-- **Step 15 was the fourth until 2026-11-19.** Its plan made it three PRs, which moved this chart's count from 61 to 63 and the drawn end of the critical path from 13 to 15.
+- **Step 15 was the fourth until 2026-11-19.** Its plan made it three PRs, which moved this chart's count from 61 to 63. The critical path's end did not move: 15 PR 1 makes Put on live, and its e2e is the check the switch waits for (slice 2's done-when, below). 15 PR 2 and 15 PR 3 follow it in lane B, and the chart does not draw the switch as waiting for them; when the family switches is the maintainer's call.
 
 **What it shows**
 
@@ -355,11 +355,11 @@ The end of this chart is firm only for the steps planned in detail. Of the 11 PR
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
-  real ✓, the day page, and the steps the switch waits on (12d, then the two page PRs 7b-i and 7b-ii and the safety fix 12d-ii, then step 15's three PRs: plan decision D39). Nothing shortens it:
+  real ✓, the day page, and the steps the switch waits on (12d, then the two page PRs 7b-i and 7b-ii and the safety fix 12d-ii, then 15 PR 1, the first of step 15's three: plan decision D39). Nothing shortens it:
   only one migration may be unapplied at a time, and each must be seen applied before the next
   merges. A delay on a red bar moves the end; a delay on a blue bar usually does not.
-- **Lane B had slack** across waves 7 to 9; both page PRs are merged (7b-i, 7b-ii), and its three
-  remaining PRs, step 15's, are on the critical path. Lane C was ahead of the drawing: 12d-ii
+- **Lane B had slack** across waves 7 to 9; both page PRs are merged (7b-i, 7b-ii). Of its three
+  remaining PRs, step 15's, the first is on the critical path. Lane C was ahead of the drawing: 12d-ii
   merged before 7b-ii and did not hold step 15. Lanes B, C and S did their first
   six waves before any program data existed.
 - **12a is two PRs since 2026-11-17** (12a-i, 12a-ii). 12a-i, the day's read, stays on the
