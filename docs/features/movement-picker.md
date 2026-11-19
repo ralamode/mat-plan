@@ -292,6 +292,10 @@ path and **creating** the deliberate one.
 
 ## Traps
 
+- ⚠️ **The sheet's scroll lock needs `StyleNonce` in the root layout.** `RemoveScroll` locks the
+  page by injecting a `<style>`, which the production CSP blocks unless it carries the request's nonce;
+  `components/layout/style-nonce.tsx`, rendered in `app/layout.tsx`, supplies it. Without it the
+  picker still opens, but the page behind it scrolls, and CI (no CSP nonce in jsdom) stays green.
 - ⚠️ **A copy key must not begin `use`.** `useAsTyped` reads as a React hook to
   `react-hooks/rules-of-hooks`, and the footer calls it inside a conditional — exactly what that rule
   forbids. They are `asTyped` / `asTypedHint`; the UI text is unchanged.
