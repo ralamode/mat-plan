@@ -1,13 +1,15 @@
 diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
-index c888c629..520f6bb3 100644
+index 655adcd5..819e78a1 100644
 --- a/packages/db/src/erasure/erase.ts
 +++ b/packages/db/src/erasure/erase.ts
-@@ -273,7 +273,7 @@ export async function eraseHousehold(
-       const owner = householdColumn(g.table);
-       const gone = rowsOf<{ id: number; hh: number | string | null }>(
-         await tx.execute(
--          sql`DELETE FROM ${g.table} WHERE ${g.householdRows(scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
-+          sql`DELETE FROM ${g.table} WHERE ${g.table === schema.movements ? sql`(${g.householdRows(scope)}) OR ${schema.movements.id} = (SELECT max(${schema.movements.id}) FROM ${schema.movements})` : g.householdRows(scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
-         ),
-       );
-       if (owner && gone.some((r) => Number(r.hh) !== Number(householdId))) {
+@@ -213,7 +213,9 @@ async function members(exec: Executor, scope: OwnerScope): Promise<ErasureReport
+  * household-column check to refuse).
+  */
+ function rowsFor(g: (typeof HOUSEHOLD_GRAPH)[number], scope: OwnerScope): SQL {
+-  return g.householdRows(scope);
++  return g.table === schema.movements
++    ? sql`(${g.householdRows(scope)}) OR ${schema.movements.id} = (SELECT max(${schema.movements.id}) FROM ${schema.movements})`
++    : g.householdRows(scope);
+ }
+ 
+ async function measure(exec: Executor, scope: OwnerScope) {
