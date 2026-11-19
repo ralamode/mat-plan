@@ -166,6 +166,7 @@ describe('enterMutation — for an action that speaks the FAM-1 contract', () =>
     checkMutationLimit.mockResolvedValue({ allowed: true, reason: 'limiter-error' });
     expect(await enterMutation(TRANSPORT_REFUSALS)).toEqual({ ok: true, userId: USER_ID });
     expect(reportLimiterUnavailable).toHaveBeenCalledTimes(1);
+    expect(reportLimiterUnavailable).toHaveBeenCalledWith('mutation');
   });
 
   it('the refusal is a `ProgramResult` and a `RowResult` as it stands, and carries no copy', async () => {

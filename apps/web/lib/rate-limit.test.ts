@@ -344,7 +344,6 @@ describe('ROW_WRITE_RATE_LIMIT — row writes have their own budget (FAM-1 D23)'
    */
   it('🔴 through enterMutation: the row policy admits the request the default refuses', async () => {
     const { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({ env: CONFIGURED });
-    vi.doMock('@sentry/nextjs', () => ({ addBreadcrumb: vi.fn() }));
     vi.doMock('@/lib/dal/session', () => ({
       sessionUserOrNull: async () => ({ userId: 'user_abc' }),
     }));
@@ -365,7 +364,6 @@ describe('ROW_WRITE_RATE_LIMIT — row writes have their own budget (FAM-1 D23)'
       }
       expect(await enterMutation('refused', ROW_WRITE_RATE_LIMIT)).toEqual(limited);
     } finally {
-      vi.doUnmock('@sentry/nextjs');
       vi.doUnmock('@/lib/dal/session');
     }
   });
@@ -470,6 +468,7 @@ describe('reportLimiterUnavailable — a dead limiter is an event, once per proc
           {
             level: 'warning',
             tags: { rate_limit_outcome: 'limiter_unavailable', limiter: 'mutation' },
+            fingerprint: ['rate-limiter-unavailable', 'mutation'],
           },
         ],
         [
@@ -477,6 +476,7 @@ describe('reportLimiterUnavailable — a dead limiter is an event, once per proc
           {
             level: 'warning',
             tags: { rate_limit_outcome: 'limiter_unavailable', limiter: 'export' },
+            fingerprint: ['rate-limiter-unavailable', 'export'],
           },
         ],
       ]);

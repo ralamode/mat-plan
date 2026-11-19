@@ -1389,7 +1389,9 @@ per 5 minutes, keyed on the signed-in Clerk user id.
    should receive **one** `rate limiter unavailable` event per server instance, tagged
    `rate_limit_outcome: limiter_unavailable` and `limiter: mutation` (no id), plus a `rate-limit`
    breadcrumb on every such request. ⚠️ That event is the ONLY signal of a permanently dead limiter:
-   a request it let through succeeds, so a breadcrumb alone would never be sent.
+   a request it let through succeeds, so a breadcrumb alone would never be sent. One event means at
+   least one failure on that instance (a single slow call counts); a limiter that is really dead shows
+   as an event from every fresh instance.
 5. **The zip export has its own limit** (`checkExportLimit`, `mat-plan:export`); a dead or timing-out
    limiter raises the same event with `limiter: export`, once per server instance. What is limited: `.github/SECURITY.md` → Rate
    limiting.

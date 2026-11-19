@@ -856,7 +856,7 @@ household text: added before FAM-1's first free-text length CHECKs could be hit)
 
 **A dead rate limiter is one event with no id** (2026-11-19): `rate limiter unavailable`, tagged
 `rate_limit_outcome: limiter_unavailable` and `limiter: mutation` or `export`, once per server process
-per limiter (`apps/web/lib/rate-limit.ts` → `reportLimiterUnavailable`). No user, profile or household
+per limiter family (`apps/web/lib/rate-limit.ts` → `reportLimiterUnavailable`), with a fixed fingerprint per family. No user, profile or household
 id, and no count.
 
 **One identifier is sent to Sentry on purpose: the public id in a scope-miss event.** When a

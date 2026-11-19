@@ -248,7 +248,9 @@ The shapes those lanes agree on, the fakes and the preview route are
    export's (`checkExportLimit`, `mat-plan:export`), which is not a `MutationLimitPolicy` and has the
    export route as its one caller; its docblock says so. A dead limiter (`limiter-error`, a timeout
    included) is reported by `reportLimiterUnavailable` in the same file: one id-free Sentry event per
-   process per limiter, because a request the dead limiter let through sends no breadcrumb.
+   process per limiter family (`mutation` covers both mutation policies; `export`), with a per-family
+   fingerprint so Sentry's Dedupe keeps the two apart. A breadcrumb is sent only with a later event,
+   and a request the dead limiter let through raises none.
    **Its MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
    V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since

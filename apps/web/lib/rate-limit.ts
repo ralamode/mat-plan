@@ -248,7 +248,10 @@ export async function checkExportLimit(userId: string): Promise<LimitCheck> {
   return check(exportLimiter, userId);
 }
 
-/** Which limiter a caller found dead: the event's one tag besides the outcome. */
+/**
+ * Which limiter FAMILY a caller found dead: the event's one tag besides the outcome. `mutation` covers
+ * both mutation policies (`enterMutation` reports for either); `export` is the export's.
+ */
 export type LimiterName = 'mutation' | 'export';
 
 /** The limiters already reported dead in this process. Two names, so it cannot grow. */
@@ -259,7 +262,7 @@ const reportedUnavailable = new Set<LimiterName>();
  * open, so a limiter that is down for good looks exactly like a healthy one. A breadcrumb alone is not
  * a signal: Sentry sends breadcrumbs only with a later event, and a request the dead limiter let
  * through succeeds and sends none. So the caller's `limiter-error` raises one real event, **once per
- * process per limiter** (the `session.ts` `auth() unavailable` shape), and keeps the breadcrumb for an
+ * process per limiter family** (the `session.ts` `auth() unavailable` shape), and keeps the breadcrumb for an
  * error that does follow.
  *
  * What it carries: the fixed message and two tags. No user id, no profile id, no count; the limiter
@@ -276,6 +279,12 @@ export function reportLimiterUnavailable(limiter: LimiterName): void {
   Sentry.captureMessage('rate limiter unavailable', {
     level: 'warning',
     tags: { rate_limit_outcome: 'limiter_unavailable', limiter },
+    // 🔴 **The fingerprint is load-bearing.** Sentry's default Dedupe integration drops an event whose
+    // message, fingerprint and stacktrace match the previous one, ignoring tags. All three limiters
+    // share one Redis, so an outage reports `mutation` first and the `export` event, identical but
+    // for its tag, would be dropped, with this process never trying again. A per-family fingerprint
+    // keeps the two apart, and files them as two issues.
+    fingerprint: ['rate-limiter-unavailable', limiter],
   });
 }
 
