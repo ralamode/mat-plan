@@ -11,12 +11,14 @@
  * 0001 still writes the household id on every new database.
  */
 
+import { seedPublicId } from './catalog-seed';
+
 /** The root household (named `HOUSEHOLD_DEFAULT_NAME`, in `enums.ts`). */
-export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
+export const SEED_HOUSEHOLD_PUBLIC_ID = seedPublicId('010');
 
 // The the kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
-export const SEED_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
-export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
+export const SEED_PROFILE_PUBLIC_ID = seedPublicId('001');
+export const SEED_PROFILE_2_PUBLIC_ID = seedPublicId('002');
 /**
  * A THIRD athlete, seeded for `PROF-1 b` (2026-11-08) and owned by the **archive** specs.
  *
@@ -30,7 +32,7 @@ export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
  * ⚠️ **So do not reach for this one for anything else.** A second spec depending on it would recreate
  * the problem it was added to solve.
  */
-export const SEED_PROFILE_3_PUBLIC_ID = '019826b4-0000-7000-8000-000000000003';
+export const SEED_PROFILE_3_PUBLIC_ID = seedPublicId('003');
 
 /**
  * Every household and profile `public_id` the seed writes (`PRIV-3` RC, D7), built from the

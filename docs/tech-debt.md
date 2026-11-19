@@ -583,17 +583,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `docs/specs/v1-22-…` are known false positives — they are about other columns).
 - **Severity:** low (docs drift), and now three copies rather than twelve.
 
-### Two load-bearing strings are re-typed next to the const that defines them (found 2026-10-09, TEN-2a reuse panel)
-
-- **What & why:** out of TEN-2a's diff, so recorded rather than fixed. (1) `packages/db/scripts/verify.ts`
-  has `const UQ = 'uq_entries_profile_day_bodyweight'`, re-typing the value `schema.ts` already exports
-  as `BODYWEIGHT_DAY_UNIQUE_INDEX`. (2) `packages/shared/src/seed-ids.ts` hand-types
-  `SEED_PUBLIC_ID_PREFIX`'s value **three** times instead of importing the const.
-- **Impact:** low today; a rename in either place goes green and means nothing.
-- **Proposed fix:** import the const in both. Charged to nobody — a good first slice for whoever next
-  touches either file.
-- **Severity:** low.
-
 ### The comment-stripping `code()` test helper has TWO copies left, outside `apps/web` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
 
 - **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in

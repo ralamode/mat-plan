@@ -3449,7 +3449,7 @@ console.log(
 // `uq_entries_profile_day_bodyweight` keys on (profile_id, activity_date, coalesce(context,'morning'))
 // for live bodyweight rows. Each case uses its own day so the cases cannot interfere.
 {
-  const UQ = 'uq_entries_profile_day_bodyweight';
+  const UQ = schema.BODYWEIGHT_DAY_UNIQUE_INDEX;
   // (a) A second live weigh-in on the same day is rejected.
   await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 80, activityDate: '2026-05-01' });
   await expectRejectedBy(UQ, () =>
@@ -3528,7 +3528,7 @@ console.log(
   let refusal = '';
   try {
     await db.transaction(async (tx) => {
-      await tx.execute(sql`DROP INDEX "uq_entries_profile_day_bodyweight"`);
+      await tx.execute(sql`DROP INDEX ${sql.identifier(schema.BODYWEIGHT_DAY_UNIQUE_INDEX)}`);
       const row = (n: string, profileId: number, activityDate: string, context: string | null) => ({
         publicId: `019826b4-0000-7000-8000-0000000d1d${n}`,
         clientId: `019826b4-0000-7000-8000-0000000d1e${n}`,
@@ -9361,7 +9361,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
   const b0Partial = await db.execute<{ indexname: string; indexdef: string }>(
     sql`select indexname, indexdef from pg_indexes
         where indexname in ('uq_entries_superset_order', 'uq_entry_sets_entry_idx',
-                            'uq_entry_set_quantities_set_slot', 'uq_entries_profile_day_bodyweight')`,
+                            'uq_entry_set_quantities_set_slot', ${schema.BODYWEIGHT_DAY_UNIQUE_INDEX})`,
   );
   const b0PartialRows = (
     b0Partial as unknown as { rows: { indexname: string; indexdef: string }[] }
