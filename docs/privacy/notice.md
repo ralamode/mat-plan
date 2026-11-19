@@ -236,8 +236,10 @@ field, as above. Two things are worth saying plainly about every clear:
 
 There is still **no way to permanently remove one single logged item on demand**: the finest grain for
 removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
-on request.) If a person's name was typed as a movement and your logs hold it, ask, and it is
-replaced with a neutral name on that movement and on your household's logs; the logs themselves stay.
+on request.) If a person's name was typed as a movement and your logs hold it, ask, and it can
+be replaced with a neutral name on that movement and on your household's logs; the logs themselves stay.
+It is not done, and we tell you why, if the same words were also typed into a note or label on those
+logs, or if the new name is already in use.
 
 ## Getting your data out
 
