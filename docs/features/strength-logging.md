@@ -166,6 +166,11 @@ regresses.
    `isEditableSet(s) === (lockedReason(s) === null)`. A wrong reason is worse than none. (⚠️ The two
    halves are not quite identical today: the client requires exactly one quantity and the SQL guard
    doesn't check the count, filed as V1-36.)
+   🔴 **One clause is server-only on purpose: the SQL refuses a PROGRAM row** (`programRow()`, which a
+   purge leaves set). A program row's numbers belong to the day page's Change (`amendRow`), which
+   holds the writable window and the program checks; no client renders a program row through this
+   path, so `isEditableSet` has nothing to mirror. `db:verify`'s "TD fix-a-set" block, mutations `449`
+   and `450`.
 
 4. **Every magnitude lives in `entry_set_quantities`, never on the set.** Since GAP-3 (#139) there is
    no `weight_num`, no `weight_label`, no `seconds`. The two MODES (`is_bodyweight`, `is_band`) are

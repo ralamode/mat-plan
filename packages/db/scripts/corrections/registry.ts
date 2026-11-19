@@ -31,6 +31,7 @@ import {
   parseAccountList,
 } from './accounts';
 import { CorrectionRefusal, redactedFailure } from './redact';
+import { note, type CorrectionLine } from './summary';
 import { correctionTargetIsPreview, seedHouseholdClaimIsAllowed } from './target-url';
 import { setLocalTimeouts } from '../../src/writers/executor';
 import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
@@ -64,8 +65,12 @@ export type Correction = {
    * census is output-only, so what it prints is the whole surface.
    */
   kind?: 'report';
-  /** Returns a human-readable line per row it would change (dry run) or did change (`--apply`). */
-  run: (db: Database, apply: boolean) => Promise<string[]>;
+  /**
+   * Returns a human-readable line per row it would change (dry run) or did change (`--apply`). A line
+   * that describes no write ("nothing to do", "already claimed") is a `note(…)`, which the runner
+   * prints and never counts (`./summary.ts`).
+   */
+  run: (db: Database, apply: boolean) => Promise<CorrectionLine[]>;
 };
 
 /**
@@ -535,7 +540,7 @@ const nullRoutineToFull: Correction = {
     const scope = await liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
 
     if (scope === null) {
-      return ['the seeded household is not in this database — nothing to do'];
+      return [note('the seeded household is not in this database — nothing to do')];
     }
 
     // `IS NULL` is the per-row guard (once corrected, a row stops matching); the household predicate is
@@ -558,7 +563,9 @@ const nullRoutineToFull: Correction = {
       );
 
     if (targets.length === 0) {
-      return ['no live profile in the seeded household has routine_config = NULL — nothing to do'];
+      return [
+        note('no live profile in the seeded household has routine_config = NULL — nothing to do'),
+      ];
     }
 
     for (const t of targets) {
@@ -818,7 +825,9 @@ const householdClaim: Correction = {
 
       if (sameHousehold.length > 0) {
         return [
-          `already claimed by this Clerk account (membership ${existing.publicId}) — no change`,
+          note(
+            `already claimed by this Clerk account (membership ${existing.publicId}) — no change`,
+          ),
         ];
       }
       throw new Error(
