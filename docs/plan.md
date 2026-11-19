@@ -1260,8 +1260,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     written by the model. The sheet's value is shown as fixed source text beside an **empty** field
     and one tap fills it, one value at a time. There is no "fill all" and no bulk confirm, ever.
   - **R8a:** an imported load is filled at the moment of use, the first day that movement comes up,
-    which is what makes R8's one tap safe. So a review screen is never where loads are accepted,
-    and it accepts any other risky value only one tap at a time unless the maintainer reopens R8.
+    which is what makes R8's one tap safe. If the review screen is built, it is never where loads are
+    accepted, and it accepts any other risky value only one tap at a time unless the maintainer
+    reopens R8.
 
 - **LIFE-1 — the Wake button on a past day writes TODAY's wake, and can write a second one.**
   _(found by a UX panel during `V1-9b` B1-2, 2026-11-14; not scoped.)_ `logLifeActivitiesAction`
