@@ -396,7 +396,7 @@ export const QUIET_LINK_CLASS = `text-muted-foreground hover:text-foreground tex
 
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
- * notices on the day page, the day page's "Not on a program yet" and rest-day notices). Defined at
+ * notices on the day page, the day page's "Not on a program." and rest-day notices). Defined at
  * FAM-1 13d, the third copy; `page.tsx`'s two literals moved to it at 12c.
  */
 export const NOTICE_CLASS =
