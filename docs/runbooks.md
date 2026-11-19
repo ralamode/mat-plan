@@ -2145,8 +2145,8 @@ also asked for their account to go (step 0); no names. Retention as for a househ
 ## Remove one program, workout or typed item on request
 
 **When:** the household asks for one program it built, one workout in such a program, or one item it
-typed (a movement of its own) to be removed, and nothing else. The app can rename a program or a
-workout but delete neither, and it can neither rename nor delete a typed item, so FAM-1 7b-i's notice
+typed (a movement of its own) to be removed, and nothing else. The app can rename a program, and a
+workout once the workout pages are in (FAM-1 7b-ii), but delete neither, and it can neither rename nor delete a typed item, so FAM-1 7b-i's notice
 sentence tells the household to ask. **Manual until `PRIV-3` scripts it** (PR 3b scripts the program
 removal). Read ["Delete a household"](#delete-a-household-and-everyone-in-it-priv-1) first: this
 section reuses its transaction shape, its pre-flights and its delete order, restricted to one program,
@@ -2163,8 +2163,8 @@ principle that also binds any later in-app removal:
 > this to hurt eventual reporting"_ _(maintainer, 2026-11-18)_
 
 1. **Who may ask:** the household owner, confirmed on the invitation channel, and re-confirmed once
-   they have been told who is affected (step 0). **No pause** (Q8): the removal runs right after that
-   confirmation. A Neon restore branch is cut immediately before it and **held 3 days**, then deleted.
+   they have been told who is affected (step 3). **No pause** (Q8): the removal runs right after that
+   confirmation, except where an adult athlete's copy is owed first (Q11, step 3). A Neon restore branch is cut immediately before it and **held 3 days**, then deleted.
    An adult athlete asking about a program written for them asks the owner, or asks for their own
    erasure ([Erase one athlete](#erase-one-athlete-fam-1-step-5)). `OPS-3`'s drill does not gate a
    removal from the maintainer's own family; it gates an outside family's (Q7).
