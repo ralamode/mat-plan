@@ -3,7 +3,6 @@ import {
   CHOOSE_KIND_MESSAGE,
   PROFILE_KIND,
   PROFILE_KIND_LABELS,
-  type ProfileKind,
   PROFILE_NAME_MAX,
   SEED_PROFILE_2_NAME,
   SEED_PROFILE_3_NAME,
@@ -18,12 +17,13 @@ import {
   ATHLETE_FORM_COPY,
   athleteEditPath,
   athletePath,
+  HOME_LINK,
   MIN_TAP_TARGET_PX,
   NAME_ERROR_ID,
   SETTINGS_COPY,
   SETTINGS_PATH,
 } from '../lib/constants';
-import { SEED_PROFILE_2_ROUTE } from './steps';
+import { addAthlete, archiveAdded, SEED_PROFILE_2_ROUTE } from './steps';
 import { expectNoHorizontalOverflow, MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
 
 /**
@@ -534,21 +534,6 @@ const uniqueName = (label: string, index: number) =>
 
 const added: string[] = [];
 
-async function addAthlete(
-  page: Page,
-  name: string,
-  // `ProfileKind`, not a `'Child' | 'Adult'` union: the radio's label IS `PROFILE_KIND_LABELS`, so a
-  // second spelling of it here is a second place to update when the wording changes. The twin helper
-  // in `scripts/screenshot-ephemeral.ts` reads the same constant.
-  kind: ProfileKind = PROFILE_KIND.kid,
-): Promise<void> {
-  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[kind]}`) }).check();
-  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
-  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
-  added.push(name);
-}
-
 test.afterEach(async ({ page }) => {
   // ⚠️ **Its own budget.** a-1d's duplicate tests leave TWO athletes under one name, so cleanup can
   // need two full round trips through a Server Action plus two page loads, which overran the 30s and
@@ -557,36 +542,8 @@ test.afterEach(async ({ page }) => {
   // (`worker/workerProcessEntry.js`, `afterHooksSlot`), so it was the hook's own 30s, and
   // `test.setTimeout` here sets that slot — it extends the hook without shrinking the test.
   test.setTimeout(90_000);
-  // Archive whatever this test created, so the picker does not accumulate fixtures. Best effort:
-  // a test that failed before the add leaves nothing to clean, and a missing row must not mask the
-  // real failure.
-  for (const name of added.splice(0)) {
-    try {
-      await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
-      const archive = () => page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
-
-      // 🔴 **A LOOP, because a-1d made two athletes under ONE name a real fixture.** This was
-      // `if (await control.count()) await control.click()`, and on the duplicate tests — the only
-      // ones that create two rows with the same name — `count()` was 2, so `click()` threw
-      // Playwright's strict-mode violation straight into the `catch` below. Neither athlete was
-      // archived, on every run and every retry, and the swallow meant this cleanup reported nothing
-      // while doing nothing. A cleanup that cannot fail out loud has to be correct by construction.
-      //
-      // ⚠️ **Counting the controls DOWN is the wait, and the first fix got this wrong.** It waited on
-      // the Undo button, which is already visible from the PREVIOUS archive — so the loop re-queried
-      // while the row was still detaching, `click()` retried the stale handle for the whole 30s
-      // action timeout, and the passes burned the hook's budget instead. `toHaveCount` polls, so it
-      // is both the "the Server Action landed" signal the Undo assertion used to be and the loop's
-      // own termination condition.
-      for (let remaining = await archive().count(); remaining > 0; remaining -= 1) {
-        await archive().first().click();
-        await expect(archive()).toHaveCount(remaining - 1, { timeout: 15_000 });
-      }
-    } catch {
-      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one. ⚠️ Which
-      // is exactly why the loop above must not depend on it: see the comment there.
-    }
-  }
+  // Archive whatever this test created, so the picker does not accumulate fixtures (`steps.ts`).
+  await archiveAdded(page, added.splice(0));
 });
 
 test('the picker offers Add athlete, which creates one and lands on their day page', async ({
@@ -736,7 +693,7 @@ test('a long name added through the form does not overflow the picker at 360px',
   const long = uniqueName('x', testInfo.workerIndex)
     .padEnd(PROFILE_NAME_MAX, 'W')
     .slice(0, PROFILE_NAME_MAX);
-  await addAthlete(page, long, PROFILE_KIND.adult);
+  await addAthlete(page, long, PROFILE_KIND.adult, added);
   // The actual name, not `/W/` — matching a single padded character would pass on any heading.
   await expect(page.getByRole('heading', { name: long, level: 1 })).toBeVisible();
 
@@ -756,7 +713,7 @@ test('a duplicate name warns instead of adding, and the warning takes focus', as
   page,
 }, testInfo) => {
   const name = uniqueName('dupe', testInfo.workerIndex);
-  await addAthlete(page, name, PROFILE_KIND.kid);
+  await addAthlete(page, name, PROFILE_KIND.kid, added);
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 
   // The same name again, with a FRESH clientId (a new page load mints one), must warn.
@@ -784,7 +741,7 @@ test('the warning keeps both fields, and "Add another" adds the second one', asy
   page,
 }, testInfo) => {
   const name = uniqueName('another', testInfo.workerIndex);
-  await addAthlete(page, name, PROFILE_KIND.kid);
+  await addAthlete(page, name, PROFILE_KIND.kid, added);
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
   await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }).check();
@@ -809,7 +766,7 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   page,
 }, testInfo) => {
   const name = uniqueName('enterdupe', testInfo.workerIndex);
-  await addAthlete(page, name, PROFILE_KIND.kid);
+  await addAthlete(page, name, PROFILE_KIND.kid, added);
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
   await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
@@ -844,7 +801,7 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
 
 test('editing the name past the match dismisses the warning', async ({ page }, testInfo) => {
   const name = uniqueName('stale', testInfo.workerIndex);
-  await addAthlete(page, name, PROFILE_KIND.kid);
+  await addAthlete(page, name, PROFILE_KIND.kid, added);
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
   await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
@@ -889,7 +846,7 @@ test('the callout fits 360px with a 40-character name, and its choices clear the
   const long = uniqueName('w', testInfo.workerIndex)
     .padEnd(PROFILE_NAME_MAX, 'W')
     .slice(0, PROFILE_NAME_MAX);
-  await addAthlete(page, long, PROFILE_KIND.kid);
+  await addAthlete(page, long, PROFILE_KIND.kid, added);
 
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
@@ -906,4 +863,20 @@ test('the callout fits 360px with a 40-character name, and its choices clear the
     const box = await control.boundingBox();
     if (box) expect(box.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
   }
+});
+
+/**
+ * Household settings has a way back on a phone, where there is no rail (maintainer, 2026-11-19).
+ * `a11y.spec.ts`'s tap-target scan skips `<a>`, so this measures the link's height itself.
+ */
+test('household settings has a ← Home link that reaches the picker at 360px', async ({ page }) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+  const home = page.getByRole('link', { name: HOME_LINK, exact: true });
+  const box = await home.boundingBox();
+  expect(box?.height ?? 0, 'a thumb target, not a line of text').toBeGreaterThanOrEqual(
+    MIN_TAP_TARGET_PX,
+  );
+  await home.click();
+  await expect(page).toHaveURL(new RegExp(`${APP_HOME_PATH}$`));
 });

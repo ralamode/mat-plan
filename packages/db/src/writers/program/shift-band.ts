@@ -10,6 +10,12 @@ import type { Executor } from '../executor';
 export const SHIFT_BAND = 1_000_000;
 
 /**
+ * Where a row waits before its first placing (`putOn`'s new or reopened assignment): past any real
+ * place and past the band, so it meets neither, until `placeAssignments` gives it its place.
+ */
+export const PARK_IDX = 2 * SHIFT_BAND;
+
+/**
  * Reordering rows whose places are a NON-deferrable partial unique index (FAM-1 plan D19: a
  * workout's `uq_prescriptions_workout_idx`; a week's `uq_block_day_workouts_slot`, 6b; an athlete's
  * program order, `uq_program_assignments_profile_idx`, through `placeAssignments`). Setting the final places one row at a time collides as soon as two rows

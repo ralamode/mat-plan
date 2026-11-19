@@ -1,4 +1,4 @@
-import { ON_PROGRAM, type DayPlan } from '@mat-plan/shared';
+import { addDays, ON_PROGRAM, type DayPlan } from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
   noProgram,
@@ -7,7 +7,7 @@ import {
 } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
-import { dayPageView, lookAheadFallsBack } from './day-notices';
+import { dayPageView, lookAheadFallsBack, offersProgramsLink, startsTomorrow } from './day-notices';
 
 /** What the day page shows around the screen (FAM-1 12c; maintainer, 2026-11-17). */
 
@@ -68,5 +68,46 @@ describe('lookAheadFallsBack', () => {
     expect(lookAheadFallsBack(tomorrowReadOnly)).toBe(false);
     expect(lookAheadFallsBack({ ...tomorrowReadOnly, onProgram: ON_PROGRAM.never })).toBe(true);
     expect(lookAheadFallsBack({ ...noProgram, future: false })).toBe(false);
+  });
+});
+
+describe('offersProgramsLink (FAM-1 15)', () => {
+  // Any day (maintainer, 2026-11-19): the rule reads no day at all, so a past day, open or closed,
+  // links like today. Only an archived athlete, who cannot be put on a program, does not.
+  it('a live athlete links to Programs', () => {
+    expect(offersProgramsLink({ archived: false })).toBe(true);
+  });
+
+  it('an archived athlete does not', () => {
+    expect(offersProgramsLink({ archived: true })).toBe(false);
+  });
+});
+
+describe('startsTomorrow (D46)', () => {
+  /** Today, on no program today, with one from tomorrow: the line's case. */
+  const today: DayPlan = {
+    ...noProgram,
+    onProgram: ON_PROGRAM['not-this-day'],
+    day: noProgram.today,
+    writable: true,
+    canGoForward: true,
+  };
+
+  it('today, with a program from tomorrow: says it starts tomorrow', () => {
+    expect(startsTomorrow(today)).toBe(true);
+  });
+
+  it('🔴 never on yesterday, though it is writable and every past day can go forward', () => {
+    expect(startsTomorrow({ ...today, day: addDays(today.today, -1) })).toBe(false);
+  });
+
+  it('not when nothing covers tomorrow, nor for an archived athlete (not writable)', () => {
+    expect(startsTomorrow({ ...today, canGoForward: false })).toBe(false);
+    expect(startsTomorrow({ ...today, writable: false })).toBe(false);
+  });
+
+  it('only for an athlete on no program today: never and yes do not say it', () => {
+    expect(startsTomorrow({ ...today, onProgram: ON_PROGRAM.never })).toBe(false);
+    expect(startsTomorrow({ ...today, onProgram: ON_PROGRAM.yes })).toBe(false);
   });
 });

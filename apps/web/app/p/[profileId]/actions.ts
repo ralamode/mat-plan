@@ -17,6 +17,7 @@ import {
   editStrengthSetSchema,
   logBodyweightSchema,
   logStrengthSessionSchema,
+  lowerCaseUuidSchema,
   METRIC_KEYS,
   METRIC_VALUE_TYPE,
   uuidSchema,
@@ -28,6 +29,7 @@ import { z } from 'zod';
 import {
   AMEND_ERROR_COPY,
   BODYWEIGHT_COPY,
+  CHECKIN_COPY,
   HIDE_COPY,
   NO_PROFILE_LOG,
   NO_PROFILE_SAVE,
@@ -208,9 +210,18 @@ export async function logCheckinsAction(
         fieldErrors[f.key] = value.error.issues.map((i) => i.message);
         continue;
       }
-      const clientId = uuidSchema.safeParse(formData.get(clientIdInputName(f.key)));
+      // Lower-cased, so an id and its upper-case twin are one id here as they are to Postgres.
+      const clientId = lowerCaseUuidSchema.safeParse(formData.get(clientIdInputName(f.key)));
       if (!clientId.success) {
-        fieldErrors[f.key] = ['Could not submit this item. Reload and try again.'];
+        fieldErrors[f.key] = [CHECKIN_COPY.itemNotSubmitted];
+        continue;
+      }
+      // Two items under one id would write one row and both answer `created`. The form mints one id
+      // per field, so only a crafted submit repeats one; every field sharing it is refused.
+      const sharedWith = fieldKeyByClientId.get(clientId.data);
+      if (sharedWith !== undefined) {
+        fieldErrors[sharedWith] = [CHECKIN_COPY.itemNotSubmitted];
+        fieldErrors[f.key] = [CHECKIN_COPY.itemNotSubmitted];
         continue;
       }
       // Carry the descriptor's identity straight through — no re-encoding a key and

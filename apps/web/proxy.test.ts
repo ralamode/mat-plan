@@ -4,7 +4,13 @@ import { NextRequest, type NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLERK_IMG_ORIGIN } from '@/lib/clerk';
-import { APP_HOME_PATH, NONCE_HEADER, PRIVACY_PATH, SIGN_IN_PATH } from '@/lib/constants';
+import {
+  APP_HOME_PATH,
+  NONCE_HEADER,
+  PRIVACY_PATH,
+  REFERRER_POLICY,
+  SIGN_IN_PATH,
+} from '@/lib/constants';
 
 import { buildCsp, config, proxy } from './proxy';
 
@@ -67,6 +73,8 @@ vi.mock('@/lib/clerk', async (importOriginal) => {
 // ⚠️ The `+`, `/` and `=` are a secondary guard, NOT the mechanism; see that case's own note.
 const ROTATED_COOKIE = '__clerk_handshake=a+b/c==; Path=/; HttpOnly';
 const clerkCalls: { handled: boolean }[] = [];
+/** The options each `clerkMiddleware(handler, options)` call was given. */
+const clerkOptions: unknown[] = [];
 /**
  * 🔴 **AUTH-1 1d — the auto-proxy branch, which returns a PLAIN `Response`.** `clerkMiddleware.js`
  * arms a frontend-API proxy when the publishable key is production and the hostname matches, and
@@ -77,26 +85,29 @@ let clerkReturnsPlainResponse = false;
 /** Clerk's handshake: `NextResponse.redirect`, built WITHOUT calling our handler. */
 let clerkReturnsRedirect = false;
 vi.mock('@clerk/nextjs/server', () => ({
-  clerkMiddleware: (handler: () => NextResponse) => async (): Promise<NextResponse | Response> => {
-    clerkCalls.push({ handled: true });
-    if (clerkReturnsRedirect) {
-      // ⚠️ Built WITHOUT calling the handler — which is what `clerkMiddleware` does for a
-      // handshake, and the reason the tombstone must wrap the function's single `return`.
-      // ⚠️ `await import` inside the factory: `vi.mock` is hoisted above the module's own imports,
-      // so closing over the top-level `NextResponse` throws `ReferenceError` at call time.
-      const { NextResponse: NR } = await import('next/server');
-      const redirect = NR.redirect(new URL('/sign-in', ORIGIN));
-      redirect.headers.append('set-cookie', ROTATED_COOKIE);
-      return redirect;
-    }
-    const res = handler();
-    res.headers.append('set-cookie', ROTATED_COOKIE);
-    if (clerkReturnsPlainResponse) {
-      // A genuinely plain Response: no `.cookies`, headers carried across.
-      return new Response(null, { status: 200, headers: res.headers });
-    }
-    return res;
-  },
+  clerkMiddleware:
+    (handler: () => NextResponse, options?: unknown) =>
+    async (): Promise<NextResponse | Response> => {
+      clerkCalls.push({ handled: true });
+      clerkOptions.push(options);
+      if (clerkReturnsRedirect) {
+        // ⚠️ Built WITHOUT calling the handler — which is what `clerkMiddleware` does for a
+        // handshake, and the reason the tombstone must wrap the function's single `return`.
+        // ⚠️ `await import` inside the factory: `vi.mock` is hoisted above the module's own imports,
+        // so closing over the top-level `NextResponse` throws `ReferenceError` at call time.
+        const { NextResponse: NR } = await import('next/server');
+        const redirect = NR.redirect(new URL('/sign-in', ORIGIN));
+        redirect.headers.append('set-cookie', ROTATED_COOKIE);
+        return redirect;
+      }
+      const res = handler();
+      res.headers.append('set-cookie', ROTATED_COOKIE);
+      if (clerkReturnsPlainResponse) {
+        // A genuinely plain Response: no `.cookies`, headers carried across.
+        return new Response(null, { status: 200, headers: res.headers });
+      }
+      return res;
+    },
 }));
 
 beforeEach(() => {
@@ -104,6 +115,7 @@ beforeEach(() => {
   clerkReturnsPlainResponse = false;
   clerkReturnsRedirect = false;
   clerkCalls.length = 0;
+  clerkOptions.length = 0;
 });
 
 /**
@@ -164,6 +176,14 @@ describe('the proxy redirects nothing (AUTH-1 1d)', () => {
   it('sets the security headers on a public path too', async () => {
     const { res } = await run('/');
     expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+  });
+
+  it('sends a referrer to this site only, so a form posted before hydration carries its Origin', async () => {
+    // The contract pin (AGENTS.md: the literal belongs on the assertion side, once). `no-referrer`
+    // made browsers post forms with `Origin: null`, which Next's Server Action check refuses.
+    expect(REFERRER_POLICY).toBe('same-origin');
+    const { res } = await run('/');
+    expect(res.headers.get('referrer-policy')).toBe(REFERRER_POLICY);
   });
 });
 
@@ -414,6 +434,18 @@ describe('Clerk composition', () => {
     const { location } = await run('/p/x');
     expect(location).toBeNull();
     expect(clerkCalls).toEqual([{ handled: true }]);
+  });
+
+  /**
+   * 🔴 **Clerk's same-origin relay stays disarmed, and since the referrer policy it is a PRIVACY
+   * control.** Armed, `/__clerk/*` copies every request header to Clerk's API, and under
+   * `Referrer-Policy: same-origin` that includes a `Referer` naming the athlete page and day. The
+   * mock used to drop the options argument, so deleting this option left every test green.
+   */
+  it('passes frontendApiProxy disabled, so no same-origin path relays a Referer to Clerk', async () => {
+    clerkConfigured = true;
+    await run('/');
+    expect(clerkOptions).toEqual([{ frontendApiProxy: { enabled: false } }]);
   });
 });
 

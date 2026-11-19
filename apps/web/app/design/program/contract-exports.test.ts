@@ -5,6 +5,7 @@ import {
   isPlainDecimal,
   MONDAY_FIRST,
   PLAIN_DECIMAL,
+  programsByStay,
   QUANTITY_SLOT,
   quantityText,
   showsOnlyLogged,
@@ -31,6 +32,7 @@ import {
   heavyASupersets,
   programsList,
   programView,
+  todayThreeProgramsOneEnding,
   DAY_PLAN_FIXTURE_SOURCES,
 } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -151,6 +153,27 @@ describe('the helpers, with the arguments the lanes pass', () => {
     expectTypeOf(showsOnlyLogged).toBeCallableWith({ writable: false, future: false });
     expectTypeOf(showsOnlyLogged(everyTypeOnce)).toEqualTypeOf<boolean>();
     expect(showsOnlyLogged(everyTypeOnce)).toBe(false);
+  });
+
+  it('programsByStay takes a plan’s current programs and hands back their own type', () => {
+    type Current = DayPlan['currentPrograms'][number];
+    const plan: DayPlan = todayThreeProgramsOneEnding;
+    expectTypeOf(programsByStay(plan.currentPrograms)).toEqualTypeOf<{
+      staying: Current[];
+      ending: Current[];
+    }>();
+    // A caller's own rows keep their fields: the Program order dialog's, say, with a place.
+    const rows = plan.currentPrograms.map((program, place) => ({ ...program, place }));
+    expectTypeOf(programsByStay(rows).staying).toEqualTypeOf<typeof rows>();
+    expectTypeOf(programsByStay(rows).ending).items.toHaveProperty('place').toEqualTypeOf<number>();
+    // A frozen list is taken as it is.
+    expectTypeOf(programsByStay).toBeCallableWith(Object.freeze([...plan.currentPrograms]));
+    // A list that cannot carry the flag is refused: `programs` is the day's, not the current ones.
+    // @ts-expect-error `DayPlan.programs` has no `endsToday`, so every one would read as staying.
+    programsByStay(plan.programs);
+    const { staying, ending } = programsByStay(plan.currentPrograms);
+    expect([staying.length, ending.length]).toEqual([2, 1]);
+    expect(rows.find((row) => row.endsToday)?.place).toBe(2);
   });
 
   it('MONDAY_FIRST is weekdays, so each one indexes a program’s week', () => {

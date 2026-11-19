@@ -20,7 +20,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace }) }));
 
 import { SAVING_LABEL } from '@/lib/constants';
 
+import { takeArrival } from './arrival';
 import {
+  backToLabel,
   BUILDER_COPY,
   droppedText,
   EDITOR_COPY,
@@ -33,6 +35,7 @@ import {
   saveRefusal,
   undoneText,
   usedByText,
+  workoutSavedText,
 } from './builder-text';
 import { unitFieldId } from './editor-draft';
 import { programPath } from './routes';
@@ -113,7 +116,9 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
         program={family}
       />,
     );
-    expect(screen.getByRole('link', { name: family.name })).toBeTruthy();
+    // Its name says where it goes; the words it shows are inside that name (WCAG 2.5.3).
+    const back = screen.getByRole('link', { name: backToLabel(family.name) });
+    expect(back.textContent).toBe(`← ${family.name}`);
     expect(screen.getByText(usedByText(family.athletes))).toBeTruthy();
   });
 
@@ -166,6 +171,24 @@ describe('WorkoutEditorScreen (FAM-1 8)', () => {
     save();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(BACK));
     expect(all.saveWorkout).toHaveBeenCalledWith(heavyADraft);
+  });
+
+  it('🔴 a Save leaves the program page its message, once, for that program only (focus after Save)', async () => {
+    editor();
+    save();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(BACK));
+    expect(takeArrival(heavyADraft.programPublicId)).toBe(workoutSavedText(heavyADraft.name));
+    expect(takeArrival(heavyADraft.programPublicId)).toBeNull();
+  });
+
+  it('a refused Save leaves no message for the program page', async () => {
+    takeArrival(heavyADraft.programPublicId); // whatever an earlier test's Save left
+    editor({
+      saveWorkout: vi.fn().mockResolvedValue({ ok: false, reason: PROGRAM_REFUSAL.retry }),
+    });
+    save();
+    await waitFor(() => expect(screen.getByRole('alert').textContent).not.toBe(''));
+    expect(takeArrival(heavyADraft.programPublicId)).toBeNull();
   });
 
   it('a blank name is refused with no call, and the field takes focus', async () => {

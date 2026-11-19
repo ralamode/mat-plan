@@ -118,6 +118,17 @@ export const SIGN_IN_PATH = '/sign-in';
 export const NONCE_HEADER = 'x-nonce';
 
 /**
+ * The `Referrer-Policy` every response carries (`proxy.ts`). **`same-origin`, never `no-referrer`.**
+ * Under `no-referrer` every browser (per Fetch) sends a native form POST with `Origin: null`, even to this site, and
+ * Next's Server Action CSRF check (origin host must equal host) then refuses it: a server-action form
+ * tapped before the page hydrates did nothing (docs/plans/td-form-before-hydration.md). `same-origin`
+ * still sends NO referrer to any other site, so no URL (a profile id, a day) leaves for a third
+ * party, while no same-origin path relays to one (Clerk's relay stays disarmed; see `proxy.ts`).
+ * `proxy.test.ts` pins the value.
+ */
+export const REFERRER_POLICY = 'same-origin';
+
+/**
  * The token-set preview harness (UI-4, built to serve UI-3). Named here because the a11y spec and the
  * screenshot flow both land on it, and a route path re-typed in two places is how one of them ends up
  * pointing at nothing.
@@ -373,12 +384,19 @@ export const NAV_LINK_CLASS =
 export const NAV_ROW_CLASS =
   'focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3 focus-visible:ring-inset';
 
-export const QUIET_LINK_CLASS =
-  'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
+/**
+ * An underlined, tap-target-sized link with no colour or size of its own: `QUIET_LINK_CLASS` builds on
+ * it, and a link in a name or a sentence that keeps its text's colour uses it with a hover of its own
+ * (the program builder's athlete names and "Home", FAM-1 15).
+ */
+export const INLINE_LINK_CLASS =
+  'focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-3';
+
+export const QUIET_LINK_CLASS = `text-muted-foreground hover:text-foreground text-sm ${INLINE_LINK_CLASS}`;
 
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
- * notices on the day page, the day page's "Not on a program yet" and rest-day notices). Defined at
+ * notices on the day page, the day page's "Not on a program." and rest-day notices). Defined at
  * FAM-1 13d, the third copy; `page.tsx`'s two literals moved to it at 12c.
  */
 export const NOTICE_CLASS =
@@ -575,6 +593,15 @@ export const ADD_ATHLETE_COPY = {
  * heading on a screen that has no other navigation.
  */
 export const ALL_ATHLETES_LINK = '← All athletes';
+
+/**
+ * The way back to `/p` from a **household** page (Programs, Household settings), where
+ * `ALL_ATHLETES_LINK` is the way back from a page about ONE athlete. The rule, so the next page
+ * chooses on purpose: household pages say Home, one athlete's pages say All athletes. Settings lists
+ * archived athletes that `/p` does not, so "All athletes" would point away from the page that shows
+ * more of them. Both lead to `APP_HOME_PATH`; whether to settle on one label is the maintainer's call.
+ */
+export const HOME_LINK = '← Home';
 
 /**
  * UI-6 — the app's own 404 (`app/not-found.tsx`). One message for an unknown URL AND for an athlete
@@ -845,6 +872,15 @@ const PRACTICE_FIELD_SUFFIX = ' minutes';
 const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
   (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
 )!.label;
+
+/**
+ * The check-in submit's per-field refusal for an item it cannot write as sent: a missing or malformed
+ * `client_id`, or one another field of the same submit also carries. The form mints a fresh id per
+ * field on every load, so a reload is the true remedy.
+ */
+export const CHECKIN_COPY = {
+  itemNotSubmitted: 'Could not submit this item. Reload and try again.',
+} as const;
 
 /**
  * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
@@ -1255,22 +1291,18 @@ export const ATHLETE_FORM_COPY = {
   kindRecoveryMemberBefore: 'Added the wrong kind?',
   kindRecoveryOwnerAfter: 'and add them again — what they logged stays with the archived athlete.',
   /**
-   * The per-option consequences (PROF-1 a-1u). **Parallel, and BOTH always render.**
+   * What a new athlete starts with (FAM-1 15, v12's line): no program. One line under the kind
+   * choice, the same for Child and Adult, because a program is no longer something the kind decides.
+   * It replaced the per-option lines ("trains on the household's program" and its first-run and
+   * adult twins), which described the legacy seeded program (roadmap thread, N3, 2026-11-19).
    *
-   * 🔴 **The first version hid the child's consequence at first run**, which a UX lens caught: with no
-   * household program the kid line was dropped entirely, so the screen read "Child" next to
-   * "Adult — logs their own training" — in front of the form's main audience, implying children do
-   * not log. Both options now always say what the athlete's training FOLLOWS, which is the only fact
-   * that separates them.
-   *
-   * ⚠️ `kidWithProgram` vs `kidFirstRun`: the household's program is the real difference, but a
-   * first-run household has none, so claiming one would be false. The first-run wording describes the
-   * same rule by what the parent will do instead.
+   * ⚠️ **A function of the Programs page's name, not a sentence with "Programs" typed in.** The word
+   * is `BUILDER_COPY.programs` (the page's heading), and this module cannot import it:
+   * `builder-text.ts` imports from here, so reading it at this module's load would be a cycle that
+   * throws whenever `builder-text.ts` loads first. The form passes it in.
    */
-  kidWithProgram: 'trains on the household’s program',
-  kidFirstRun: 'follows the routine you save for them',
-  /** Never "no household program" — at first run there is none, which makes the negation confusing. */
-  adultConsequence: 'trains on their own',
+  startsWithNoProgram: (programs: string) =>
+    `New athletes start with no program. Put them on one or more from ${programs}.`,
   /** The submit. Named for what it does, not "Save" — this screen CREATES. */
   add: 'Add athlete',
   /**

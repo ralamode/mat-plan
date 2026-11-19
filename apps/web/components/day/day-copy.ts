@@ -18,12 +18,38 @@ import type { RowWriteKind, TypedProblem } from './row-values';
 export const DAY_COPY = {
   heading: 'Workouts',
   /**
-   * H9 (12d-ii): an un-ticked load logged in another unit must be typed again. Both units are
-   * named, so the old unit's number is not typed into the new unit's field ("Logged as 25 lb").
-   * "It", not "the weight": a distance or a count can change unit too.
+   * H9 (12d-ii): a ✓ refused on an un-ticked row whose load was logged in another unit, after
+   * something was typed over it. 🔴 **It asks for no conversion** (plan U1.2): it names what was
+   * logged, in words, and the way back (maintainer, orchestrator's chat, 2026-11-19, replacing
+   * #644's "This now logs in kg: enter it in kg, then ✓."). `was` is the held value in words
+   * ("27.5 pounds"); `to` the item's unit as a word (`''` for a plain count).
    */
-  retypeLoad: (was: string, unit: string) =>
-    `Logged as ${was}. This now logs in ${unit}: enter it in ${unit}, then ✓.`,
+  retypeLoad: (was: string, to: string) =>
+    `Logged as ${was} before the workout changed to ${to || 'a plain number'}. Clear what you typed and tap ✓ to put it back.`,
+  /**
+   * 12d-iii (D44, Form 1; the logged line is the UX panel's, approved by the maintainer, 2026-11-18):
+   * the line on a row whose quantity was logged in another unit than the item's now. 🔴 **No
+   * conversion is ever asked for** (plan U1.2): the load stays as logged, and only whoever edited the
+   * unit can fix it. `from` and `to` are the units as words (`pounds`; `''` for a plain count);
+   * `noun` names what to fix ("load", "distance", "number").
+   *
+   * `unticked`: the row was un-ticked this visit, so it says what it held (`was`, "27.5 pounds"),
+   * and offers the ✓ only while the ✓ really puts it back (nothing typed over it).
+   */
+  otherUnit: (
+    from: string,
+    to: string,
+    { noun, unticked }: { noun: string; unticked: { was: string; canPutBack: boolean } | null },
+  ) => {
+    const changed = `before the workout changed to ${to || 'a plain number'}.`;
+    if (unticked) {
+      const said = `Logged as ${unticked.was} ${changed}`;
+      return unticked.canPutBack ? `${said} Tap ✓ to put it back.` : said;
+    }
+    return `Logged ${from ? `in ${from}` : 'as a plain number'} ${changed} Ask whoever changed it to fix the ${noun}.`;
+  },
+  /** What the other-unit line asks to have fixed, by the row's type (12d-iii). */
+  otherUnitNoun: { load: 'load', distance: 'distance', number: 'number' },
   done: 'Done',
   doneMark: 'Done ✓',
   lastTime: 'Last time',
@@ -123,13 +149,22 @@ export const PROGRAM_COPY = {
   orderStale: `${STALE} Here are the programs now.`,
   done: DAY_COPY.done,
   switcher: 'Switch athlete',
-  notYet: 'Not on a program yet.',
+  /**
+   * No CURRENT program (`never`): "yet" was false for an athlete taken off their last program, and
+   * no fourth state is added for one word (D46; maintainer, 2026-11-19). The key keeps its name.
+   */
+  notYet: 'Not on a program.',
   /** `notYet`'s second sentence, only on a day that can be logged (maintainer, 2026-11-17). */
   notYetLogHere: 'Bodyweight and practice log here.',
   notYetPutOn: (athlete: string) => `Put ${athlete} on a program to see their workouts.`,
   /** The Programs page's own heading, so the link and the page it opens cannot drift. */
   programs: BUILDER_COPY.programs,
   notThisDay: 'Not on a program on this day.',
+  /**
+   * Today, for an athlete whose program starts tomorrow (`startsTomorrow`; D46, maintainer,
+   * 2026-11-19): after a parent chooses Tomorrow, "not on a program on this day" read as a failure.
+   */
+  startsTomorrow: 'Starts on a program tomorrow.',
   /**
    * A future day (look-ahead), placed by the page in place of the read-only notice: v12's words
    * (`index.html:2605`; maintainer, 2026-11-17). A day that has not happened is not a missed one.

@@ -107,7 +107,8 @@ scans the card in **both** states) **fails the build**. Two more things not to r
    (since migration 0025; `db:verify` flags one, `prescriptionsWithoutAWorkoutOnTemplateBlocks`).
    `db:verify` proves the legacy output byte-identical with a newer template block on the same day,
    and mutations 55 and 56 keep it honest. ⚠️ So a household whose only programs are built ones reads
-   "no program" in `householdHasProgram` (the add-athlete form's Child wording).
+   "no program" in `householdHasProgram`. Since FAM-1 15 PR 2 the add-athlete form no longer reads
+   it (or `householdProgramsAnything`): it says every new athlete starts with no program.
 
    ⚠️ **This is why only ONE block is seeded.** Since 2026-09-24 that is the **Youth Daily Program**
    — the A/B rotation the kids actually run. The Kids S&C Foundation block it replaced is archived

@@ -91,3 +91,36 @@ export function dayPageView(
 export function lookAheadFallsBack(plan: DayPlan): boolean {
   return plan.future && plan.onProgram !== ON_PROGRAM.yes;
 }
+
+/**
+ * Whether "Not on a program." links to Programs (FAM-1 15): for a live athlete, on any day
+ * (maintainer, 2026-11-19). The notice shows only when the athlete has no CURRENT program (`never`;
+ * one put on since reads `not-this-day`), so the link fixes what the parent is looking at even from a
+ * past day. An archived athlete cannot be put on one (the writer takes live athletes only,
+ * `lockAthletes`).
+ *
+ * ⚠️ **Not `plan.writable`**: the day plays no part, and a closed past day still links.
+ */
+export function offersProgramsLink(page: { archived: boolean }): boolean {
+  return !page.archived;
+}
+
+/**
+ * Whether today's page says "Starts on a program tomorrow." in place of "Not on a program on this
+ * day" (D46; maintainer, 2026-11-19): on TODAY, a live athlete on no program today
+ * (`not-this-day`) with one from tomorrow. On today, `canGoForward` is exactly "a live assignment
+ * covers tomorrow" (the contract's `canGoForward`, `day < today || onNextDay`; confirmed by lane E,
+ * 2026-11-19), and `writable` is false for an archived athlete.
+ *
+ * 🔴 **`day === today` is load-bearing**: `canGoForward` is true on EVERY past day, so without it
+ * yesterday's page (still writable) would say "tomorrow" for a program that starts the day after
+ * today.
+ */
+export function startsTomorrow(plan: DayPlan): boolean {
+  return (
+    plan.onProgram === ON_PROGRAM['not-this-day'] &&
+    plan.writable &&
+    plan.day === plan.today &&
+    plan.canGoForward
+  );
+}

@@ -5,22 +5,29 @@ import { NAME_WRAP_CLASS, NOTICE_CLASS, QUIET_LINK_CLASS } from '@/lib/constants
 import { cn } from '@/lib/utils';
 
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
+import { startsTomorrow } from './day-notices';
 
 /**
- * Why there are no workouts (FAM-1 step 13d; plan D17): "Not on a program yet" for an athlete who
- * has never been on one, "Not on a program on this day" for one who is on a program now but was not
- * on this day. Nothing when they are on one.
+ * Why there are no workouts (FAM-1 step 13d; plan D17; D46): "Not on a program." for an athlete on
+ * no current program; "Not on a program on this day" for one who is on a program now but not on
+ * this day, except TODAY when it starts tomorrow: "Starts on a program tomorrow." (`startsTomorrow`).
+ * Nothing when they are on one. `programsHref` is read only by the first.
  *
  * **Placed by the page**, above Bodyweight, where v12 has it (maintainer, 2026-11-16).
  *
- * `programsHref` is the Programs list. **Until it exists, the notice offers no link and does not ask
- * anyone to put the athlete on a program** (UX panel, 13d): from 12c to step 15 every athlete sees
- * this daily, and a sentence pointing at a page that is not there reads as broken.
+ * `programsHref` is the Programs list. **The page passes it for a live athlete, on any day**
+ * (`offersProgramsLink`, FAM-1 15; maintainer, 2026-11-19): this notice means no program now, so the
+ * link helps from a past day too. An archived athlete cannot be put on one, so there the notice
+ * neither links nor asks.
  */
 export function NotOnAProgram({ plan, programsHref }: { plan: DayPlan; programsHref?: string }) {
   if (plan.onProgram === ON_PROGRAM.yes) return null;
   if (plan.onProgram === ON_PROGRAM['not-this-day']) {
-    return <p className={NOTICE_CLASS}>{PROGRAM_COPY.notThisDay}</p>;
+    return (
+      <p className={NOTICE_CLASS}>
+        {startsTomorrow(plan) ? PROGRAM_COPY.startsTomorrow : PROGRAM_COPY.notThisDay}
+      </p>
+    );
   }
   const athlete = athleteNameOf(plan);
   return (

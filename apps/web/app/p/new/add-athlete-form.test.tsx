@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { foldName, PROFILE_KIND, PROFILE_NAME_MAX, type ProfileKind } from '@mat-plan/shared';
+import {
+  foldName,
+  PROFILE_KIND,
+  PROFILE_KIND_LABELS,
+  PROFILE_NAME_MAX,
+  type ProfileKind,
+} from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,6 +25,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace, push: vi.fn(), back: vi.fn(), refresh: vi.fn() }),
 }));
 
+import { BUILDER_COPY } from '@/components/program-builder/builder-text';
 import { athletePath, ATHLETE_FORM_COPY, HOUSEHOLD_FULL } from '@/lib/constants';
 
 import { addAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
@@ -29,8 +36,7 @@ afterEach(cleanup);
 
 const CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
 
-const renderForm = (programsAnything = true) =>
-  render(<AddAthleteForm clientId={CLIENT_ID} programsAnything={programsAnything} />);
+const renderForm = () => render(<AddAthleteForm clientId={CLIENT_ID} />);
 
 const radios = () => screen.getAllByRole('radio') as HTMLInputElement[];
 const nameField = () => screen.getByLabelText(ATHLETE_FORM_COPY.nameLabel) as HTMLInputElement;
@@ -105,28 +111,26 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     expect(radios().map((r) => r.value)).toEqual([PROFILE_KIND.kid, PROFILE_KIND.adult]);
   });
 
-  it('claims the household program only when the household actually programs something', () => {
-    renderForm(false);
-    // A first-run household has no program, so "on the household's program" would be false. `a-g`'s
-    // day page branches on the same boolean rather than claiming one exists.
-    // Both options ALWAYS carry a consequence now; only the child's wording branches. The first
-    // version dropped the child line entirely at first run, leaving "Child" beside
-    // "Adult — logs their own training" in front of this form's main audience.
-    expect(screen.getByText(ATHLETE_FORM_COPY.kidFirstRun)).toBeTruthy();
-    expect(screen.queryByText(ATHLETE_FORM_COPY.kidWithProgram)).toBeNull();
-    cleanup();
-    renderForm(true);
-    expect(screen.getByText(ATHLETE_FORM_COPY.kidWithProgram)).toBeTruthy();
-  });
+  it('says once, for both kinds, that a new athlete starts with no program (FAM-1 15)', () => {
+    renderForm();
+    // v12's line, built from the Programs page's own name. One line, OUTSIDE the radio labels: a
+    // program is no longer something the kind decides, so neither option carries a consequence.
+    const line = screen.getByText(ATHLETE_FORM_COPY.startsWithNoProgram(BUILDER_COPY.programs));
+    expect(line.tagName).toBe('P');
+    expect(line.closest('label')).toBeNull();
+    // Read with the group, beside the permanence, by `aria-describedby`.
+    const describedBy = (screen.getByRole('radiogroup').getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .filter(Boolean);
+    const hint = screen.getByText(ATHLETE_FORM_COPY.kindPermanence);
+    expect(describedBy.slice(0, 2)).toEqual([hint.id, line.id]);
 
-  it('keeps the adult consequence in BOTH cases — it does not depend on a program', () => {
-    for (const programs of [true, false]) {
-      renderForm(programs);
-      // Exact strings, not `new RegExp(copy)`: the copy is data and a future edit adding a `.` or
-      // `(` would turn the pattern into a silently different matcher.
-      expect(screen.getByText(ATHLETE_FORM_COPY.adultConsequence)).toBeTruthy();
-      cleanup();
-    }
+    // No per-kind line: each option's label is its word and nothing more.
+    expect(radios().map((r) => r.closest('label')!.textContent)).toEqual(
+      [PROFILE_KIND.kid, PROFILE_KIND.adult].map((k) => PROFILE_KIND_LABELS[k]),
+    );
+    // The permanence is kept, unchanged (roadmap thread, N3, 2026-11-19).
+    expect(hint.textContent).toBe(ATHLETE_FORM_COPY.kindPermanence);
   });
 
   it('carries the server-minted clientId as a hidden field, unmodified', () => {

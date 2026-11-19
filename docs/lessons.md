@@ -256,6 +256,18 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A Server Action form submitted before hydration answered `Invalid Server Actions request.` and
+  nothing showed: the cause was our own `Referrer-Policy: no-referrer`.** → Under it every browser
+  (Fetch, "append a request `Origin` header") sends a native form POST with `Origin: null`, even
+  same-origin, and Next's CSRF check (origin host must equal host) aborts. The server log says so:
+  ``… does not match `origin` header with value `null` … Aborting the action.``. A hydrated
+  `fetch` is CORS-mode and carries a real Origin, so only early taps fail. → `Referrer-Policy:
+same-origin` (`REFERRER_POLICY`); never `serverActions.allowedOrigins: ['null']`. To reproduce,
+  abort `**/_next/static/chunks/**` in Playwright: the page stays unhydrated and the harness still
+  works, where `javaScriptEnabled: false` blinds Playwright too. ⚠️ Only a form whose `action` IS a
+  server reference posts natively; a client closure gets a `javascript:` action and waits for
+  hydration. Before hydration, clerk-js is not refreshing the session token, so an expired one
+  refuses the POST and lands on sign-in.
 - **`toMatchSnapshot` is the wrong tool for a layout baseline, and it fails twice before it tells
   you so.** → UI-5 pinned the pre-shell phone geometry as six JSON snapshots. (1) `pnpm format`
   formats `**/*.json` — Prettier collapsed each baseline's arrays onto one line, and since
@@ -310,10 +322,11 @@ access token`, which reads like a permissions problem with the repo. The cause w
   page", and an assertion written against it reads as a product bug. **Instead:**
   `await page.route('**/_next/static/chunks/**', (r) => r.abort())` — the harness keeps working, the
   page stays SSR-only, and the submit is a native POST. That swap turned a dead end into a
-  measurement in one run. ⚠️ **And the measurement was worth having:** `/p/new`'s unhydrated POST is
-  refused by Next (`Invalid Server Actions request`), which **withdrew the justification for a fix
-  that had already shipped in that PR** — it restored form state for a render that cannot happen.
-  [tech-debt.md](./tech-debt.md) has it. **The general shape: a cheap probe that could falsify your
+  measurement in one run. ⚠️ **And the measurement was worth having:** `/p/new`'s unhydrated POST
+  was refused by Next (`Invalid Server Actions request`), which at the time withdrew the
+  justification for a fix that had already shipped in that PR. ✅ **The refusal's cause was ours and
+  is fixed** (2026-11-19, `Referrer-Policy`; the entry below), so that render CAN happen now, and the
+  narrowed [tech-debt.md](./tech-debt.md) entry owes the fix back. **The general shape: a cheap probe that could falsify your
   own fix is worth running BEFORE you defend the fix in a docblock, not after.**
 - **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
   OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
@@ -381,6 +394,16 @@ access token`, which reads like a permissions problem with the repo. The cause w
 - **Read `error-context.md` in the Playwright artifact FIRST** (`gh run download <run-id>`) — the
   page snapshot names the true state in one look (a disabled "Logging…" button, which element was
   `readonly`), instead of inferring it from the assertion text. (V1-5)
+- **A layout proof on a page that lists shared rows goes red when OTHER specs add rows, on both
+  attempts, then passes on the next run.** → `ui5-geometry.spec.ts` "household settings fills the
+  viewport" (#652, run 44502104829: footer bottom 2568 against a 2400px viewport). The settings page
+  lists every athlete in the household the whole suite shares; that run it held 4 live and 10
+  archived, added by other specs before this one ran (`fullyParallel`, so the count depends on
+  order). Its precondition compared `<main>`'s first child with the viewport, leaving out the header,
+  `<main>`'s padding and the footer, so it passed while the page overflowed, and the footer assertion
+  blamed `flex-1`. → Size the fixture-independent part from the page: measure what you need first
+  (here the footer's position with `<main>`'s growth switched off) and set the viewport from it. A
+  precondition, when you keep one, measures the same box the assertion does.
 - **A Playwright RETRY reuses the same ephemeral DB, so "already logged" UI breaks the rerun.** →
   Attempt 1 logged the row; the retry found the control `readonly`/`aria-disabled` **by design** and
   timed out in `fill()`, looking like a fresh bug rather than leftover state. → Make writing steps

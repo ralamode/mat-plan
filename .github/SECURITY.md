@@ -165,11 +165,11 @@ what _reaches_ a sink, never whether the string appears.
 
 **CSRF — no tokens, deliberately. Three layers cover the current surface:**
 
-| Shape                                     | Protected by                                                                                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding.                            |
-| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. The only one today is `GET` (`app/p/[profileId]/export/route.ts`).                                     |
-| **Cookies**                               | 🔴 **Two layers and a vendor default, not three — see below.** This app sets exactly one cookie now (`tz`), and it is Clerk's cookies that carry the session. |
+| Shape                                     | Protected by                                                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding.                                                                                                                                                  |
+| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. Two today, both `GET`: the export (`app/p/[profileId]/export/route.ts`), which moves a rate-limit counter, safely because the count comes after its profile check, and a how-to (`app/programs/how-to/[optionId]/route.ts`). |
+| **Cookies**                               | 🔴 **Two layers and a vendor default, not three — see below.** This app sets exactly one cookie now (`tz`), and it is Clerk's cookies that carry the session.                                                                                                                       |
 
 🔴 **The cookie row, honestly, after AUTH-1 1d.** The row used to read
 `SameSite=Lax + httpOnly + secure in prod (app/gate/actions.ts)` and claim three layers. All of that
@@ -192,9 +192,11 @@ described the gate's cookie, which is deleted. What is true now:
   is reasoning about a dependency this repo cannot pin — which is why the production observation below
   is what settles it.
 - ⚠️ **Do not write "`httpOnly` does not apply".** That is true on the custom domain, where clerk-js
-  reads the cookies from JavaScript. On the `*.vercel.app` alias Clerk's auto-proxy forwards the
-  Frontend API's own `Set-Cookie` verbatim, with whatever attributes Clerk chooses — which can
-  include `HttpOnly`. The two deployments differ.
+  reads the cookies from JavaScript. Clerk's auto-proxy, where armed, forwards the Frontend API's own
+  `Set-Cookie` verbatim, with whatever attributes Clerk chooses, which can include `HttpOnly`. ✅
+  **It is disarmed on every host** (`proxy.ts` passes `frontendApiProxy: { enabled: false }`, AUTH-1
+  1d; `proxy.test.ts` pins the option), so no deployment relays Clerk's cookies through this origin.
+  This bullet read as if the `*.vercel.app` alias still did; corrected 2026-11-19.
 
 **So the post-`1d` CSRF story is Next's Origin-vs-Host check PLUS a vendor default — two layers and a
 dependency, not the three the row claimed.**
@@ -282,7 +284,15 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 ## Transport / headers
 
 - HSTS, nonce-based CSP (middleware), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy`, `Permissions-Policy`. ⚠️ **No credential cookie is set by this app** — the
+  `Referrer-Policy: same-origin` (`REFERRER_POLICY`), `Permissions-Policy`. **`same-origin`, not
+  `no-referrer`, because** under `no-referrer` every browser (Fetch, "append a request `Origin`
+  header") sends a native form POST with `Origin: null`, even to this site, and Next's Server Action
+  check refuses it, so a server-action form tapped before hydration did nothing (four routes; the day page's closure-wrapped forms always waited for hydration). `same-origin` still sends no
+  referrer to any other site. That holds only while **no same-origin path relays to a third party**:
+  Clerk's frontend-API relay stays disarmed (pinned in `proxy.test.ts`), there is no Sentry
+  `tunnelRoute` and no external `rewrites()`. Adding any of them would forward a `Referer` naming an
+  athlete page. Sentry also drops `referer` (`lib/sentry-scrub.ts`). `strict-origin` was rejected:
+  it fixes the bug but sends our origin to every cross-origin request. ⚠️ **No credential cookie is set by this app** — the
   only one it writes is `tz`, deliberately neither `Secure` nor `HttpOnly` because a client writes it;
   the session cookies are Clerk's (see Injection / CSRF).
 - **CORS closed** — the LLM calls server-to-server, so no browser origin needs opening.
@@ -322,15 +332,19 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 
 ## Rate limiting
 
-- `@upstash/ratelimit` (sliding window) on **mutations**, and planned for `/api/sync` and the
-  LLM-facing API. In-memory counters don't work on serverless.
+- `@upstash/ratelimit` (sliding window), keyed on the Clerk principal, never an IP or a caller-supplied id
+  (`apps/web/lib/rate-limit.ts` has the numbers):
+  - **every mutation**, through `enterMutation`;
+  - **the zip export**, through `checkExportLimit`, checked after the route's session and profile
+    checks, so only an export of the caller's own household's profile is counted;
+  - planned for `/api/sync` and the LLM-facing API.
+    In-memory counters don't work on serverless. This section is the one statement of what is limited;
+    other docs point here.
 - ⚠️ **"auth" was the first item on this list and is deliberately gone (AUTH-1 1d).** It meant the
   gate login — an unauthenticated password oracle, the one surface where a limiter was the primary
   control. `1d` deletes it. Sign-in is now Clerk's, so the brute-force surface and its limiting are
   the vendor's, not ours: **this repo rate-limits nothing on the authentication path.** State that
   rather than implying coverage we do not have.
-- ⏳ The zip export remains unlimited — the most expensive single request in the app
-  (`docs/tech-debt.md`).
 
 ## Supply chain
 

@@ -58,24 +58,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Severity:** low. Both guards are best-effort and say so; each wrapper has a case in
   `hooks.test.sh`.
 
-### The strength fix-a-set path can change a program row on any day (found 2026-11-17, FAM-1 11c's panel)
-
-- **What & why it's debt:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`)
-  edits any LIVE set of the profile, on any day, through `ownedEntryIds`. A program row of the
-  Weight × reps type passes its shape guards (mass, done, not bodyweight), so a crafted fix-a-set
-  request can change a program row's numbers outside D20's writable window (today and yesterday).
-  The day page's own Change (`amendRow`, 11c-i) keeps the window; this older path does not.
-- **Reach:** within the household only, and on the athlete's own history: `ownedEntryIds` rides
-  `isLiveProfile(profilePublicId, scope)`, so another household's set is never reached. A household member
-  corrects with the same authority as logging and hiding (ADR 0008 Decision 4; revisited after
-  AUTH-1); what is missing is
-  the window, not the ownership.
-- **The fix:** the fix-a-set path refuses a program row (`programRow()`, i.e. `entries.prescription_set IS NOT NULL`, which a
-  purge leaves set) whose day is outside `rowDayOpen`. A `db:verify` boundary proof, a purged row
-  (`prescription_id` NULL) among its cases, and a mutation.
-- **Owner:** lane E (FAM-1; the board, 2026-11-17). **Trigger:** its own small PR after 11c-i.
-- **Severity:** medium (a data-integrity gap on the athlete's own records; no cross-household reach).
-
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff) — ✅ CLOSED 2026-11-18
 
 - **Closed by `OPS-2` PR 1:** the expansion and `CALISTHENICS_RAMP_SCHEDULE` are deleted (plan D4, the maintainer's Q6), so no seed writes `ramp_targets`; `verify/seed.ts`'s Proof A counts the table after a production seed.
@@ -99,6 +81,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   the items no outcome explains, before they throw. `db:verify` stages the race on PGlite with a
   statement-level `AFTER INSERT` trigger that hides the holder inside the skipped insert
   (`verify/single-values.ts` → `verifyDayTakenRace`); mutations 420 and 421 remove each retry.
+  Since 2026-11-19 `verifyRetryLandsOnTakenDay` also stages a third phone holding the day again
+  before the retry (a `BEFORE INSERT` statement trigger), so a retry must answer `day_taken`;
+  mutations 422 and 423.
   A second miss still throws: for a check-in, a reused `public_id`; for a weigh-in, a replay of a
   hidden one, a `client_id` already used by another metric or profile, or an evening-only day.
 
@@ -299,33 +284,33 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
   fresh context instead of continuing the archived session.
 
-### The add-athlete form cannot be submitted without hydration — Next refuses the request (added 2026-11-10)
+### A refusal on the add or rename form, submitted before hydration, re-renders a blank form (narrowed 2026-11-19; added 2026-11-10)
 
-- **What & why it's debt:** `/p/new` renders server-side, but a submit made before the client runtime
-  is in place **never reaches the Server Action**. Measured: with the app's chunks blocked
-  (`page.route('**/_next/static/chunks/**', r => r.abort())`), the native POST reaches the server and
-  is answered `⨯ Error: Invalid Server Actions request.` — four times, once per attempt. No envelope
-  is produced, so nothing renders and the page simply sits there.
-- **Why this entry replaced a different one.** The first version of it said a `javaScriptEnabled: false`
-  context "cannot be driven", which was true but unhelpful: in such a context `page.url()` answers
-  while `locator.count()` returns 0 and `innerText()` 32 characters, because **Playwright's own
-  injected script cannot run there either**, so it cannot distinguish an empty page from a blind
-  harness. Blocking the chunks instead keeps the harness working and the page unhydrated, which is
-  what turned a dead end into the measurement above. ⚠️ **The cause is not established** — only that
-  the request is refused. Do not write one in here.
-- **What it cost, recorded because the rule earned it.** `a-1d` shipped a fix for the one refusal on
-  this form that depended on client state (the duplicate callout was gated on the React `name`
-  state): the envelope carried the parsed name and kind and the island seeded from them. The
-  measurement above **removed its justification** — an unhydrated submit produces no envelope to seed
-  from, and a submit captured _during_ hydration is replayed against an island that is already
-  mounted, where a `useState` initializer is inert. It was reverted rather than kept as defence
-  against a state that cannot occur.
-- **What this means for claims:** nothing in this repo tests an unhydrated path, and the one above
-  shows the form does not support one. `rename-form.tsx` reasons about a no-JS re-render from the
-  code, not from a test, and should be read that way.
-- **The fix, when taken:** decide whether progressive enhancement is wanted on this form at all. If
-  it is, the Server Action request has to be made to work unhydrated first — there is no point
-  restoring field state for a POST the framework rejects.
+- **What was here, and what changed.** The entry recorded that an unhydrated submit of `/p/new`
+  never reached its Server Action, cause unknown. **Cause found and fixed 2026-11-19**
+  ([plan](./plans/td-form-before-hydration.md)): `Referrer-Policy: no-referrer` made browsers send
+  the native POST with `Origin: null`, which Next's Server Action check refused. It is now
+  `same-origin`, and `e2e/form-before-hydration.spec.ts` submits the add form with the chunks
+  blocked. Four routes behave differently now: `/p/new`, `/p/[id]/edit`, `/p/[id]/routine` and
+  `/settings`. The day page's log forms wrap their action in a client closure, so they always waited
+  for hydration and are unchanged.
+- **What is left:** a REFUSAL on add or rename, submitted unhydrated, re-renders the island fresh.
+  The typed name is gone (the add's `name` starts `''`; the rename's seeds from the stored name), so
+  the duplicate callout cannot match its folded name, and the form shows no message. Nothing is
+  written. This is the state the reverted a-1d fix handled (`typed`/`chosenKind` on the envelope),
+  reverted only because the POST never arrived; that reason is gone.
+- **Smaller, harmless, recorded:**
+  - a late-hydrating rename success runs `router.back()` to the pre-submit edit page;
+  - an unhydrated archive on `/settings` gets no Undo or announcement (Restore still works);
+  - an unhydrated add's `RedirectType.replace` is a plain redirect, so Back reopens `/p/new`, and
+    the duplicate check is the backstop;
+  - an unhydrated routine Save re-posts the server-rendered order (a no-op);
+  - an unhydrated submit after the Clerk session token expires is refused and lands on `/sign-in`
+    with nothing written, since clerk-js is what refreshes the token.
+- **The fix, when taken:** restore the a-1d envelope seed (`typed`, `chosenKind`) for the add and
+  the rename, each with an unhydrated e2e of its refusal. `profile-actions.ts` is owned by
+  `write-path.md`.
+- **Severity:** low (a refusal path, a slow phone, nothing written).
 
 ### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
 
@@ -601,17 +586,6 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `docs/specs/v1-22-…` are known false positives — they are about other columns).
 - **Severity:** low (docs drift), and now three copies rather than twelve.
 
-### Two load-bearing strings are re-typed next to the const that defines them (found 2026-10-09, TEN-2a reuse panel)
-
-- **What & why:** out of TEN-2a's diff, so recorded rather than fixed. (1) `packages/db/scripts/verify.ts`
-  has `const UQ = 'uq_entries_profile_day_bodyweight'`, re-typing the value `schema.ts` already exports
-  as `BODYWEIGHT_DAY_UNIQUE_INDEX`. (2) `packages/shared/src/seed-ids.ts` hand-types
-  `SEED_PUBLIC_ID_PREFIX`'s value **three** times instead of importing the const.
-- **Impact:** low today; a rename in either place goes green and means nothing.
-- **Proposed fix:** import the const in both. Charged to nobody — a good first slice for whoever next
-  touches either file.
-- **Severity:** low.
-
 ### The comment-stripping `code()` test helper has TWO copies left, outside `apps/web` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
 
 - **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in
@@ -707,17 +681,12 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
 - **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
   rule is scoped to `/api/sync`, so there is no standing convention this violates.
 
-### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
-
-- **What & why:** `.github/scripts/check-status-touched.mjs` still accepts a `docs/status.md` touch
-  when `docs/changelog/README.md` is absent from the working tree, so branches cut before DX-2 aren't
-  failed for a rule that didn't exist when they were cut. Its self-test keeps the legacy cases.
-- **Impact:** low. It's dead code once no open branch predates DX-2, but it's a second rule to read.
-- **Proposed fix:** once `gh pr list` shows no open PR whose merge base predates #190, delete the
-  legacy branch of the guard and its test cases, and drop the "LEGACY" paragraph from the docblock.
-- **Severity:** low.
-
 ### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
+
+> ✅ **Closed by DX-18 PR 2:** `changed-scopes.mjs` treats an image as inert only under `docs/` or
+> `.github/`, so an image under `apps/web/` runs the smoke and the build
+> (`changed-scopes.test.sh` → "an image under apps/web/ is app content"). The entry is kept for its
+> history.
 
 - **What & why:** `.github/workflows/ci.yml`'s e2e auto-skip treats any
   `\.(png|jpe?g|gif|svg|webp|ico)$` file as provably inert. That was right while images were only PR
@@ -828,7 +797,7 @@ success.` Harmless there — nothing referenced the files yet.
   mutual-exclusion CHECK** — it would be a breaking migration and would foreclose the above.
 - **Severity:** informational.
 
-### The zip export is not rate-limited (V1-14a; the mutating actions were, at `AUTH-1` 1c-3b)
+### `/api/sync` must land rate-limited (the mutating actions are since `AUTH-1` 1c-3b, the zip export since 2026-11-19)
 
 - **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The **seven** mutating Server
   Actions in `app/p/[profileId]/actions.ts` — **and the zip export route, so a full training-history
@@ -842,26 +811,22 @@ success.` Harmless there — nothing referenced the files yet.
 - 🔴 **Half paid at `AUTH-1` 1c-3b (2026-11-01).** The seven mutating Server Actions are now limited
   on the Clerk principal (`checkMutationLimit`, 120 / 5 min), placed after the session check and
   **before** the zod parse, so an unauthenticated flood costs zero Redis and zero DB work.
-  ⏳ **The zip export route is NOT** — the eighth surface this entry counts, and the most expensive
-  single request in the app. ⚠️ **Deferred to `1c-4` PR 4 specifically, not to "1c-4"** — 1c-4's PR 2
-  (the resolver, 2026-11-03) is what made the principal the thing being _scoped_, and it did not
-  touch this route; `export/route.ts` still imports no limiter. A reader who sees 1c-4 merged would
-  otherwise take this as delivered.
-- **Impact:** low today. Reaching these actions requires the gate cookie **and** a Clerk session,
-  both re-checked inside each action, so neither a proxy-skipping request nor a session-only caller
-  gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
-  limited — ⚠️ in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash
-  database, so the limiter failed open there. The app is a single household on an unlisted URL. The
-  residual exposure is the **unthrottled zip export** named above — not a gate-holder writing
-  unbounded rows, which `1c-3b` capped at 120 / 5 min. Annoying, not dangerous, and visible in the log.
+- ✅ **The export half paid 2026-11-19** (the FAM-1 export follow-up,
+  [plan](./plans/fam-1-export-owner-only.md) PR A): `checkExportLimit`, 30 / 10 min on its own
+  `mat-plan:export` key, checked after the route's session and profile checks. ⚠️ **This row used to
+  say "deferred to `1c-4` PR 4".** No such PR existed: 1c-4 shipped without touching the route, and
+  the export stayed unlimited until this follow-up.
+- **Impact:** low today. Reaching these actions takes a Clerk session with a household membership,
+  re-checked inside each action (the gate cookie this line also named went at `1d`). The app is a single household on an unlisted URL. Since
+  2026-11-19 the export is limited too, so nothing is left on the surfaces this entry counts (the
+  mutations and the export). Page reads and the how-to Route Handler were never in it. Annoying, not dangerous, and visible in the log.
 - **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
   **`checkMutationLimit`** — a second instance of the same fail-open seam, with its own
   `mat-plan:mutate` prefix, not `checkRateLimit` itself — exactly as AGENTS.md's rate-limit line ("auth + mutations +
-  `/api/sync`") presumes. ⏳ **What is left:** the zip export at **`1c-4` PR 4**, and `/api/sync`, which should
+  `/api/sync`") presumes. ⏳ **What is left:** `/api/sync`, which should
   land limited from day one — the batch flush is the genuine amplification endpoint.
-- **Severity:** low (accepted until **`1c-4` PR 4**, not "until Clerk" and not "until 1c-4" — Clerk
-  landed at Beta 0, the mutations half shipped at `1c-3b`, and 1c-4's resolver shipped without it;
-  the seam and its contract already exist).
+- **Severity:** low, and nothing on today's surfaces. What remains is `/api/sync`, which is not a
+  surface yet; the seam and its contract already exist.
 
 ### Sentry ships without source maps, so stack frames are minified (V1-14a)
 

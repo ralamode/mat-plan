@@ -2,17 +2,18 @@
 import { ROW_REFUSAL, type DayPlan, type RowAmend, type RowResult } from '@mat-plan/shared';
 import {
   closedDayLoggedOnly,
+  everyTypeOnce,
   yesterdayEditedAfterLogging,
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
-import { card, held, makeMount, press, status } from './day-test-utils';
+import { card, describedTexts, held, makeMount, press, status } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
 import { unitSpoken } from './row-values';
 
@@ -105,14 +106,48 @@ describe('Change: where it applies', () => {
     expect(within(pullUp).queryAllByRole('textbox')).toHaveLength(0);
   });
 
-  it('🔴 a set logged in another unit than the item is in stays text: no load in the wrong unit', () => {
+  it('🔴 a set logged in another unit offers its reps only: the load stays text in its own unit (12d-iii)', async () => {
     const kg: DayPlan = structuredClone(yesterdayHalfDone);
     const item = kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!;
     item.unit = 'kg';
-    mount(kg, { change: true });
+    const { actions } = mount(kg, { change: true });
     const rowOne = loggedRow();
-    expect(within(rowOne).queryAllByRole('textbox')).toHaveLength(0);
+    // One field, the reps; the load is text with its own unit, never a kg field.
+    expect(within(rowOne).getAllByRole('textbox')).toEqual([reps()]);
     expect(rowOne.textContent).toContain('27.5 lb');
+    // The line says why, asks for no conversion, and the ✓ and the reps field point at it.
+    // Every set logged in pounds has its own line; set 1's is the one its ✓ and field point at.
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.load,
+      unticked: null,
+    });
+    expect(within(bench()).getAllByText(said).length).toBeGreaterThan(1);
+    expect(describedTexts(benchTick())).toContain(said);
+    expect(describedTexts(reps())).toContain(said);
+    // The load cell says the unit's word, not its code, to a screen reader (plan U2.5).
+    const cell = within(rowOne).getByText(unitSpoken('lb'));
+    expect(cell.className).toContain('sr-only');
+
+    type(reps(), '6');
+    await leave(reps());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    // The load goes back exactly as it was logged, in pounds.
+    expect(actions.amendRow.mock.calls[0]![0].values).toEqual({
+      quantities: [{ slot: 'primary', unit: 'lb', value: 27.5 }],
+      reps: 6,
+    });
+    expect(within(bench()).getByText(DAY_COPY.change.changed('8', '6 reps'))).toBeTruthy();
+    expect(loggedRow().textContent).toContain('27.5 lb');
+  });
+
+  it('a set logged in the item’s unit has no other-unit line', () => {
+    mount(yesterdayHalfDone, { change: true });
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.load,
+      unticked: null,
+    });
+    expect(within(bench()).queryByText(said)).toBeNull();
+    expect(describedTexts(benchTick())).not.toContain(said);
   });
 });
 
@@ -912,5 +947,258 @@ describe('Change: second-pass fixes', () => {
     };
     act(() => control.setPlan(late)); // the ✓'s refresh, from before both Changes
     expect(set3().value).toBe('40');
+  });
+});
+
+describe('Change: Escape from any control, and a ✕ press that ends elsewhere', () => {
+  /** Past the grace in which the ✕'s click may still come (`CANCEL_CLICK_GRACE_MS`). */
+  const afterGrace = async () => {
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+    });
+  };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Escape from the ✓ while typed over puts the number back, and focus stays on the ✓', () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => benchTick().focus());
+    fireEvent.keyDown(benchTick(), { key: 'Escape' });
+    expect(load().value).toBe('27.5');
+    expect(document.activeElement).toBe(benchTick());
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Escape from the ✕ puts the number back, and focus moves to the ✓ before the ✕ goes', () => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => cancelX().focus());
+    fireEvent.keyDown(cancelX(), { key: 'Escape' });
+    expect(load().value).toBe('27.5');
+    expect(document.activeElement).toBe(benchTick());
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Escape on a row that is not being changed is left alone', () => {
+    mount(yesterdayHalfDone, { change: true });
+    act(() => benchTick().focus());
+    // `fireEvent` answers false when the event was prevented.
+    expect(fireEvent.keyDown(benchTick(), { key: 'Escape' })).toBe(true);
+  });
+
+  it.each([
+    ['the ✓', () => benchTick()],
+    ['the ✕', () => cancelX()],
+  ])('the window losing focus from %s sends nothing', async (_label, control) => {
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    act(() => control().focus());
+    // A window blur: the control is still the page's active element.
+    await act(async () => {
+      fireEvent.blur(control());
+    });
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('leaving the row from the ✓ sends the Change once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    act(() => benchTick().focus());
+    await act(async () => benchTick().blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('🔴 a tap on the ✕ in an iPhone’s order cancels, even when the finger lifts past its edge', async () => {
+    // iOS: pointerdown, pointerup (where the finger lifts says nothing: iOS targets the click itself),
+    // the compat mousedown's blur of the field, then the click on the ✕.
+    const { actions } = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    const x = cancelX();
+    // The finger lifts past the ✕'s edge. jsdom has no layout, so the point is placed by hand: a
+    // rule that read the release point would take this for "elsewhere" (the bug this pins).
+    const restore = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => document.body,
+    });
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+      load().blur();
+    });
+    if (restore) Object.defineProperty(document, 'elementFromPoint', restore);
+    else Reflect.deleteProperty(document, 'elementFromPoint');
+    await act(async () => {
+      fireEvent.click(x);
+    });
+    await afterGrace();
+    expect(load().value).toBe('27.5');
+    expect(actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('a ✕ press dragged off with a mouse in Safari (the field already blurred) is sent after the grace', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      load().blur(); // Safari blurs the field at pointer-down and does not focus the ✕
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    expect(actions.amendRow).not.toHaveBeenCalled(); // the click may still come
+    await afterGrace();
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    // A later, unrelated release sends nothing more: the watch was one-shot.
+    await act(async () => {
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    await afterGrace();
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('an iPhone slide-off (the field still focused) is called off, and leaving the row then sends once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      fireEvent.pointerUp(cancelX(), { pointerId: 1 }); // captured to the ✕; no click follows
+    });
+    await afterGrace();
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+    await leave(load());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ✕ press that becomes a scroll, with focus already out of the row, sends at once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    await act(async () => {
+      fireEvent.pointerDown(cancelX(), { pointerId: 1 });
+      load().blur();
+      fireEvent.pointerCancel(cancelX(), { pointerId: 1 });
+    });
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('Chrome: a ✕ press released elsewhere with focus on the ✕ keeps the row open, then leaving it sends once', async () => {
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: amendOk }),
+    });
+    type(load(), '30');
+    const x = cancelX();
+    await act(async () => {
+      fireEvent.pointerDown(x, { pointerId: 1 });
+      x.focus(); // Chrome focuses a button on mousedown
+      fireEvent.pointerUp(document.body, { pointerId: 1 });
+    });
+    await afterGrace();
+    expect(actions.amendRow).not.toHaveBeenCalled();
+    expect(load().value).toBe('30');
+    await act(async () => x.blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed save, then leaving the row from the ✓, sends exactly once more', async () => {
+    let calls = 0;
+    const { actions } = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async (input) =>
+          (calls += 1) === 1 ? { ok: false, reason: ROW_REFUSAL.retry } : amendOk(input),
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    expect(actions.amendRow).toHaveBeenCalledTimes(1);
+    act(() => benchTick().focus());
+    await act(async () => benchTick().blur());
+    expect(actions.amendRow).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Change: a row logged in another unit (12d-iii)', () => {
+  /** `yesterdayHalfDone` with the bench now in kg: its logged sets are in lb. */
+  function inKg(from: DayPlan = yesterdayHalfDone): DayPlan {
+    const kg: DayPlan = structuredClone(from);
+    kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!.unit = 'kg';
+    return kg;
+  }
+
+  it('the line stays while an un-tick is in flight: nothing below the row moves', async () => {
+    const gate = held();
+    mount(inKg(), {
+      change: true,
+      wrap: (a) => ({ untickRow: (input) => gate.after(() => a.untickRow(input)) }),
+    });
+    const before = within(bench()).getAllByText(/before the workout changed/).length;
+    await act(async () => {
+      fireEvent.click(benchTick());
+    });
+    expect(within(bench()).getAllByText(/before the workout changed/)).toHaveLength(before);
+    expect(describedTexts(benchTick()).some((t) => t.includes('before the workout changed'))).toBe(
+      true,
+    );
+    await gate.resolve();
+  });
+
+  it('a load typed before the unit changed is dropped: no field, no "not saved", nothing sent', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    await act(async () => control.setPlan(inKg(control.plan)));
+    expect(within(loggedRow()).getAllByRole('textbox')).toEqual([reps()]);
+    expect(within(bench()).queryByText(DAY_COPY.change.notSaved('27.5 lb × 8'))).toBeNull();
+    await leave(reps());
+    expect(control.actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('Undo after a reps-only Change sends the row back as logged, in lb', async () => {
+    const { actions } = mount(inKg(), { change: true });
+    type(reps(), '6');
+    await leave(reps());
+    await press(button(DAY_COPY.change.undo));
+    expect(actions.amendRow).toHaveBeenCalledTimes(2);
+    expect(actions.amendRow.mock.calls[1]![0].values).toEqual({
+      quantities: [{ slot: 'primary', unit: 'lb', value: 27.5 }],
+      reps: 8,
+    });
+  });
+
+  it('a count logged in another unit shows the line on its card and stays text', () => {
+    const plan: DayPlan = structuredClone(everyTypeOnce);
+    const vest = plan.workouts[0]!.items.find((i) => i.name === 'Vest weight')!;
+    vest.unit = 'kg';
+    vest.rows[0]!.logged = {
+      entryPublicId: ENTRY_3,
+      values: { quantities: [{ slot: 'primary', unit: 'lb', value: 10 }] },
+      prescribedText: vest.rows[0]!.logged?.prescribedText ?? '10 lb',
+    };
+    mount(plan, { change: true });
+    const item = card(plan.workouts[0]!.name, 'Vest weight');
+    const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.number,
+      unticked: null,
+    });
+    expect(within(item).getByText(said)).toBeTruthy();
+    expect(within(item).queryAllByRole('textbox')).toHaveLength(0);
+    const tick = within(item).getByRole('button', { name: DAY_COPY.logLabel('Vest weight') });
+    expect(describedTexts(tick)).toContain(said);
   });
 });

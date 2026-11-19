@@ -44,8 +44,16 @@ import { logRow, retickRow, rowWorkout, untickRow } from '../../src/writers/day/
 import { hideEntries } from '../../src/writers/hide';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { insertWorkoutOwnedBy } from '../../src/writers/ownership';
+import { updateStrengthSetById } from '../../src/writers/strength-session';
 import { verifyDayPlan } from './day-plan';
-import { asDb, asTx, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import {
+  asDb,
+  asTx,
+  rolledBack,
+  stageHideDuringInsert,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import {
   entriesOnAnotherWorkoutsPrescriptions,
   entriesOnForeignPrescriptions,
@@ -67,8 +75,8 @@ import {
  *   that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–181; 120 is unused, see there);
  * - **step 12a-i**: the day resolver and PREVIOUS, in `./day-plan.ts` (`verifyDayPlan`, called at
  *   the end of `verifyDay`): it seeds the state each `DayPlan` fixture with no `before` describes,
- *   with hand-written timestamps (eleven, plus the two whose only change is an archive), and
- *   deep-equals it with ids mapped exactly; 12a-ii adds the other four of the six with a `before`;
+ *   with hand-written timestamps (twelve, plus the two whose only change is an archive), and
+ *   deep-equals it with ids mapped exactly; 12a-ii adds the other six of the eight with a `before`;
  * - **step 11c-i (`verifyAmend`, after 11b's)**: Change, `amendRow`, as
  *   `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan lists it, with mutations 348–356 and 358–363. A
  *   non-number is the contract's schema test (`rowAmendSchema`), since the action parses (plan S4);
@@ -102,6 +110,85 @@ export async function verifyDay(_ctx: VerifyContext): Promise<void> {
   await verifyRowRace();
   // 12a-i's proofs run after 11b's, so an 11b patch still fails on its own assertion first.
   await verifyDayPlan();
+  // Last: it ticks through this file's fixture and `logRow`, so a patch that breaks a tick fails on
+  // lane E's own assertion first.
+  await verifyFixASetRefusesProgramRows();
+}
+
+/**
+ * TD fix-a-set (the board, 2026-11-19): `updateStrengthSetById`, the old V1-9 path, never edits a
+ * program row; a program row's numbers are `amendRow`'s. A purged prescription leaves the row a
+ * program row. That an old strength-session set still edits is four of the twelve fix-a-set cases in
+ * `verify.ts` (the ones that assert an edit lands), which go red if the conjunct refused every row.
+ */
+async function verifyFixASetRefusesProgramRows(): Promise<void> {
+  await proof(
+    'fix-a-set: a program row is amendRow’s, never the old path’s',
+    async (f, tx) => {
+      const logged = expectOk(
+        await f.tick({
+          prescriptionPublicId: f.p.weightReps.publicId,
+          values: { reps: 8, quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 30 }] },
+        }),
+        'TD fix-a-set: a weight \u00d7 reps row is logged',
+      );
+      const entryId = (await f.entryRow(logged.entryPublicId)).id;
+      const [set] = await tx
+        .select({ id: schema.entrySets.id, publicId: schema.entrySets.publicId })
+        .from(schema.entrySets)
+        .where(and(eq(schema.entrySets.entryId, entryId), isNull(schema.entrySets.deletedAt)));
+      assert.ok(set, 'TD fix-a-set: the row has a live set');
+      const edit = () =>
+        updateStrengthSetById(asTx(tx), {
+          profilePublicId: f.athlete.publicId,
+          setId: set.publicId,
+          reps: 3,
+          weight: 99,
+          scope: f.H_SCOPE,
+        });
+      const stored = async () => {
+        const [s] = await tx
+          .select({ reps: schema.entrySets.reps })
+          .from(schema.entrySets)
+          .where(eq(schema.entrySets.id, set.id));
+        const [q] = await tx
+          .select({ value: schema.entrySetQuantities.valueNum })
+          .from(schema.entrySetQuantities)
+          .where(
+            and(
+              eq(schema.entrySetQuantities.entrySetId, set.id),
+              eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.primary),
+            ),
+          );
+        return { reps: s?.reps, weight: Number(q?.value) };
+      };
+      assert.deepEqual(await stored(), { reps: 8, weight: 30 }, 'TD fix-a-set: the row as logged');
+
+      assert.equal(await edit(), null, 'TD fix-a-set: the old path refuses a program row');
+      assert.deepEqual(
+        await stored(),
+        { reps: 8, weight: 30 },
+        'TD fix-a-set: …and writes nothing',
+      );
+
+      // A purged prescription (`ON DELETE SET NULL`): the set stays, so it is still a program row.
+      await tx
+        .update(schema.entries)
+        .set({ prescriptionId: null })
+        .where(eq(schema.entries.id, entryId));
+      assert.equal(
+        await edit(),
+        null,
+        'TD fix-a-set: a program row whose prescription is purged is still refused',
+      );
+      assert.deepEqual(
+        await stored(),
+        { reps: 8, weight: 30 },
+        'TD fix-a-set: …and the purged row writes nothing',
+      );
+    },
+    'TD',
+  );
 }
 
 // ── FAM-1 11b — the row writer ──────────────────────────────────────────────────────────────────────
@@ -790,6 +877,19 @@ async function verifyExport(): Promise<void> {
         day: YESTERDAY,
         kind: ENTRY_KIND.bodyweight,
       });
+      // Planted: a weigh-in naming a movement and no metric, which the schema's at-most-one check
+      // allows. The strength log's join takes it, so the bodyweight file must not.
+      await tx.insert(schema.entries).values({
+        publicId: newId(),
+        clientId: newId(),
+        profileId: f.athlete.id,
+        activityDate: YESTERDAY,
+        unit: 'lb',
+        valueNum: '81',
+        activityTypeId: await typeId(SEED_ACTIVITY_TYPE_KEYS.weighIn),
+        movementId: f.moves.reps,
+        status: ENTRY_STATUS.done,
+      });
 
       // Planted at both edges of the month, so a dropped month bound copies one into the file.
       const month = DAY.slice(0, 7);
@@ -873,20 +973,10 @@ async function verifyRowRace(): Promise<void> {
         await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
         'FAM-1 11b race: the holder ✓',
       );
-      await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
-      await tx.execute(sql`insert into race_target values (${holder.entryPublicId}::uuid)`);
-      await tx.execute(sql`create function verify_row_race_hide() returns trigger language plpgsql as $$
-        begin
-          update entries set deleted_at = now()
-            where public_id in (select public_id from race_target) and deleted_at is null;
-          return null;
-        end $$`);
-      await tx.execute(
-        sql`create trigger row_race_hide after insert on entries for each statement execute function verify_row_race_hide()`,
-      );
+      const hide = await stageHideDuringInsert(tx);
+      await hide.arm(holder.entryPublicId);
       const second = await f.tick({ prescriptionPublicId: f.p.reps.publicId });
-      await tx.execute(sql`drop trigger row_race_hide on entries`);
-      await tx.execute(sql`drop function verify_row_race_hide()`);
+      await hide.disarm();
       const saved = expectOk(second, 'FAM-1 11b race: a ✓ on a set un-ticked mid-insert saves');
       // ⚠️ 11b-interim: a NEW entry, the un-ticked one hidden. 11c-ii's revive flips this to "the same
       // entry, brought back" (plan 11c, § Proofs 11b's rewrite).

@@ -16,13 +16,14 @@ import { cn } from '@/lib/utils';
 import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, formatRowValues, unitSuffix, type RowField } from './row-values';
-import { rowIdProps, useChange } from './use-change';
+import { changeRowProps, useChange } from './use-change';
 import { useRow } from './use-row';
 import {
   CARD_CLASS,
   ItemHeading,
   LOGGED_CARD_CLASS,
   RowInput,
+  OtherUnitLine,
   secondaryText,
   Tick,
   TINT_CLASS,
@@ -89,7 +90,7 @@ function SingleItem({
   const r = useRow(workout, workoutKey, item, row);
   const errorId = useId();
   const rowId = useId();
-  const change = useChange(r, item, row, rowId);
+  const change = useChange(r, item, row, rowId, tickRef);
   const status = hasRowStatus(r, change);
   const isCheck = item.trackingType === TRACKING_TYPE.check;
   const previous = row.previous ? slotQuantity(item, row.previous.quantities) : null;
@@ -104,7 +105,7 @@ function SingleItem({
 
   return (
     <li
-      {...rowIdProps(rowId)}
+      {...changeRowProps(rowId, change)}
       className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}
     >
       <ItemHeading item={item} label={label} onTint={onTint} />
@@ -174,6 +175,13 @@ function SingleItem({
       <div className="mt-2 empty:hidden">
         <RowStatus r={r} change={change} lineId={errorId} tickRef={tickRef} />
       </div>
+      {/* 12d-iii: a sibling after the status slot, as in the set table, so a message never
+          replaces it and the status stays next to the row. */}
+      {r.otherUnit ? (
+        <div className="mt-2">
+          <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
+        </div>
+      ) : null}
     </li>
   );
 }

@@ -1,3 +1,4 @@
+import { MAX_HOUSEHOLD_ATHLETES } from '@mat-plan/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // V1-14a. `lib/rate-limit.ts` builds its limiter at MODULE LOAD from `env`, so each case here has to
@@ -174,12 +175,14 @@ describe('MUTATION_RATE_LIMIT — sized for a kid logging, not for a brute-force
     // 🔴 **Edited at FAM-1 step 0b, which is this assertion doing its job.** It held one entry from
     // `1d`; the row-write limiter is the second, meant, and named here with its own const and its
     // own prefix. A third instance, or either one built from the other's policy, is still red.
-    const { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({
+    // The export limiter (FAM-1 export follow-up) is the third, meant, with its own sibling prefix.
+    const { EXPORT_RATE_LIMIT, MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({
       env: { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' },
     });
     expect(built).toEqual([
       { ...MUTATION_RATE_LIMIT, prefix: 'mat-plan:mutate' },
       { ...ROW_WRITE_RATE_LIMIT, prefix: 'mat-plan:row-write' },
+      { ...EXPORT_RATE_LIMIT, prefix: 'mat-plan:export' },
     ]);
   });
 
@@ -341,7 +344,6 @@ describe('ROW_WRITE_RATE_LIMIT — row writes have their own budget (FAM-1 D23)'
    */
   it('🔴 through enterMutation: the row policy admits the request the default refuses', async () => {
     const { MUTATION_RATE_LIMIT, ROW_WRITE_RATE_LIMIT } = await loadWith({ env: CONFIGURED });
-    vi.doMock('@sentry/nextjs', () => ({ addBreadcrumb: vi.fn() }));
     vi.doMock('@/lib/dal/session', () => ({
       sessionUserOrNull: async () => ({ userId: 'user_abc' }),
     }));
@@ -362,8 +364,130 @@ describe('ROW_WRITE_RATE_LIMIT — row writes have their own budget (FAM-1 D23)'
       }
       expect(await enterMutation('refused', ROW_WRITE_RATE_LIMIT)).toEqual(limited);
     } finally {
-      vi.doUnmock('@sentry/nextjs');
       vi.doUnmock('@/lib/dal/session');
+    }
+  });
+});
+
+/**
+ * The FAM-1 export follow-up (PR A): the zip export's own budget, through its own checker. The same
+ * three properties the row-write suite proves for its policy: the number, enforcement at that number,
+ * and a counter that never shares with another.
+ */
+describe('EXPORT_RATE_LIMIT — the export has its own budget (FAM-1 export follow-up)', () => {
+  const CONFIGURED = { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' };
+
+  it('is the plan’s number, and one export of every athlete in a full household fits', async () => {
+    const { EXPORT_RATE_LIMIT } = await loadWith({ env: {} });
+    // The contract pin: the literal belongs on the assertion side exactly once (AGENTS.md).
+    expect(EXPORT_RATE_LIMIT).toEqual({ attempts: 30, window: '10 m' });
+    // Raising the household cap past the budget fails here, not on a parent exporting everyone.
+    expect(EXPORT_RATE_LIMIT.attempts).toBeGreaterThanOrEqual(MAX_HOUSEHOLD_ATHLETES);
+  });
+
+  it('🔴 is enforced at ITS number', async () => {
+    const { checkExportLimit, EXPORT_RATE_LIMIT } = await loadWith({ env: CONFIGURED });
+    for (let n = 0; n < EXPORT_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkExportLimit('user_abc')).allowed).toBe(true);
+    }
+    expect(await checkExportLimit('user_abc')).toEqual({ allowed: false, reason: 'limited' });
+  });
+
+  it('🔴 an export never spends the ✓ budget, and a ✓ never spends an export', async () => {
+    const { checkExportLimit, checkMutationLimit, EXPORT_RATE_LIMIT, MUTATION_RATE_LIMIT } =
+      await loadWith({ env: CONFIGURED });
+    for (let n = 0; n < EXPORT_RATE_LIMIT.attempts; n += 1) await checkExportLimit('user_abc');
+    expect((await checkExportLimit('user_abc')).allowed).toBe(false);
+    // The whole mutation budget is still there, not what is left of a shared one.
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkMutationLimit('user_abc')).allowed).toBe(true);
+    }
+    expect((await checkMutationLimit('user_abc')).allowed).toBe(false);
+
+    const fresh = await loadWith({ env: CONFIGURED });
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) await fresh.checkMutationLimit('u');
+    expect((await fresh.checkMutationLimit('u')).allowed).toBe(false);
+    expect((await fresh.checkExportLimit('u')).allowed).toBe(true);
+  });
+
+  it('🔴 an Upstash timeout is a dead limiter, not an ok (it resolves, it does not throw)', async () => {
+    // `@upstash/ratelimit` 2.2.0 answers a timeout with `{ success: true, reason: 'timeout' }`.
+    const slow = await loadWith({
+      env: CONFIGURED,
+      limit: async () => ({ success: true, reason: 'timeout' }) as { success: boolean },
+    });
+    expect(await slow.checkExportLimit('user_abc')).toEqual({
+      allowed: true,
+      reason: 'limiter-error',
+    });
+    expect(await slow.checkMutationLimit('user_abc')).toEqual({
+      allowed: true,
+      reason: 'limiter-error',
+    });
+  });
+
+  it('fails OPEN, and says which way', async () => {
+    const off = await loadWith({ env: {} });
+    expect(await off.checkExportLimit('user_abc')).toEqual({
+      allowed: true,
+      reason: 'unconfigured',
+    });
+    const broken = await loadWith({
+      env: CONFIGURED,
+      limit: async () => {
+        throw new Error('redis is down');
+      },
+    });
+    expect(await broken.checkExportLimit('user_abc')).toEqual({
+      allowed: true,
+      reason: 'limiter-error',
+    });
+  });
+});
+
+/**
+ * #665's P2 (the board's fix): a dead limiter raises one real Sentry event per process per limiter.
+ * A breadcrumb alone is sent only with a later event, so a request the dead limiter let through
+ * would report nothing.
+ */
+describe('reportLimiterUnavailable — a dead limiter is an event, once per process', () => {
+  it('🔴 one event per limiter, then only breadcrumbs; no id in either', async () => {
+    const captureMessage = vi.fn();
+    const addBreadcrumb = vi.fn();
+    vi.doMock('@sentry/nextjs', () => ({ captureMessage, addBreadcrumb }));
+    try {
+      const { reportLimiterUnavailable } = await loadWith({ env: {} });
+      reportLimiterUnavailable('mutation');
+      reportLimiterUnavailable('mutation');
+      reportLimiterUnavailable('export');
+      reportLimiterUnavailable('export');
+      // The exact objects, so an id added to either fails here.
+      expect(captureMessage.mock.calls).toEqual([
+        [
+          'rate limiter unavailable',
+          {
+            level: 'warning',
+            tags: { rate_limit_outcome: 'limiter_unavailable', limiter: 'mutation' },
+            fingerprint: ['rate-limiter-unavailable', 'mutation'],
+          },
+        ],
+        [
+          'rate limiter unavailable',
+          {
+            level: 'warning',
+            tags: { rate_limit_outcome: 'limiter_unavailable', limiter: 'export' },
+            fingerprint: ['rate-limiter-unavailable', 'export'],
+          },
+        ],
+      ]);
+      expect(addBreadcrumb.mock.calls.map(([b]) => b)).toEqual([
+        { category: 'rate-limit', level: 'warning', message: 'mutation limiter unavailable' },
+        { category: 'rate-limit', level: 'warning', message: 'mutation limiter unavailable' },
+        { category: 'rate-limit', level: 'warning', message: 'export limiter unavailable' },
+        { category: 'rate-limit', level: 'warning', message: 'export limiter unavailable' },
+      ]);
+    } finally {
+      vi.doUnmock('@sentry/nextjs');
     }
   });
 });

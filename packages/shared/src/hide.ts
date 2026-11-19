@@ -62,12 +62,19 @@ export type HideEntriesInput = z.infer<typeof hideEntriesSchema>;
  * So this pattern pins **exactly six** fractional digits. Five or seven is not a token this app
  * produced, and accepting one would mean accepting a value that cannot match a row.
  *
- * **And it must name a real instant** (V1-9b B1-2, #547's review): `2026-02-30T…`, month 13, hour 24
- * or second 60 match the pattern but fail Postgres' `::timestamptz` cast (22008), which would reach
- * `error.tsx` from a public endpoint instead of answering `bad_value`. JS parsing is lenient (30
- * February becomes 2 March), so the check is that the parsed instant prints back to the token's own
- * first 23 characters. Year 0000 prints back too but Postgres has no year 0, so the year must be 1
- * or later. The value itself is never replaced: the six digits stay as typed.
+ * **And it must be a token the app could have written: one real instant, in its one spelling**
+ * (V1-9b B1-2, #547's review; `program-contract.md` invariant 29). Five shapes match the pattern and
+ * are refused, for two reasons:
+ * - **30 February, month 13 and year 0000 fail Postgres' `::timestamptz` cast** (22008), which would
+ *   reach `error.tsx` from a public endpoint instead of answering `bad_value`.
+ * - **Hour 24 and second 60 pass the cast**, as the next midnight and the next minute, so each is a
+ *   second spelling of an instant. No token the app writes has one, and accepting it would let two
+ *   strings name one hide.
+ *
+ * JS parsing is lenient (30 February becomes 2 March), so the check is that the parsed instant prints
+ * back to the token's own first 23 characters, which refuses four of the five. Year 0000
+ * prints back too but Postgres has no year 0, so the year must be 1 or later. The value itself is
+ * never replaced: the six digits stay as typed.
  */
 export const hiddenAtSchema = z
   .string()

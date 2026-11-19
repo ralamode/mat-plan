@@ -5,9 +5,13 @@ on:
   push:
     branches: [main]
 
+# A pull request cancels its own older run. A push to main never cancels, and each commit gets its
+# own group: GitHub keeps only one PENDING run per group even without cancelling (AGENTS.md records
+# it for migrate.yml), so a shared group would drop a middle commit's mutation shards on quick merges
+# and the red run would not sit on the commit that caused it (DX-18 D6).
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default; the gitleaks job widens to read PRs.
 permissions:
@@ -43,6 +47,14 @@ jobs:
         run: |
           sha="$(bash .github/scripts/resolve-pr-base.sh)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      - name: Scopes (changed-scopes.mjs)
+        id: scopes
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: bash .github/scripts/scopes-step.sh
 
       # ── Action pins (SEC-2; .github/SECURITY.md → "Supply chain") ──────────
       # migrate.yml only runs AFTER merge, so GitHub's
@@ -416,6 +428,7 @@ jobs:
           pnpm --filter @mat-plan/db db:verify
 
       - name: Build
+        if: steps.scopes.outputs.run_build != 'false'
         run: pnpm build
         env:
           # lib/env.ts validates at build; values are non-secret CI placeholders.
@@ -424,10 +437,8 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-latest
-    # `pull-requests: read` lets the guard list a PR's changed files (auto-skip).
     permissions:
       contents: read
-      pull-requests: read
     services:
       postgres:
         image: postgres:17
@@ -448,6 +459,23 @@ jobs:
       DATABASE_URL_UNPOOLED: postgres://mat:mat@localhost:5432/mat_plan_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the scopes diff against the PR base
+          persist-credentials: false # PR code runs below; nothing here fetches or pushes
+
+      - name: Resolve PR base
+        id: base
+        run: |
+          sha="$(bash .github/scripts/resolve-pr-base.sh)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      - name: Scopes (changed-scopes.mjs)
+        id: scopes
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: bash .github/scripts/scopes-step.sh
 
       # The smoke is SKIPPED (heavy steps gated) but the job still SUCCEEDS in two
       # cases — so once `e2e` is a required check (planned at V0/PR-28), neither
@@ -457,54 +485,25 @@ jobs:
       #   1. MANUAL: the `ci-skip-e2e` label — for a known-flaky or e2e-irrelevant
       #      change that DOES touch code. Escalation beyond that: admin merge.
       #   2. AUTOMATIC: every changed file in the PR is provably inert (docs /
-      #      tooling only — see INERT below), so the smoke has nothing to prove.
-      #      Conservative + default-to-run: any file outside the allowlist (app,
-      #      packages, workflows, config, lockfile) forces the smoke to run.
+      #      tooling only), so the smoke has nothing to prove. The list and its rules
+      #      live in .github/scripts/changed-scopes.mjs (run_e2e); any file outside it
+      #      (app, packages, workflows, config, lockfile) forces the smoke to run.
       - name: Resolve e2e override
         id: guard
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const pr = context.payload.pull_request;
-            let skip = false;
-            let reason = '';
-
-            const labels = (pr?.labels ?? []).map((l) => l.name);
-            if (labels.includes('ci-skip-e2e')) {
-              skip = true;
-              reason = 'ci-skip-e2e label';
-            }
-
-            // Auto-skip only on PRs (a push to main always runs the smoke).
-            if (!skip && pr) {
-              const INERT = [
-                /^docs\//, // all docs (incl. plans, lessons, ADRs)
-                /^[^/]+\.md$/, // root-level markdown (README, AGENTS, …)
-                /^\.claude\//, // agent tooling: skills, settings
-                /^\.github\/(ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE)/,
-                /^\.github\/SECURITY\.md$/,
-                /^LICENSE$/,
-                /\.(png|jpe?g|gif|svg|webp|ico)$/i,
-              ];
-              const files = await github.paginate(github.rest.pulls.listFiles, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pr.number,
-                per_page: 100,
-              });
-              const names = files.map((f) => f.filename);
-              // Default to RUN: skip only if there is at least one file and EVERY
-              // one is inert. An empty list (shouldn't happen) runs the smoke.
-              if (names.length > 0 && names.every((f) => INERT.some((re) => re.test(f)))) {
-                skip = true;
-                reason = `docs/tooling-only change — ${names.length} file(s), all inert`;
-              }
-            }
-
-            if (skip) {
-              core.notice(`e2e smoke skipped (${reason}); job still reports success.`);
-            }
-            core.setOutput('skip', skip ? 'true' : 'false');
+        env:
+          RUN_E2E: ${{ steps.scopes.outputs.run_e2e }}
+          SKIP_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-skip-e2e') }}
+        run: |
+          if [ "$SKIP_LABEL" = true ]; then
+            reason='ci-skip-e2e label'
+          elif [ "$RUN_E2E" = false ]; then
+            reason='docs/tooling-only change (changed-scopes.mjs)'
+          else
+            echo "skip=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::notice::e2e smoke skipped ($reason); job still reports success."
+          echo "skip=true" >>"$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         if: steps.guard.outputs.skip != 'true'
@@ -622,6 +621,163 @@ jobs:
             apps/web/playwright-report
             apps/web/test-results
           retention-days: 7
+
+  # ── The mutation proof, sharded (DX-18 D6) ────────────────────────────────────────────────────
+  # Each patch in packages/db/scripts/mutations/ is applied in turn and db:verify must go RED on its
+  # named assertion (mutations.mjs). Its own jobs, not steps in `quality`: a matrix needs a job, and
+  # keeping the shards out of `quality` keeps that gate minutes long. No check is required, so this
+  # changes no merge rule. PGlite: no database, no secret.
+  #
+  # `mutations-plan` decides ONCE whether the shards run (changed-scopes.mjs) and how many. When they
+  # do not, the shard and total jobs are SKIPPED at job level and take no runner: before this, every
+  # PR started all of them just to skip their steps, and eight open PRs queued each other for most of
+  # an hour (2026-11-19). On a PR, `cancel-in-progress` (top of this file) ends a superseded run.
+  mutations-plan:
+    name: mutations-plan
+    runs-on: ubuntu-latest
+    outputs:
+      run_mutations: ${{ steps.scopes.outputs.run_mutations }} # the scope's own name: the polarity scan reads it
+      shards: ${{ steps.shards.outputs.shards }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the scopes diff against the PR base
+          persist-credentials: false # PR code runs below; nothing here fetches or pushes
+
+      - name: Resolve PR base
+        id: base
+        run: |
+          sha="$(bash .github/scripts/resolve-pr-base.sh)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # ── Scopes: which heavy steps this PR needs (DX-18 D7; .github/scripts/scopes-step.sh) ──
+      # A step skips only on a literal 'false' (`!= 'false'`), so a missing output runs.
+      - name: Scopes (changed-scopes.mjs)
+        id: scopes
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: bash .github/scripts/scopes-step.sh
+
+      # 🔴 The one place the shard count is written. Every push to main runs 8 (the slowest took
+      # 12m26s on 2026-11-19); a pull request runs 4, so open PRs do not hold 8 runners each.
+      - name: Shard count
+        id: shards
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            echo 'shards=[0,1,2,3,4,5,6,7]' >>"$GITHUB_OUTPUT"
+          else
+            echo 'shards=[0,1,2,3]' >>"$GITHUB_OUTPUT"
+          fi
+
+  mutations:
+    name: mutations (${{ strategy.job-index }})
+    needs: mutations-plan
+    if: needs.mutations-plan.outputs.run_mutations != 'false'
+    runs-on: ubuntu-latest
+    env:
+      pnpm_config_verify_deps_before_run: 'false' # see `quality`
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.mutations-plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # PR code runs below; nothing here fetches or pushes
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Mutation proof (this shard)
+        env:
+          SHARD: ${{ strategy.job-index }}/${{ strategy.job-total }}
+          REPORT: ${{ runner.temp }}/mutations-ran/shard-${{ strategy.job-index }}.json
+        run: |
+          mkdir -p "$(dirname "$REPORT")"
+          pnpm --filter @mat-plan/db db:mutations --shard "$SHARD" --report "$REPORT"
+
+      - name: Upload what this shard ran
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutations-ran-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/mutations-ran/
+          retention-days: 1
+          overwrite: true # a re-run replaces its attempt's report
+
+  # Every shard passed, and together they ran every committed patch exactly once. Runs whenever the
+  # plan said to run, so a plan or shard that failed or was skipped turns this red, never silent.
+  mutations-total:
+    name: mutations-total
+    needs: [mutations-plan, mutations]
+    if: "!cancelled() && needs.mutations-plan.outputs.run_mutations != 'false'"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # nothing here fetches or pushes
+
+      - name: Every shard passed
+        env:
+          PLAN: ${{ needs.mutations-plan.result }}
+          RESULT: ${{ needs.mutations.result }}
+        run: |
+          if [ "$PLAN" != success ] || [ "$RESULT" != success ]; then
+            echo "::error::the mutation proof did not pass (plan: $PLAN, shards: $RESULT)"
+            exit 1
+          fi
+
+      - name: Download the shards' reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mutations-ran-*
+          path: ${{ runner.temp }}/mutations-ran
+          merge-multiple: true
+
+      - name: Every patch ran exactly once
+        # Plain node: --verify-reports reads files and applies nothing, so nothing is installed.
+        run: node packages/db/scripts/mutations.mjs --verify-reports "$RUNNER_TEMP/mutations-ran"
+
+  # A red proof on main opens (or comments on) one issue, so it is not a red mark nobody reads.
+  mutations-red-on-main:
+    name: mutations-red-on-main
+    needs: [mutations-plan, mutations, mutations-total]
+    if: >-
+      !cancelled() && github.event_name == 'push' &&
+      (needs.mutations-plan.result == 'failure' || needs.mutations.result == 'failure' ||
+       needs.mutations-total.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          title='mutation gate red on main'
+          body="The mutation proof failed on $SHA: $RUN_URL"
+          # The plain listing, not --search: search indexing lags, so two quick red pushes would
+          # each miss the other's issue and open two.
+          number="$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title \
+            --jq "map(select(.title == \"$title\")) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi
 
   gitleaks:
     name: gitleaks

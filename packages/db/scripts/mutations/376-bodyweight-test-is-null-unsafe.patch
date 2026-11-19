@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
-index 9cf56f34..3dabafe9 100644
+index cc8ae5bd..5411c569 100644
 --- a/packages/db/src/queries/export-month.ts
 +++ b/packages/db/src/queries/export-month.ts
-@@ -289,7 +289,7 @@ export function foldStrengthMonth(rows: readonly StrengthMonthRow[]): FoldedStre
- export function bodyweightEntry() {
-   return or(
-     eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.weighIn),
--    sql`${schema.entries.metricKey} is not distinct from ${SEED_METRIC_KEYS.bodyweight}`,
-+    eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+@@ -295,7 +295,7 @@ export function bodyweightEntry() {
+     isNull(schema.entries.movementId),
+     or(
+       eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.weighIn),
+-      sql`${schema.entries.metricKey} is not distinct from ${SEED_METRIC_KEYS.bodyweight}`,
++      eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+     ),
    )!;
  }
- 
