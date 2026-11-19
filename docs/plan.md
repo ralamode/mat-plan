@@ -1530,7 +1530,7 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
       athlete is its own.
       **This row also owes the words in the app** where a login that is not the owner's has no
       export control: until a member login exists, the privacy notice is the only place that says
-      so, once FAM-1's export follow-up (lane E, not merged yet) changes it.
+      so, as it does since #670 (2026-11-19).
       `SETTINGS_COPY.ownerOnly` is the likely pattern.
     - **Bodyweight, feeds and sharing.** "Shouldn't any member of the household be ok to see it?
       This shouldn't go on a child's feed but and adult could choose to publish." Inside the app,
