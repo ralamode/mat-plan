@@ -255,7 +255,8 @@ logs, or if the new name is already in use.
 ## Getting your data out
 
 Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the
-strength log and the bodyweight log. Once the day page that logs a workout ships, a workout an
+strength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins
+(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an
 athlete logs from a program has one row per exercise in the strength log, with the **workout's name as
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
@@ -264,8 +265,7 @@ name typed into any of them goes with it. One change is made on the way out: a v
 =, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it
 as a formula.
 
-**What the export does not yet include**, so you are not surprised: check-ins and other logged life
-activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
+**What the export does not yet include**, so you are not surprised: the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
 targets, the programs you build and who is on which program (only a workout's name and the targets of
 an exercise an athlete logged, in the "prescribed" column, go out). The export covers your logged training; it is not yet a complete copy.
 

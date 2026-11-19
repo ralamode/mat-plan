@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/movement-ownership.ts b/packages/db/src/queries/movement-ownership.ts
+index f3ac6013..2d28aad9 100644
+--- a/packages/db/src/queries/movement-ownership.ts
++++ b/packages/db/src/queries/movement-ownership.ts
+@@ -109,7 +109,7 @@ export async function movementRefsIntoHousehold(exec: Reads, movements: IdIn): P
+   const about = movements(sql`m.id`);
+   const row = (
+     (await exec.execute(
+-      sql`select (${entryMovementRefs(about)}) + (${prescriptionMovementRefs(about)}) as n`,
++      sql`select (${entryMovementRefs(about)}) as n`,
+     )) as { rows: { n: number }[] }
+   ).rows[0];
+   return row.n;

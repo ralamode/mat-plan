@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index c888c629..73884cc9 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -193,7 +193,7 @@ async function members(exec: Executor, scope: OwnerScope): Promise<ErasureReport
+               hm.clerkUserId,
+               rows.map((r) => r.clerkUserId),
+             ),
+-            isLiveMembership(),
++            sql`${hm.deletedAt} IS NULL`,
+             not(theirs),
+           ),
+         )

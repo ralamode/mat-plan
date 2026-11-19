@@ -408,6 +408,9 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
         'household A, MEMBER — PROF-1 b: a member of the SAME household must get 0 rows from ' +
         'archiveProfile, which only a legitimately-minted member scope can prove (a forged one ' +
         'proves the forgery case instead)',
+      GONE_SCOPE:
+        'a household id no row carries — the athlete-cap lock must refuse when the household is ' +
+        'gone (an erasure mid-call), and only a scope for a missing household can prove that',
     };
 
     const verify = code(join(REPO, 'packages/db/scripts/verify.ts'));
