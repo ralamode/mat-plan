@@ -145,13 +145,13 @@ Lane C's spec uses the new consts in its own PR. This PR does not touch `day-pag
 - A second seed run writes nothing (`ctid`).
 - **The lived-in preview:** the world's programs already exist and one of the e2e program's items is
   retyped, so the e2e program is skipped with a warning and the run succeeds.
-- **No profile:** with Athlete Four archived, the e2e program is not made.
+- **No profile:** a household without a live, active Athlete Four gets no e2e program (household B; in the seed household the program already exists, so an archived case would only test the `client_id` skip).
 - The world's deep-equals and counts are unchanged. These proofs come after the world's in
   `verifySeedFixtures`, so 410, 411, 415 and 416 still go red on their own lines.
 - **Mutations** (new):
   - the e2e week left off one day;
   - the put on a day late;
-  - the e2e program made when Athlete Four is archived;
+  - the e2e program made without a live, active Athlete Four;
   - `limit_reached` thrown again.
 - **Cited, not duplicated:** production writes none of it (OPS-2 Proof A, mutations 45 and 326); the
   set equals what the seed writes (mutation 274).

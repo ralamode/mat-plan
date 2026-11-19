@@ -36,7 +36,8 @@ export const SEED_PROFILE_3_PUBLIC_ID = '019826b4-0000-7000-8000-000000000003';
  * test-only program `Test – Change e2e` (`packages/db/src/writers/program/seed-e2e.ts`), which holds
  * both superset workouts every day of the week (docs/plans/fam-1-e2e-change-athlete.md).
  *
- * ⚠️ **Do not reach for it for anything else**, for the reason `SEED_PROFILE_3_PUBLIC_ID` gives.
+ * ⚠️ **Do not reach for it for anything else**: the Change e2e changes this athlete's rows, so a
+ * second spec reading them would see its edits.
  *
  * Only the fixture seed writes it, and **no seed has ever written this id to production**: a row
  * found there means a fixture seed was pointed at the wrong database.
