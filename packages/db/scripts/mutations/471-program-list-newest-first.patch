@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/queries/program/program-list.ts b/packages/db/src/queries/program/program-list.ts
-index 0e156b76..9a022b15 100644
+index cfdee3ec..85897e35 100644
 --- a/packages/db/src/queries/program/program-list.ts
 +++ b/packages/db/src/queries/program/program-list.ts
 @@ -1,4 +1,4 @@
@@ -8,12 +8,12 @@ index 0e156b76..9a022b15 100644
  
  import {
    isoDaySchema,
-@@ -42,7 +42,7 @@ export async function readProgramList(
-     })
-     .from(schema.programBlocks)
-     .where(liveTemplateBlockIn(scope))
--    .orderBy(asc(schema.programBlocks.id));
-+    .orderBy(desc(schema.programBlocks.id));
+@@ -32,7 +32,7 @@ import { athletesOnPrograms } from './athletes';
+  * The household's Programs list order: its live template programs, oldest first. ONE rule, read by
+  * the Programs list and by Put on, which places a new program by it (D41, ADR 0007 A2 §7).
+  */
+-export const programListOrder = () => asc(schema.programBlocks.id);
++export const programListOrder = () => desc(schema.programBlocks.id);
  
-   const on = new Map<number, string[]>();
-   for (const athlete of await athletesOnPrograms(exec, scope, today)) {
+ export async function readProgramList(
+   exec: Executor,

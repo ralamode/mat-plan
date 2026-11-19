@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 240dbb23..71d9bbbd 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -232,7 +232,7 @@ export async function putOn(
+           publicId: newId(),
+           blockId: block.id,
+           profileId: athlete.id,
+-          idx: PARK_IDX,
++          idx: at,
+           activeFrom: draft.from,
+         })
+         .returning({ id: a.id });
