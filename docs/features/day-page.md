@@ -268,3 +268,10 @@ contract's `quantityText` (C1, #436).
 Start from the step's row in the plan (§5) and its prototype states (§8). A screen step gets a UX
 panel before it is built ([AGENTS.md](../../AGENTS.md) → "UI PR rules"). Re-run `pnpm test`, and
 `pnpm e2e:local e2e/program-preview-a11y.spec.ts` for the screen on the preview route.
+
+A program row's ✓ in an e2e spec is `programRowTick(page, workout, item)` and its wait
+`settled(button, pressed)`, both in `e2e/steps.ts` (moved out of `e2e/day-page.spec.ts` at FAM-1
+15 PR 1, when the builder's spec became the second to tick a row): a change to a row's heading level
+or its ✓'s name changes them there, once.
+The device's today (`pinDayBeforeWrite`'s check) is `deviceToday()` from `lib/date.ts`, shared
+with the builder's Put-on dialog since FAM-1 15.
