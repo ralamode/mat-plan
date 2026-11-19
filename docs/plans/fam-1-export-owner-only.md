@@ -1,8 +1,8 @@
-# FAM-1 export follow-ups: a rate limit on the export, and the bodyweight file for the owner only
+# FAM-1 export follow-ups: a rate limit on the export, and the export for the household owner only
 
-_Lane E, 2026-11-19. One plan, **two PRs**: (A) the rate limit first, then (B) the owner-only
-bodyweight file. Rev 3, reshaped by the panel below. No code is committed before the maintainer
-approves this plan._
+_Lane E, 2026-11-19. One plan, **two PRs**: (A) the rate limit first, then (B) the export for the
+household owner only. Rev 4: reshaped by the panel, then by the maintainer's answers (2026-11-19,
+§ Decisions). Code follows the plan's merge._
 
 ## Where this sits
 
@@ -12,13 +12,13 @@ approves this plan._
   ([fam-1-14-export.md](./fam-1-14-export.md) → "Questions for the maintainer", 2026-11-17):
   "Bodyweight download, operator only", decided as its own small PR. The board added the export
   rate limit, the route's other open debt, on 2026-11-18. Formula escaping shipped separately (#621).
-- **Next:** nothing is gated on them. PR B's member branch has no population until
+- **Next:** nothing is gated on them. PR B's refusal has no population until
   [`INVITE-1`](../plan.md) makes members real (see Facts).
 - **Roadmap:** no item moves. The FAM-1 plan's step-14 line belongs to the roadmap thread, which
   gets an as-built sentence after each PR merges.
 - _Roadmap alignment (2026-11-19):_ answers `.github/SECURITY.md` → Sensitive data for the export.
   Pays the export half of [tech-debt](../tech-debt.md) → "The zip export is not rate-limited".
-  `ID-1`'s six keep-open items are answered in the log. `INVITE-1` gates Q2, and `COACH-1`'s "may
+  `ID-1`'s six keep-open items are answered in the log; Q1 adds a requirement to `ID-1`, and `COACH-1`'s "may
   archive will not be is-the-owner" note (`apps/web/lib/dal/household.ts:367`) applies here too.
   Checked against the private roadmap; nothing to add here.
 
@@ -41,12 +41,12 @@ inventory and notice change in the same PR."_
 **PR B is done when:**
 
 1. The household owner's zip is unchanged, byte for byte and in file order.
-2. A member's zip has no bodyweight file in any month. A month whose remaining files would both be
-   empty is left out, so the month list shows no weigh-in either.
-3. The bodyweight read refuses a non-owner scope in SQL (`isOwnerOf`). `db:verify` proves a
-   member-role scope reads zero rows, and a mutation proves that assertion can fail.
-4. The notice, inventory, SECURITY.md and runbooks say exactly what the code does, including what
-   it still does not do (the day page).
+2. Any other login is refused the export with the same `404` as a miss, and no month or file read
+   runs. Neither export link is shown to a non-owner.
+3. The export's first read (`loggedMonths`) refuses a non-owner scope in SQL (`isOwnerOf`).
+   `db:verify` proves a member-role scope reads zero months, and a mutation proves that assertion
+   can fail.
+4. The notice, inventory, SECURITY.md and runbooks say exactly what the code does.
 
 ## Facts this plan rests on (read from `origin/main`)
 
@@ -165,114 +165,127 @@ inventory and notice change in the same PR."_
   corrected. The `docs/plan.md` SCALE-4 count of unwired claims (`:394`) drops by one.
 - Plus a changelog fragment.
 
-## PR B — the bodyweight file for the owner only
+## PR B — the export for the household owner only
 
-**B1. `packages/db/src/queries/export-month.ts`** (EDIT):
+_Rev 4: the maintainer's Q1 (2026-11-19) replaces rev 3's "leave the bodyweight file out". **The
+owner gets everything; any other login is refused the export.**_
 
-- `bodyweightMonthRows` takes `scope: OwnerScope`, and its WHERE gains `isOwnerOf(args.scope)`,
-  as `archiveProfile` does.
-- The type catches an accidental caller. The conjunct is the guard: a member scope cast past the
-  type reads zero rows.
-- `strengthMonthRows`, `checkinMonthRows` and `loggedMonths` keep `HouseholdScope`.
+**B1. `packages/db/src/queries/export-month.ts`** (EDIT): `loggedMonths` takes `scope: OwnerScope`,
+and its WHERE gains `isOwnerOf(args.scope)`, as `archiveProfile` does.
 
-**B2. `apps/web/lib/dal/export.ts`** (EDIT): `const owner = ownerScope(scope)` once, before the
-month loop.
+- It is the export's first read, and every file is built from the months it returns. So one
+  conjunct gates the whole export: a member scope cast past the type gets no months and therefore no
+  files.
+- The type catches an accidental caller; the conjunct is the guard.
+- The three file reads keep `HouseholdScope` and are unchanged. That leaves no edit to
+  `bodyweightMonthRows` and none to its five proof call sites.
 
-- **Owner:** today's three pushes, in today's order.
-- **Member:** the bodyweight read never runs, and the month pushes strength and check-ins. A month
-  whose strength and check-in row arrays are both empty is skipped. The decision is made on the
-  arrays, never by comparing file text to a header. By the 14b partition such a month holds only
-  weigh-ins, so it leaves no trace. The skip sits inside the member branch only.
-- **No `reportAuthorityRefusal`:** a member asking for the export is not refused anything they
-  asked for by name.
-- The comment at `:139` ("every month's zip holds the same files") becomes "for a given role".
+**B2. `apps/web/lib/dal/export.ts`** (EDIT): `buildExportEntries` narrows once, with
+`const owner = ownerScope(scope)`.
 
-**B3. `db:verify`** (EDIT):
+- With no owner, it returns a refusal, `null`, before any month query. `buildExportZip` passes the
+  `null` through.
+- The owner's path passes `owner` to `loggedMonths` and is otherwise unchanged.
+- A non-owner's refusal is reported with `reportAuthorityRefusal(AUTHORITY_ACTION.exportProfile)`,
+  a new member of the existing const, the same id-free signal `archiveAthlete` sends.
 
-- **The helper.** Add `asOwner(scope, what)` to `packages/db/scripts/verify/harness.ts`, the shape of
-  the file-private one at `verify/erasure.ts:630`, with the message taking its prefix from `what`.
-  Import it in `verify.ts` and `verify/day.ts`.
-  - `erasure.ts` is the PRIV-3 lane's and `docs/features/erasure.md`'s, so its private copy stays.
-    Swapping it to the shared helper goes to the board as a P2 for that lane.
-  - No new file joins `scope.test.ts`'s cast allowlist.
-- **The five existing call sites narrow through `asOwner`:**
-  - `verify.ts:3258`, `:5417` and `:10194`;
-  - the `TEN1_READS_1C` row at `:5391`, inside its lambda, which keeps the row's household-B
-    assertion meaningful;
-  - `verify/day.ts:813`, where the shared `args` splits, so the bodyweight read gets an owner scope.
+**B3. `apps/web/app/p/[profileId]/export/route.ts`** (EDIT): a `null` zip answers `notFound()`, the
+same byte-identical miss as an unknown id.
+
+- A member can already see that the athlete exists in the app, so the `404` hides nothing new, and
+  the route keeps one miss shape (#643).
+- The order is session, profile, limiter, then build. A member spends one unit of budget per
+  refused attempt, which is harmless.
+
+**B4. The link** (EDIT): `householdState()` gains `canExportAthletes: ownerScope(scope) !== null`
+(`apps/web/lib/dal/household.ts:376`, one capability per boolean, beside `canArchiveAthletes`).
+
+- `apps/web/app/p/[profileId]/page.tsx:279` and `apps/web/app/settings/athlete-list.tsx:328` render
+  the export link only when it's true, so the UI never offers what the endpoint refuses.
+- A non-owner sees no link and no replacement copy. Q3 says the notice carries it until `INVITE-1`.
+- It's a small visual change, so one UX reviewer reads it before code (AGENTS.md → UI PR rules).
+  Today nobody sees the difference: every login is an owner.
+
+**B5. `db:verify`** (EDIT):
+
+- **The helper.** Add `asOwner(scope, what)` to `packages/db/scripts/verify/harness.ts`, in the shape
+  of the file-private one at `verify/erasure.ts:630`, with the message taking its prefix from
+  `what`.
+  - `erasure.ts` keeps its copy. The swap goes to Native Scaling after this PR (board,
+    2026-11-19).
+- **The six `loggedMonths` call sites in `verify.ts` narrow through `asOwner`:** `:2523`, `:8477`,
+  `:10100`, `:10153`, `:10180`, and the `TEN1_READS_1C` row at `:5404`, inside its lambda, which
+  keeps the row's household-B assertion meaningful.
 - **The new proof**, in `verify.ts` beside the TEN-1 matrix (not in a `verify/` module, where a cast
   is red by design, `verify/harness.ts:281-288`):
-  - the owner scope reads the fixture's weigh-in;
-  - `A_MEMBER_SCOPE` (minted, not forged, at `verify.ts:431`) is cast `as OwnerScope` past the type
-    and reads zero rows. That cast is new, and `verify.ts` is already on the per-file allowlist.
+  - the owner scope reads the fixture's months;
+  - `A_MEMBER_SCOPE` (minted at `verify.ts:431`) is cast `as OwnerScope` and reads zero months. The
+    cast is new, and `verify.ts` is already on the per-file allowlist.
 - **Mutation 610** drops the conjunct, and its first failing assertion is the new proof's.
-- `03-undo-1c-predicates.patch` is re-cut where its `@@ -358,7` hunk meets the conjunct, and
-  proved red again.
+- Every patch that touches `loggedMonths` (`03-undo-1c-predicates.patch` among them) is checked
+  with `git apply --check`, re-cut where needed, and proved red again.
 - `db:mutations` runs locally (a `packages/db/**` diff), taking the machine-wide slot.
 
-**B4. Tests: `apps/web/lib/dal/export-prescribed.test.ts`** (EDIT, the existing harness):
+**B6. Tests:**
 
-- the scope becomes mutable, built with `HOUSEHOLD_ROLE.owner` / `.member`, which also fixes the
-  hand-typed `role: 'owner'` at `:32`;
-- the real `ownerScope` is used;
-- the cases:
-  - (a) owner: `entries.map(e => e.path)` equals strength, bodyweight, check-ins for each month;
-  - (b) member, a month with strength rows and no check-ins: the exact path list is strength then
-    check-ins, and `bodyweightMonthRows` is never called. That catches an "either file empty"
-    skip;
-  - (c) member, a weigh-in-only month: no entries for that month;
-  - (d) owner, a weigh-in-only month: all three files, in order. That catches a skip placed outside
-    the member branch.
+- **`apps/web/lib/dal/export-prescribed.test.ts`** (EDIT, the existing harness). The scope becomes
+  mutable, built with `HOUSEHOLD_ROLE.owner` / `.member`, which also fixes the hand-typed
+  `role: 'owner'` at `:32`. The real `ownerScope` is used. Cases:
+  - (a) owner: `entries.map(e => e.path)` equals strength, bodyweight, check-ins for each month,
+    as today;
+  - (b) member: the result is `null`, no month or file read is called, and one authority refusal is
+    reported.
+- **`export/route.test.ts`**: a `null` zip gives today's `404` with `no-store`.
+- **`household.test.ts`**: `canExportAthletes` is true for an owner scope and false for a member.
+- The page tests or e2e: the seeded owner still sees the link.
 
-**B5. Docs.** The privacy lens's list is the floor; every sentence is written in the PR, and the
-lens re-reads it.
+**B7. Docs** (the privacy lens re-reads every sentence in the PR):
 
 - **`docs/privacy/notice.md`:**
-  - "Getting your data out" gets a new sentence, roughly: _the weigh-in file is in the download
-    only when you are signed in as the household's owner; everyone else signed in to the household
-    gets the rest. Weigh-ins are still shown, and can be changed, on the athlete's page by anyone
-    signed in to the household, and anyone using the owner's signed-in phone can download them. An
-    adult athlete who is not the owner gets their own weigh-ins by asking for the full copy. Today
-    every adult given a sign-in to a household is its owner, so this changes nothing for anyone
-    yet; it applies once people can be invited as members._
-  - The dated "What changed on …" entry describes a rule that now exists, not a reduction in who
-    receives the file, because nobody receives less today. The sign-off line (`:426-432`) is
-    updated with it.
-  - Limitation 3 (`:150-153`) is reworded to the same effect.
-  - `:109` ("the adult … can export") becomes "the household owner".
-  - The archived-athlete export lines (`:272-274`, `:287`) gain the role caveat.
+  - "Getting your data out" gets a sentence, roughly: _only the household's owner can download an
+    athlete's export. Today every adult given a sign-in to a household is its owner, so this changes
+    nothing for anyone yet; it applies once people can be invited as members. Anyone signed in to
+    the household sees weigh-ins in the app._
+  - Limitation 3 (`:150-153`) is reworded: anyone signed in can see any athlete's history in the
+    app; only the owner can download it.
+  - `:109` becomes "the household owner".
+  - The archived-athlete export lines (`:272-274`, `:287`) say "the owner".
   - `:122`'s "shared login" goes; sign-in is per person.
-  - A dated "What changed on …" entry is added, "Last updated" is bumped, and
-    `notice-content.ts` is regenerated.
+  - A dated "What changed on …" entry, worded as a rule that now exists. The sign-off line
+    (`:426-432`), "Last updated", and the regenerated `notice-content.ts` go with it.
 - **`docs/privacy/data-inventory.md`:**
-  - §4: the export row is corrected ("any member can export any athlete").
-  - §4 also gets a new open fact, "the day page shows weigh-ins to any member", owned by Q2's row.
-  - §4 also states that every login bound today is an owner.
-  - §6: the per-role contents, and the residual that a member's empty zip still says the athlete
-    has history.
-  - A dated re-read entry in the header. PR A adds its own for §4, §7 and §8.
-- **`docs/tech-debt.md`**, the empty-zip row (`:360-362`): a second cause, a member and a
-  weigh-in-only athlete. It stays dark until members exist.
-- **`.github/SECURITY.md` → Sensitive data:**
-  - the export enforces it (owner scope, SQL conjunct, proof);
-  - the day page does not, yet; Q2 owns that;
-  - "owner" means every login a correction bound as owner, not a single person.
-- **`docs/runbooks.md`:** `:1461`, `:1973` and `:2195` say the owner runs the in-app export, or the
-  full copy is produced. `:1466`'s "no check-ins" went false at #655 and is fixed in the same edit.
-- **The "three files" invariant:** `docs/csv-export-contract.md:222`, `docs/features/write-path.md`
-  invariant 16 and `packages/shared/src/csv/checkins.ts:54` say "for the owner; two for a member".
-- `docs/features/day-writers.md` invariant 28 and the mutations README (row 610, and the 03 re-cut).
+  - §4: the export row ("any member can export any athlete") becomes the owner only, and states
+    that every login bound today is an owner;
+  - §6: the recipient;
+  - a dated re-read entry in the header.
+- **`.github/SECURITY.md:134`**, reworded per Q4:
+  - **Bodyweight** is privileged: never logged, and never in an LLM or MCP payload unless a scoped,
+    explicit purpose requires it.
+  - Anyone signed in to the household may see it in the app (Q2). The export goes to owner logins
+    only.
+  - It never appears on a child's feed in any future feed or sharing feature; an adult may choose
+    to publish their own (Q2).
+  - An adult athlete's own access is `ID-1`'s question.
+- **`docs/runbooks.md`:** `:1461`, `:1973` and `:2195` say the owner runs the in-app export.
+  `:1466`'s "no check-ins" went false at #655 and is fixed in the same edit.
+- **The feature guides:** `docs/features/write-path.md` invariant 16 (the export reads take an
+  owner scope at `loggedMonths`) and the mutations README (row 610, plus any re-cut).
 - Plus a changelog fragment.
+- **Not in this repo PR:** the `ID-1` requirement and the feed rule go to the roadmap thread to
+  record in `docs/plan.md` (`ID-1`) and the program plan; lane E edits neither.
 
 ## Alternatives considered
 
 - **One PR for both.** Rejected (scope S1). The maintainer's decision was "each its own small PR".
   The halves share only the route's neighbourhood. Bundled, the limiter would wait on PR B's
   questions, and reverting a misfiring 429 would re-expose the file.
-- **Refuse the whole export to a member (`404`).** Rejected; Q1. A member would lose the athlete's
-  training history, which nothing marks privileged, to keep back one file.
-- **A header-only bodyweight file for a member.** Rejected. It reads as "no weigh-ins", which is
-  false.
+- **Leave only the bodyweight file out of a member's zip** (rev 1–3). Superseded by the
+  maintainer's Q1: a non-owner is refused the whole export until `ID-1` lets an adult export their
+  own data.
+- **Gate the bodyweight read rather than `loggedMonths`** (rev 2–3). Superseded with it. One
+  conjunct on the first read gates every file and avoids five proof call-site edits.
+- **A `403` for a member.** Rejected: one miss shape (#643), and a member learns nothing new from
+  `404`.
 - **Type-only owner gate.** Rejected (correctness, security, privacy, architecture). It fails open
   under a cast, and nothing proves it.
 - **Limiter before the profile read.** Rejected (security S3): it opens a cross-site drain.
@@ -287,33 +300,35 @@ lens re-reads it.
 
 ## Risks / rollback
 
-- **The owner's zip must not change.** B4 (a) pins the order. `export-full-day.spec.ts` runs as the
+- **The owner's zip must not change.** B6 (a) pins the order. `export-full-day.spec.ts` runs as the
   seeded owner.
 - **The limiter fails open, as every policy does.** A Redis outage leaves the export unlimited, never
   unavailable; the breadcrumb records it.
-- **An adult athlete who is a member** gets their weigh-ins only through the full copy. Named in the
-  notice and the runbooks.
+- **An adult athlete who is a member** cannot export their own data until `ID-1` builds it; they
+  can ask for the full copy. The notice says only the owner can download.
 - **Rollback:** revert either PR on its own. Neither has a migration or stored state.
 
 ## Out of scope
 
-- **The day page's bodyweight reads for a member:** `loggedBodyweight`, `lastBodyweightBefore`, the
-  amend and clear. That's Q2, and the inventory's §4 names it as open.
-- **Copy beside the export link telling a member a file is withheld.** That's Q3; it needs a
-  capability boolean and a UX pass.
-- A `guardian` role, per-athlete grants (`ID-1`), and audit logging of exports.
+- **"An adult member exports only their own data."** That's an `ID-1` requirement (Q1), buildable
+  once a login can be linked to its own athlete.
+- **The day page's bodyweight reads.** There is no change: any household member may see weigh-ins
+  in the app (Q2).
+- **Copy for a non-owner where the link was.** None until `INVITE-1` (Q3).
+- A `guardian` role, per-athlete grants, and audit logging of exports.
 
-## Questions for the maintainer
+## Decisions _(maintainer, 2026-11-19, relayed by the board from the orchestrator's chat)_
 
-- **Q1:** a member's export leaves out the bodyweight file (recommended), or refuses the whole zip?
-- **Q2:** the day page's bodyweight reads for a member. Open a backlog row now, gated on `INVITE-1`
-  (recommended: members don't exist until then), or decide the behaviour now?
-- **Q3:** tell a member their export has no weigh-ins with a line of copy beside the link, or the
-  notice only (recommended until `INVITE-1`, when members first exist)?
-- **Q4:** SECURITY.md:134 says "kid bodyweight", but the rule applies to every profile, since
-  `ID-1` item 5 forbids branching on `kind`. Reword it to "bodyweight" (recommended), with a
-  qualifier: the export returns it to owner logins only, and an adult athlete's own access is
-  `ID-1`'s question.
+- **Q1: the owner gets everything; any other login is refused the export, for now.** "An adult
+  member exports only their own data" is built with `ID-1`, once a login can be linked to its own
+  athlete, and is recorded there as a requirement. The maintainer's words: _"They can only export
+  their own data, if they are an adult, otherwise refuse unless it's the owner."_
+- **Q2: no day-page change.** Any household member may see weigh-ins in the app. A product rule for
+  any future feed or sharing feature: bodyweight never appears on a child's feed, and an adult may
+  choose to publish their own. The maintainer's words: _"Shouldn't any member of the household be ok
+  to see it? This shouldn't go on a child's feed but and adult could choose to publish."_
+- **Q3: the privacy notice only, until `INVITE-1`.**
+- **Q4: reword SECURITY.md:134**, as B7 writes it.
 
 ## Review-response log
 
@@ -367,3 +382,11 @@ lens re-reads it.
 | R3  | Correctness               | (b) passes on a wrong skip; no owner weigh-in-only case                                                                                        | **accepted** | B4 (b) exact paths; (d) added                                                           |
 | R4  | Privacy                   | Notice sentence implies a restriction nobody is under today                                                                                    | **accepted** | B5: "today every login is the owner" clause; inventory §4; dated entry worded as a rule |
 | N   | all                       | PR A re-read entry; tech-debt empty-zip row; Q4 qualifier; "minted, not forged" cast; skip on arrays; `rate-limit.ts:9` header; cap is a floor | **accepted** | Fixed in this revision (the `:9` header joins A1's docblock edits)                      |
+
+### Rev 4 (2026-11-19): the maintainer's decisions
+
+PR B is rebuilt on Q1. The refusal is the whole export, so the gate moves from `bodyweightMonthRows`
+to `loggedMonths` (one conjunct gates every file; B5 lists its six call sites instead of five). The
+link is hidden through a `canExportAthletes` capability (B4, one UX reviewer before code). Rev 3's
+member month-skip and its tests are gone. Q2 removes the day-page question, and SECURITY.md:134 is
+reworded around it.
