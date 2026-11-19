@@ -1042,7 +1042,9 @@
         </option>
         <option value="order">Athlete One · the order of their programs</option>
         <option value="order-ending">NEW · order, with a program whose last day is today</option>
-        <option value="order-one-stays">NEW · two programs, one ending today (no Program order)</option>
+        <option value="order-one-stays">
+          NEW · two programs, one ending today (no Program order)
+        </option>
         <option value="edited">Athlete One · yesterday, after the program was edited</option>
         <option value="failed">Athlete One · a ✓ that fails</option>
       </optgroup>
@@ -4431,8 +4433,7 @@
           { prog: 'p2', from: '2026-11-12', to: addDays(TODAY, 1) },
         ];
         dayOf('a1', TODAY);
-      }
-      else if (v === 'copied') {
+      } else if (v === 'copied') {
         S.prog = 'p3';
         if (
           !prog('p3').workouts.some(function (w) {
