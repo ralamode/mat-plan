@@ -381,6 +381,16 @@ access token`, which reads like a permissions problem with the repo. The cause w
 - **Read `error-context.md` in the Playwright artifact FIRST** (`gh run download <run-id>`) — the
   page snapshot names the true state in one look (a disabled "Logging…" button, which element was
   `readonly`), instead of inferring it from the assertion text. (V1-5)
+- **A layout proof on a page that lists shared rows goes red when OTHER specs add rows, on both
+  attempts, then passes on the next run.** → `ui5-geometry.spec.ts` "household settings fills the
+  viewport" (#652, run 44502104829: footer bottom 2568 against a 2400px viewport). The settings page
+  lists every athlete in the household the whole suite shares; that run it held 4 live and 10
+  archived, added by other specs before this one ran (`fullyParallel`, so the count depends on
+  order). Its precondition compared `<main>`'s first child with the viewport, leaving out the header,
+  `<main>`'s padding and the footer, so it passed while the page overflowed, and the footer assertion
+  blamed `flex-1`. → Size the fixture-independent part from the page: measure what you need first
+  (here the footer's position with `<main>`'s growth switched off) and set the viewport from it. A
+  precondition, when you keep one, measures the same box the assertion does.
 - **A Playwright RETRY reuses the same ephemeral DB, so "already logged" UI breaks the rerun.** →
   Attempt 1 logged the row; the retry found the control `readonly`/`aria-disabled` **by design** and
   timed out in `fill()`, looking like a fresh bug rather than leftover state. → Make writing steps
@@ -395,6 +405,14 @@ access token`, which reads like a permissions problem with the repo. The cause w
   — a failure that reproduces only two days in three and looks like flake. If a test ever needs the card
   present or absent deterministically, pin the browser zone (`timezoneId`) so the local weekday is
   chosen, the same lever `screenshot --tz` uses. (V1-10)
+
+- **A role locator anchored on `"<name>,"` finds nothing: Chrome spaces out a row's stacked parts.**
+  → The picker row's accessible name joins its spans with an `sr-only` `", "`
+  (`movement-picker.tsx`), so jsdom and a read of the markup both give `"Box Jump, Reps"`. Chrome
+  builds the name with a space between flex children: `"Box Jump , Reps"`. `name: /^Box Jump,/`
+  passed review and timed out in CI (#652). → Anchor with `\s*` (`/^Box Jump\s*,/`), or locate by a
+  name that ends at a word boundary. Never trust a name derived from the markup for punctuation that
+  sits between block or flex children; check it in a browser. (FAM-1 7b-ii)
 
 - **`notFound()` route returns HTTP 200, not 404, so `expect(res.status()).toBe(404)` fails.** → The
   app is `force-dynamic` (nonce CSP), so Next **streams the 200 header before the RSC throws

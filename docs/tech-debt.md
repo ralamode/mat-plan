@@ -330,30 +330,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   it is, the Server Action request has to be made to work unhydrated first — there is no point
   restoring field state for a POST the framework rejects.
 
-### The athlete cap is a count-then-insert, so one burst walks past it and the limiter cannot bound it (added 2026-11-09)
-
-- **What & why it's debt:** `createProfile` (`packages/db/src/writers/profile.ts`) reads
-  `countProfilesIn` and then inserts, on the plain `db` with no transaction and no lock. N concurrent
-  requests from one member all read `count < 25` before any commits, so they all insert and the
-  household lands above `MAX_HOUSEHOLD_ATHLETES`. The cap bounds the **steady state**, not a burst.
-- **Why the obvious bound is not one:** the constant's docblock originally said the burst "is bounded
-  by the limiter". It is not — `checkMutationLimit` **fails open** (`apps/web/lib/rate-limit.ts`), so
-  with Upstash unconfigured or erroring there is no limiter at all and the only ceiling is Neon's
-  connection count. The docblock's two halves contradicted each other and the sentence has been
-  corrected; this entry is the honest bound it now points at.
-- **What it is NOT:** not a tenancy or isolation defect. Every row lands in the caller's **own**
-  household under their own name, so nothing crosses a household boundary — `countProfilesIn` is
-  scoped and mutation patch `23` proves it. The cost is unbounded growth in a table with no in-app
-  delete, on the single Neon project every household shares.
-- **Why it surfaced:** a security lens on `PROF-1 a-1w` (#359), which also pointed out that the
-  accepted-debt record belongs here rather than in a constant's docblock.
-- **The fix, when taken:** wrap the create in `db.transaction` (`Executor` already admits a
-  `PgTransaction`) and take a `pg_advisory_xact_lock` keyed on the household inside `ownership.ts` —
-  the one module permitted to unwrap `scope.householdId`, so `scope.test.ts`'s `UNWRAPS_SCOPE`
-  allowlist stays accurate. Transaction-scoped locks are safe under PgBouncer transaction mode.
-  ⚠️ It changes the `Executor` contract on the write path, so it wants its own reviewed chunk rather
-  than a drive-by — which is why `a-1w` filed it instead of fixing it.
-
 ### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
 
 - **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in
@@ -639,27 +615,30 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   touches either file.
 - **Severity:** low.
 
-### The comment-stripping `code()` test helper has TWO copies left (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis)
+### The comment-stripping `code()` test helper has TWO copies left, outside `apps/web` (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis, and 2026-11-19)
 
 - **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in
   **five** places. `AUTH-1` 1b-bis extracted it to **`apps/web/test/source-scan.ts`** and converted the
   three copies it touched — `apps/web/app/pages-need-a-session.test.ts`,
   `apps/web/app/tenancy-is-not-cached.test.ts` and `apps/web/lib/dal/scoped.test.ts`.
 - **What is left, and why each is still standing:**
-  - `apps/web/lib/household-synthetic-is-dark.test.ts` — a straight conversion, but 1b-bis did not
-    touch that file and converting it would have put an unrelated file in an auth PR. **Free for
-    whoever next edits it.**
+  - `apps/web/lib/household-synthetic-is-dark.test.ts` imports the shared helper since 2026-11-19, so
+    every copy inside `apps/web` is gone.
+  - `packages/shared/src/test-support/source-graph.ts` exports its own `code` (the same two
+    regexes), lifted there from `quantity-text.test.ts` by #531 for the shared package's graph guards.
   - `packages/db/src/scope.test.ts` — ⚠️ **not a straight conversion**: it is in another package and
-    cannot import `apps/web/test/`. It needs either its own copy (which is the status quo) or a shared
-    home under `packages/shared`, which means shipping test support in a published package. **Decide
-    that when a third package wants it**, not before.
+    cannot import `apps/web/test/`. `packages/shared` is private and already has `src/test-support/`,
+    so that is the natural single home, but `packages/shared` publishes only `"."`, so the other two
+    packages would need a relative import or a new subpath export. **Decide that when it is next
+    touched**, not here.
   - `apps/web/app/design/tokens/token-sets.test.ts` carries the same block-comment regex inline, which
     is a near-miss rather than a copy.
 - **Impact:** these are the structural guards. A fix to the stripping (a `//` inside a string, a
   template literal) lands in one copy and not the others, so two guards can disagree about what is
-  code. **Narrowed from five to two, so the blast radius is now one package boundary wide.**
-- **Proposed fix:** convert `household-synthetic-is-dark.test.ts` opportunistically; leave
-  `packages/db` alone until a second consumer there justifies the shared module.
+  code. **Narrowed from five to two, one per package outside `apps/web`, plus the app's shared one.**
+- **Proposed fix:** make `packages/shared/src/test-support/source-graph.ts`'s `code` the one copy,
+  with `apps/web/test/source-scan.ts` and `packages/db/src/scope.test.ts` importing it, once a subpath
+  export (or a sanctioned relative import) for test support is agreed.
 - **Severity:** low.
 
 ### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
@@ -730,16 +709,6 @@ previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name ch
   assume:** a replayed submit after a success would then refuse rather than no-op.
 - **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
   rule is scoped to `/api/sync`, so there is no standing convention this violates.
-
-### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
-
-- **What & why:** `.github/scripts/check-status-touched.mjs` still accepts a `docs/status.md` touch
-  when `docs/changelog/README.md` is absent from the working tree, so branches cut before DX-2 aren't
-  failed for a rule that didn't exist when they were cut. Its self-test keeps the legacy cases.
-- **Impact:** low. It's dead code once no open branch predates DX-2, but it's a second rule to read.
-- **Proposed fix:** once `gh pr list` shows no open PR whose merge base predates #190, delete the
-  legacy branch of the guard and its test cases, and drop the "LEGACY" paragraph from the docblock.
-- **Severity:** low.
 
 ### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
 
@@ -852,7 +821,7 @@ success.` Harmless there — nothing referenced the files yet.
   mutual-exclusion CHECK** — it would be a breaking migration and would foreclose the above.
 - **Severity:** informational.
 
-### The zip export is not rate-limited (V1-14a; the mutating actions were, at `AUTH-1` 1c-3b)
+### `/api/sync` must land rate-limited (the mutating actions are since `AUTH-1` 1c-3b, the zip export since 2026-11-19)
 
 - **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The **seven** mutating Server
   Actions in `app/p/[profileId]/actions.ts` — **and the zip export route, so a full training-history
@@ -866,26 +835,22 @@ success.` Harmless there — nothing referenced the files yet.
 - 🔴 **Half paid at `AUTH-1` 1c-3b (2026-11-01).** The seven mutating Server Actions are now limited
   on the Clerk principal (`checkMutationLimit`, 120 / 5 min), placed after the session check and
   **before** the zod parse, so an unauthenticated flood costs zero Redis and zero DB work.
-  ⏳ **The zip export route is NOT** — the eighth surface this entry counts, and the most expensive
-  single request in the app. ⚠️ **Deferred to `1c-4` PR 4 specifically, not to "1c-4"** — 1c-4's PR 2
-  (the resolver, 2026-11-03) is what made the principal the thing being _scoped_, and it did not
-  touch this route; `export/route.ts` still imports no limiter. A reader who sees 1c-4 merged would
-  otherwise take this as delivered.
-- **Impact:** low today. Reaching these actions requires the gate cookie **and** a Clerk session,
-  both re-checked inside each action, so neither a proxy-skipping request nor a session-only caller
-  gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
-  limited — ⚠️ in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash
-  database, so the limiter failed open there. The app is a single household on an unlisted URL. The
-  residual exposure is the **unthrottled zip export** named above — not a gate-holder writing
-  unbounded rows, which `1c-3b` capped at 120 / 5 min. Annoying, not dangerous, and visible in the log.
+- ✅ **The export half paid 2026-11-19** (the FAM-1 export follow-up,
+  [plan](./plans/fam-1-export-owner-only.md) PR A): `checkExportLimit`, 30 / 10 min on its own
+  `mat-plan:export` key, checked after the route's session and profile checks. ⚠️ **This row used to
+  say "deferred to `1c-4` PR 4".** No such PR existed: 1c-4 shipped without touching the route, and
+  the export stayed unlimited until this follow-up.
+- **Impact:** low today. Reaching these actions takes a Clerk session with a household membership,
+  re-checked inside each action (the gate cookie this line also named went at `1d`). The app is a single household on an unlisted URL. Since
+  2026-11-19 the export is limited too, so nothing is left on the surfaces this entry counts (the
+  mutations and the export). Page reads and the how-to Route Handler were never in it. Annoying, not dangerous, and visible in the log.
 - **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
   **`checkMutationLimit`** — a second instance of the same fail-open seam, with its own
   `mat-plan:mutate` prefix, not `checkRateLimit` itself — exactly as AGENTS.md's rate-limit line ("auth + mutations +
-  `/api/sync`") presumes. ⏳ **What is left:** the zip export at **`1c-4` PR 4**, and `/api/sync`, which should
+  `/api/sync`") presumes. ⏳ **What is left:** `/api/sync`, which should
   land limited from day one — the batch flush is the genuine amplification endpoint.
-- **Severity:** low (accepted until **`1c-4` PR 4**, not "until Clerk" and not "until 1c-4" — Clerk
-  landed at Beta 0, the mutations half shipped at `1c-3b`, and 1c-4's resolver shipped without it;
-  the seam and its contract already exist).
+- **Severity:** low, and nothing on today's surfaces. What remains is `/api/sync`, which is not a
+  surface yet; the seam and its contract already exist.
 
 ### Sentry ships without source maps, so stack frames are minified (V1-14a)
 

@@ -1,12 +1,13 @@
 diff --git a/packages/db/src/queries/household-membership.ts b/packages/db/src/queries/household-membership.ts
-index c2211f2..193f1e0 100644
+index c30b9792..e5e0e097 100644
 --- a/packages/db/src/queries/household-membership.ts
 +++ b/packages/db/src/queries/household-membership.ts
-@@ -30,7 +30,6 @@ export async function membershipHousehold(exec: Executor, clerkUserId: string):
-     .where(
-       and(
-         eq(schema.householdMembers.clerkUserId, clerkUserId),
--        isNull(schema.householdMembers.deletedAt),
-         // 🔴 AND SO IS THE HOUSEHOLD. Without this a member of a SOFT-DELETED household still
-         // resolves a working scope and can read its profiles — the exact thing TEN-1 extracted
-         // `liveHouseholdIds` to prevent, whose docblock calls `deleted_at IS NULL` "the load-bearing
+@@ -42,7 +42,7 @@ export type Membership = {
+  * (`src/erasure/erase.ts`) cannot disagree. Needs `households` joined to `household_members`.
+  */
+ export function isLiveMembership() {
+-  return and(isNull(schema.householdMembers.deletedAt), isNull(schema.households.deletedAt));
++  return and(isNull(schema.households.deletedAt));
+ }
+ 
+ export async function membershipHousehold(

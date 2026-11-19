@@ -1,6 +1,7 @@
 import {
   emptyWeek,
   MAX_DAY_SLOTS,
+  MAX_HOUSEHOLD_ITEMS,
   MAX_PROGRAM_WORKOUTS,
   MONDAY_FIRST,
   PROGRAM_REFUSAL,
@@ -18,9 +19,13 @@ import {
   dayFullLabel,
   dayFullText,
   dayIsFull,
+  householdIsFull,
+  ITEM_PICKER_COPY,
   nameRefusal,
+  newItemRefusal,
   programFullText,
   programIsFull,
+  saveRefusal,
   supersetLetterOf,
   supersetSpoken,
   takenOffText,
@@ -153,5 +158,39 @@ describe('the program page’s caps (FAM-1 7b-i): "is full … holds at most N",
     expect(to(true, false)).toBe(
       'This program is full: a program holds at most 50 workouts. Nothing was copied. Create another program to copy it into.',
     );
+  });
+});
+
+describe('the workout editor’s caps (FAM-1 7b-ii): its own words for limit_reached', () => {
+  it('a new workout in a full program says the program is full and nothing was saved', () => {
+    expect(saveRefusal(PROGRAM_REFUSAL.limit_reached)).toBe(
+      'This program is full: a program holds at most 50 workouts. This one wasn’t saved.',
+    );
+  });
+
+  it('a household at MAX_HOUSEHOLD_ITEMS: the stop before typing, and the refusal in the footer', () => {
+    expect(ITEM_PICKER_COPY.householdFull).toBe(
+      'Your household has the most custom items it can keep (500). Pick one from the list instead.',
+    );
+    expect(newItemRefusal(PROGRAM_REFUSAL.limit_reached)).toEqual({
+      field: null,
+      footer:
+        'Your household has the most custom items it can keep (500), so this one wasn’t made. Pick one from the list instead.',
+    });
+  });
+
+  it('counts the household’s own items only, and stops at the cap, not one before', () => {
+    const own = (n: number) => Array.from({ length: n }, () => ({ owner: 'household' }));
+    const library = Array.from({ length: MAX_HOUSEHOLD_ITEMS }, () => ({ owner: 'catalog' }));
+    expect(householdIsFull(own(MAX_HOUSEHOLD_ITEMS - 1))).toBe(false);
+    expect(householdIsFull(own(MAX_HOUSEHOLD_ITEMS))).toBe(true);
+    expect(householdIsFull([...library, ...own(1)])).toBe(false);
+  });
+
+  it('every other refusal keeps its own line (no refusal falls to limit_reached’s words)', () => {
+    for (const reason of PROGRAM_REFUSALS.filter((r) => r !== PROGRAM_REFUSAL.limit_reached)) {
+      expect(saveRefusal(reason)).not.toMatch(/is full/);
+      expect(newItemRefusal(reason).footer ?? '').not.toMatch(/custom items/);
+    }
   });
 });

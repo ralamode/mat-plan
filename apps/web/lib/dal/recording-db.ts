@@ -75,6 +75,10 @@ export function oneHouseholdThenEmpty(sql: string): unknown[][] {
   // against a query that does not exist. Narrowly matched on the single-column select the guard
   // emits, so no broader `from "profiles"` read is affected.
   if (/^select "name" from "profiles"/i.test(sql)) return [['Recorded Name']];
+  // The athlete-cap lock (`createProfile`, tech-debt fix): one row means the household row was found
+  // and locked. Zero would make every add answer `refused` before the queries this stub exists to
+  // record are ever emitted.
+  if (/pg_advisory_xact_lock/.test(sql)) return [[null]];
   return [];
 }
 

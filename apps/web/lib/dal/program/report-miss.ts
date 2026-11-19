@@ -3,7 +3,6 @@ import 'server-only';
 import {
   programIn,
   programWorkoutIds,
-  workoutIn,
   workoutInHousehold,
   type HouseholdScope,
 } from '@mat-plan/db';
@@ -46,13 +45,14 @@ const workoutMiss = (workoutPublicId: string): ScopeMiss => ({
   resource: { kind: SCOPE_MISS_KIND.workout, publicId: workoutPublicId },
 });
 
-/** A workout of a program. */
-const workoutProbe = (
-  scope: HouseholdScope | null,
-  programPublicId: string,
-  workoutPublicId: string,
-): Probe => ({
-  found: async () => !!scope && (await workoutIn(db, scope, programPublicId, workoutPublicId)),
+/**
+ * A workout of a program, probed after its program was found: the household's whichever program
+ * it is in (`workoutInHousehold`). A workout of ANOTHER of the household's programs
+ * (`/programs/A/workouts/<B's>`) is still the caller's `not_found`, but it names nothing outside the
+ * household, so it is not a scope miss and nothing is reported (FAM-1 7b-ii; the 7b plan's Co-out).
+ */
+const workoutProbe = (scope: HouseholdScope | null, workoutPublicId: string): Probe => ({
+  found: async () => !!scope && (await workoutInHousehold(db, scope, workoutPublicId)),
   miss: workoutMiss(workoutPublicId),
 });
 
@@ -74,7 +74,7 @@ async function reportFirstMiss(
   }
 }
 
-/** A program, then (when the input names one) its workout. */
+/** A program, then (when the input names one) the workout, against the household as a whole. */
 export async function reportProgramMiss(
   scope: HouseholdScope | null,
   ids: { programPublicId: string; workoutPublicId?: string | null },
@@ -82,7 +82,7 @@ export async function reportProgramMiss(
   const { programPublicId, workoutPublicId } = ids;
   await reportFirstMiss(scope, [
     programProbe(scope, programPublicId),
-    ...(workoutPublicId ? [workoutProbe(scope, programPublicId, workoutPublicId)] : []),
+    ...(workoutPublicId ? [workoutProbe(scope, workoutPublicId)] : []),
   ]);
 }
 
@@ -124,9 +124,6 @@ export async function reportCopyMiss(
 ): Promise<void> {
   await reportFirstMiss(scope, [
     programProbe(scope, copy.toProgramPublicId),
-    {
-      found: async () => !!scope && (await workoutInHousehold(db, scope, copy.workoutPublicId)),
-      miss: workoutMiss(copy.workoutPublicId),
-    },
+    workoutProbe(scope, copy.workoutPublicId),
   ]);
 }

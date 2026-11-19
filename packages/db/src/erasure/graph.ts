@@ -3,6 +3,7 @@ import { getTableConfig, type PgColumn, type PgTable } from 'drizzle-orm/pg-core
 
 import * as schema from '../schema';
 import type { HouseholdScope } from '../scope';
+import type { PreflightCheck } from './preflight';
 import {
   householdMemberInHousehold,
   householdRowIs,
@@ -52,6 +53,22 @@ export type HouseholdGraphTable = {
   /** The household's rows of `table`. Hidden rows included; never a `deleted_at` conjunct. */
   readonly householdRows: (scope: HouseholdScope) => SQL;
 };
+
+/** A condition on an id expression: "this id is one of the rows a check is about". */
+export type IdIn = (id: SQL) => SQL;
+
+/** The graph's own predicate for `t`'s household rows. Throws for a table outside the graph. */
+export function householdRowsOf(t: PgTable, scope: HouseholdScope): SQL {
+  const g = HOUSEHOLD_GRAPH.find((x) => x.table === t);
+  if (!g) throw new Error(`PRIV-3: ${graphTableName(t)} is not in HOUSEHOLD_GRAPH`);
+  return g.householdRows(scope);
+}
+
+/** `id IN (the household's rows of t)`, by the graph's own predicate. Throws as `householdRowsOf`. */
+export function householdIdsOf(t: PgTable & { id: PgColumn }, scope: HouseholdScope): IdIn {
+  const where = householdRowsOf(t, scope);
+  return (id) => sql`${id} IN (SELECT ${t.id} FROM ${t} WHERE ${where})`;
+}
 
 /** The table's SQL name, from drizzle's own config, so no name is re-typed beside its table. */
 export function graphTableName(t: PgTable): string {
@@ -231,4 +248,7 @@ export const NON_ABORTING_EDGES = [
   { fk: 'entry_sets_entry_id_entries_id_fk', guard: 'cascade' },
   { fk: 'sessions_workout_id_workouts_id_fk', guard: 'f' },
   { fk: 'workouts_copied_from_workout_id_workouts_id_fk', guard: 'e' },
-] as const;
+] as const satisfies readonly {
+  fk: string;
+  guard: 'cascade' | Extract<PreflightCheck, 'e' | 'f' | 'g'>;
+}[];

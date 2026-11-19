@@ -1,0 +1,1 @@
+PRIV-3 2a: P3b a DELETE that removes fewer rows than it counted aborts with ErasureCountMismatch on that table

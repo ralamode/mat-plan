@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-18. This is a beta."
+            "text": "Last updated: 2026-11-19. This is a beta."
           }
         ]
       }
@@ -313,7 +313,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " screen, opened from the home screen): anyone\nsigned in to your household can create and rename a program, set its week and copy a workout. The\nscreens for writing a workout and adding a movement of your own aren't in the app yet. What is\nstored: a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. Once adding a movement of your own is in the app, a name someone in your household types there is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\nIn the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so, once the workout screen is in the app, will be an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,\nrestore, export or erase them, and they stay until the program or the household is removed.\n"
+              "text": " screen, opened from the home screen): anyone\nsigned in to your household can create and rename a program, write and change its workouts, add\na movement of your own, set its week and copy a workout. What is\nstored: a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. A movement name someone in your household types with \"+ New item\" is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\nIn the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so is an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,\nrestore, export or erase them, and they stay until the program or the household is removed.\n"
             },
             {
               "k": "strong",
@@ -1838,7 +1838,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log and the bodyweight log. Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
+        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
@@ -1882,7 +1882,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", so you are not surprised: check-ins and other logged life\nactivities, the daily readiness colour, the \"how it felt\" notes, the per-athlete prescribed\ntargets, the programs you build and who is on which program (only a workout's name and the targets of\nan exercise an athlete logged, in the \"prescribed\" column, go out). The export covers your logged training; it is not yet a complete copy."
+        "text": ", so you are not surprised: the daily readiness colour, the \"how it felt\" notes, the per-athlete prescribed\ntargets, the programs you build and who is on which program (only a workout's name and the targets of\nan exercise an athlete logged, in the \"prescribed\" column, go out). The export covers your logged training; it is not yet a complete copy."
       }
     ]
   },

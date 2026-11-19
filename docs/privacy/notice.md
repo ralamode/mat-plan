@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-18. This is a beta.**
+**Last updated: 2026-11-19. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -40,18 +40,18 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
-  signed in to your household can create and rename a program, set its week and copy a workout. The
-  screens for writing a workout and adding a movement of your own aren't in the app yet. What is
+  signed in to your household can create and rename a program, write and change its workouts, add
+  a movement of your own, set its week and copy a workout. What is
   stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
   For each exercise in a workout: its instructions and rest note, the name you give a group of
   exercises done together, and the targets you set (sets, reps, and a weight, time, distance or
   count). These belong to the household, so removing one athlete does not
-  remove them; deleting the household does. Once adding a movement of your own is in the app, a name someone in your household types there is added to the list that anyone signed in to your household picks from, and it
+  remove them; deleting the household does. A movement name someone in your household types with "+ New item" is added to the list that anyone signed in to your household picks from, and it
   stays in that list whether or not any program still uses it. It can't be renamed or removed in the
   app. Please type only the name of an exercise, never a person's name or anything about a child.
-  In the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so, once the workout screen is in the app, will be an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,
+  In the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so is an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,
   restore, export or erase them, and they stay until the program or the household is removed.
   **Who is on which program**: which athlete is on it, from which day and through which day, and on
   which days of the week. That belongs to the athlete, and goes with them if they are removed. Taking
@@ -255,7 +255,8 @@ logs, or if the new name is already in use.
 ## Getting your data out
 
 Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the
-strength log and the bodyweight log. Once the day page that logs a workout ships, a workout an
+strength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins
+(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an
 athlete logs from a program has one row per exercise in the strength log, with the **workout's name as
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
@@ -264,8 +265,7 @@ name typed into any of them goes with it. One change is made on the way out: a v
 =, +, -, @ or a tab gets a leading apostrophe, so a spreadsheet shows it as text instead of running it
 as a formula.
 
-**What the export does not yet include**, so you are not surprised: check-ins and other logged life
-activities, the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
+**What the export does not yet include**, so you are not surprised: the daily readiness colour, the "how it felt" notes, the per-athlete prescribed
 targets, the programs you build and who is on which program (only a workout's name and the targets of
 an exercise an athlete logged, in the "prescribed" column, go out). The export covers your logged training; it is not yet a complete copy.
 

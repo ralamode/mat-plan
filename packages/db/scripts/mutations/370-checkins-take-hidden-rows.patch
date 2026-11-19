@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
+index ae691e2c..549f643a 100644
+--- a/packages/db/src/queries/export-month.ts
++++ b/packages/db/src/queries/export-month.ts
+@@ -320,7 +320,6 @@ export function checkinMonthRows(
+     .where(
+       and(
+         isLiveProfile(args.profilePublicId, args.scope),
+-        isNull(schema.entries.deletedAt),
+         isNull(schema.entries.movementId),
+         not(bodyweightEntry()),
+         gte(schema.entries.activityDate, from),

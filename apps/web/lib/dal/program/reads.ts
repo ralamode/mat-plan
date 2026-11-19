@@ -6,6 +6,7 @@ import { readProgramList, readProgramView, readWorkoutDraft } from '@mat-plan/db
 import {
   uuidSchema,
   type ProgramList,
+  type ProgramListEntry,
   type ProgramView,
   type WorkoutDraft,
 } from '@mat-plan/shared';
@@ -79,4 +80,22 @@ export const getProgramView = cache(async function getProgramView(
     ));
   if (!view) await reportProgramMiss(scope, { programPublicId });
   return view ?? null;
+});
+
+/**
+ * One program's entry of the Programs list, for a workout page's back link and "Used by …" (FAM-1
+ * 7b-ii; the 7b plan, reuse S5: found in `getProgramList`, not by a second read). The ids are
+ * compared lower-cased, because a route's id is the URL's spelling and the list's is lower-case.
+ * A non-uuid id is `null` with no report; no household, or a program the household does not have,
+ * is `null` and reported once (with no scope, as `no_scope`). `today` is the route's.
+ */
+export const getProgramEntry = cache(async function getProgramEntry(
+  programPublicId: string,
+  today: string,
+): Promise<ProgramListEntry | null> {
+  if (!uuidSchema.safeParse(programPublicId).success) return null;
+  const id = programPublicId.toLowerCase();
+  const entry = (await getProgramList(today))?.find((program) => program.programPublicId === id);
+  if (!entry) await reportProgramMiss(await getHouseholdScope(), { programPublicId });
+  return entry ?? null;
 });

@@ -453,8 +453,8 @@ Their deliverables are unchanged and still written below; only when they start h
       verified by a scan over every ref.
 - [ ] No open P0. DX-5(a) merge gates are enforced.
 - [ ] Previews hold no production data and no production credential; fork protection is on (OPS-1).
-- [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2; PR 1 in review).
-- [ ] The live app holds no test athletes (OPS-2 PR 2, or `CAT-3`'s fresh start, whichever runs first).
+- [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2; PR 1 is merged and applied, #592).
+- [ ] The live app holds no test athletes (`CAT-3`'s fresh start; OPS-2 PR 2 is retired, since after the fresh start it has no target).
 - [ ] A single household has been restored from backup without touching any other (OPS-3).
 - [ ] `db:verify` proves that a second household cannot read, write, correct or export the first's data —
       every entry point, including the movement catalog (TEN-1).
@@ -500,6 +500,26 @@ Ticked but not crossed off above, verified 2026-11-13: `TEN-1` ✅ · `AUTH-1` �
 (2026-10-08) · `ONB-0` ✅ (2026-10-07).
 
 ### What is left, in dependency order
+
+**Status on 2026-11-19.** The table below is the picture of 2026-11-13, kept as written. Since then:
+
+- **Rows 2 to 5 were re-scoped by FAM-1** ([its milestone](./fam-1-family-program.md), lane S). `V1-24` 3b
+  shipped as the new day page, with bodyweight and practice and none of the old forms. `V1-9b` B1-3,
+  the hide screen, was cut on 2026-11-15. B1-2 (#547) and B2-0 (#514) are merged, and B2, Clear this
+  day, is lane S's one PR left. So the run-through's "delete a mis-logged entry" is now: un-tick a
+  row, and clear a day.
+- **Row 6, `OPS-3`,** gates the first outside invite, not the family's trial week (the maintainer,
+  2026-11-18). It has no plan yet.
+- **Row 7, `OPS-2`:** PR 1 is merged and applied (#592). PR 2 is retired.
+- **Row 8, `PRIV-3`:** its first PR (#520) and the erasure core (PR 2a, #654) are merged. The household command,
+  the athlete command and the program removal are planned in detail
+  ([`priv-3-guarded-deletion.md`](../plans/priv-3-guarded-deletion.md)) and follow the fresh start. The purge window is after Beta 0
+  (the maintainer, 2026-11-19).
+- **Rows 9 to 12** are still to do. Rows 9, 11 and 12 are the maintainer's own steps; row 10, the PII
+  scan over every ref, is one small PR with no owner yet.
+- **Not in this table, and now the larger part of Beta 0:** [`FAM-1`](./fam-1-family-program.md),
+  whose milestone says which of its steps are not planned in detail, and
+  [`CAT-3`](../specs/cat-3-movement-library.md), the movement library, with the fresh start.
 
 Sizes are **PRs**, calibrated against this repo's own measured distribution over the last 60 merges:
 median **368** insertions, p25 **174**, p75 **906**. So S ≈ ≤200, M ≈ ~400, L ≈ ~900+.

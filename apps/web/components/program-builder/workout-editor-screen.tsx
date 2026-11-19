@@ -30,7 +30,6 @@ import { moveDown, moveUp } from '@/lib/routine/editor';
 
 import {
   addedText,
-  capText,
   BUILDER_COPY,
   EDITOR_COPY,
   ITEM_PICKER_COPY,
@@ -45,6 +44,7 @@ import {
   unlinkedText,
   unitChangedText,
   usedByText,
+  workoutFullText,
   type MoveDirection,
   type SupersetChange,
 } from './builder-text';
@@ -78,7 +78,8 @@ import { BuilderLink } from './route-link';
  *
  * - `draft` is read **once**, when the editor opens: what it loaded, what "changed" compares with,
  *   and the ids Save sends (its `workoutClientId`, so a retried Save replays the same attempt). A
- *   later `draft` from a refreshed page does not move them.
+ *   later `draft` from a page re-rendered (`router.refresh`) does not move them; a browser reload
+ *   remounts the screen, so it starts again from the page's draft.
  * - `program` names the program in the back link and says who a change applies to. **Optional**:
  *   the preview route does not pass it yet (the maintainer kept the harness as it is, 2026-11-16);
  *   7b's page must (`owed.test.ts`). Without it the link reads "← Program" and the line is hidden.
@@ -106,6 +107,7 @@ const HEADING_ID = 'workout-editor-heading';
 const ITEMS_HEADING_ID = 'workout-items';
 const SAVE_ALERT_ID = 'workout-save-alert';
 const DISCARD_QUESTION_ID = 'workout-discard-question';
+const ITEMS_FULL_ID = 'workout-items-full';
 
 /**
  * Everything typed, as one comparable value: the screen is "changed" when it differs. Group keys
@@ -188,6 +190,7 @@ export function WorkoutEditorScreen({
   ];
 
   const back = programPath(loaded.draft.programPublicId);
+  const workoutFull = cards.length >= MAX_WORKOUT_ITEMS;
   const dirty = snapshot(name, description, cards) !== loaded.snapshot;
   const labels = supersetLabels(cards.map((card) => card.item));
   const groupOf = (index: number) => cards[index]?.item.superset?.group ?? null;
@@ -455,7 +458,9 @@ export function WorkoutEditorScreen({
     const result = await actions.saveWorkout(read.draft);
     if (!isCurrent(mine)) return;
     // `pending` stays set on success: the page changes, and Save must not read as ready again.
-    if (result.ok) return router.push(back);
+    // `replace`, never `push`, here and on every way out (7b plan, U1-1): Back after a Save never
+    // returns to this editor, whose draft is the one from before the save, nor to `/workouts/new`.
+    if (result.ok) return router.replace(back);
     setPending(false);
     const message = saveRefusal(result.reason);
     refuse(
@@ -465,7 +470,7 @@ export function WorkoutEditorScreen({
   }
 
   function leave(from: HTMLElement | null) {
-    if (!dirty) return router.push(back);
+    if (!dirty) return router.replace(back);
     leftFrom.current = from;
     report('');
     flushSync(() => setLeaving(true));
@@ -504,6 +509,9 @@ export function WorkoutEditorScreen({
         <div className="flex flex-col gap-2">
           <BuilderLink
             href={back}
+            // Leaving replaces the editor's entry, as Save and Discard do (7b-ii): Back never
+            // reopens an editor holding the draft as it was before a save.
+            replace
             className={NAV_LINK_CLASS}
             onClick={(event) => {
               // A new tab (cmd, ctrl or shift) leaves this one as it is.
@@ -619,17 +627,24 @@ export function WorkoutEditorScreen({
             ref={addItemsRef}
             type="button"
             variant={cards.length ? 'ghost' : 'outline'}
-            className={CTA_CLASS}
-            aria-disabled={cards.length >= MAX_WORKOUT_ITEMS || undefined}
+            // Looks stopped when full, with the reason under it (7b-ii; it looked live: #460).
+            className={`${CTA_CLASS} ${PENDING_CLASS}`}
+            aria-disabled={workoutFull || undefined}
+            aria-describedby={workoutFull ? ITEMS_FULL_ID : undefined}
             onClick={() => {
               // A full workout says so here, rather than opening a picker where every row refuses.
-              if (cards.length >= MAX_WORKOUT_ITEMS) return report(capText(MAX_WORKOUT_ITEMS));
+              if (workoutFull) return report(workoutFullText);
               pickerReturn.current = addItemsRef.current;
               setPickerOpen(true);
             }}
           >
             {ITEM_PICKER_COPY.open}
           </Button>
+          {workoutFull ? (
+            <p id={ITEMS_FULL_ID} className="text-muted-foreground text-sm">
+              {workoutFullText}
+            </p>
+          ) : null}
         </section>
 
         {/* The save bar: always in view on a phone, where Save and what it says are. The status
@@ -659,7 +674,7 @@ export function WorkoutEditorScreen({
                   type="button"
                   variant="outline"
                   className="text-destructive flex-1"
-                  onClick={() => router.push(back)}
+                  onClick={() => router.replace(back)}
                 >
                   {EDITOR_COPY.discard}
                 </Button>

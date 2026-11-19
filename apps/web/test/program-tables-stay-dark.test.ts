@@ -49,6 +49,10 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     // and no `apps/web` file imports it (pinned below), so it cannot race migrate.yml. The FILE, not
     // the directory: a later module there (the delete core) justifies its own entry.
     'packages/db/src/erasure/graph.ts',
+    // PRIV-3 2a's pre-flights (a) and (h) name `program_assignments` in raw SQL (named columns only,
+    // `a.id`, `a.profile_id`, `a.block_id`). Same reason as the graph: no barrel re-export, no
+    // `apps/web` import (pinned below), and only an operator's correction or `db:verify` runs them.
+    'packages/db/src/erasure/preflight.ts',
   ];
   const PATTERNS: Record<string, RegExp> = {
     insert: new RegExp(`\\.insert\\(\\s*(?:schema\\.)?(?:${TABLES})\\b`),
@@ -317,11 +321,13 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
     );
     const importing = web.filter(importsActions);
     expect(importing.filter((f) => !PROGRAM_PAGE.test(f))).toEqual([]);
-    // Non-vacuity: the two 7b-i pages do import it.
+    // Non-vacuity: the four pages (7b-i, 7b-ii) do import it.
     expect(importing).toEqual(
       expect.arrayContaining([
         'apps/web/app/programs/page.tsx',
         'apps/web/app/programs/[programId]/page.tsx',
+        'apps/web/app/programs/[programId]/workouts/[workoutId]/page.tsx',
+        'apps/web/app/programs/[programId]/workouts/new/page.tsx',
       ]),
     );
     expect(PROGRAM_PAGE.test('apps/web/app/programs/[programId]/workouts/new/page.tsx')).toBe(true);

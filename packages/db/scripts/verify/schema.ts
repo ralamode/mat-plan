@@ -32,9 +32,31 @@ import {
   TRACKING_TYPES,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNull, ne, notExists, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 
 import { schema } from '../../src/client';
+import {
+  assignmentsAcross,
+  assignmentsAcrossHouseholds,
+  crossHouseholdWorkoutCopies,
+  entriesOnForeignPrescriptions,
+  sessionsOnForeignWorkouts,
+  shapeIds,
+  strayEntriesInSessions,
+  strayEntriesInSupersets,
+  targetsAcrossHouseholds,
+} from '../../src/erasure/preflight';
 import {
   SEED_FIXTURE_COUNTS,
   SEED_FIXTURE_PROGRAM_CLIENT_IDS,
@@ -408,17 +430,6 @@ async function workoutsOnNonTemplateBlocks(tx: VerifyTx): Promise<number[]> {
     .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.workouts.blockId))
     .where(sql`${schema.programBlocks.kind} <> ${PROGRAM_BLOCK_KIND.template}`);
   return rows.map((r) => r.id);
-}
-
-/** Workouts copied from a workout in ANOTHER household (A2 §2, §8). Also the runbook pre-flight's query. */
-async function crossHouseholdWorkoutCopies(tx: VerifyTx): Promise<number[]> {
-  const res = await tx.execute(sql`
-    SELECT w.id FROM workouts w
-      JOIN program_blocks b ON b.id = w.block_id
-      JOIN workouts src ON src.id = w.copied_from_workout_id
-      JOIN program_blocks sb ON sb.id = src.block_id
-     WHERE b.household_id <> sb.household_id`);
-  return idsOf(res);
 }
 
 /** A template block in `scope`, through the real writer, read back by its client_id. */
@@ -1270,27 +1281,8 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
 
 // ── FAM-1 step 4a-ii ────────────────────────────────────────────────────────────────────────────────
 
-/** Sessions whose workout is in ANOTHER household than the session's profile (A2 §6). Runbook pre-flight (f). */
-export async function sessionsOnForeignWorkouts(tx: VerifyTx): Promise<number[]> {
-  const res = await tx.execute(sql`
-    SELECT s.id FROM sessions s
-      JOIN profiles p ON p.id = s.profile_id
-      JOIN workouts w ON w.id = s.workout_id
-      JOIN program_blocks b ON b.id = w.block_id
-     WHERE p.household_id <> b.household_id`);
-  return idsOf(res);
-}
-
-/** Entries whose prescription is in ANOTHER household than the entry's profile (A3). Runbook pre-flight (g). */
-export async function entriesOnForeignPrescriptions(tx: VerifyTx): Promise<number[]> {
-  const res = await tx.execute(sql`
-    SELECT e.id FROM entries e
-      JOIN profiles p ON p.id = e.profile_id
-      JOIN prescriptions pr ON pr.id = e.prescription_id
-      JOIN program_blocks b ON b.id = pr.block_id
-     WHERE p.household_id <> b.household_id`);
-  return idsOf(res);
-}
+// Runbook pre-flights (f) and (g), unscoped: one join each, in `src/erasure/preflight.ts` (PRIV-3 2a).
+export { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts };
 
 /** Sessions naming a workout whose type is not `workout` (D6). Not a CHECK: A2 §6 does not authorize one. */
 export async function workoutSessionsOfAnotherType(tx: VerifyTx): Promise<number[]> {
@@ -2245,21 +2237,6 @@ async function assignmentsOnLegacyBlocks(tx: VerifyTx): Promise<number[]> {
 }
 
 /**
- * Assignments whose athlete and program are in different households. The same join as the runbook's
- * household pre-flight (h), unscoped: (h) adds "either side in H". No `deleted_at` filter.
- */
-async function assignmentsAcrossHouseholds(tx: VerifyTx): Promise<number[]> {
-  return idsOf(
-    await tx.execute(sql`
-      SELECT a.id FROM program_assignments a
-        JOIN profiles p ON p.id = a.profile_id
-        JOIN program_blocks b ON b.id = a.block_id
-       WHERE p.household_id <> b.household_id
-       ORDER BY a.id`),
-  );
-}
-
-/**
  * The LATER of two live assignments of one athlete to one program whose inclusive ranges share a day:
  * the program would be due twice that day. The keys cannot see this (the open key ignores closed rows),
  * and off-and-on-again on one day makes it in the usual case (`schema.ts` → `programAssignments`).
@@ -2362,18 +2339,13 @@ async function blocksOnlyThisAthleteWasOn(tx: VerifyTx, p: number, h: number): P
   );
 }
 
-/** Pre-flight: another athlete's entry in this athlete's session OR superset (the delete would abort). */
+/**
+ * Pre-flight: another athlete's entry in this athlete's session OR superset (the delete would abort).
+ * The household pre-flights (b) and (c), narrowed to one profile (`src/erasure/preflight.ts`).
+ */
 async function strayEntriesInAthletesSessions(tx: VerifyTx, p: number): Promise<number[]> {
-  return idsOf(
-    await tx.execute(sql`
-      SELECT e.id FROM entries e
-       WHERE e.profile_id <> ${p}
-         AND (e.session_id IN (SELECT id FROM sessions WHERE profile_id = ${p})
-              OR e.superset_id IN (SELECT ss.id FROM supersets ss
-                                     JOIN sessions s ON s.id = ss.session_id
-                                    WHERE s.profile_id = ${p}))
-       ORDER BY e.id`),
-  );
+  const isP = (id: SQL) => sql`${id} = ${p}`;
+  return shapeIds(tx, sql`${strayEntriesInSessions(isP)} UNION ${strayEntriesInSupersets(isP)}`);
 }
 
 /**
@@ -2382,20 +2354,9 @@ async function strayEntriesInAthletesSessions(tx: VerifyTx, p: number): Promise<
  * no writer makes one, and the household delete's (a) and (h) stop on the same shape. Must be 0.
  */
 async function athleteRowsOnAnotherHouseholdsProgram(tx: VerifyTx, p: number): Promise<number[]> {
-  return idsOf(
-    await tx.execute(sql`
-      SELECT t.id FROM prescription_targets t
-        JOIN prescriptions x ON x.id = t.prescription_id
-        JOIN program_blocks b ON b.id = x.block_id
-        JOIN profiles pr ON pr.id = t.profile_id
-       WHERE t.profile_id = ${p} AND b.household_id <> pr.household_id
-      UNION ALL
-      SELECT a.id FROM program_assignments a
-        JOIN program_blocks b ON b.id = a.block_id
-        JOIN profiles pr ON pr.id = a.profile_id
-       WHERE a.profile_id = ${p} AND b.household_id <> pr.household_id
-       ORDER BY 1`),
-  );
+  // The household pre-flights (a) and (h), narrowed to one profile (`src/erasure/preflight.ts`).
+  const isP = (profile: SQL) => sql`${profile} = ${p}`;
+  return shapeIds(tx, sql`${targetsAcrossHouseholds(isP)} UNION ALL ${assignmentsAcross(isP)}`);
 }
 
 /**
