@@ -7232,7 +7232,7 @@ console.log(
   console.log(
     '✓ TEN-2c SEED SHADOW REPORT, three directions: the ABSORB IS GONE (a global catalog insert whose ' +
       'slug a household owns now lands alongside it — TEN-2b’s baseline, inverted), `seed()` INSERTS ' +
-      'the curated row and WARNS instead of throwing (naming the seed slug, never the household’s free ' +
+      'the curated row and WARNS instead of throwing (as counts only, never a slug or the household’s free ' +
       'text, because that log is world-readable), and with no shadow it warns about nothing and stays ' +
       'idempotent. No DDL left in this block',
   );

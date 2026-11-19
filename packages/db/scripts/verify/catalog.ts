@@ -666,6 +666,27 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
     );
   });
 
+  // A household row on a slug that is both a legacy and a library slug is counted ONCE, as legacy.
+  await rolledBack(async (tx) => {
+    const entry = CATALOG_MOVEMENTS.find((e) => e.slug === 'sled_push')!;
+    const baseline = await seedReference(asDb(tx), { catalog: [] });
+    await insertMovementOwnedBy(asTx(tx), ctx.A_SCOPE, {
+      publicId: newId(),
+      slug: entry.slug,
+      name: 'A2-i shared-slug item',
+      isBodyweight: false,
+    });
+    const counts = await seedReference(asDb(tx), { catalog: [entry] });
+    assert.deepEqual(
+      [
+        counts.householdRowsOnSeedSlugs - baseline.householdRowsOnSeedSlugs,
+        counts.householdRowsOnCatalogSlugs,
+      ],
+      [1, 0],
+      'CAT-3 A2-i E5: a household row on a shared legacy/library slug is counted once, as legacy',
+    );
+  });
+
   // D5.5: a slug twice in one list: the first entry is written, with its join rows only.
   await rolledBack(async (tx) => {
     const first = CATALOG_MOVEMENTS.find(

@@ -324,7 +324,7 @@ they are how to schedule any milestone, not facts about this one.
   **pre-`TEN-2b`** rows still sitting at `household_id IS NULL` are served to every household by
   global-first. That is the **read** leak's residual, and it closes at **`TEN-2c-1`** (the split
   backfill); `0017` only stops it growing, via the new CHECK. Also: the seed's **shadow guard no
-  longer throws** — it inserts the curated row and **warns**, naming the seed slug only (counts only since `CAT-3` A2-i) and never the
+  longer throws** — it inserts the curated row and **warns**, with counts only (until `CAT-3` A2-i it named the seed slug) and never the
   household's free text, because `migrate.yml` publishes that message to a world-readable Actions log.
   ✅ **`TEN-2d`'s `VALIDATE` was the invite gate; it has since landed** (below).
 

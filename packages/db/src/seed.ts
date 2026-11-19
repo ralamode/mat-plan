@@ -637,8 +637,8 @@ export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{
 /**
  * The seed's one report line, from its counts (CAT-3 A2-i, spec rule 7, E5), last and in both modes.
  * 🔴 **Counts only**: it is printed to `migrate.yml`'s world-readable log, and naming a slug a household
- * also holds says what that household typed. Never a slug, never a `name`. `db:verify` captures every
- * console method around this and asserts it.
+ * also holds says what that household typed. Never a slug, never a `name`. `db:verify` captures everything
+ * printed to stdout and stderr around the run and asserts it.
  *
  * The household lines are warnings, not errors: the curated row IS inserted (since TEN-2c the two
  * namespaces are separate and global-first serves it), so nothing is broken, and a throw would wedge

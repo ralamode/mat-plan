@@ -195,7 +195,7 @@ blocker was `TEN-2d`** — the arc's only mechanical production-side gate, disch
 Also: the seed's **shadow guard no longer throws.** It **inserts** the curated row and **warns** — the
 demotion had to be both halves, because the old guard filtered the shadowed slug out of the `VALUES`
 **before** the arbiter was consulted, so demoting only the `throw` would have left a silent, permanent
-gap in reference data. The warning names the **seed slug only** (counts only since `CAT-3` A2-i), never the household's free text,
+gap in reference data. The warning gives **counts only** (until `CAT-3` A2-i it named the seed slug), never the household's free text,
 because `migrate.yml` publishes it to a world-readable Actions log. Plus a **report-only** correction,
 `movements-ownership-2026-10-11`, that counts what `TEN-2c-1` / `TEN-2b-2` / `TEN-2d` still owe —
 aggregate counts only, no `name` and no `slug`.

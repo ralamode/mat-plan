@@ -51,7 +51,8 @@ in `apps/` reads them until P11-ii (`apps/web/test/program-tables-stay-dark.test
    mutation `503`.
 7. **The seed's report is counts only** (`SeedCounts`, all numbers; `reportSeed`). `migrate.yml`'s log
    is public, and a slug a household also holds says what that household typed. The proofs capture
-   every console method around the whole seed run.
+   everything printed to stdout and stderr around
+   the whole seed run.
 
 ## Traps
 
@@ -71,7 +72,7 @@ in `apps/` reads them until P11-ii (`apps/web/test/program-tables-stay-dark.test
     unreferenced)", the orphan-removal input. Its "legacy or catalog" discriminator lands with or
     before the switch, or a correction built on that report would delete the library.
   - Cut a Neon restore branch, run `db:seed` against it from the operator's console, and confirm the
-    counts line (about 463 inserted, 12 held by a legacy row). `db:verify` runs the real library only
+    counts line (`CATALOG_MOVEMENTS.length − 12` inserted, 12 held by a legacy row). `db:verify` runs the real library only
     on PGlite inside a savepoint; this is its first real-Postgres run.
   - Run the runbook's shadow query on production first, so the household count is known in advance.
   - A runbook entry for a seed run that fails on catalog data (fix forward; nothing is left behind).

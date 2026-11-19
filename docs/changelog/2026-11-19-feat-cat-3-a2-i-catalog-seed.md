@@ -6,5 +6,5 @@ already holds the slug, or a row a household owns, and each insert skips itself 
 write, so a deploy with every entry already present cannot fail. Production's seed gives it an empty
 list until A2-ii, and a proof fails if that changes. `movementIsCatalog()` is the one test for a
 library row. The seed's public log now prints counts only, never a slug a household also holds. The
-ownership report counts blockers by the database CHECK's own rule, and 13 new mutation patches prove
+ownership report counts blockers by the database CHECK's own rule, and 17 new mutation patches (502–518) prove
 the guards can fail.

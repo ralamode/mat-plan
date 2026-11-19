@@ -507,7 +507,7 @@ that promotes one household's free text into the global reference namespace, whi
 ⚠️ **The message is published, and a warning is published exactly as widely as the refusal was.**
 `migrate.yml` logs are world-readable on a public repo, so since `CAT-3` A2-i the message is **counts
 only**: no slug (a slug a household also holds says what they typed) and never a row's `name`.
-`db:verify` asserts both against every console method captured together; keep that property if you
+`db:verify` asserts both against everything printed to stdout and stderr; keep that property if you
 extend it, because the privacy half is the one a rewrite loses first.
 
 **The refusal this replaced, for anyone reading an older run.** While the non-partial
