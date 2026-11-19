@@ -98,8 +98,10 @@ export type MutationLimitPolicy = typeof MUTATION_RATE_LIMIT | typeof ROW_WRITE_
  *
  * **Sized from the household cap, not from a typical family.** An owner taking every athlete's data
  * out, which the privacy notice tells them to do before deleting anything, taps one link per athlete,
- * and a household holds up to `MAX_HOUSEHOLD_ATHLETES` (25), with archived athletes' links listed too.
- * Thirty in ten minutes fits that pass with headroom and still refuses a loop. `rate-limit.test.ts`
+ * and a household holds up to `MAX_HOUSEHOLD_ATHLETES` (25), archived athletes included (the cap
+ * counts them).
+ * Thirty in ten minutes fits that pass, the headroom covers a retried download or two, and it still
+ * refuses a loop. `rate-limit.test.ts`
  * pins `attempts >= MAX_HOUSEHOLD_ATHLETES`, so raising the cap fails a test, not a parent.
  *
  * ⚠️ **Not a `MutationLimitPolicy`, on purpose.** It has its own checker (`checkExportLimit`, no policy
@@ -255,7 +257,11 @@ export type LimitCheck = {
 async function check(limiter: Ratelimit | null, userId: string): Promise<LimitCheck> {
   if (!limiter) return { allowed: true, reason: 'unconfigured' };
   try {
-    const { success } = await limiter.limit(userId);
+    const { success, reason } = await limiter.limit(userId);
+    // 🔴 **A timeout RESOLVES, it does not throw.** With `timeout` set, `@upstash/ratelimit` 2.2.0
+    // races Redis against a timer that answers `{ success: true, reason: 'timeout' }`. Read as `ok`,
+    // a hanging Redis would be indistinguishable from a healthy one; it is the dead-limiter case.
+    if (reason === 'timeout') return { allowed: true, reason: 'limiter-error' };
     return success ? { allowed: true, reason: 'ok' } : { allowed: false, reason: 'limited' };
   } catch {
     return { allowed: true, reason: 'limiter-error' };

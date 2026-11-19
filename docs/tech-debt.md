@@ -825,7 +825,7 @@ success.` Harmless there — nothing referenced the files yet.
   mutual-exclusion CHECK** — it would be a breaking migration and would foreclose the above.
 - **Severity:** informational.
 
-### The zip export is not rate-limited (V1-14a; the mutating actions were, at `AUTH-1` 1c-3b; the export since 2026-11-19)
+### `/api/sync` must land rate-limited (the mutating actions are since `AUTH-1` 1c-3b, the zip export since 2026-11-19)
 
 - **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The **seven** mutating Server
   Actions in `app/p/[profileId]/actions.ts` — **and the zip export route, so a full training-history
@@ -844,12 +844,10 @@ success.` Harmless there — nothing referenced the files yet.
   `mat-plan:export` key, checked after the route's session and profile checks. ⚠️ **This row used to
   say "deferred to `1c-4` PR 4".** No such PR existed: 1c-4 shipped without touching the route, and
   the export stayed unlimited until this follow-up.
-- **Impact:** low today. Reaching these actions requires the gate cookie **and** a Clerk session,
-  both re-checked inside each action, so neither a proxy-skipping request nor a session-only caller
-  gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
-  limited — ⚠️ in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash
-  database, so the limiter failed open there. The app is a single household on an unlisted URL. Since
-  2026-11-19 the export is limited too, so no residual exposure remains on today's surfaces. Annoying, not dangerous, and visible in the log.
+- **Impact:** low today. Reaching these actions takes a Clerk session with a household membership,
+  re-checked inside each action (the gate cookie this line also named went at `1d`). The app is a single household on an unlisted URL. Since
+  2026-11-19 the export is limited too, so nothing is left on the surfaces this entry counts (the
+  mutations and the export). Page reads and the how-to Route Handler were never in it. Annoying, not dangerous, and visible in the log.
 - **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
   **`checkMutationLimit`** — a second instance of the same fail-open seam, with its own
   `mat-plan:mutate` prefix, not `checkRateLimit` itself — exactly as AGENTS.md's rate-limit line ("auth + mutations +

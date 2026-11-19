@@ -400,12 +400,32 @@ describe('EXPORT_RATE_LIMIT — the export has its own budget (FAM-1 export foll
       await loadWith({ env: CONFIGURED });
     for (let n = 0; n < EXPORT_RATE_LIMIT.attempts; n += 1) await checkExportLimit('user_abc');
     expect((await checkExportLimit('user_abc')).allowed).toBe(false);
-    expect((await checkMutationLimit('user_abc')).allowed).toBe(true);
+    // The whole mutation budget is still there, not what is left of a shared one.
+    for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkMutationLimit('user_abc')).allowed).toBe(true);
+    }
+    expect((await checkMutationLimit('user_abc')).allowed).toBe(false);
 
     const fresh = await loadWith({ env: CONFIGURED });
     for (let n = 0; n < MUTATION_RATE_LIMIT.attempts; n += 1) await fresh.checkMutationLimit('u');
     expect((await fresh.checkMutationLimit('u')).allowed).toBe(false);
     expect((await fresh.checkExportLimit('u')).allowed).toBe(true);
+  });
+
+  it('🔴 an Upstash timeout is a dead limiter, not an ok (it resolves, it does not throw)', async () => {
+    // `@upstash/ratelimit` 2.2.0 answers a timeout with `{ success: true, reason: 'timeout' }`.
+    const slow = await loadWith({
+      env: CONFIGURED,
+      limit: async () => ({ success: true, reason: 'timeout' }) as { success: boolean },
+    });
+    expect(await slow.checkExportLimit('user_abc')).toEqual({
+      allowed: true,
+      reason: 'limiter-error',
+    });
+    expect(await slow.checkMutationLimit('user_abc')).toEqual({
+      allowed: true,
+      reason: 'limiter-error',
+    });
   });
 
   it('fails OPEN, and says which way', async () => {

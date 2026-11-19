@@ -82,8 +82,11 @@ describe('GET /p/[profileId]/export', () => {
     vi.mocked(buildExportZip).mockResolvedValueOnce(new Uint8Array([1]));
     expect((await call()).status).toBe(200);
     expect(Sentry.addBreadcrumb).toHaveBeenCalledTimes(1);
-    expect(Sentry.addBreadcrumb).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'export limiter unavailable' }),
-    );
+    // The exact object, so an id added to it fails here.
+    expect(Sentry.addBreadcrumb).toHaveBeenCalledWith({
+      category: 'rate-limit',
+      level: 'warning',
+      message: 'export limiter unavailable',
+    });
   });
 });
