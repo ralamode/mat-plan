@@ -900,7 +900,11 @@ async function verifyRowRace(): Promise<void> {
       await tx.execute(
         sql`create trigger row_race_hide after insert on entries for each statement execute function verify_row_race_hide()`,
       );
-      const second = await f.tick({ prescriptionPublicId: f.p.reps.publicId });
+      // Different numbers from the holder's, so "revived with the ✓'s numbers" can fail.
+      const second = await f.tick({
+        prescriptionPublicId: f.p.reps.publicId,
+        values: { reps: 7, quantities: [] },
+      });
       await tx.execute(sql`drop trigger row_race_hide on entries`);
       await tx.execute(sql`drop function verify_row_race_hide()`);
       const saved = expectOk(second, 'FAM-1 11b race: a ✓ on a set un-ticked mid-insert saves');
@@ -921,9 +925,10 @@ async function verifyRowRace(): Promise<void> {
           saved.entryPublicId !== holder.entryPublicId,
           (await f.entryRow(holder.entryPublicId)).deletedAt !== null,
           live[0].n,
-          saved.values,
+          saved.values.reps,
+          holder.values.reps,
         ],
-        [false, false, 1, holder.values],
+        [false, false, 1, 7, 10],
         'FAM-1 11b race: and it is the un-ticked entry, revived with the ✓’s numbers (11c-ii)',
       );
     },
@@ -1767,15 +1772,19 @@ async function verifyRowWriter(): Promise<void> {
       'FAM-1 11b 10: re-tick answers ok with the row’s values',
     );
     const again = expectOk(await f.untick(first.entryPublicId), 'FAM-1 11b 10: un-tick it again');
+    const newer: RowValues = {
+      reps: 6,
+      quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value: 35 }],
+    };
     const revived = expectOk(
-      await f.tick({ prescriptionPublicId: f.p.weightReps.publicId }),
+      await f.tick({ prescriptionPublicId: f.p.weightReps.publicId, values: newer }),
       'FAM-1 11b 10: a new ✓ on the same set',
     );
     // 11c-ii (R7): the new ✓ REVIVED the entry, so re-ticking it answers it as it is now. Under 11b
     // this was `slot_taken`; mutation 122 now reddens 10f below.
     assert.deepEqual(
-      [revived.entryPublicId, await f.retick(first.entryPublicId, again.hiddenAt!)],
-      [first.entryPublicId, revived],
+      [revived.entryPublicId, revived.values, await f.retick(first.entryPublicId, again.hiddenAt!)],
+      [first.entryPublicId, newer, revived],
       'FAM-1 11b 10: a re-tick of a revived entry answers ok with its current values',
     );
   });
@@ -1930,12 +1939,6 @@ async function verifyRowWriter(): Promise<void> {
   });
 }
 
-// ── FAM-1 11c-i — Change (`amendRow`) ─────────────────────────────────────────────────────────────────
-
-/**
- * Change, as `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan → Change lists it. Each
- * mutation (348–356 and 358–363, `scripts/mutations/README.md`) names the assertion here that it turns red.
- */
 // ── FAM-1 11c-ii — the revive (D35; plan 11c R1–R8, mutations 341–347 and 357) ──────────────────────
 
 /**
@@ -1944,6 +1947,9 @@ async function verifyRowWriter(): Promise<void> {
  * end-of-proof sweep.
  */
 async function verifyRevive(): Promise<void> {
+  /** This step's proofs, labelled `11c-ii` in the sweep. */
+  const reviveProof = (name: string, body: (f: Fixture, tx: VerifyTx) => Promise<void>) =>
+    proof(name, body, '11c-ii');
   const wr = (reps: number, value: number): RowValues => ({
     reps,
     quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'lb', value }],
@@ -1993,7 +1999,7 @@ async function verifyRevive(): Promise<void> {
     tx.delete(schema.entries).where(inArray(schema.entries.id, ids));
 
   // R3 (341): after an un-tick, the same entry comes back, with the new numbers and the new clientId.
-  await proof('R1: a ✓ after an un-tick revives the entry', async (f, tx) => {
+  await reviveProof('R1: a ✓ after an un-tick revives the entry', async (f, tx) => {
     const c2 = newId();
     const first = expectOk(
       await f.tick({ prescriptionPublicId: f.p.weightReps.publicId, values: wr(8, 30) }),
@@ -2017,31 +2023,34 @@ async function verifyRevive(): Promise<void> {
   });
 
   // R4 (UNHIDE): after Clear day, the revive clears `hide_reason` too, so it leaves the cleared count.
-  await proof('R2: a ✓ after Clear day revives the entry and clears its reason', async (f, tx) => {
-    const first = expectOk(
-      await f.tick({ prescriptionPublicId: f.p.check.publicId }),
-      'FAM-1 11c-ii R2: the ✓',
-    );
-    const cleared = await clearDay(f.exec, {
-      profilePublicId: f.athlete.publicId,
-      scope: f.H_SCOPE,
-      day: DAY,
-    });
-    assert.ok('hiddenAt' in cleared, 'FAM-1 11c-ii R2: Clear day hid the row');
-    const again = expectOk(
-      await f.tick({ prescriptionPublicId: f.p.check.publicId }),
-      'FAM-1 11c-ii R2: a ✓ after Clear day',
-    );
-    const slot = await onSlot(tx, f.p.check.id);
-    assert.deepEqual(
-      [again.entryPublicId, slot.all.length, slot.live.length, slot.live[0]?.hideReason],
-      [first.entryPublicId, 1, 1, null],
-      'FAM-1 11c-ii R2: after Clear day, the entry is revived and its hide_reason cleared',
-    );
-  });
+  await reviveProof(
+    'R2: a ✓ after Clear day revives the entry and clears its reason',
+    async (f, tx) => {
+      const first = expectOk(
+        await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+        'FAM-1 11c-ii R2: the ✓',
+      );
+      const cleared = await clearDay(f.exec, {
+        profilePublicId: f.athlete.publicId,
+        scope: f.H_SCOPE,
+        day: DAY,
+      });
+      assert.ok('hiddenAt' in cleared, 'FAM-1 11c-ii R2: Clear day hid the row');
+      const again = expectOk(
+        await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+        'FAM-1 11c-ii R2: a ✓ after Clear day',
+      );
+      const slot = await onSlot(tx, f.p.check.id);
+      assert.deepEqual(
+        [again.entryPublicId, slot.all.length, slot.live.length, slot.live[0]?.hideReason],
+        [first.entryPublicId, 1, 1, null],
+        'FAM-1 11c-ii R2: after Clear day, the entry is revived and its hide_reason cleared',
+      );
+    },
+  );
 
   // An empty ✓ revives with the prescription's numbers; five rounds leave one entry.
-  await proof('R3: an empty ✓, and five rounds', async (f, tx) => {
+  await reviveProof('R3: an empty ✓, and five rounds', async (f, tx) => {
     const first = expectOk(
       await f.tick({ prescriptionPublicId: f.p.weightReps.publicId, values: wr(8, 30) }),
       'FAM-1 11c-ii R3: the first ✓',
@@ -2079,7 +2088,7 @@ async function verifyRevive(): Promise<void> {
 
   // R3 (343): with several hidden entries on the slot, the most recently hidden is revived, even on
   // the LOWER id.
-  await proof('R4: several hidden entries', async (f, tx) => {
+  await reviveProof('R4: several hidden entries', async (f, tx) => {
     const first = expectOk(
       await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
       'FAM-1 11c-ii R4: the first ✓',
@@ -2109,7 +2118,7 @@ async function verifyRevive(): Promise<void> {
 
   // R2 (342): another athlete's hidden entry, planted in this athlete's session and hidden more
   // recently, is never revived.
-  await proof('R5: another athlete’s hidden entry is never revived', async (f, tx) => {
+  await reviveProof('R5: another athlete’s hidden entry is never revived', async (f, tx) => {
     const first = expectOk(
       await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
       'FAM-1 11c-ii R5: the ✓',
@@ -2150,7 +2159,7 @@ async function verifyRevive(): Promise<void> {
 
   // R4 (357): the revive's UPDATE hits the row arbiter (a sibling's LIVE entry planted on the set, in
   // this athlete's session: state (i)). The savepoint absorbs the 23505 and the insert answers.
-  await proof('R6: the row arbiter arm', async (f, tx) => {
+  await reviveProof('R6: the row arbiter arm', async (f, tx) => {
     const first = expectOk(
       await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
       'FAM-1 11c-ii R6: the ✓',
@@ -2170,48 +2179,12 @@ async function verifyRevive(): Promise<void> {
     );
   });
 
-  // A refused ✓ never reaches the revive (R1): the hidden entry is untouched.
-  await proof('R7: a refused ✓ leaves the hidden entry untouched', async (f, tx) => {
-    const c1 = newId();
-    const first = expectOk(
-      await f.tick({
-        clientId: c1,
-        prescriptionPublicId: f.p.weightReps.publicId,
-        values: wr(8, 30),
-      }),
-      'FAM-1 11c-ii R7: the ✓',
-    );
-    expectOk(await f.untick(first.entryPublicId), 'FAM-1 11c-ii R7: the un-tick');
-    const before = await onSlot(tx, f.p.weightReps.id);
-    const setsOf = async () =>
-      tx
-        .select({ reps: schema.entrySets.reps, deletedAt: schema.entrySets.deletedAt })
-        .from(schema.entrySets)
-        .where(eq(schema.entrySets.entryId, (await f.entryRow(first.entryPublicId)).id));
-    const setsBefore = await setsOf();
-    expectRefused(
-      await f.tick({ prescriptionPublicId: f.p.weightReps.publicId }, '2026-12-31'),
-      ROW_REFUSAL.closed_day,
-      'FAM-1 11c-ii R7: a ✓ outside the window is closed_day',
-    );
-    expectRefused(
-      await f.tick({
-        prescriptionPublicId: f.p.weightReps.publicId,
-        values: { quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'kg', value: 30 }] },
-      }),
-      ROW_REFUSAL.bad_value,
-      'FAM-1 11c-ii R7: a weight in another unit is bad_value',
-    );
-    assert.deepEqual(
-      [await onSlot(tx, f.p.weightReps.id), await setsOf()],
-      [before, setsBefore],
-      'FAM-1 11c-ii R7: a refused ✓ leaves the hidden entry untouched',
-    );
-    assert.equal(before.all[0]?.clientId, c1, 'FAM-1 11c-ii R7: …its clientId included');
-  });
+  // A refused ✓ never reaches the revive (R1). No proof of its own: every refusal throws inside the
+  // writer's transaction, which rolls back, so "the hidden entry is untouched" would hold even if a
+  // revive ran first. R6's `stillHidden` is the case that can fail: a revive attempted, then refused.
 
   // R4 / S2 (345–347): the revive freezes the CURRENT prescription: its text, its unit and its group.
-  await proof('R8: frozen again', async (f, tx) => {
+  await reviveProof('R8: frozen again', async (f, tx) => {
     const first = expectOk(
       await f.tick({ prescriptionPublicId: f.p.weightReps.publicId }),
       'FAM-1 11c-ii R8: the Weight × Reps ✓',
@@ -2269,8 +2242,56 @@ async function verifyRevive(): Promise<void> {
     assert.equal(group?.group, 'z', 'FAM-1 11c-ii R8: frozen again: the group');
   });
 
+  // R4: the revive's UPDATE hits `entries.client_id` (this ✓'s id landed on another row meanwhile).
+  // Staged on one connection with a statement trigger on `sessions` (lane S's #578 rig): step 11's
+  // session upsert fires it after the replay check and before the revive, and it plants a hidden row
+  // holding this ✓'s clientId on another prescription. The savepoint absorbs the 23505 and the
+  // classifier answers: a holder on another slot is `not_found`. Mutation 611 drops the arm.
+  await reviveProof('R10: the clientId arm', async (f, tx) => {
+    const target = newId();
+    const holder = expectOk(
+      await f.tick({ prescriptionPublicId: f.p.check.publicId }),
+      'FAM-1 11c-ii R10: a row to copy',
+    );
+    const hidden = expectOk(
+      await f.tick({ prescriptionPublicId: f.p.reps.publicId }),
+      'FAM-1 11c-ii R10: the ✓ to revive',
+    );
+    expectOk(await f.untick(hidden.entryPublicId), 'FAM-1 11c-ii R10: its un-tick');
+    await tx.execute(
+      sql`create temp table revive_target (client_id uuid not null, src uuid not null)`,
+    );
+    await tx.execute(
+      sql`insert into revive_target values (${target}::uuid, ${holder.entryPublicId}::uuid)`,
+    );
+    await tx.execute(sql`create function verify_revive_client_id() returns trigger language plpgsql as $$
+      begin
+        insert into entries (public_id, client_id, profile_id, activity_date, unit, movement_name,
+            activity_type_id, movement_id, session_id, prescription_id, prescription_set,
+            prescribed_snapshot, status, deleted_at)
+          select gen_random_uuid(), t.client_id, e.profile_id, e.activity_date, e.unit, e.movement_name,
+            e.activity_type_id, e.movement_id, e.session_id, e.prescription_id, e.prescription_set,
+            e.prescribed_snapshot, e.status, now()
+          from entries e join revive_target t on e.public_id = t.src
+          where not exists (select 1 from entries x where x.client_id = t.client_id);
+        return null;
+      end $$`);
+    await tx.execute(
+      sql`create trigger revive_client_id after insert on sessions for each statement execute function verify_revive_client_id()`,
+    );
+    const answer = await f.tick({ clientId: target, prescriptionPublicId: f.p.reps.publicId });
+    await tx.execute(sql`drop trigger revive_client_id on sessions`);
+    await tx.execute(sql`drop function verify_revive_client_id()`);
+    await tx.execute(sql`drop table revive_target`);
+    assert.deepEqual(
+      [answer, (await f.entryRow(hidden.entryPublicId)).deletedAt !== null],
+      [{ ok: false, reason: ROW_REFUSAL.not_found }, true],
+      'FAM-1 11c-ii R10: the clientId arm: a clientId another row took meanwhile is not_found, the entry stays hidden',
+    );
+  });
+
   // R5 (344), and D35's accepted limit, pinned.
-  await proof('R9: replays, and the limit', async (f) => {
+  await reviveProof('R9: replays, and the limit', async (f) => {
     const [c1, c2] = [newId(), newId()];
     const first = expectOk(
       await f.tick({
@@ -2330,6 +2351,12 @@ async function verifyRevive(): Promise<void> {
   });
 }
 
+// ── FAM-1 11c-i — Change (`amendRow`) ─────────────────────────────────────────────────────────────────
+
+/**
+ * Change, as `docs/plans/fam-1-11c-change-and-revive.md` → § Test plan → Change lists it. Each
+ * mutation (348–356 and 358–363, `scripts/mutations/README.md`) names the assertion here that it turns red.
+ */
 async function verifyAmend(): Promise<void> {
   const primary = QUANTITY_SLOT.primary;
   const q = (unit: Unit, value: number, slot: QuantitySlot = primary) => ({ slot, unit, value });

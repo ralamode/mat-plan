@@ -19,7 +19,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../../client';
 import { schema } from '../../client';
-import { ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX } from '../../schema';
+import { ENTRY_CLIENT_ID_UNIQUE_INDEX, ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX } from '../../schema';
 import { prescriptionTerms } from '../../queries/day/prescription-terms';
 import {
   programRowOf,
@@ -380,10 +380,13 @@ export async function logRow(
      *   arbiter answer: `slot_taken`, or this `clientId`'s own row). Otherwise the most recently
      *   hidden: `deleted_at` DESC, then `id` DESC, sorted HERE, after the lock (Postgres sorts a
      *   locking query before it locks, so an `ORDER BY deleted_at` would sort on pre-lock values).
+     *   ⚠️ JS `Date` holds milliseconds and the column microseconds, so two hides under 1 ms apart tie
+     *   and fall to `id DESC`; unreachable in practice, since a ✓ must come between two un-ticks.
      * - **R4, in a savepoint:** `UNHIDE` (which clears `hide_reason` in the same UPDATE, so a revive
      *   after Clear day passes `entries_hide_reason_hidden_check`), this ✓'s `clientId`, the columns
      *   frozen again, `updated_at`. The UPDATE repeats the profile conjunct (defence in depth; R2's is
-     *   the one mutation 342 proves). 0 rows: someone restored it first, so insert. A `23505` on
+     *   the one mutation 342 proves). Its 0-row arm (someone restored it first, so insert) is
+     *   unreachable while R2's lock is held: defence that matters only if the lock is removed. A `23505` on
      *   `uq_entries_client_id`: this `clientId` landed elsewhere meanwhile, so the classifier answers.
      *   On the row arbiter: a live row now holds the set, so the insert answers. The entry's live set
      *   is soft-deleted, and this ✓'s set is written below as for any ✓, so a unit change (lb → kg)
@@ -432,7 +435,7 @@ export async function logRow(
         });
         return revived ? { entry: revived } : null;
       } catch (error) {
-        if (isUniqueViolationOn(error, ['uq_entries_client_id'])) {
+        if (isUniqueViolationOn(error, [ENTRY_CLIENT_ID_UNIQUE_INDEX])) {
           const holder = await classifyRowHolder(tx, profileId, write);
           if (holder.held) return { answer: await answerHolder(tx, holder) };
           throw error;
@@ -477,12 +480,11 @@ export async function logRow(
     if (!entry) {
       const answered = await explainMiss();
       if (answered) return answered;
-      // 🔴 **Neither held nor taken: retried ONCE** (lane S's #578 pattern). The insert and these
-      // reads are separate statements, so the entry that held the set can be un-ticked or cleared by
-      // another phone between them: nothing holds the set by the time it is read, and the same ✓
-      // inserts on a second try.
-      // The retry goes back through the revive (11c-ii, plan 11c § Proofs 11b's rewrite), so the
-      // un-ticked entry is brought back rather than a second one inserted beside it.
+      // 🔴 **Neither held nor taken: retried ONCE** (lane S's #578 pattern). Since 11c-ii the revive's
+      // `FOR UPDATE` holds a live holder it read, so another phone's un-tick of THAT row waits; the
+      // window is now an entry committed after the lock's snapshot, which the skipped insert met and
+      // which is hidden by the time it is read. The retry goes back through the revive (plan 11c §
+      // Proofs 11b's rewrite), so that entry is brought back rather than a second one inserted.
       placed = await place();
       if ('answer' in placed) return placed.answer;
       entry = placed.entry;
