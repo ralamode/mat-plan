@@ -129,7 +129,7 @@ not count programs or compare the list with `programsList`.
 | `packages/db/src/writers/program/seed-fixtures.ts` | the per-program function; the `limit_reached` skip; `SEED_PROGRAM_CLIENT_IDS`                                                                   | lane P                                                     |
 | N `packages/db/src/writers/program/seed-e2e.ts`    | the e2e program as data                                                                                                                         | lane P                                                     |
 | `packages/db/scripts/verify/program.ts`            | the proofs below                                                                                                                                | lane P                                                     |
-| `packages/db/scripts/mutations/`                   | 274 re-cut (its context is the set); 410, 411, 415, 416 re-cut if the function moves them; new patches from lane P's 581–589                    | lane P (274: its owner told)                               |
+| `packages/db/scripts/mutations/`                   | 274 re-cut (its context is the set); 410, 411, 415, 416 re-cut if the function moves them; new patches 585–589 (lane P's block)                 | lane P (274: its owner told)                               |
 | `docs/features/program-writers.md`                 | a map row ("not a contract fixture"), invariant 1's exception list, invariant 19                                                                | lane P                                                     |
 | `docs/privacy/data-inventory.md`                   | the dated note                                                                                                                                  | lane P                                                     |
 | N changelog fragment                               |                                                                                                                                                 | lane P                                                     |
@@ -143,17 +143,18 @@ Lane C's spec uses the new consts in its own PR. This PR does not touch `day-pag
   - Athlete Four's plan holds Heavy A then Heavy B, Heavy A's supersets a and b, Heavy B's a;
   - on the day before the start, nothing.
 - `active_from` is `SEED_E2E_START_DAY`.
-- A second seed run writes nothing (`ctid`).
+- A second seed run writes nothing: assignments by `ctid`; program and item counts.
 - **The lived-in preview:** covered through the shared function by the world's proofs (mutations
   411, 415, 416), not by an e2e-specific case.
 - **No profile:** a household without Athlete Four (household B) gets no e2e program; and in the seed household, with the program retired and Athlete Four archived, a run makes none.
-- The world's deep-equals and counts are unchanged. These proofs come after the world's in
+- The world's deep-equals and counts are unchanged. These proofs are in their own `verifySeedE2eAthlete`, after
   `verifySeedFixtures`, so 410, 411, 415 and 416 still go red on their own lines.
 - **Mutations** (new):
   - the e2e week left off one day;
   - the put on a day late;
   - the e2e program made without a live, active Athlete Four;
-  - `limit_reached` thrown again.
+  - `limit_reached` thrown again;
+  - the live-athlete check without `archived_at` (589).
 - **Cited, not duplicated:** production writes none of it (OPS-2 Proof A, mutations 45 and 326); the
   set equals what the seed writes (mutation 274).
 

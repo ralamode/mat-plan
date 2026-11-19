@@ -106,7 +106,6 @@ import { SHIFT_BAND } from '../../src/writers/program/shift-band';
 import {
   SEED_E2E_PROGRAM_CLIENT_ID,
   SEED_E2E_PROGRAM_NAME,
-  SEED_E2E_SLOTS,
   SEED_E2E_START_DAY,
 } from '../../src/writers/program/seed-e2e';
 import { resolveDayPlan } from '../../src/queries/day/day-plan';
@@ -3428,10 +3427,15 @@ async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promi
  */
 async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
-  const heavy = SEED_E2E_SLOTS.map((slot) => ({
-    label: slot.label,
-    name: world.programs.find((p) => p.id === 'p1')!.workouts.find((w) => w.wid === slot.wid)!.name,
-  }));
+  // The expectation is spelled from the world by its own workout ids and literal labels, never from
+  // the slots the seed writes, so a swapped or repeated slot is seen. Supersets are what lane C's
+  // locators read.
+  const expected = (wid: string, label: string) => ({
+    label,
+    name: programOf(world, 'p1').workouts.find((w) => w.wid === wid)!.name,
+    supersets: workoutDraft(world, 'p1', wid).items.map((i) => i.superset?.group ?? null),
+  });
+  const heavy = [expected('w2', 'Morning'), expected('w3', 'Evening')];
   assert.ok(
     !SEED_FIXTURE_PROGRAM_CLIENT_IDS.includes(SEED_E2E_PROGRAM_CLIENT_ID),
     'FAM-1 e2e athlete: the test program’s client_id is no fixture program’s',
@@ -3459,7 +3463,11 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
           today,
           catalog: [],
         })
-      )?.workouts.map((w) => ({ label: w.label, name: w.name })) ?? null;
+      )?.workouts.map((w) => ({
+        label: w.label,
+        name: w.name,
+        supersets: w.items.map((i) => i.superset?.group ?? null),
+      })) ?? null;
     for (let i = 0; i < 7; i++) {
       const day = addDays(SEED_E2E_START_DAY, i);
       for (const today of [day, addDays(day, 1)]) {
@@ -3541,6 +3549,11 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       result,
       'ok',
       'FAM-1 e2e athlete: the seed succeeds with the household at its item cap',
+    );
+    assert.equal(
+      await programBlockByClientId(exec, scope, seedFixtureProgramClientId('p1')),
+      null,
+      'FAM-1 e2e athlete: …and a program whose items hit the cap is skipped, not half-made',
     );
   });
   console.log(
