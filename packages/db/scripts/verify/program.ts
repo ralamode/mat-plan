@@ -3632,6 +3632,18 @@ async function verifyCaps(): Promise<void> {
       timeoutSet,
       'TD lock timeout: newItem sets lock_timeout before it waits on the household-items lock',
     );
+    // The household row is read FOR KEY SHARE, so an erasure mid-call answers `not_found`, never a
+    // 23503 (waiting is unprovable on one connection; the lock MODE is not): only a locking read
+    // takes RowShareLock on the table, which a plain SELECT (AccessShareLock) does not.
+    const householdLocks = (
+      await tx.execute(
+        sql`select mode from pg_locks where locktype = 'relation' and relation = 'households'::regclass and pid = pg_backend_pid()`,
+      )
+    ).rows as Array<{ mode: string }>;
+    assert.ok(
+      householdLocks.some((l) => l.mode === 'RowShareLock'),
+      'FAM-1 newItem: the household row is read FOR KEY SHARE, so an erasure mid-call is not_found',
+    );
     assert.deepEqual(
       await add('Caps One Too Many'),
       { ok: false, reason: PROGRAM_REFUSAL.limit_reached },
