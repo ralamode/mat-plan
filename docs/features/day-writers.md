@@ -220,6 +220,10 @@ flowchart LR
     `logRow` re-runs the insert once; a second miss still throws. Proved with a statement-level
     `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`); mutation 372.
 
+27. **The 14b partition proof** sits beside `verifyExport` in `verify/day.ts`: it logs every kind of entry
+    and plants a hidden check-in and a bodyweight metric under another activity, then asserts each live
+    entry is in exactly one export file (the read is `write-path.md`'s; mutations 368–371).
+
 ## Fake parity
 
 The preview's fake (`apps/web/app/design/program/fakes.ts`) and the writer answer the same input the
