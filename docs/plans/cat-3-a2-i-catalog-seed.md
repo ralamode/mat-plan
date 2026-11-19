@@ -296,6 +296,13 @@ sharded gate. A mutation that cannot fail is not written.
 
 None for the maintainer.
 
+## Approval
+
+**Approved by the maintainer** _(orchestrator's chat, 2026-11-19, relayed by the board)_, asked "Approve
+lane P's A2-i plan (#693): the movement library's database loader, inert in production until the switch
+step (A2-ii), with counts-only logs (no typed movement names ever printed)?": **"Approve
+(Recommended)"**.
+
 ## Review-response log (adversarial panel)
 
 Panel, 2026-11-19: db-safety, privacy and correctness, on Opus 5.5 (the author on Opus 5.5 too). Lane
