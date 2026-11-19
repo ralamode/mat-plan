@@ -57,6 +57,7 @@ rules it starts under. Each step below adds its files, its diagram and its invar
 | `packages/db/src/writers/program/new-item.ts`         | `newItem`: selects the item a name already names (`existingItem`, then the slug), with its stored name and own type; else makes a household item typed as asked.                                                                                                                                                                                                                                                                                                       |
 | `packages/db/src/writers/program/copy-workout.ts`     | `copyWorkout`: an independent copy of a workout into one of the household's programs, named by C15, with frozen provenance, optionally onto weekdays.                                                                                                                                                                                                                                                                                                                  |
 | `packages/db/src/writers/program/seed-fixtures.ts`    | `seedProgramFixtures`: the test seed's fixture programs (`SEED_FIXTURES=1` only), built with the real writers, and the seed's athletes on them. A program the household already has, by its fixed `client_id`, is left as it is.                                                                                                                                                                                                                                       |
+| `packages/db/src/writers/program/seed-e2e.ts`         | **Not a contract fixture.** The test seed's one program for lane C's Change e2e: Athlete Four on it from `SEED_E2E_START_DAY`, its own fixed past day, Heavy A ("Morning") then Heavy B ("Evening") on every day of the week. A small world, seeded by `seed-fixtures.ts`' same function.                                                                                                                                                                              |
 | `packages/db/src/writers/program/assign.ts`           | `putOn`: athletes onto a template program from today or tomorrow, one row in its Programs-list place (a reopen at its old place, D41) and all seven weekday rows; already on is skipped; a last day of today is reopened on the same row. Also the shared helpers: `lockProgram` and `lockAthletes` (used by `takeOff` and the reorder too), and `openAssignments` and `placeAssignments`, the one band writer of an athlete's order.                                  |
 | `packages/db/src/writers/program/take-off.ts`         | `takeOff`: removes a start not begun, or begun today with nothing logged under it (`lastDay: null`); otherwise ends the stretch today (`lastDay: today`). A replay answers the same (decided 2026-11-18).                                                                                                                                                                                                                                                              |
 | `packages/db/src/writers/program/reorder-programs.ts` | `reorderPrograms`: the athlete's full order, a permutation of their `currentPrograms` (a different set is `invalid`, which also covers a list made stale by a put on, take off or midnight; two reorders of one set: the last one wins), written by `placeAssignments`; a program ending today keeps its row; an unchanged order writes nothing.                                                                                                                       |
@@ -70,7 +71,9 @@ rules it starts under. Each step below adds its files, its diagram and its invar
    a **column request** to lane A, added expand-only in its next migration (plan §6). The one
    exception is a **seam turn the board grants**: 6a-ii's line in `packages/db/src/index.ts` and its
    case in `apps/web/test/program-tables-stay-dark.test.ts`, and (board, 2026-11-17) that test's
-   allowance for `lib/dal/day/` to import `workoutInHousehold` alone.
+   allowance for `lib/dal/day/` to import `workoutInHousehold` alone; and (board, 2026-11-19) the
+   e2e athlete's lines in `packages/shared/src/seed-ids.ts`, `packages/db/src/seed.ts`,
+   `packages/db/src/index.ts`, `packages/db/scripts/verify.ts` and `packages/db/scripts/verify/schema.ts`.
 2. 🔴 **A read deep-equals the contract's fixture.** Seed the state the fixture describes, run the
    query, and compare through `scripts/verify/normalize-fixture.ts`: `workout` with `heavy-a-draft`
    (6a), `program-view` with `family-program` (6c). The shapes and fixtures are
@@ -217,7 +220,7 @@ flowchart TD
     program goes before the first program they keep that comes later in the household's Programs
     list (`programBlocks.id` among live templates; a program outside the list, a hidden one, is never
     later), or last; a reopen goes back to its old place, after the open programs that were ahead of it (a lower
-    `idx`; the maintainer's refinement of "reopen at old number", 2026-11-19, option A),
+    `idx`; recommended to the maintainer as a refinement of "reopen at old number", 2026-11-19, pending),
     which is where it was unless a program earlier in the list was put on in between or the athlete
     reordered (accepted by the maintainer, 2026-11-18; the preview fake keeps it where it was). A
     second known difference from the fake, accepted by the contract owner (2026-11-19): "later" is
@@ -244,7 +247,9 @@ flowchart TD
     on nothing, and a program whose item the household has under another type, or whose name a
     program of the household already has, is left out, since `migrate-preview.yml` seeds the long-lived preview
     database on every push (`seed-fixtures-puts-on-an-archived-athlete`,
-    `seed-fixtures-uses-a-wrongly-typed-item`). An item the catalog has is the catalog's in the
+    `seed-fixtures-uses-a-wrongly-typed-item`). So is a household at its item cap
+    (`seed-throws-at-the-item-cap`). The e2e test program (`seed-e2e.ts`) goes through the same
+    function, and is made only with Athlete Four live and active (`seed-e2e-without-its-athlete`). An item the catalog has is the catalog's in the
     seeded workouts (`newItem`): "DB bench press" is seeded as the catalog's Dumbbell Bench Press.
 
 20. 🔴 **The program page and the day page agree on who is on what** (6c-ii). Both reads take each
@@ -270,7 +275,9 @@ flowchart TD
     them, so the library and an item a catalog row shadows never count),
     under a transaction-scoped advisory lock keyed on the household (`ADVISORY_LOCK.householdItems` in `writers/locks.ts`, reached through
     `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
-    other. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
+    other, and a wait on it ends after `LOCK_TIMEOUT` (`setLocalLockTimeout`, set first in the
+    same transaction, so it bounds every later lock wait there too) rather than queueing behind a
+    stuck holder. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
     (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live
     workouts, under the block lock both take first; `copyWorkout` also refuses a weekday it would
     go on that already holds `MAX_DAY_SLOTS`, since it writes slots without a week to parse. `saveWeek` answers a weekday past

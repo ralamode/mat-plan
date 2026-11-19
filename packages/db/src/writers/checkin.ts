@@ -1,4 +1,4 @@
-import { METRIC_KEYS } from '@mat-plan/shared';
+import { lowerCaseUuidSchema, METRIC_KEYS } from '@mat-plan/shared';
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { schema } from '../client';
@@ -113,18 +113,40 @@ type CheckinArgs = {
  * before the reads run: no insert, no holder, no taken day. The day is free by then, so those items
  * are inserted once more and classified again. A second miss is not that race (it would need a new
  * practice logged and cleared again inside the retry), so it throws as before.
+ *
+ * 🔴 **Ids are parsed into Postgres' own spelling on entry, and must be distinct.** The classifier
+ * below matches the insert's `RETURNING` and the holder read by JS string, while Postgres compares
+ * `uuid`s and prints them lower case and hyphenated. So an id sent in another spelling (upper case,
+ * braces, no hyphens) used to be written and then missed: a habit threw, and a practice was answered
+ * `day_taken` against the row it had just written. `lowerCaseUuidSchema` accepts only the hyphenated
+ * form and folds the case, so what the classifier holds is what Postgres prints. And two items under
+ * one id write one row, which the per-id maps would report as two `created`. The app's forms mint one
+ * lower-case id per item and `logCheckinsAction` parses with the same schema and refuses a repeat as
+ * a field error first, so both throws are preconditions, not answers. ⚠️ **A batch caller (the
+ * unwired `/api/sync`) must collapse identical replays, and refuse different items sharing an id as
+ * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages
+ * are for tests; `quietDbErrors` logs only the class. Answers carry the parsed id.
  */
 export async function writeCheckinEntries(
   exec: Executor,
   args: CheckinArgs,
 ): Promise<CheckinWriteResult[]> {
-  const first = await attemptCheckinEntries(exec, args);
-  const missed = args.values.filter((_, i) => first[i] === null);
+  const values = args.values.map((v) => {
+    const clientId = lowerCaseUuidSchema.safeParse(v.clientId);
+    if (!clientId.success) throw new Error('check-in client_id is not a hyphenated uuid');
+    return { ...v, clientId: clientId.data };
+  });
+  if (new Set(values.map((v) => v.clientId)).size !== values.length) {
+    throw new Error('check-in client_ids repeat within one submit');
+  }
+
+  const first = await attemptCheckinEntries(exec, { ...args, values });
+  const missed = values.filter((_, i) => first[i] === null);
   if (missed.length === 0) return first as CheckinWriteResult[];
 
   const retried = await attemptCheckinEntries(exec, { ...args, values: missed });
   const byClientId = new Map(missed.map((v, i) => [v.clientId, retried[i]]));
-  return args.values.map((v, i) => {
+  return values.map((v, i) => {
     const result = first[i] ?? byClientId.get(v.clientId);
     if (result == null) {
       // No insert, no holder and no taken day, twice. The insert collided on another unique (a reused

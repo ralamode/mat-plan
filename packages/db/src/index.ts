@@ -82,8 +82,10 @@ export {
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_3_PUBLIC_ID,
+  SEED_PROFILE_4_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_2_NAME,
+  SEED_PROFILE_4_NAME,
   SEED_FULL_ROUTINE,
   SEED_ATHLETE_TWO_ROUTINE,
   // FAM-1 step 1: the program-fixtures flag, so the local harness and its containment test name it
@@ -92,3 +94,6 @@ export {
 } from './seed';
 
 export type { CheckinMonthRow, StrengthMonthRow } from './queries/export-month';
+// The bound a request write puts on its advisory-lock wait, named so the app's order tests assert
+// the value the writers set rather than re-typing it.
+export { LOCK_TIMEOUT } from './writers/executor';

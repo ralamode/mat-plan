@@ -161,6 +161,7 @@ import {
   columnsOf,
   db,
   expectRejectedBy,
+  lockTimeoutSetBy,
   orFail,
   rolledBack,
   type VerifyContext,
@@ -278,7 +279,8 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
   );
 }
 // V1-3: the kid profiles, stable by public_id across re-seeds. PROF-1 b added a THIRD, owned by the
-// archive e2e specs — see `SEED_PROFILE_3_PUBLIC_ID`'s docblock for why archive cannot share one.
+// archive e2e specs — see `SEED_PROFILE_3_PUBLIC_ID`'s docblock for why archive cannot share one —
+// and FAM-1 a FOURTH, owned by the Change e2e (`SEED_PROFILE_4_PUBLIC_ID`).
 //
 // 🔴 **PRIV-3 RC, D7: what the seed writes, stated once.** This used to be a hand-written list of the
 // three profile ids; it is now equality with `SEED_PUBLIC_IDS`, the set `household-claim-…` refuses
@@ -295,7 +297,7 @@ assert.deepEqual(
 // SEED_PROFILE_NAME / SEED_PROFILE_2_NAME, which asserting against the consts could never catch.
 assert.deepEqual(
   profiles.map((p) => p.name).sort(),
-  ['Athlete One', 'Athlete Three', 'Athlete Two'],
+  ['Athlete Four', 'Athlete One', 'Athlete Three', 'Athlete Two'],
   'OSS-1: the seeded profile names are role names, not real first names',
 );
 assert.equal(households.length, 1, 'exactly one household after two seed runs');
@@ -8792,11 +8794,13 @@ await rolledBack(async (tx) => {
   // (1) The lock, keyed by the household. `asTx(tx)`, never `asPg`: on one connection a query on the
   //     pool inside this transaction would wait forever. createProfile's own transaction is a
   //     savepoint here, and an xact lock taken in a savepoint is held until the outer one ends.
-  await createProfile(asTx(tx), A_SCOPE, {
-    name: 'TD Cap Lock Probe',
-    kind: PROFILE_KIND.kid,
-    clientId: newId(),
-  });
+  const { set: timeoutSet } = await lockTimeoutSetBy(tx, () =>
+    createProfile(asTx(tx), A_SCOPE, {
+      name: 'TD Cap Lock Probe',
+      kind: PROFILE_KIND.kid,
+      clientId: newId(),
+    }),
+  );
   const [key] = (await tx.execute(sql`select hashint8(${households[0].id}::bigint) as k`))
     .rows as Array<{ k: number }>;
   const locks = (
@@ -8811,6 +8815,10 @@ await rolledBack(async (tx) => {
         Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
     ),
     'TD athlete cap: createProfile holds the household-athletes advisory lock, keyed by its household',
+  );
+  assert.ok(
+    timeoutSet,
+    'TD lock timeout: createProfile sets lock_timeout before it waits on the household-athletes lock',
   );
 });
 

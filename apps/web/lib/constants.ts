@@ -396,7 +396,7 @@ export const QUIET_LINK_CLASS = `text-muted-foreground hover:text-foreground tex
 
 /**
  * A dashed, muted notice box: why something is absent or read-only (the closed-day and archived
- * notices on the day page, the day page's "Not on a program yet" and rest-day notices). Defined at
+ * notices on the day page, the day page's "Not on a program." and rest-day notices). Defined at
  * FAM-1 13d, the third copy; `page.tsx`'s two literals moved to it at 12c.
  */
 export const NOTICE_CLASS =
@@ -593,6 +593,15 @@ export const ADD_ATHLETE_COPY = {
  * heading on a screen that has no other navigation.
  */
 export const ALL_ATHLETES_LINK = '← All athletes';
+
+/**
+ * The way back to `/p` from a **household** page (Programs, Household settings), where
+ * `ALL_ATHLETES_LINK` is the way back from a page about ONE athlete. The rule, so the next page
+ * chooses on purpose: household pages say Home, one athlete's pages say All athletes. Settings lists
+ * archived athletes that `/p` does not, so "All athletes" would point away from the page that shows
+ * more of them. Both lead to `APP_HOME_PATH`; whether to settle on one label is the maintainer's call.
+ */
+export const HOME_LINK = '← Home';
 
 /**
  * UI-6 — the app's own 404 (`app/not-found.tsx`). One message for an unknown URL AND for an athlete
@@ -863,6 +872,15 @@ const PRACTICE_FIELD_SUFFIX = ' minutes';
 const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
   (a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice,
 )!.label;
+
+/**
+ * The check-in submit's per-field refusal for an item it cannot write as sent: a missing or malformed
+ * `client_id`, or one another field of the same submit also carries. The form mints a fresh id per
+ * field on every load, so a reload is the true remedy.
+ */
+export const CHECKIN_COPY = {
+  itemNotSubmitted: 'Could not submit this item. Reload and try again.',
+} as const;
 
 /**
  * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is

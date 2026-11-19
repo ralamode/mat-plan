@@ -30,10 +30,12 @@ import {
   emptyWeek,
   WEEKDAYS,
   weekDaysSchema,
+  SEED_PROFILE_4_PUBLIC_ID,
 } from '@mat-plan/shared';
 import {
   adultProgramWithCopy,
   DAY_PLAN_FIXTURE_SOURCES,
+  FIXTURE_SWITCH_DAY,
   familyProgram,
   familyProgramAfterTakeOff,
   familyProgramArchivedAthlete,
@@ -101,7 +103,21 @@ import {
 import { saveWeek } from '../../src/writers/program/save-week';
 import { saveWorkout } from '../../src/writers/program/save-workout';
 import { SHIFT_BAND } from '../../src/writers/program/shift-band';
-import { asDb, asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import {
+  SEED_E2E_PROGRAM_CLIENT_ID,
+  SEED_E2E_PROGRAM_NAME,
+  SEED_E2E_START_DAY,
+} from '../../src/writers/program/seed-e2e';
+import { resolveDayPlan } from '../../src/queries/day/day-plan';
+import {
+  asDb,
+  asTx,
+  lockTimeoutSetBy,
+  orFail,
+  rolledBack,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
 /**
@@ -142,6 +158,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyCopyWorkout(ctx);
   await verifyPutOn(ctx);
   await verifySeedFixtures(ctx);
+  await verifySeedE2eAthlete(ctx);
   await verifyProgramReads(ctx);
   await verifyTakeOff(ctx);
   await verifyReorderPrograms(ctx);
@@ -3411,6 +3428,147 @@ async function verifyReorderPrograms({ A_SCOPE, B_SCOPE }: VerifyContext): Promi
   );
 }
 
+/**
+ * The test seed's e2e athlete (docs/plans/fam-1-e2e-change-athlete.md): Athlete Four, on the test
+ * program from `FIXTURE_SWITCH_DAY`, has Heavy A then Heavy B on every day of the week, today and
+ * yesterday, as the day page reads it. Fixed dates only: no clock.
+ */
+async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  const world = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world;
+  // The expectation is spelled from the world by its own workout ids and literal labels, never from
+  // the slots the seed writes, so a swapped or repeated slot is seen. Supersets are what lane C's
+  // locators read.
+  const expected = (wid: string, label: string) => ({
+    label,
+    name: programOf(world, 'p1').workouts.find((w) => w.wid === wid)!.name,
+    supersets: workoutDraft(world, 'p1', wid).items.map((i) => i.superset?.group ?? null),
+  });
+  const heavy = [expected('w2', 'Morning'), expected('w3', 'Evening')];
+  assert.ok(
+    !SEED_FIXTURE_PROGRAM_CLIENT_IDS.includes(SEED_E2E_PROGRAM_CLIENT_ID),
+    'FAM-1 e2e athlete: the test program’s client_id is no fixture program’s',
+  );
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const a = schema.programAssignments;
+    const rows = await tx
+      .select({ activeFrom: a.activeFrom, activeTo: a.activeTo, name: schema.programBlocks.name })
+      .from(a)
+      .innerJoin(schema.profiles, eq(schema.profiles.id, a.profileId))
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, a.blockId))
+      .where(and(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID), isNull(a.deletedAt)));
+    assert.deepEqual(
+      rows,
+      [{ activeFrom: SEED_E2E_START_DAY, activeTo: null, name: SEED_E2E_PROGRAM_NAME }],
+      'FAM-1 e2e athlete: Athlete Four is on the test program from its start day, and on nothing else',
+    );
+    const plan = async (day: string, today: string) =>
+      (
+        await resolveDayPlan(exec, {
+          scope: A_SCOPE,
+          profilePublicId: SEED_PROFILE_4_PUBLIC_ID,
+          day,
+          today,
+          catalog: [],
+        })
+      )?.workouts.map((w) => ({
+        label: w.label,
+        name: w.name,
+        supersets: w.items.map((i) => i.superset?.group ?? null),
+      })) ?? null;
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(SEED_E2E_START_DAY, i);
+      for (const today of [day, addDays(day, 1)]) {
+        assert.deepEqual(
+          await plan(day, today),
+          heavy,
+          `FAM-1 e2e athlete: Heavy A then Heavy B on every day of the week (${day}, today ${today})`,
+        );
+      }
+    }
+    assert.deepEqual(
+      await plan(addDays(SEED_E2E_START_DAY, -1), SEED_E2E_START_DAY),
+      [],
+      'FAM-1 e2e athlete: …and nothing the day before the start',
+    );
+
+    // A second run writes nothing: assignments, programs and items.
+    const snapshot = async () => ({
+      rows: await assignmentRows(tx),
+      blocks: await blocksIn(tx, A_SCOPE),
+      movements: (
+        await tx
+          .select({ id: schema.movements.id })
+          .from(schema.movements)
+          .where(movementInHousehold(A_SCOPE))
+      ).length,
+    });
+    const before = await snapshot();
+    await seedProgramFixtures(exec, A_SCOPE);
+    assert.deepEqual(
+      await snapshot(),
+      before,
+      'FAM-1 e2e athlete: a second seed run writes nothing',
+    );
+
+    // With Athlete Four archived, and the test program gone, a run makes no new one.
+    await tx
+      .update(schema.programBlocks)
+      .set({ clientId: newId(), deletedAt: sql`now()` })
+      .where(eq(schema.programBlocks.clientId, SEED_E2E_PROGRAM_CLIENT_ID));
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID));
+    await seedProgramFixtures(exec, A_SCOPE);
+    assert.equal(
+      await programBlockByClientId(exec, A_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
+      null,
+      'FAM-1 e2e athlete: with Athlete Four archived, no test program is made',
+    );
+
+    // A household without Athlete Four gets no test program.
+    await seedProgramFixtures(exec, B_SCOPE);
+    assert.equal(
+      await programBlockByClientId(exec, B_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
+      null,
+      'FAM-1 e2e athlete: a household without Athlete Four gets no test program',
+    );
+  });
+
+  // A household at its item cap: the seed skips what it cannot make, and never throws.
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { scope } = await capsHousehold(tx);
+    for (let i = 0; i < MAX_HOUSEHOLD_ITEMS; i++) {
+      await insertMovementOwnedBy(exec, scope, {
+        publicId: newId(),
+        slug: `seed-cap-item-${i}`,
+        name: `Seed Cap Item ${i}`,
+        isBodyweight: false,
+        trackingType: TRACKING_TYPE.reps,
+      });
+    }
+    const result = await seedProgramFixtures(exec, scope).then(
+      () => 'ok',
+      (e: unknown) => String(e).slice(0, 120),
+    );
+    assert.equal(
+      result,
+      'ok',
+      'FAM-1 e2e athlete: the seed succeeds with the household at its item cap',
+    );
+    assert.equal(
+      await programBlockByClientId(exec, scope, seedFixtureProgramClientId('p1')),
+      null,
+      'FAM-1 e2e athlete: …and a program whose items hit the cap is skipped, not half-made',
+    );
+  });
+  console.log(
+    '✓ FAM-1 e2e athlete: Athlete Four has Heavy A then Heavy B every day from its start day; a re-run writes nothing; no live, active Athlete Four, no program; the item cap is a skip',
+  );
+}
+
 async function verifyCaps(): Promise<void> {
   // ── The household's own items ──
   await rolledBack(async (tx) => {
@@ -3443,7 +3601,9 @@ async function verifyCaps(): Promise<void> {
       ).length;
     const add = (name: string) => newItem(exec, scope, { name, trackingType: TRACKING_TYPE.reps });
 
-    const last = await add('Caps Last Drill');
+    const { set: timeoutSet, result: last } = await lockTimeoutSetBy(tx, () =>
+      add('Caps Last Drill'),
+    );
     assert.ok(last.ok && !last.existed, 'FAM-1 caps: the item that reaches the cap is made');
     assert.equal(
       await own(),
@@ -3467,6 +3627,10 @@ async function verifyCaps(): Promise<void> {
           Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
       ),
       'FAM-1 caps: newItem holds the household-items advisory lock, keyed by its household',
+    );
+    assert.ok(
+      timeoutSet,
+      'TD lock timeout: newItem sets lock_timeout before it waits on the household-items lock',
     );
     assert.deepEqual(
       await add('Caps One Too Many'),
