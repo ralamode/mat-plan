@@ -4,8 +4,8 @@ import { and, asc, eq, gte, isNull, lt, not, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from '../schema';
-import type { HouseholdScope } from '../scope';
-import { isLiveProfile } from '../writers/ownership';
+import type { HouseholdScope, OwnerScope } from '../scope';
+import { isLiveProfile, isOwnerOf } from '../writers/ownership';
 import {
   byFirstLogged,
   entrySessionIsItsAthletes,
@@ -60,6 +60,8 @@ export function monthRange(month: string): { from: string; to: string } {
 /**
  * One flat (entry × set × quantity) row. Derived, not hand-typed — the `ProgramDayRow` precedent —
  * so a nullability change in the select cannot leave a consumer claiming a shape this no longer has.
+ *
+ * Not owner-gated; the export's gate is `loggedMonths`.
  */
 export type StrengthMonthRow = Awaited<ReturnType<typeof strengthMonthRows>>[number];
 
@@ -297,6 +299,8 @@ export function bodyweightEntry() {
  * **Every logged check-in in one month** (FAM-1 14b): every live entry with no movement that is not a
  * bodyweight reading, so with the strength log and the bodyweight file each live entry lands in exactly
  * one file. `entryId` is for `db:verify`'s partition proof only and never becomes a column.
+ *
+ * Not owner-gated; the export's gate is `loggedMonths`.
  */
 export function checkinMonthRows(
   db: NodePgDatabase<typeof schema>,
@@ -338,7 +342,9 @@ export function checkinMonthRows(
 /** One row of `checkinMonthRows`, for tests that mock it (typed, so the shape cannot drift). */
 export type CheckinMonthRow = Awaited<ReturnType<typeof checkinMonthRows>>[number];
 
-/** Every bodyweight reading in one month. */
+/** Every bodyweight reading in one month. *
+ * Not owner-gated; the export's gate is `loggedMonths`.
+ */
 export function bodyweightMonthRows(
   db: NodePgDatabase<typeof schema>,
   args: {
@@ -381,19 +387,36 @@ export function bodyweightMonthRows(
  *
  * One indexed scan over `idx_entries_profile_date`. Drives which files the export writes, so a
  * profile with no data produces no directory rather than an empty one.
+ *
+ * 🔴 **The export's owner gate** (FAM-1 export follow-up, [plan](../../../../docs/plans/fam-1-export-owner-only.md)
+ * PR B; the maintainer's Q1, 2026-11-19: only the household's owner downloads an export). It takes
+ * an `OwnerScope`, so a caller must narrow with `ownerScope()` first, and its WHERE carries
+ * `isOwnerOf`, so a member scope cast past the type reads **no months**, and the DAL builds no file.
+ * `db:verify` proves the zero rows; mutation 610 drops the conjunct.
+ *
+ * ⚠️ **It gates the export's control flow, not the three file reads.** `strengthMonthRows`,
+ * `bodyweightMonthRows` and `checkinMonthRows` stay on `HouseholdScope` on purpose: every member may
+ * see those rows in the app (Q2), so the rule is about the export artifact, and the DAL only ever
+ * reads the files for months this returned.
  */
 export function loggedMonths(
   db: NodePgDatabase<typeof schema>,
   args: {
     profilePublicId: string;
-    /** TEN-1: the household this request is authorized for. */
-    scope: HouseholdScope;
+    /** TEN-1: the household this request is authorized for; the export's owner gate (above). */
+    scope: OwnerScope;
   },
 ) {
   return db
     .selectDistinct({ month: sql<string>`to_char(${schema.entries.activityDate}, 'YYYY-MM')` })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
-    .where(and(isLiveProfile(args.profilePublicId, args.scope), isNull(schema.entries.deletedAt)))
+    .where(
+      and(
+        isLiveProfile(args.profilePublicId, args.scope),
+        isNull(schema.entries.deletedAt),
+        isOwnerOf(args.scope),
+      ),
+    )
     .orderBy(sql`to_char(${schema.entries.activityDate}, 'YYYY-MM') desc`);
 }

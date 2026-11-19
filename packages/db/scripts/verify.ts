@@ -161,6 +161,7 @@ import {
   db,
   expectRejectedBy,
   orFail,
+  asOwner,
   rolledBack,
   type VerifyContext,
 } from './verify/harness';
@@ -2522,7 +2523,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 
   const months = await loggedMonths(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-    scope: A_SCOPE,
+    scope: asOwner(A_SCOPE, 'V1-13 loggedMonths'),
   });
   assert.ok(
     months.some((m) => m.month === '2026-03'),
@@ -5401,7 +5402,10 @@ const TEN1_READS_1C: readonly Ten1Read[] = [
     'loggedMonths (which months the export writes at all)',
     bwOwner,
     VERIFY_PROFILE_PUBLIC_ID,
-    (profilePublicId, scope) => loggedMonths(asPg, { profilePublicId, scope }),
+    // FAM-1 export follow-up: narrowed inside the lambda, so the row still reads household B's
+    // owner against A's profile (zero months by `isLiveProfile`, not by the owner gate).
+    (profilePublicId, scope) =>
+      loggedMonths(asPg, { profilePublicId, scope: asOwner(scope, 'TEN-1 loggedMonths') }),
   ],
 ];
 
@@ -8474,11 +8478,24 @@ console.log(
     'PROF-1 b: an ARCHIVED athlete is still renameable — archive is not a lock',
   );
   assert.deepEqual(
-    await loggedMonths(asPg, { profilePublicId: B_P, scope: A_SCOPE }),
+    await loggedMonths(asPg, { profilePublicId: B_P, scope: asOwner(A_SCOPE, 'PROF-1 b') }),
     [{ month: '2026-07' }],
     'PROF-1 b: …and the export path still returns an ARCHIVED athlete’s months (criterion 5) — the ' +
       'month this athlete logged, not merely "an array": fold archived_at into isLiveProfile and ' +
       'this returns [] while an Array.isArray check would stay green',
+  );
+
+  // (5b) 🔴 THE EXPORT IS THE OWNER'S (FAM-1 export follow-up, plan PR B; the maintainer's Q1,
+  // 2026-11-19). `loggedMonths` takes an `OwnerScope` and its WHERE carries `isOwnerOf`, so a member
+  // scope pushed past the type by a cast reads NO months, and the DAL builds no file. The forged
+  // scope is the archive proof's shape above: a cast is the only way in, which is the point.
+  assert.deepEqual(
+    await loggedMonths(asPg, {
+      profilePublicId: B_P,
+      scope: { ...A_SCOPE, role: HOUSEHOLD_ROLE.member } as OwnerScope,
+    }),
+    [],
+    'FAM-1 export: a member scope cast past the type reads no months, so no export file is built',
   );
 
   // (6) RESTORE IS ANY-MEMBER (decision M1). The member who could not archive CAN restore, with no
@@ -10097,9 +10114,10 @@ const REPLAY_REFUSED = /no live row for client_id/;
     scope: hideScope,
     month: monthOf(AUDIT_DAY),
   });
+  const hideOwner = asOwner(hideScope, 'V1-9b B1-1b');
   const beforeMonths = await loggedMonths(asPg, {
     profilePublicId: hideProfilePublicId,
-    scope: hideScope,
+    scope: hideOwner,
   });
   assert.ok(beforeStrength.length > 0, 'V1-9b B1-1b: the audit fixture is in the export');
 
@@ -10150,7 +10168,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
   assert.ok(hasAuditMonth(beforeMonths), 'V1-9b B1-1b: the audit month is in loggedMonths before');
   assert.ok(
     !hasAuditMonth(
-      await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideScope }),
+      await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideOwner }),
     ),
     "V1-9b B1-1b: 🔴 hide the month's only entry and loggedMonths DROPS the month (criterion 16)",
   );
@@ -10177,7 +10195,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
       'value preserved (criterion 16, the self-serve half)',
   );
   assert.deepEqual(
-    await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideScope }),
+    await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideOwner }),
     beforeMonths,
     'V1-9b B1-1b: …and loggedMonths has the month back',
   );

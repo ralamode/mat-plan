@@ -6,7 +6,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 
 import { schema } from '../../src/client';
-import type { HouseholdScope } from '../../src/scope';
+import { type HouseholdScope, type OwnerScope, ownerScope } from '../../src/scope';
 import type { Executor } from '../../src/writers/executor';
 
 /**
@@ -311,4 +311,19 @@ export async function orFail<T>(what: string, run: () => Promise<T>): Promise<T>
   } catch (e) {
     assert.fail(`${what} (threw: ${String((e as Error).message).slice(0, 120)})`);
   }
+}
+
+/**
+ * **Narrow a proof's scope to an `OwnerScope`, or fail the proof** (FAM-1 export follow-up). For a
+ * proof that calls an owner-gated read or writer with a scope it built as an owner: it routes through
+ * `ownerScope()`, the one narrowing, rather than a cast (`src/scope.test.ts` → `ALLOWED_CAST`), and a
+ * scope that is not an owner's fails here, loudly, instead of reading zero rows.
+ *
+ * `what` names the proof in the failure. `verify/erasure.ts` still keeps a private copy of this shape
+ * (PRIV-3 2a); switching it to this one belongs to that lane.
+ */
+export function asOwner(scope: HouseholdScope, what: string): OwnerScope {
+  const owner = ownerScope(scope);
+  assert.ok(owner, `${what}: the scope is an owner scope`);
+  return owner;
 }
