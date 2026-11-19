@@ -305,8 +305,9 @@ export function RowInput({
         tickRef.current?.focus();
         void r.press();
       }}
-      // The prescription's number: an empty ✓ logs it (plan D13).
-      placeholder={placeholderOf(item, field)}
+      // The prescription's number: an empty ✓ logs it (plan D13). Not on a load that must be typed
+      // again (H9), where an empty ✓ is refused: a placeholder there would look already filled in.
+      placeholder={field === 'quantity' && r.mustTypeLoad ? undefined : placeholderOf(item, field)}
       aria-label={DAY_COPY.fieldLabel(name, spoken)}
       aria-invalid={invalid || undefined}
       aria-describedby={r.error ? errorId : undefined}

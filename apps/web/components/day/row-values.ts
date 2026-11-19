@@ -75,8 +75,15 @@ export type TypedProblem = NumberProblem | 'other_unit';
  * unit was edited after the row was logged). `textOf` leaves such a quantity out of the field.
  */
 export function loggedInOtherUnit(item: DayItem, values: RowValues): boolean {
+  return otherUnitLoad(item, values) !== null;
+}
+
+/** That quantity as the row writes it ("25 lb"), or `null` when it is in the item's unit. */
+export function otherUnitLoad(item: DayItem, values: RowValues): string | null {
   const quantity = slotQuantity(item, values.quantities);
-  return !!quantity && quantity.unit !== item.unit;
+  return quantity && quantity.unit !== item.unit
+    ? quantityText(quantity.value, quantity.unit)
+    : null;
 }
 
 /**

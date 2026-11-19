@@ -17,6 +17,13 @@ import type { RowWriteKind, TypedProblem } from './row-values';
  */
 export const DAY_COPY = {
   heading: 'Workouts',
+  /**
+   * H9 (12d-ii): an un-ticked load logged in another unit must be typed again. Both units are
+   * named, so the old unit's number is not typed into the new unit's field ("Logged as 25 lb").
+   * "It", not "the weight": a distance or a count can change unit too.
+   */
+  retypeLoad: (was: string, unit: string) =>
+    `Logged as ${was}. This now logs in ${unit}: enter it in ${unit}, then ✓.`,
   done: 'Done',
   doneMark: 'Done ✓',
   lastTime: 'Last time',
@@ -147,8 +154,9 @@ export const TYPED_PROBLEM_COPY: Record<TypedProblem, string> = {
   not_a_number: 'Numbers only.',
   out_of_range: 'That number won’t work. Check it.',
   missing: 'Enter a number, then ✓.',
-  // H9 (12d-ii): the load was logged in another unit, so it is never filled from the plan.
-  other_unit: 'This was logged in another unit. Enter the weight you used, then ✓.',
+  // H9 (12d-ii): the load was logged in another unit, so it is never filled from the plan. The row
+  // says it with both units when it can (`DAY_COPY.retypeLoad`); this is the fallback.
+  other_unit: 'This was logged in another unit. Enter it again in this one, then ✓.',
 };
 
 /**

@@ -514,7 +514,13 @@ describe('after the program was edited (D7)', () => {
     fireEvent.change(setField(el(), 'DB bench press', 1, SPOKEN.reps), { target: { value: '7' } });
     await press(setTick(el(), 'DB bench press', 1));
     expect(control.actions.logRow).not.toHaveBeenCalled();
-    expect(within(el()).getByText(TYPED_PROBLEM_COPY.other_unit)).toBeTruthy();
+    // Both units named, so the old unit's number is not typed into the new unit's field.
+    const load = setField(el(), 'DB bench press', 1, unitSpoken('kg'));
+    expect(within(el()).getByText(DAY_COPY.retypeLoad('27.5 lb', 'kg'))).toBeTruthy();
+    expect(load.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(load);
+    // No prescription shows in the field: an empty ✓ here is refused, not filled.
+    expect(load.getAttribute('placeholder')).toBeNull();
     // Typed, it is sent as typed, in the item's unit.
     fireEvent.change(setField(el(), 'DB bench press', 1, unitSpoken('kg')), {
       target: { value: '12.5' },
@@ -523,6 +529,27 @@ describe('after the program was edited (D7)', () => {
     const sent = control.actions.logRow.mock.calls[0]![0].values;
     expect(sent.quantities).toEqual([{ ...lb(12.5), unit: 'kg' }]);
     expect(sent.reps).toBe(7);
+  });
+
+  it('H9 ends once the row is logged again: a later un-tick, now in the item’s unit, fills as D13 says', async () => {
+    const changed = structuredClone(yesterdayHalfDone);
+    const bench = changed.workouts
+      .find((w) => w.name === 'Heavy A')!
+      .items.find((i) => i.name === 'DB bench press')!;
+    bench.unit = 'kg';
+    bench.target = { ...bench.target, quantities: [{ ...lb(30), unit: 'kg' }] };
+    const control = mount(changed);
+    const el = () => card('Heavy A', 'DB bench press');
+    const load = () => setField(el(), 'DB bench press', 1, unitSpoken('kg'));
+    await press(setTick(el(), 'DB bench press', 1)); // un-tick the lb row
+    fireEvent.change(load(), { target: { value: '12.5' } });
+    await press(setTick(el(), 'DB bench press', 1)); // logged again, in kg
+    expect(control.actions.logRow).toHaveBeenCalledTimes(1);
+    await press(setTick(el(), 'DB bench press', 1)); // un-tick the kg row
+    fireEvent.change(load(), { target: { value: '' } });
+    await press(setTick(el(), 'DB bench press', 1));
+    expect(control.actions.logRow).toHaveBeenCalledTimes(2);
+    expect(control.actions.logRow.mock.calls[1]![0].values.quantities).toEqual([]);
   });
 
   it('a same-unit row still fills an empty load from the prescription after an un-tick (D13 unchanged)', async () => {
