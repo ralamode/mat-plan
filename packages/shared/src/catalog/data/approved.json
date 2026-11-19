@@ -567,5 +567,31 @@
     "kettlebell_halo": "6e087a068aa8d18ea249da9d74a92f0b51224fde54f590387b5e47cfbb68ac7d",
     "kettlebell_figure_eight": "d352e4b62ce117d4e5684e16e0f0f0ef4fb859b02cd98ffb03b2c62545e0036a",
     "sandbag_clean": "08b8979ce776913e591666798ecb6f615d12a46276d86feb27f203bb98b5dbba"
+  },
+  "13": {
+    "handstand": "9017eb75f385d5493ee9706755c46e2b85f3cc96c777ffbdc1ab150b93de3115",
+    "wall_handstand": "0333935a8c9f10c977c7f40a8f68eccedc50218f264783d931662bc950649382",
+    "handstand_walk": "c03bd733c69ddd91e28c1bdfe0a967382f730596f31c7b6437d8a0646530069b",
+    "lateral_handstand_walk": "6017f83026b6a39dba3645b9117867090de9f79829b8b00cd736eb1e88ea1a30",
+    "wall_walk": "6d5a673f294c9dc3f7327e64da82e491cfd11814c572ceaeb3c02511872a81a8",
+    "headstand": "07d8685be80912ec022775c45103e6527404024fa2738db6f72e31b2321e419a",
+    "crow_pose": "7862bf257da2191b4ef31b7728243d0a0de9b398da785c3b5d56bf57abb743cb",
+    "l-sit": "7ac471bce10bdfbac91af00df0d8794fcfa897bcfd75c8299aa2125487dc7371",
+    "front_lever": "a57e06f9b4c4343a867f3eedafde125892a60af71939bafccc5b187ccce4a5f3",
+    "tuck_front_lever": "47d39a8eaeac5837fdccf182c898972edfd5cf82e083b02c61a96fc2a09119dd",
+    "back_lever": "015ebf2da3d9f741ec1772e36a5d0b06c50e63209a14908a5183e8c70ff88799",
+    "tuck_back_lever": "3d6b0f940c5e0a001e6bbd6e9b40a2c865337cfe2a89700fc71bdce62b697b93",
+    "planche": "4559fd5dcc683019464e0cf8ca14376bd639f4c081181c5bdfddc0163c4ba2f6",
+    "tuck_planche": "9e9b0c920bbb395a845a4ea28159be8640fb6f5305ff64d7c791d864313e64be",
+    "planche_lean": "774db3b15274c9242fe3327ce7c80a64d97b1ea4abdfdb1fd504bad47aaea746",
+    "elbow_lever": "aaa0c67c77b6e9bbe65f9a910d00bef2a9f28e73aeb7b2ae0026b762347049f3",
+    "pseudo_planche_push-up": "e173893dc5fd46e0ff3ea2134c41c6dabdc445c415b5de325fc9d52f82dc8737",
+    "muscle-up": "382becbc6249450a838921a236eb74bd5acd3db56da613a3da7c6d9d830fe95e",
+    "ring_muscle-up": "c29f5756107eb78eb2937fd9ced11cd6cfc80dc26504c1e0771629122e43f92a",
+    "skin_the_cat": "ed144d5ec7a78986d526708b9f43c976446d97091a0306065005374814c0e7ae",
+    "dragon_flag": "8532257ad124a2958f443f3b8cd21b6952d4f38df554936bcb2600badb9fe651",
+    "forward_roll": "4e4ee4749fcfa8a3ec55a1d2a10779fabd664c26e641486656af9bf0704bc06d",
+    "backward_roll": "df5b3094758e7b35a4699185c1651b47ace648b1f4344839c97e8334b26bd09e",
+    "cartwheel": "f028ea7403ebaabec5d66d217b2c08739df4f93137d8d7c43ac08ef9e4206052"
   }
 }
