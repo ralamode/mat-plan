@@ -1,16 +1,13 @@
 diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
-index b07bbe11..48c7e9db 100644
+index c888c629..89f40b68 100644
 --- a/packages/db/src/erasure/erase.ts
 +++ b/packages/db/src/erasure/erase.ts
-@@ -225,7 +225,10 @@ export async function eraseHousehold(
-     // 3 · Delete in graph order; each RETURNING length must equal its count.
-     const deleted: { table: string; rows: number }[] = [];
-     for (const [i, g] of HOUSEHOLD_GRAPH.entries()) {
--      const where = g.householdRows(scope);
-+      const where =
-+        g.table === schema.entries
-+          ? sql`(${g.householdRows(scope)}) AND ${schema.entries.deletedAt} IS NULL`
-+          : g.householdRows(scope);
-       const gone = rowsOf<{ id: number }>(
-         await tx.execute(sql`DELETE FROM ${g.table} WHERE ${where} RETURNING ${g.table.id}`),
-       ).length;
+@@ -273,7 +273,7 @@ export async function eraseHousehold(
+       const owner = householdColumn(g.table);
+       const gone = rowsOf<{ id: number; hh: number | string | null }>(
+         await tx.execute(
+-          sql`DELETE FROM ${g.table} WHERE ${g.householdRows(scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
++          sql`DELETE FROM ${g.table} WHERE ${g.table === schema.entries ? sql`(${g.householdRows(scope)}) AND ${schema.entries.deletedAt} IS NULL` : g.householdRows(scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
+         ),
+       );
+       if (owner && gone.some((r) => Number(r.hh) !== Number(householdId))) {

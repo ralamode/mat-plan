@@ -1720,9 +1720,10 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 ```
 
 A `40P01` (a deadlock with an app write on the same athlete) has rolled the whole transaction back;
-re-run it from `BEGIN`. `PRIV-3` 2a's core (`src/erasure/erase.ts`, used from 2b) locks in the program
-writers' order, programs then athletes, so it cannot deadlock with them; its `lock_timeout` can still
-abort it while an app write holds a row, and then the same re-run applies.
+re-run it from `BEGIN`. `PRIV-3` 2a's core (`src/erasure/erase.ts`, used from 2b) locks programs
+before athletes, the program writers' order, so it cannot deadlock with them; it can still deadlock
+with a log write (which takes the session before the athlete), or hit its `lock_timeout`. Postgres
+aborts one side; if it is the erasure, re-run from the dry run.
 
 **The order is child-before-parent and is not arbitrary.** `entries` carries FKs to **both**
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against

@@ -16,6 +16,7 @@ import { eq, sql, type SQL } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import {
+  ErasureCountMismatch,
   ErasurePreflightRefused,
   ErasureTargetNotFound,
   eraseHousehold,
@@ -85,6 +86,7 @@ export async function verifyErasure(ctx: VerifyContext): Promise<void> {
   await verifyHouseholdPartition(ctx);
   await verifyLocks();
   await verifyCoreErases();
+  await verifyDeleteCountChecked();
   await verifyPreflightsRefuse();
   await verifyHiddenHouseholdErased();
 }
@@ -616,21 +618,6 @@ async function verifyHouseholdPartition({ A_SCOPE, B_SCOPE }: VerifyContext): Pr
 
 // ── PRIV-3 2a: the erasure core ─────────────────────────────────────────────────────────────────
 
-/** Thrown by a proof to roll back a savepoint it opened; never by the code under test. */
-class CallerRollback extends Error {}
-
-/** Run `fn` in a savepoint of `tx` that is always rolled back. */
-async function inSavepoint(tx: VerifyTx, fn: (sp: VerifyTx) => Promise<void>): Promise<void> {
-  try {
-    await tx.transaction(async (sp) => {
-      await fn(sp);
-      throw new CallerRollback();
-    });
-  } catch (e) {
-    if (!(e instanceof CallerRollback)) throw e;
-  }
-}
-
 async function newHousehold(tx: VerifyTx | typeof db, name: string): Promise<number> {
   const [row] = await tx
     .insert(schema.households)
@@ -708,17 +695,21 @@ async function verifyLocks(): Promise<void> {
     'PRIV-3 2a: PARENT_TABLES is exactly the graph tables some foreign key points into',
   );
   // The program writers lock `program_blocks`, then `profiles` (`writers/program/assign.ts`, lane
-  // guide invariant 12); the core takes the same two first, then every other parent, parent first.
+  // guide invariant 12); the core takes the same two first, then the household row, then the two
+  // again (to hold any inserted before the household row was locked), then every other parent,
+  // parent first.
   const parentNames = PARENT_TABLES.map(graphTableName);
+  const first = ['program_blocks', 'profiles'];
   const expected = [
-    'program_blocks',
-    'profiles',
-    ...[...parentNames].reverse().filter((t) => t !== 'program_blocks' && t !== 'profiles'),
+    ...first,
+    'households',
+    ...first,
+    ...[...parentNames].reverse().filter((t) => !first.includes(t) && t !== 'households'),
   ];
   assert.deepEqual(
     LOCK_ORDER.map(graphTableName),
     expected,
-    "PRIV-3 2a: the core locks program_blocks, then profiles, then the other parents parent first (the program writers' order)",
+    "PRIV-3 2a: the core locks program_blocks, then profiles, then the household, then both again, then the other parents parent first (the program writers' order)",
   );
   // The mode and the place, from the source: PGlite has one connection, so no proof can show a wait.
   const src = readFileSync(new URL('../../src/erasure/erase.ts', import.meta.url), 'utf8');
@@ -740,7 +731,7 @@ async function verifyLocks(): Promise<void> {
     'PRIV-3 2a: the core locks before it re-runs the pre-flights',
   );
   console.log(
-    `✓ PRIV-3 2a: the core locks the ${PARENT_TABLES.length} parent tables FOR UPDATE, program_blocks then profiles first, before its pre-flights`,
+    `✓ PRIV-3 2a: the core locks the ${PARENT_TABLES.length} parent tables FOR UPDATE, program_blocks then profiles first and again after the household row, before its pre-flights`,
   );
 }
 
@@ -778,6 +769,52 @@ async function verifyCoreErases(): Promise<void> {
       clerkUserId: shared,
       role: HOUSEHOLD_ROLE.member,
     });
+    // Neither of these is live elsewhere, by the resolver's rule (member row AND household live):
+    // a sign-in live in H and hidden in K, and one hidden in H and live in a HIDDEN household.
+    const liveInH = `verify_priv_3_2a_live_in_h_${newId()}`;
+    const inHiddenHousehold = `verify_priv_3_2a_hidden_household_${newId()}`;
+    const hiddenHousehold = await newHousehold(tx, 'verify PRIV-3 2a hidden K2');
+    await tx
+      .update(schema.households)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.households.id, hiddenHousehold));
+    await tx.insert(schema.householdMembers).values([
+      {
+        publicId: newId(),
+        householdId: live.householdId,
+        clerkUserId: liveInH,
+        role: HOUSEHOLD_ROLE.member,
+      },
+      {
+        publicId: newId(),
+        householdId: kMember[0].householdId,
+        clerkUserId: liveInH,
+        role: HOUSEHOLD_ROLE.member,
+        deletedAt: new Date(),
+      },
+      {
+        publicId: newId(),
+        householdId: live.householdId,
+        clerkUserId: inHiddenHousehold,
+        role: HOUSEHOLD_ROLE.member,
+        deletedAt: new Date(),
+      },
+      {
+        publicId: newId(),
+        householdId: hiddenHousehold,
+        clerkUserId: inHiddenHousehold,
+        role: HOUSEHOLD_ROLE.member,
+      },
+    ]);
+    // K's movement that nothing references, inserted LAST: the newest movement row in the database.
+    // A walk that widened `movements` to another household's unreferenced row would delete it with no
+    // foreign key to stop it; the core's household check must.
+    await insertMovementOwnedBy(asTx(tx), K_SCOPE, {
+      publicId: newId(),
+      slug: 'priv-3-2a-k-orphan',
+      name: 'priv-3-2a K orphan movement',
+      isBodyweight: false,
+    });
 
     const hBefore = await idsByTable(tx, H_SCOPE);
     const kBefore = await idsByTable(tx, K_SCOPE);
@@ -808,7 +845,7 @@ async function verifyCoreErases(): Promise<void> {
     assert.deepEqual(
       dry.members.filter((m) => m.liveElsewhere).map((m) => m.clerkUserId),
       [shared],
-      'PRIV-3 2a: P3 the report marks exactly the sign-in that is live in another household',
+      'PRIV-3 2a: P3 the report marks exactly the sign-in that is live in another household (not one hidden there, nor one in a hidden household)',
     );
     assert.equal(
       dry.members.length,
@@ -819,18 +856,11 @@ async function verifyCoreErases(): Promise<void> {
     // Inside a caller's transaction (CAT-3 R0's shape): the core completes, the caller throws, and
     // the whole erasure is rolled back with the caller's transaction.
     let inner: Awaited<ReturnType<typeof eraseHousehold>> | undefined;
-    let thrown: unknown;
-    try {
-      await tx.transaction(async (callerTx) => {
+    await assert.doesNotReject(
+      rolledBack(async (callerTx) => {
         inner = await eraseHousehold(asTx(callerTx), h, { apply: true });
-        throw new CallerRollback();
-      });
-    } catch (e) {
-      thrown = e;
-    }
-    assert.ok(
-      thrown instanceof CallerRollback,
-      `PRIV-3 2a: P3 the core erases household H, hidden rows included (threw: ${String((thrown as Error)?.message).slice(0, 120)})`,
+      }, tx),
+      'PRIV-3 2a: P3 the core erases household H, hidden rows included',
     );
     assert.deepEqual(
       inner?.counts,
@@ -891,6 +921,39 @@ async function verifyCoreErases(): Promise<void> {
     );
     console.log(
       `✓ PRIV-3 2a: P3 the core erases ${dry.total} rows of H across all ${GRAPH_NAMES.length} graph tables (hidden rows in ${hiddenTables.length} tables), leaves K, the reference tables and the global movements unchanged, rolls back with a caller that throws, and marks the sign-in live elsewhere`,
+    );
+  });
+}
+
+// ── P3b: a DELETE that removes fewer rows than it counted aborts the erasure ───────────────────
+async function verifyDeleteCountChecked(): Promise<void> {
+  await rolledBack(async (tx) => {
+    const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P3b H'));
+    const h = asOwner(H_SCOPE, 'H');
+    await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-p3b');
+    // A trigger that silently skips every delete of one leaf table (no FK points into it, so nothing
+    // else notices): only the RETURNING-length check can. Rolled back with the transaction.
+    await tx.execute(sql`
+      CREATE FUNCTION verify_priv_3_2a_skip_delete() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN RETURN NULL; END $$`);
+    await tx.execute(sql`
+      CREATE TRIGGER verify_priv_3_2a_skip_delete BEFORE DELETE ON day_readiness
+        FOR EACH ROW EXECUTE FUNCTION verify_priv_3_2a_skip_delete()`);
+    let thrown: unknown;
+    try {
+      await eraseHousehold(asTx(tx), h, { apply: true });
+    } catch (e) {
+      thrown = e;
+    }
+    assert.ok(
+      thrown instanceof ErasureCountMismatch &&
+        thrown.table === 'day_readiness' &&
+        thrown.expected === 1 &&
+        thrown.actual === 0,
+      `PRIV-3 2a: P3b a DELETE that removes fewer rows than it counted aborts with ErasureCountMismatch on that table (threw: ${String((thrown as Error)?.message).slice(0, 120)})`,
+    );
+    console.log(
+      '✓ PRIV-3 2a: P3b a DELETE that removes fewer rows than it counted aborts the erasure, naming the table',
     );
   });
 }
@@ -961,6 +1024,19 @@ async function verifyPreflightsRefuse(): Promise<void> {
         },
       },
       {
+        check: 'a',
+        what: "H's athlete's target on K's prescription",
+        plant: async (sp) => {
+          await sp.insert(schema.prescriptionTargets).values({
+            publicId: newId(),
+            prescriptionId: one(K, 'prescriptions'),
+            profileId: one(H, 'profiles'),
+            load: '45',
+          });
+          return null;
+        },
+      },
+      {
         check: 'b',
         what: "K's athlete's entry in H's session",
         plant: async (sp) => {
@@ -985,6 +1061,17 @@ async function verifyPreflightsRefuse(): Promise<void> {
         what: "K's athlete's entry on H's movement",
         plant: async (sp) => {
           await plantEntry(sp, one(K, 'entries'), { movementId: one(H, 'movements') });
+          return null;
+        },
+      },
+      {
+        check: 'd',
+        what: "K's prescription on H's movement",
+        plant: async (sp) => {
+          await sp
+            .update(schema.prescriptions)
+            .set({ movementId: one(H, 'movements') })
+            .where(eq(schema.prescriptions.id, one(K, 'prescriptions')));
           return null;
         },
       },
@@ -1046,10 +1133,22 @@ async function verifyPreflightsRefuse(): Promise<void> {
           return null;
         },
       },
+      {
+        check: 'h',
+        what: "H's athlete's assignment to K's program",
+        plant: async (sp) => {
+          await mkAssignment(sp, {
+            blockId: one(K, 'program_blocks'),
+            profileId: one(H, 'profiles'),
+            idx: 1,
+          });
+          return null;
+        },
+      },
     ];
 
     for (const c of cases) {
-      await inSavepoint(tx, async (sp) => {
+      await rolledBack(async (sp) => {
         const pointer = await c.plant(sp);
         const before = [await idsByTable(sp, H_SCOPE), await idsByTable(sp, K_SCOPE)];
         let thrown: unknown;
@@ -1080,11 +1179,11 @@ async function verifyPreflightsRefuse(): Promise<void> {
           [c.check],
           `PRIV-3 2a: P4 (${c.check}) the dry run reports (${c.check}) alone`,
         );
-      });
+      }, tx);
     }
 
     // (d) the other way: H's own entry on K's movement is erased with H, and is not refused.
-    await inSavepoint(tx, async (sp) => {
+    await rolledBack(async (sp) => {
       await plantEntry(sp, one(H, 'entries'), { movementId: one(K, 'movements') });
       await assert.doesNotReject(
         eraseHousehold(asTx(sp), h, { apply: true }),
@@ -1095,9 +1194,9 @@ async function verifyPreflightsRefuse(): Promise<void> {
         1,
         "PRIV-3 2a: P4 (d) K's movement survives H's erasure",
       );
-    });
+    }, tx);
     console.log(
-      `✓ PRIV-3 2a: P4 each of the ${cases.length} pre-flights, planted alone, refuses the erasure naming itself and changes nothing (the SET NULL pointers of (e), (f) and (g) included); (d) the other way erases`,
+      `✓ PRIV-3 2a: P4 each of ${cases.length} pre-flight cases, planted alone ((a) and (h) both ways, (d) by entry and by prescription), refuses the erasure naming itself and changes nothing (the SET NULL pointers of (e), (f) and (g) included); (d) the other way erases`,
     );
   });
 }

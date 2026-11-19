@@ -1,12 +1,12 @@
-import { type SQL, sql } from 'drizzle-orm';
+import { and, inArray, not, type SQL, sql } from 'drizzle-orm';
 import { getTableConfig, type PgColumn, type PgTable } from 'drizzle-orm/pg-core';
 
+import { isLiveMembership } from '../queries/household-membership';
 import * as schema from '../schema';
 import type { OwnerScope } from '../scope';
-import type { Executor } from '../writers/executor';
-import { movementIsGlobal } from '../writers/ownership';
-import { graphTableName, HOUSEHOLD_GRAPH } from './graph';
-import { householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } from './preflight';
+import { type Executor, rowsOf, setLocalTimeouts } from '../writers/executor';
+import { graphTableName, HOUSEHOLD_GRAPH, householdIdsOf, householdRowsOf } from './graph';
+import { countOf, householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } from './preflight';
 
 /**
  * 🔴 **The household erasure core** (`PRIV-3` PR 2a; `docs/plans/priv-3-guarded-deletion.md` D3;
@@ -18,14 +18,14 @@ import { householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } from './pr
  *   dry run (apply: false): count every graph table, run the pre-flights, read the memberships.
  *                           Writes nothing, takes no lock, opens no transaction.
  *   apply:  exec.transaction(tx =>
- *             SET LOCAL lock_timeout '5s'; SET LOCAL statement_timeout '60s'
+ *             setLocalTimeouts(tx, '60s')                       (lock 5s, statement 60s)
  *             now(), pg_current_wal_lsn()                       (the restore point, reported)
  *             SELECT … FOR UPDATE on every PARENT_TABLES row of H, in LOCK_ORDER, id order
  *             the household row exists, or ErasureTargetNotFound
  *             pre-flights (a)–(h), each zero, or ErasurePreflightRefused { check }
  *             count every graph table (count()::int)
- *             DELETE … RETURNING id in graph order; each RETURNING length = its count
- *             the global movements' count is unchanged)
+ *             DELETE … RETURNING in graph order: each length = its count (ErasureCountMismatch),
+ *             and every returned household_id is H's (ErasureForeignRow))
  * ```
  *
  * **It runs inside a caller's transaction, and never commits one.** It opens its work with
@@ -34,8 +34,8 @@ import { householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } from './pr
  * **SAVEPOINT**: the core's work is released into the caller's transaction and commits only when the
  * caller's does, so a caller that compares the returned `total` with an expected one and throws
  * rolls the whole erasure back. A refusal inside the core rolls back to the savepoint and rethrows;
- * the caller's transaction is left usable. ⚠️ The `SET LOCAL` timeouts then last until the CALLER's
- * transaction ends, not only the core's work.
+ * the caller's transaction is left usable. ⚠️ The timeouts are `SET LOCAL`: they outlive the
+ * savepoint and last until the CALLER's transaction ends.
  *
  * **What it returns:** the per-table counts in graph order (rows that would be erased on a dry run,
  * rows erased under `apply`), their total, the pre-flight counts, and the household's Clerk user ids,
@@ -43,19 +43,28 @@ import { householdPreflights, PREFLIGHT_CHECKS, type PreflightCheck } from './pr
  * account must NOT be deleted at Clerk: PR 2b's checklist). 🔴 The report holds Clerk ids; a caller
  * that prints it decides what is safe to print (R0 prints counts only).
  *
- * 🔴 **The lock order, which is what keeps it from deadlocking against the program writers.** The
- * assignment writers (`writers/program/assign.ts`, lane guide invariant 12) lock the program first
- * (`program_blocks`, `FOR NO KEY UPDATE`), then the athletes (`profiles`, in id order). A core that
- * took the athletes first could hold a profile one of them waits on while waiting on its block:
- * `40P01`. So `LOCK_ORDER` is H's `program_blocks` rows FIRST, then H's `profiles`, then the other
- * `PARENT_TABLES` parent before child; every table's rows in id order. `db:verify` pins the order and
- * the mode from this file's source (PGlite has one connection, so no proof can show a wait).
+ * 🔴 **Errors: only the core's own are safe to print.** Its three typed errors carry fixed text, a
+ * check letter, a table name and counts. Anything else is a database error, a `DrizzleQueryError`
+ * whose MESSAGE holds the bound parameters, the household's id among them. So every caller catches
+ * and redacts (`scripts/corrections/redact.ts`) and prints only `cause.code` and `cause.constraint`.
+ *
+ * 🔴 **The lock order: never against the program writers.** `LOCK_ORDER` takes H's `program_blocks`
+ * rows FIRST, then H's `profiles`, the order of the assignment writers (`writers/program/assign.ts`
+ * `lockProgram` then `lockAthletes`, lane guide invariant 12), so the core cannot deadlock with
+ * `putOn`, `takeOff` or `reorderPrograms`. Then the household row; then `program_blocks` and
+ * `profiles` ONCE MORE, to hold any inserted before the household row was locked (no new one can be
+ * inserted after it); then the other parents, parent before child. Every table in id order.
+ * ⚠️ **It CAN deadlock with a log write.** The row writer takes `KEY SHARE` on a session (inserting a
+ * superset) before a profile (inserting the entry); the core locks the profile before the session.
+ * Postgres aborts one side (`40P01`); if that is the erasure, re-run from the dry run. So can a
+ * `lock_timeout`. `db:verify` pins the order and the mode from this file's source: PGlite has one
+ * connection, so no proof can show a wait.
  *
  * **Why `FOR UPDATE`, not `FOR NO KEY UPDATE`.** An insert of a child row takes `FOR KEY SHARE` on the
- * parent it references; only `FOR UPDATE` conflicts with it. So once the parents are locked, no new
- * row can come to reference H's rows (a straddling row written after the pre-flights would otherwise
- * be deleted, nulled or aborted on) until the transaction ends. A deadlock or `lock_timeout` aborts
- * the whole erasure; the operator re-runs the dry run.
+ * parent it references; only `FOR UPDATE` conflicts with it. So once a parent row is locked, no new
+ * row can reference it until the transaction ends. After the second pass over blocks and profiles,
+ * the set of H's parent rows is closed, so a straddling row cannot be written between the pre-flights
+ * and the deletes.
  *
  * **Never a `deleted_at` filter**, here or in the graph: a hidden household, profile or row is erased
  * like a live one (`scripts/corrections/README.md`, the deletion rules).
@@ -83,7 +92,7 @@ export class ErasureTargetNotFound extends Error {
   }
 }
 
-/** A `DELETE`'s `RETURNING` length differed from its count, or a global movement changed. */
+/** A `DELETE`'s `RETURNING` length differed from its pre-delete count. */
 export class ErasureCountMismatch extends Error {
   constructor(
     readonly table: string,
@@ -97,15 +106,30 @@ export class ErasureCountMismatch extends Error {
   }
 }
 
+/** A `DELETE` returned a row whose `household_id` is not the erased household's. */
+export class ErasureForeignRow extends Error {
+  constructor(readonly table: string) {
+    super(`erasure aborted: a deleted ${table} row was not the household's; nothing was erased`);
+    this.name = 'ErasureForeignRow';
+  }
+}
+
 export type ErasureReport = {
   readonly applied: boolean;
   /** Graph order. Rows that would be erased (dry run) or that were (apply). */
   readonly counts: readonly { readonly table: string; readonly rows: number }[];
   readonly total: number;
   readonly preflights: Readonly<Record<PreflightCheck, number>>;
-  /** 🔴 Personal identifiers (Clerk user ids): for PR 2b's privileged heading only. */
+  /**
+   * 🔴 Personal identifiers (Clerk user ids): for PR 2b's privileged heading only. `liveElsewhere`
+   * is as of the transaction, not a lock; 2b re-reads it immediately before any Clerk deletion.
+   */
   readonly members: readonly { readonly clerkUserId: string; readonly liveElsewhere: boolean }[];
-  /** Under `apply`: the database's clock and WAL position when the transaction began. */
+  /**
+   * Under `apply`: `now()`, which is the start of the ENCLOSING transaction (the caller's, inside
+   * one), and the WAL position read at the core's first statement. Either is a valid restore point:
+   * nothing of the erasure is written before them.
+   */
   readonly restorePoint: { readonly at: string; readonly walLsn: string } | null;
 };
 
@@ -122,28 +146,21 @@ export const PARENT_TABLES: readonly GraphTable[] = HOUSEHOLD_GRAPH.map((g) => g
     ),
 );
 
+const FIRST: readonly GraphTable[] = [schema.programBlocks, schema.profiles];
+
 /**
- * 🔴 The order the core locks in: `program_blocks`, then `profiles` (the program writers' order),
- * then every other parent, parent before child (reverse graph order).
+ * 🔴 The order the core locks in (see the module doc): `program_blocks`, `profiles`, the household
+ * row, `program_blocks` and `profiles` again, then every other parent, parent before child.
  */
 export const LOCK_ORDER: readonly GraphTable[] = [
-  schema.programBlocks,
-  schema.profiles,
-  ...[...PARENT_TABLES]
-    .reverse()
-    .filter((t) => t !== schema.programBlocks && t !== schema.profiles),
+  ...FIRST,
+  schema.households,
+  ...FIRST,
+  ...[...PARENT_TABLES].reverse().filter((t) => !FIRST.includes(t) && t !== schema.households),
 ];
 
-const rowsOf = <T>(res: unknown) => (res as { rows: T[] }).rows;
-
-function householdRowsOf(t: PgTable, scope: OwnerScope): SQL {
-  return HOUSEHOLD_GRAPH.find((g) => g.table === t)!.householdRows(scope);
-}
-
 async function countRows(exec: Executor, t: GraphTable, where: SQL): Promise<number> {
-  return rowsOf<{ n: number }>(
-    await exec.execute(sql`SELECT count(*)::int AS n FROM ${t} WHERE ${where}`),
-  )[0].n;
+  return countOf(exec, sql`SELECT 1 FROM ${t} WHERE ${where}`);
 }
 
 /** Whether the household row is there. Hidden or live: a hidden household is still erased. */
@@ -151,24 +168,41 @@ async function householdExists(exec: Executor, scope: OwnerScope): Promise<boole
   return (await countRows(exec, schema.households, householdRowsOf(schema.households, scope))) > 0;
 }
 
-async function globalMovements(exec: Executor): Promise<number> {
-  return countRows(exec, schema.movements, movementIsGlobal());
-}
-
-/** The household's memberships, hidden ones too, and whether each account is live elsewhere. */
+/**
+ * The household's memberships, hidden ones too, and whether each account holds a LIVE membership
+ * (`isLiveMembership`: member row and household both live, the resolver's own rule) elsewhere.
+ */
 async function members(exec: Executor, scope: OwnerScope): Promise<ErasureReport['members']> {
   const hm = schema.householdMembers;
-  const theirs = sql`(SELECT ${hm.id} FROM ${hm} WHERE ${householdRowsOf(hm, scope)})`;
-  return rowsOf<{ clerk: string; elsewhere: boolean }>(
-    await exec.execute(sql`
-      SELECT m.clerk_user_id AS clerk,
-             EXISTS (SELECT 1 FROM household_members o
-                      WHERE o.clerk_user_id = m.clerk_user_id AND o.deleted_at IS NULL
-                        AND o.id NOT IN ${theirs}) AS elsewhere
-        FROM household_members m
-       WHERE m.id IN ${theirs}
-       ORDER BY m.id`),
-  ).map((r) => ({ clerkUserId: r.clerk, liveElsewhere: r.elsewhere }));
+  const theirs = householdIdsOf(hm, scope)(sql`${hm.id}`);
+  const rows = await exec
+    .select({ clerkUserId: hm.clerkUserId })
+    .from(hm)
+    .where(theirs)
+    .orderBy(hm.id);
+  if (rows.length === 0) return [];
+  const elsewhere = new Set(
+    (
+      await exec
+        .select({ clerkUserId: hm.clerkUserId })
+        .from(hm)
+        .innerJoin(schema.households, sql`${schema.households.id} = ${hm.householdId}`)
+        .where(
+          and(
+            inArray(
+              hm.clerkUserId,
+              rows.map((r) => r.clerkUserId),
+            ),
+            isLiveMembership(),
+            not(theirs),
+          ),
+        )
+    ).map((r) => r.clerkUserId),
+  );
+  return rows.map((r) => ({
+    clerkUserId: r.clerkUserId,
+    liveElsewhere: elsewhere.has(r.clerkUserId),
+  }));
 }
 
 async function measure(exec: Executor, scope: OwnerScope) {
@@ -188,6 +222,12 @@ async function measure(exec: Executor, scope: OwnerScope) {
 
 const totalOf = (counts: readonly { rows: number }[]) => counts.reduce((n, c) => n + c.rows, 0);
 
+/** The column that names a row's household, where the table has one (the household row: its id). */
+function householdColumn(t: GraphTable): PgColumn | null {
+  if (t === schema.households) return schema.households.id;
+  return 'householdId' in t ? (t.householdId as PgColumn) : null;
+}
+
 /** Erase one household (or, with `apply: false`, report what would be erased). See the module doc. */
 export async function eraseHousehold(
   exec: Executor,
@@ -201,8 +241,7 @@ export async function eraseHousehold(
   }
 
   return exec.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
-    await tx.execute(sql`SET LOCAL statement_timeout = '60s'`);
+    await setLocalTimeouts(tx, '60s');
     const [point] = rowsOf<{ at: string; lsn: string }>(
       await tx.execute(sql`SELECT now()::text AS at, pg_current_wal_lsn()::text AS lsn`),
     );
@@ -214,29 +253,36 @@ export async function eraseHousehold(
       );
     }
     if (!(await householdExists(tx, scope))) throw new ErasureTargetNotFound();
+    const [{ id: householdId }] = rowsOf<{ id: number }>(
+      await tx.execute(
+        sql`SELECT ${schema.households.id} AS id FROM ${schema.households} WHERE ${householdRowsOf(schema.households, scope)}`,
+      ),
+    );
 
     // 2 · The pre-flights, under the locks, and the counts the deletes must match.
     const m = await measure(tx, scope);
     for (const check of PREFLIGHT_CHECKS) {
       if (m.preflights[check] !== 0) throw new ErasurePreflightRefused(check, m.preflights[check]);
     }
-    const globalBefore = await globalMovements(tx);
 
-    // 3 · Delete in graph order; each RETURNING length must equal its count.
+    // 3 · Delete in graph order. Each RETURNING length must equal its count, and every returned row
+    // that names a household must name H (a widened predicate would otherwise erase another
+    // family's row, or a global movement, and report it as H's).
     const deleted: { table: string; rows: number }[] = [];
     for (const [i, g] of HOUSEHOLD_GRAPH.entries()) {
-      const where = g.householdRows(scope);
-      const gone = rowsOf<{ id: number }>(
-        await tx.execute(sql`DELETE FROM ${g.table} WHERE ${where} RETURNING ${g.table.id}`),
-      ).length;
-      if (gone !== m.counts[i].rows) {
-        throw new ErasureCountMismatch(m.counts[i].table, m.counts[i].rows, gone);
+      const owner = householdColumn(g.table);
+      const gone = rowsOf<{ id: number; hh: number | string | null }>(
+        await tx.execute(
+          sql`DELETE FROM ${g.table} WHERE ${g.householdRows(scope)} RETURNING ${g.table.id} AS id, ${owner ?? sql`NULL`} AS hh`,
+        ),
+      );
+      if (owner && gone.some((r) => Number(r.hh) !== Number(householdId))) {
+        throw new ErasureForeignRow(m.counts[i].table);
       }
-      deleted.push({ table: m.counts[i].table, rows: gone });
-    }
-    const globalAfter = await globalMovements(tx);
-    if (globalAfter !== globalBefore) {
-      throw new ErasureCountMismatch('movements (global)', globalBefore, globalAfter);
+      if (gone.length !== m.counts[i].rows) {
+        throw new ErasureCountMismatch(m.counts[i].table, m.counts[i].rows, gone.length);
+      }
+      deleted.push({ table: m.counts[i].table, rows: gone.length });
     }
 
     return {

@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/erasure/erase.ts b/packages/db/src/erasure/erase.ts
+index c888c629..43fb1d1d 100644
+--- a/packages/db/src/erasure/erase.ts
++++ b/packages/db/src/erasure/erase.ts
+@@ -155,7 +155,6 @@ const FIRST: readonly GraphTable[] = [schema.programBlocks, schema.profiles];
+ export const LOCK_ORDER: readonly GraphTable[] = [
+   ...FIRST,
+   schema.households,
+-  ...FIRST,
+   ...[...PARENT_TABLES].reverse().filter((t) => !FIRST.includes(t) && t !== schema.households),
+ ];
+ 

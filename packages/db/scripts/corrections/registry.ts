@@ -32,6 +32,7 @@ import {
 } from './accounts';
 import { CorrectionRefusal, redactedFailure } from './redact';
 import { correctionTargetIsPreview, seedHouseholdClaimIsAllowed } from './target-url';
+import { setLocalTimeouts } from '../../src/writers/executor';
 import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
 
 /**
@@ -431,8 +432,7 @@ const bodyweightDuplicates: Correction = {
     await db.transaction(async (tx) => {
       // `createDbPool` sets only connectionTimeoutMillis, so without these a blocked row lock waits
       // forever. A correction is DDL-adjacent ops work; AGENTS.md takes the same posture for DDL.
-      await tx.execute(sql`set local lock_timeout = '5s'`);
-      await tx.execute(sql`set local statement_timeout = '30s'`);
+      await setLocalTimeouts(tx, '30s');
 
       // Re-check the keeper under a row lock. A plain SELECT takes no lock under READ COMMITTED, so
       // doing this inside the transaction narrows the window but does not close it — the lock does.
@@ -573,8 +573,7 @@ const nullRoutineToFull: Correction = {
     if (!apply) return changes;
 
     await db.transaction(async (tx) => {
-      await tx.execute(sql`set local lock_timeout = '5s'`);
-      await tx.execute(sql`set local statement_timeout = '30s'`);
+      await setLocalTimeouts(tx, '30s');
 
       for (const t of targets) {
         const updated = await tx

@@ -1,10 +1,10 @@
 import { type SQL, sql } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
 
 import { movementRefsIntoHousehold } from '../queries/movement-ownership';
 import * as schema from '../schema';
 import type { HouseholdScope } from '../scope';
-import { HOUSEHOLD_GRAPH } from './graph';
+import { idsOf, type Reads, rowsOf } from '../writers/executor';
+import { householdIdsOf, type IdIn } from './graph';
 
 /**
  * The household erasure's pre-flights (a)–(h) (`PRIV-3` PR 2a; `docs/runbooks.md` → "Delete a
@@ -40,24 +40,20 @@ import { HOUSEHOLD_GRAPH } from './graph';
 export const PREFLIGHT_CHECKS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const;
 export type PreflightCheck = (typeof PREFLIGHT_CHECKS)[number];
 
-/** Anything that can run a query: a db handle, a transaction, or `db:verify`'s PGlite transaction. */
-export type Reads = { execute: (query: SQL) => Promise<unknown> };
+export type { IdIn, Reads };
 
-/** A condition on a column expression: "this id is one of the rows the check is about". */
-export type IdIn = (id: SQL) => SQL;
-
-const everyRow: IdIn = () => sql`true`;
+/** "Every row": the census view of a shape. */
+export const everyRow: IdIn = () => sql`true`;
 
 async function ids(exec: Reads, query: SQL): Promise<number[]> {
-  const res = (await exec.execute(sql`${query} ORDER BY 1`)) as { rows: { id: number | string }[] };
-  return res.rows.map((r) => Number(r.id));
+  return idsOf(await exec.execute(sql`${query} ORDER BY 1`));
 }
 
-async function countOf(exec: Reads, query: SQL): Promise<number> {
-  const res = (await exec.execute(sql`SELECT count(*)::int AS n FROM (${query}) q`)) as {
-    rows: { n: number }[];
-  };
-  return res.rows[0].n;
+/** The number of rows a query returns, as an int (`count(*)::int`: node-postgres returns a string). */
+export async function countOf(exec: Reads, query: SQL): Promise<number> {
+  return rowsOf<{ n: number }>(
+    await exec.execute(sql`SELECT count(*)::int AS n FROM (${query}) q`),
+  )[0].n;
 }
 
 // ── The shapes ───────────────────────────────────────────────────────────────────────────────────
@@ -128,28 +124,16 @@ export const sessionsOnForeignWorkouts = (exec: Reads) => ids(exec, sessionsOnFo
 /** Entries whose prescription is in ANOTHER household than the entry's profile (A3). (g), unscoped. */
 export const entriesOnForeignPrescriptions = (exec: Reads) => ids(exec, entriesOnForeign(everyRow));
 /** Assignments whose athlete and program are in different households. (h), unscoped. */
-export const assignmentsAcrossHouseholds = (exec: Reads) =>
-  ids(
-    exec,
-    assignmentsAcross(() => sql`true`),
-  );
+export const assignmentsAcrossHouseholds = (exec: Reads) => ids(exec, assignmentsAcross(everyRow));
 /** The ids an id-select shape returns, ascending: how step 5's athlete views read a shape. */
 export const shapeIds = ids;
 
 // ── The household check ──────────────────────────────────────────────────────────────────────────
 
-/** `id IN (the household's rows of t)`, by the graph's own predicate. */
-function householdIdsOf(t: PgTable & { id: unknown }, scope: HouseholdScope): IdIn {
-  const g = HOUSEHOLD_GRAPH.find((x) => x.table === t);
-  if (!g) throw new Error('PRIV-3: preflight asked for a table outside HOUSEHOLD_GRAPH');
-  return (id) =>
-    sql`${id} IN (SELECT ${g.table.id} FROM ${g.table} WHERE ${g.householdRows(scope)})`;
-}
-
 /**
  * Every pre-flight for one household, as counts. Zero everywhere is the only state the core erases
- * from. (d) counts only the direction that aborts: another household's row on H's movement. H's row
- * on another household's movement is deleted with H, and is not refused.
+ * from. (d) counts only the direction that aborts: another household's entry or prescription on H's
+ * movement. H's row on another household's movement is deleted with H, and is not refused.
  */
 export async function householdPreflights(
   exec: Reads,
@@ -164,7 +148,7 @@ export async function householdPreflights(
     a: await countOf(exec, targetsAcrossHouseholds(eitherSide)),
     b: await countOf(exec, strayEntriesInSessions(athletes)),
     c: await countOf(exec, strayEntriesInSupersets(athletes)),
-    d: await movementRefsIntoHousehold(exec, scope),
+    d: await movementRefsIntoHousehold(exec, householdIdsOf(schema.movements, scope)),
     e: await countOf(exec, workoutCopiesAcross(blocks)),
     f: await countOf(exec, sessionsOnForeign(blocks)),
     g: await countOf(exec, entriesOnForeign(blocks)),

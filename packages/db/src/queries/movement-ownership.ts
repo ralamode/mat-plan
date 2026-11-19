@@ -1,9 +1,7 @@
 import { type SQL, sql } from 'drizzle-orm';
 
-import * as schema from '../schema';
-import type { HouseholdScope } from '../scope';
-import type { Executor } from '../writers/executor';
-import { movementInHousehold } from '../writers/ownership';
+import type { IdIn } from '../erasure/graph';
+import type { Executor, Reads } from '../writers/executor';
 
 /**
  * ## ONE definition of "a movement is REFERENCED", and one census of who references it
@@ -26,6 +24,10 @@ import { movementInHousehold } from '../writers/ownership';
  * [`plan.md`](../../../../docs/plan.md) → `TEN-2b-2` requires that this definition of _referenced_
  * be the one its orphan correction and `TEN-2c-1`'s split both use. A second copy of this join is a
  * defect, not a style nit: the two copies already disagreed about `prescriptions`.
+ *
+ * ⚠️ **Amended at `PRIV-3` PR 2a:** one household-relative view, `movementRefsIntoHousehold`, the
+ * erasure's pre-flight (d). It still takes no scope: the caller passes the set of movements
+ * (`IdIn`, built by the erasure graph from its own predicate), so the census joins stay unscoped.
  *
  * ## Why these are UNSCOPED, stated so the next reader does not "fix" it
  *
@@ -96,21 +98,18 @@ const prescriptionMovementRefs = (about: SQL) => sql`
 
 /**
  * Pre-flight (d), household-relative (`PRIV-3` PR 2a, `src/erasure/preflight.ts`): the `entries` and
- * `prescriptions` of ANOTHER household that point at a movement THIS household owns. Deleting the
- * household's movements would abort `23503` on them. The census's own joins, narrowed to the
- * household's movements, so this is not a second copy of the join.
+ * `prescriptions` of ANOTHER household that point at one of `movements` (the erased household's, as
+ * `householdIdsOf(schema.movements, scope)` in the graph builds it). Deleting those movements would
+ * abort `23503` on them. The census's own joins, narrowed, so this is not a second copy of the join.
  *
- * The other direction (this household's row on another household's movement) is not counted: the
+ * The other direction (the household's row on another household's movement) is not counted: the
  * row is deleted with the household, and nothing aborts.
  */
-export async function movementRefsIntoHousehold(
-  exec: { execute: (query: SQL) => Promise<unknown> },
-  scope: HouseholdScope,
-): Promise<number> {
-  const owned = sql`m.id in (select ${schema.movements.id} from ${schema.movements} where ${movementInHousehold(scope)})`;
+export async function movementRefsIntoHousehold(exec: Reads, movements: IdIn): Promise<number> {
+  const about = movements(sql`m.id`);
   const row = (
     (await exec.execute(
-      sql`select (${entryMovementRefs(owned)}) + (${prescriptionMovementRefs(owned)}) as n`,
+      sql`select (${entryMovementRefs(about)}) + (${prescriptionMovementRefs(about)}) as n`,
     )) as { rows: { n: number }[] }
   ).rows[0];
   return row.n;

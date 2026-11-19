@@ -57,21 +57,20 @@ erasure graph".
 6. **A predicate is built from a leaf, never from `scope.householdId`.** The leaves live in
    `ownership.ts`; `src/scope.test.ts` fails the build on any other module unwrapping a scope.
 
-7. **The lock order is the program writers' order.** The core locks H's `program_blocks` rows first,
-   then H's `profiles`, then the other `PARENT_TABLES` parent before child, every table in id order
-   (`LOCK_ORDER`). The assignment writers take the block, then the athletes
-   (`writers/program/assign.ts`, lane guide invariant 12); taking the athletes first could deadlock
-   (`40P01`) against `putOn`, `takeOff` or `reorderPrograms`. The mode is `FOR UPDATE`, because only
-   it conflicts with the `KEY SHARE` an inserting child takes. PGlite has one connection, so the
-   order and the mode are pinned from `erase.ts`'s source (mutations `285`, `286`), not shown.
+7. **The lock order starts with the program writers' order.** `LOCK_ORDER` (`erase.ts`, whose
+   docblock has the reasoning): `program_blocks`, `profiles`, the household row, the two again, then
+   the other parents parent-first, all `FOR UPDATE`, each table in id order. It cannot deadlock with
+   the program writers; it **can** with a log write (the row writer takes the session before the
+   profile), and Postgres then aborts one side: if that is the erasure, re-run from the dry run.
+   Pinned from the source (mutations `285`, `286`, `331`), since PGlite cannot show a wait.
 8. **Locks before the pre-flights, inside the transaction.** At READ COMMITTED a straddling row
    committed after the check would otherwise be deleted, nulled or aborted on. (e), (f) and (g)
    guard `SET NULL` keys: they are the only thing between H's erasure and H's typed text left on
    another family's row, so each has its own mutation.
 9. **The core never commits a caller's transaction.** It works inside `exec.transaction(…)`: given a
    transaction, that is a savepoint, so a caller (R0) can compare the returned `total` and throw to
-   roll everything back. P3 proves it. Its `SET LOCAL` timeouts last until the caller's transaction
-   ends.
+   roll everything back. P3 proves it. Its `SET LOCAL` timeouts (`setLocalTimeouts`,
+   `writers/executor.ts`) last until the caller's transaction ends.
 
 ## Traps
 
@@ -80,8 +79,14 @@ erasure graph".
   others miss legacy and hidden blocks.
 - drizzle's `and()` does not parenthesize its operands, so a two-part predicate carries its own
   parentheses; P7's `both()` wraps each side for the same reason.
+- **A database error from inside the core is a `DrizzleQueryError` whose message holds the household's
+  id** (drizzle puts the bound parameters in it). Every caller catches it, redacts
+  (`scripts/corrections/redact.ts`) and prints only `cause.code` and `cause.constraint`; only the
+  core's own typed errors are safe to print as they are.
 - The report's `members` are Clerk user ids: personal identifiers. A caller prints them only under a
-  privileged heading (PR 2b) or not at all (R0 prints counts).
+  privileged heading (PR 2b) or not at all (R0 prints counts). `liveElsewhere` is the resolver's own
+  rule (`isLiveMembership`: member row and household live), read as of the transaction; 2b re-reads
+  it immediately before any Clerk deletion.
 - Runbook pre-flight (i) (an entry in another profile's session, any household) is not in the core:
   it is not about one household, and the day resolver already refuses it on read.
 - `OPS-3` restores in reverse graph order into a database that already holds `REFERENCE_TABLES` and
