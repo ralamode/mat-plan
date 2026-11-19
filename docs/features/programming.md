@@ -296,6 +296,10 @@ and complete; this is the one thing it cannot reach.
 
 ## Traps
 
+- **The routine page's athlete is `profile.id`, never the URL segment.** The segment is checked, not
+  parsed, so `/p/AAAAAAAA-…` still reaches the page in upper case while every parsed id is lower case
+  (`uuidSchema` folds it; [write-path](./write-path.md) invariant 5). Compare against the DTO.
+
 - **"B is purely additive" is wrong.** `programDayRows` returns one block by design; an A/B program and
   a weekday S&C block do not merge into one card. Cost a session to rediscover.
 

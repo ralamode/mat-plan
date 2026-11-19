@@ -946,6 +946,38 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
     );
   });
 
+  it('one superset tagged in two letter cases is one superset, threaded in lower case', async () => {
+    const ss = newId();
+    expect(ss.toUpperCase(), 'the id must hold a letter, or the two spellings are one').not.toBe(
+      ss,
+    );
+    const member = (tag: string, supersetOrder: number) => ({
+      movementName: 'Bench',
+      unit: 'lb',
+      clientId: newId(),
+      sets: [{ reps: '8', weight: '40' }],
+      supersetClientId: tag,
+      supersetOrder,
+    });
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movementsRaw: JSON.stringify([member(ss, 1), member(ss.toUpperCase(), 2)]),
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(logStrengthSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supersets: [{ clientId: ss }],
+        movements: [
+          expect.objectContaining({ supersetClientId: ss, supersetOrder: 1 }),
+          expect.objectContaining({ supersetClientId: ss, supersetOrder: 2 }),
+        ],
+      }),
+    );
+  });
+
   it('rejects a lone superset member (≥2) with a locatable superset error (V1-8-3d)', async () => {
     const ss = newId();
     const raw = JSON.stringify([

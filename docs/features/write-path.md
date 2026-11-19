@@ -500,6 +500,12 @@ The shapes those lanes agree on, the fakes and the preview route are
 
 5. **Idempotency is a client UUIDv7 + a DB UNIQUE + `ON CONFLICT`** — never an app-level "does it
    exist?" check, which races. Per-row at every level of a graph, with no parent short-circuit.
+   🔴 **Every id is lower-cased by the parse** (`uuidSchema`, `packages/shared/src/id.ts`), because
+   the `uuid` column compares without regard to case and a JS `Set` or `===` does not: three schemas
+   shipped the gap (a check-in submit, a strength session that dropped a movement's sets, a hide that
+   answered not-found). A reader of the RAW body after the parse folds for itself (`deriveSupersets`
+   in the strength action). A route segment is checked, never parsed, so a page takes identity from
+   its DTO (`profile.id`), not from the URL. `id.test.ts` fails on a second uuid validator anywhere.
 
 6. ✅ **No `client_id` unique is partial any more — `V1-9b` B0 was the change.** All five
    (`sessions`, `supersets`, `entries`, `entry_sets`, `entry_set_quantities`) were

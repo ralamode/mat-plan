@@ -292,7 +292,8 @@ function deriveSupersets(movements: unknown): { clientId: string }[] {
       m && typeof m === 'object'
         ? (m as { supersetClientId?: unknown }).supersetClientId
         : undefined;
-    if (typeof id === 'string') ids.add(id);
+    // Lower-cased, as the schema will: one superset tagged in two spellings is one superset.
+    if (typeof id === 'string') ids.add(id.toLowerCase());
   }
   return [...ids].map((clientId) => ({ clientId }));
 }
