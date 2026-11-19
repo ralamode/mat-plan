@@ -222,7 +222,7 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
       <NotOnAProgram
         plan={plan}
         programsHref={
-          offersProgramsLink(plan, { archived: athlete.archived === true })
+          offersProgramsLink({ archived: athlete.archived === true })
             ? PREVIEW_PROGRAMS_HREF
             : undefined
         }

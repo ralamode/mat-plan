@@ -312,9 +312,8 @@ describe('the preview harness', () => {
     for (const fixture of Object.keys(DAY_PLAN_FIXTURES) as (keyof typeof DAY_PLAN_FIXTURES)[]) {
       const { world, athlete: id } = DAY_PLAN_FIXTURE_SOURCES[fixture];
       const athlete = world.athletes.find((a) => a.id === id)!;
-      const plan = DAY_PLAN_FIXTURES[fixture];
       render(<PreviewHarness screen="day" fixture={fixture} failNext={false} />);
-      const offered = offersProgramsLink(plan, { archived: athlete.archived === true });
+      const offered = offersProgramsLink({ archived: athlete.archived === true });
       expect(latest('not-on-a-program').props.programsHref, fixture).toBe(
         offered ? href : undefined,
       );

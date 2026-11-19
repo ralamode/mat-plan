@@ -244,7 +244,8 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     #679): under the page's own rule, `offersProgramsLink` (lane C's, in `components/day/`), so a
     change to that rule reaches the preview with no edit here. The preview has no `/programs`, so
     its link opens the preview's own Programs list. `preview-harness.test.tsx` holds the value
-    for every day fixture, a live athlete's and an archived one's. The switcher's links
+    for every day fixture, a live athlete's and an archived one's. The rule today: a live athlete,
+    on any day (plan D48, #683). The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
     The parts are lane C's; their props are a contract with the page and this harness.
 12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
