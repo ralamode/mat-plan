@@ -25,6 +25,7 @@ import {
   ON_TINT_BUTTON_FOCUS_CLASS,
   RowInput,
   OtherUnitLine,
+  QuantityCellText,
   secondaryText,
   Tick,
   TINT_CLASS,
@@ -295,7 +296,17 @@ function SetRow({
                   r.logged ? 'text-base font-medium' : secondaryText(onTint),
                 )}
               >
-                {shownValues ? fieldText(item, shownValues, field) : ''}
+                {shownValues && field === 'quantity' ? (
+                  <QuantityCellText
+                    item={item}
+                    values={shownValues}
+                    text={fieldText(item, shownValues, field)}
+                  />
+                ) : shownValues ? (
+                  fieldText(item, shownValues, field)
+                ) : (
+                  ''
+                )}
               </span>
             ) : (
               <RowInput
@@ -337,7 +348,7 @@ function SetRow({
             // tap that lands low does not reach the next set's ✓ (which would send this change).
             className={change.dirty ? 'pb-3' : 'pb-1'}
           >
-            <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
+            {/* The status first, so Change's ✕ stays directly under the ✓ (maintainer, 2026-11-17). */}
             {status ? (
               <RowStatus
                 r={r}
@@ -347,6 +358,7 @@ function SetRow({
                 underTickClassName={UNDER_TICK_CLASS}
               />
             ) : null}
+            <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
           </td>
         </tr>
       ) : null}

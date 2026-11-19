@@ -4,6 +4,7 @@ import {
   hasSetRows,
   newId,
   ROW_REFUSAL,
+  slotQuantity,
   type DayItem,
   type DayRow,
   type DayWorkout,
@@ -23,6 +24,7 @@ import {
   otherUnitOf,
   readTyped,
   sameText,
+  spokenValues,
   sameValues,
   textOf,
   type RowField,
@@ -432,14 +434,33 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   const retypeFrom = !logged && unticked ? otherUnitLoad(item, unticked.values) : null;
   /**
    * 12d-iii (D44): the row holds a quantity logged in another unit than the item's now, logged or
-   * un-ticked this visit, so its line can say why the load is text (`OtherUnitLine`). `again`: the
-   * row is un-ticked with a field, where the load must be entered again (H9).
+   * un-ticked this visit, so its line can say why the load is text (`OtherUnitLine`). Kept while an
+   * un-tick is in flight, so the line does not leave and come back under a thumb.
+   *
+   * `unticked`: the row was un-ticked this visit and has a field. `was` is what it held, in words
+   * ("27.5 pounds"), since the field no longer shows it; `canPutBack` holds only while nothing was
+   * typed over it, when the ✓ re-ticks the entry as logged (`press`). 🔴 No conversion is ever
+   * asked for (plan U1.2): typing a kg load is left to whoever knows it, and H9 guards the field.
+   * Hidden while a refused ✓'s message shows: that message already names both units.
    */
-  const held = logged ?? (unticked ? unticked.values : null);
+  const held =
+    logged ??
+    (unticked ? unticked.values : pending?.write === 'untick' ? (settled?.values ?? null) : null);
   const heldUnit = held ? otherUnitOf(item, held) : null;
+  const heldQuantity = held && heldUnit ? slotQuantity(item, held.quantities) : undefined;
   const otherUnit =
-    heldUnit !== null && item.unit
-      ? { from: heldUnit, to: item.unit, again: logged === null && hasField }
+    heldUnit !== null && heldQuantity && item.unit && !shownError?.invalid
+      ? {
+          from: heldUnit,
+          to: item.unit,
+          unticked:
+            logged === null && unticked && hasField
+              ? {
+                  was: spokenValues({ quantities: [heldQuantity] }),
+                  canPutBack: sameText(text, textOf(item, unticked.values)),
+                }
+              : null,
+        }
       : null;
 
   async function press() {

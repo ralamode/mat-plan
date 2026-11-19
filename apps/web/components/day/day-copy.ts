@@ -25,18 +25,29 @@ export const DAY_COPY = {
   retypeLoad: (was: string, unit: string) =>
     `Logged as ${was}. This now logs in ${unit}: enter it in ${unit}, then ✓.`,
   /**
-   * 12d-iii (D44, Form 1; UX panel's copy, maintainer, 2026-11-18): the line on a row whose quantity
-   * was logged in another unit than the item's now. No conversion is asked for: the load stays as
-   * logged, and only whoever edited the unit can fix it. `from` and `to` are the units as words
-   * (`pounds`; `''` for a plain count); `load`: a weight × reps row ("the load"), else "the number".
-   * `again`: the row was un-ticked this visit, so its ✓ puts it back, or it is entered again (H9).
+   * 12d-iii (D44, Form 1; the logged line is the UX panel's, approved by the maintainer, 2026-11-18):
+   * the line on a row whose quantity was logged in another unit than the item's now. 🔴 **No
+   * conversion is ever asked for** (plan U1.2): the load stays as logged, and only whoever edited the
+   * unit can fix it. `from` and `to` are the units as words (`pounds`; `''` for a plain count);
+   * `noun` names what to fix ("load", "distance", "number").
+   *
+   * `unticked`: the row was un-ticked this visit, so it says what it held (`was`, "27.5 pounds"),
+   * and offers the ✓ only while the ✓ really puts it back (nothing typed over it).
    */
-  otherUnit: (from: string, to: string, { load, again }: { load: boolean; again: boolean }) => {
-    const said = `Logged ${from ? `in ${from}` : 'as a plain number'} before the workout changed to ${to || 'a plain number'}.`;
-    if (again)
-      return `${said} Tap ✓ to put it back as it was, or enter it again${to ? ` in ${to}` : ''}.`;
-    return `${said} Ask whoever changed it to fix the ${load ? 'load' : 'number'}.`;
+  otherUnit: (
+    from: string,
+    to: string,
+    { noun, unticked }: { noun: string; unticked: { was: string; canPutBack: boolean } | null },
+  ) => {
+    const changed = `before the workout changed to ${to || 'a plain number'}.`;
+    if (unticked) {
+      const said = `Logged as ${unticked.was} ${changed}`;
+      return unticked.canPutBack ? `${said} Tap ✓ to put it back.` : said;
+    }
+    return `Logged ${from ? `in ${from}` : 'as a plain number'} ${changed} Ask whoever changed it to fix the ${noun}.`;
   },
+  /** What the other-unit line asks to have fixed, by the row's type (12d-iii). */
+  otherUnitNoun: { load: 'load', distance: 'distance', number: 'number' },
   done: 'Done',
   doneMark: 'Done ✓',
   lastTime: 'Last time',
