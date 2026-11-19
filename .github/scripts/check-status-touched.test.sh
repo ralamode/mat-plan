@@ -12,15 +12,23 @@ fails=0
 
 git -C "$tmp" init -q -b main
 git -C "$tmp" config user.email t@t && git -C "$tmp" config user.name t
-mkdir -p "$tmp/docs" "$tmp/src"
+mkdir -p "$tmp/docs/changelog" "$tmp/src"
 echo '# status' >"$tmp/docs/status.md" && echo 'x' >"$tmp/src/a.ts"
+echo '# changelog' >"$tmp/docs/changelog/README.md"
+echo 'old entry' >"$tmp/docs/changelog/2026-01-01-feat-old.md"
+echo 'a draft entry' >"$tmp/docs/changelog/draft.txt"
 git -C "$tmp" add -A && git -C "$tmp" commit -qm 'chore: base'
 
-# case <name> <branch> <commit-subject> <touch-status: y|n> <want-exit> <want-text> [STATUS_SKIP]
+# A branch with no fragment, cut now, for the mid-merge case near the end (main adds a fragment later).
+git -C "$tmp" checkout -q -B feat/mid
+echo "$RANDOM" >>"$tmp/src/a.ts" && git -C "$tmp" commit -qam 'feat(x): no entry yet'
+git -C "$tmp" checkout -q main
+
+# case <name> <branch> <commit-subject> <add-fragment: y|n> <want-exit> <want-text> [STATUS_SKIP]
 case_() {
   git -C "$tmp" checkout -q main && git -C "$tmp" checkout -q -B "$2"
   echo "$RANDOM" >>"$tmp/src/a.ts"
-  [ "$4" = y ] && echo "$RANDOM" >>"$tmp/docs/status.md"
+  [ "$4" = y ] && echo "$RANDOM" >"$tmp/docs/changelog/2026-10-01-${2//\//-}.md"
   git -C "$tmp" add -A && git -C "$tmp" commit -qm "$3"
   out="$(cd "$tmp" && STATUS_SKIP="${7:-}" node "$guard" main 2>&1)"
   code=$?
@@ -32,13 +40,13 @@ case_() {
   fi
 }
 
-case_ "feat branch without status fails"      feat/x-1  'feat(x): add'   n 1 'Status guard failed'
-case_ "feat branch with status passes"         feat/x-2  'feat(x): add'   y 0 'is updated'
-case_ "docs branch passes without status"      docs/x-3  'docs(x): write' n 0 "don't owe"
+case_ "feat branch without a fragment fails"  feat/x-1  'feat(x): add'   n 1 'Status guard failed'
+case_ "feat branch with a fragment passes"     feat/x-2  'feat(x): add'   y 0 'fragment is added'
+case_ "docs branch passes without a fragment"  docs/x-3  'docs(x): write' n 0 "don't owe"
 case_ "chore branch, fix commit, still owes"   chore/x-4 'fix(x): patch'  n 1 'Status guard failed'
 # `db` is owed by branch name only (commitlint has no `db` type): a non-owing commit type, so only
 # the branch name can make this case owe.
-case_ "db branch without status fails"         db/x-5    'chore(db): tidy' n 1 'Status guard failed'
+case_ "db branch without a fragment fails"         db/x-5    'chore(db): tidy' n 1 'Status guard failed'
 case_ "override passes and prints the reason"  fix/x-6   'fix(x): patch'  n 0 'copy-only fix' 'copy-only fix'
 case_ "blank override does not pass"           fix/x-7   'fix(x): patch'  n 1 'Status guard failed' '   '
 
@@ -60,17 +68,6 @@ check() {
   fi
 }
 
-# An uncommitted (unstaged) status.md edit counts: the useful moment is before the last commit.
-git -C "$tmp" checkout -q main && git -C "$tmp" checkout -q -B feat/x-12
-echo "$RANDOM" >>"$tmp/src/a.ts" && git -C "$tmp" commit -qam 'feat(x): add'
-echo "$RANDOM" >>"$tmp/docs/status.md"
-check "unstaged status edit counts" 0 'is updated'
-git -C "$tmp" checkout -q -- docs/status.md
-
-# Deleting status.md is not updating it.
-git -C "$tmp" rm -q docs/status.md && git -C "$tmp" commit -qm 'feat(x): drop status'
-check "deleted status.md does not count" 1 'Status guard failed'
-
 # A base that can't be resolved exits 2.
 check "bad base ref exits 2" 2 'Could not resolve a merge base' no-such-ref
 
@@ -81,20 +78,7 @@ git -C "$tmp" checkout -q --detach
 check "detached HEAD warns" 0 'detached HEAD'
 
 
-# ── Post-DX-2: once docs/changelog/README.md exists, the entry is an ADDED fragment ────────────────
-# A legacy branch, cut BEFORE the README lands on main, for the mid-merge case at the end.
-git -C "$tmp" checkout -q main && git -C "$tmp" checkout -q -B feat/legacy
-echo "$RANDOM" >>"$tmp/src/a.ts" && echo "$RANDOM" >>"$tmp/docs/status.md"
-git -C "$tmp" commit -qam 'feat(x): legacy entry in status.md'
-check "legacy: status.md still passes before DX-2" 0 'is updated'
-
-git -C "$tmp" checkout -q main
-mkdir -p "$tmp/docs/changelog"
-echo '# changelog' >"$tmp/docs/changelog/README.md"
-echo 'old entry' >"$tmp/docs/changelog/2026-01-01-feat-old.md"
-echo 'a draft entry' >"$tmp/docs/changelog/draft.txt"
-git -C "$tmp" add -A && git -C "$tmp" commit -qm 'docs: changelog fragments'
-
+# ── The entry is an ADDED fragment, named for the branch ──────────────────────────────────────────
 # branch <name> — a fresh owing branch off main with one committed code change.
 branch() {
   git -C "$tmp" checkout -q main && git -C "$tmp" checkout -q -B "$1"
@@ -114,7 +98,7 @@ check "untracked fragment passes" 0 'fragment is added'
 rm "$tmp/docs/changelog/2026-10-01-feat-y-3.md"
 
 branch feat/y-4; echo "$RANDOM" >>"$tmp/docs/status.md" && git -C "$tmp" commit -qam 'docs: status'
-check "status.md alone fails after DX-2" 1 'adds no changelog fragment'
+check "status.md alone fails" 1 'adds no changelog fragment'
 # The CI escape hatch: the failure names the label, from the script's own const, and ci.yml sets
 # STATUS_SKIP from that same literal — so the message, the const and the workflow cannot drift apart.
 label="$(grep -o "SKIP_LABEL = '[^']*'" "$guard" | cut -d"'" -f2)"
@@ -173,17 +157,23 @@ branch feat/y-13; frag notes.md; git -C "$tmp" add -A && git -C "$tmp" commit -q
 git -C "$tmp" checkout -q --detach
 check "detached without STATUS_BRANCH: an undated file fails" 1 'not a valid entry'
 
-# THE round-2 case: a legacy branch mid-merge of main (conflict-free here, uncommitted). The README is
-# now in the working tree, so the new rule applies and its status.md entry no longer passes. Main's own
-# fragments arrive as staged adds and must not count — even detached, with no branch name to match.
-git -C "$tmp" checkout -q feat/legacy
+# A branch mid-merge of main (conflict-free here, uncommitted): main's own new fragment arrives as a
+# staged add and must not count, even detached, with no branch name to match.
+git -C "$tmp" checkout -q main; frag 2026-10-02-feat-on-main.md
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'feat(x): main entry'
+git -C "$tmp" checkout -q feat/mid
 git -C "$tmp" merge -q --no-commit --no-ff main >/dev/null 2>&1
-check "legacy branch mid-merge of main fails" 1 'adds no changelog fragment'
+check "a branch mid-merge of main fails without its own fragment" 1 'adds no changelog fragment'
 git -C "$tmp" checkout -q --detach
-check "legacy mid-merge, detached, main's fragments don't count" 1 'adds no changelog fragment'
-git -C "$tmp" checkout -q feat/legacy 2>/dev/null; git -C "$tmp" merge --abort 2>/dev/null
+check "mid-merge, detached, main's fragments don't count" 1 'adds no changelog fragment'
+git -C "$tmp" checkout -q feat/mid 2>/dev/null; git -C "$tmp" merge --abort 2>/dev/null
 
-# ── Frozen history: post-DX-2, NO branch may add to status.md's or the skills README's changelog ──
+# The README is the rule's own source: without it the guard refuses to judge (exit 2), never passes.
+branch feat/y-14; git -C "$tmp" rm -q docs/changelog/README.md
+check "a tree without the changelog README exits 2" 2 'README.md is missing'
+git -C "$tmp" reset -q --hard
+
+# ── Frozen history: NO branch may add to status.md's or the skills README's changelog ──
 git -C "$tmp" checkout -q main
 mkdir -p "$tmp/.claude/skills"
 printf '# status\n\n## Where we are right now\n\npointer v1\n\n## Changelog (merged PRs)\n\n- old entry\n' >"$tmp/docs/status.md"
@@ -239,12 +229,6 @@ git -C "$tmp" checkout -q main && sed 's/^- old skill entry$/- old skill entry, 
 git -C "$tmp" commit -qam 'docs: main edits history'
 git -C "$tmp" checkout -q docs/z-8
 check "an entry main edited after the cut isn't this branch's addition" 0 "don't owe"
-
-# Pre-DX-2 (no README in the working tree), history entries are still how the changelog is written.
-branch docs/z-9 'docs(x): legacy'; git -C "$tmp" rm -q docs/changelog/README.md
-hist docs/status.md '## Changelog (merged PRs)' '- **2026-09-29** — legacy entry'
-git -C "$tmp" commit -qam 'docs: legacy entry'
-check "a pre-DX-2 branch may still add a history entry" 0 "don't owe"
 
 # ── CI's merge ref: the base is its FIRST PARENT, never pull_request.base.sha ─────────────────────
 # GitHub builds refs/pull/<n>/merge from the PR head and main AS IT IS NOW; base.sha is main when the
