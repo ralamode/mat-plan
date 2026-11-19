@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 240dbb23..3b130fd1 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -209,7 +209,7 @@ export async function putOn(
+       if (endsToday) {
+         // D41 (the maintainer, 2026-11-18): back at its old place, or last if fewer remain. Parked
+         // first, so clearing `active_to` meets no open row on the order index.
+-        const at = Math.min(endsToday.idx, order.length);
++        const at = order.length;
+         await tx
+           .update(a)
+           .set({ activeTo: null, idx: PARK_IDX, updatedAt: sql`now()` })
