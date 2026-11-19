@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index c3b16c61..6fe2cd3b 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -75,7 +75,7 @@ async function addOrSelect(
+   trackingType: TrackingType,
+ ): Promise<NewItemResult> {
+   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
+-  await setLocalLockTimeout(exec);
++  void setLocalLockTimeout;
+   // Held until the transaction ends. Reached through the household row, so the tenant id is never
+   // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
+   // count below never runs without the lock.

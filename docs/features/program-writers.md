@@ -270,7 +270,9 @@ flowchart TD
     them, so the library and an item a catalog row shadows never count),
     under a transaction-scoped advisory lock keyed on the household (`ADVISORY_LOCK.householdItems` in `writers/locks.ts`, reached through
     `householdRowIs`, so the tenant id is not unwrapped here): two adds at once count one after the
-    other. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
+    other, and a wait on it ends after `LOCK_TIMEOUT` (`setLocalLockTimeout`, set first in the
+    same transaction, so it bounds every later lock wait there too) rather than queueing behind a
+    stuck holder. `saveWorkout` (a new workout only: an edit and a replay have their row) and `copyWorkout`
     (the program it lands in, never the source's) stop a program at `MAX_PROGRAM_WORKOUTS` live
     workouts, under the block lock both take first; `copyWorkout` also refuses a weekday it would
     go on that already holds `MAX_DAY_SLOTS`, since it writes slots without a week to parse. `saveWeek` answers a weekday past
