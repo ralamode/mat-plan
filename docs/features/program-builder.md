@@ -79,7 +79,7 @@ flowchart LR
 | `apps/web/app/programs/how-to/[optionId]/route.ts`                      | "How to" for one picker option (7b): the session in-process, `getHowTo`, the strict `CatalogHowTo` or one byte-identical 404; `force-dynamic` and `no-store`. Its miss and its `no-store` come from `lib/route-miss.ts`, shared with the export.                                                                                                                                                              |
 | `apps/web/components/program-builder/how-to-loader.ts`                  | The client loader for that route: a 404 is `null`, any other failure rejects (movement-picker invariant 14).                                                                                                                                                                                                                                                                                                  |
 | `apps/web/components/program-builder/workout-editor-page.tsx`           | The editor as a real page mounts it, with `howToLoader` (a page cannot pass a function to a client screen), `program` required, and a new workout's `workoutClientId` minted on the device, once per opened editor (7b-ii).                                                                                                                                                                                   |
-| `apps/web/components/program-builder/arrival.ts`                        | The editor's one-shot message to the program page after a Save (`noteArrival`, `takeArrival`): focus on the Workouts heading, "{workout} saved." (15 PR 1).                                                                                                                                                                                                                                                   |
+| `apps/web/components/program-builder/arrival.ts`                        | The editor's one-shot message to the program page after a Save (`noteArrival`, `takeArrival`): focus on the Workouts heading, `workoutSavedText` in the bar, within `ARRIVAL_MS` (15 PR 1).                                                                                                                                                                                                                   |
 | `apps/web/components/program-builder/group-list.tsx`                    | The prototype's grouped list: `GroupList` and `GroupRowLink` (title, lines, `›`).                                                                                                                                                                                                                                                                                                                             |
 | `apps/web/app/programs/[programId]/workouts/[workoutId]/page.tsx`       | A workout's editor (7b-ii): the draft first (`getWorkoutDraft`, which reports its miss), then the picker's data and `getProgramEntry`; any `null` is `notFound()`. Title "Edit workout".                                                                                                                                                                                                                      |
 | `apps/web/app/programs/[programId]/workouts/new/page.tsx`               | A new workout (7b-ii): `getProgramEntry` and the picker's data; the draft it passes has no client id. Title "New workout".                                                                                                                                                                                                                                                                                    |
@@ -140,8 +140,9 @@ flowchart LR
     start (a start dated today included). Never from the screen's own reading of the dates. The message is
     set after the move. Focus moves only if it is still where the tap left it: an answer that lands
     after the person moved on (into Rename, say) leaves their focus alone. A Take off that throws is
-    a refusal (`retry`), so no button is left pending (15 PR 1). The started message says how to undo
-    it ("Until midnight, putting them back on undoes this."); a removed start says "{name} is off …".
+    a refusal (`retry`), so no button is left pending (15 PR 1); a `not_found` is a stale page: it
+    refreshes and says `BUILDER_COPY.takeOffStale`, focus on the heading, never "try again". The
+    message is `takenOffText`: a started one says how to undo it before midnight.
 11. **A name form, and the editor's Save, drop a late answer, but not the write** (`useAttempt`).
     Cancel, Escape, a fresh open or leaving the screen ends the attempt, so a late answer neither
     navigates nor shows an alert. The create, rename or save it sent may still have landed; 6a and
@@ -208,12 +209,12 @@ flowchart LR
     the first Back after Save, Cancel or Discard shows the program page again, and only the next
     one leaves it. A Back that reopened an editor holding the pre-save draft could overwrite the
     save, which costs more than one extra tap.
-    **After a Save, focus lands on the program page's Workouts heading** and the bar says "{workout}
-    saved." (15 PR 1, owed by 7b-ii): Save leaves the editor, its button unmounts, and Next's router
-    leaves focus alone, so the editor hands the next program page a one-shot message
-    (`arrival.ts`, module state: kept across a client navigation, empty after a reload, taken once
-    and only by the program it names). The page moves focus only from `<body>`. The back link's
-    accessible name is "Back to {program}"; it shows "← {program}".
+    **After a Save, focus lands on the program page's Workouts heading** and the bar says
+    `workoutSavedText` (15 PR 1, owed by 7b-ii): Save leaves the editor, its button unmounts, and
+    Next's router leaves focus alone, so the editor hands the next program page a one-shot message
+    (`arrival.ts`, module state: kept across a client navigation, empty after a reload, taken once,
+    only by the program it names and only within `ARRIVAL_MS`). The page moves focus only from
+    `<body>`. The back link's accessible name is `backToLabel(program)`; it shows "← {program}".
 
 16. **The item picker** (step 9) _(maintainer, 2026-11-16)_:
     - **The selection is the editor's**, in pick order, kept across a Close or a back swipe until
@@ -332,17 +333,19 @@ flowchart LR
       instead" lines show only when someone ticked keeps another program. With everyone on it, the
       button is replaced by a line saying so. A start today is undoable the same day: Take off
       removes it when nothing is logged (C15).
-    - **Put on on real data** (15 PR 1; the 15 plan's UX panel): "Starting: names" above the footer
-      (`SheetFormFooter`'s `lead`); someone taken off today reads "last day today", and when only
-      such athletes are ticked the radios give way to "They stay on, with no gap." and the action is
-      "Keep n on …" (their day is ignored, C15); mixed ticks add "… stay(s) on from today either way.";
-      someone new joining a program others are on is told the targets are shared; with no athlete at
-      all the page says "Add an athlete from Home first.", never "Everyone … is on it". **Who was
+    - **Put on on real data** (15 PR 1; the 15 plan's UX panel): `startingNamesText` and, when
+      someone new shares targets (the program has athletes, or two start together),
+      `sameTargetsText`, both in the footer (`SheetFormFooter`'s `lead`, which describes the action),
+      in view with Start. Start counts only who starts (`startLabel(fresh)`). A last day is
+      `lastDayText(day, today)`, one rule with "Who's on it". When only athletes taken off today are
+      ticked, the radios give way to `PUT_ON_COPY.stayOnNoGap` and the action is `keepLabel` (their
+      day is ignored, C15); mixed ticks add `stayOnEitherWayText`. With no athlete at all the page
+      says `PUT_ON_COPY.addAthleteBefore`…`addAthleteAfter`, never `everyoneOn`. **Who was
       just put on is held locally** (`justPutOn`, cleared when the page's data changes), so the
       trigger becomes the line and focus returns to it in the same render as the close, not when the
       refresh lands. The success line names the start's day against the **device's** today
       (`deviceToday`), since the page's `today` is stale past midnight and Put on answers no day.
-      The order hint says the program goes after their other programs (last, until 6d-iii).
+      `orderHintText` says the program goes after their other programs (last, until 6d-iii).
     - Differences from v12, each a decision above: To has no default; who will see a copy; the
       double-workout warning; the label only after a day; Starting as radios with what it changes;
       the hints shown only when they apply; Start's count; "last day …", tickable, in place of "on it";
