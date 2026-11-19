@@ -1,4 +1,8 @@
 <!-- PR title must be a Conventional Commit, e.g. feat(logger): add bodyweight entry -->
+<!-- Tag the PR when you open it (AGENTS.md → Git & branch workflow): the release as the milestone
+     (Beta 0 or Beta 1); the feature's label (FAM-1, CAT-3, PRIV-3, ...) or `tech-debt`; and
+     `bug-fix` as well if it fixes a defect.
+     gh pr create --milestone "Beta 0" --label FAM-1 -->
 
 ## Description
 
