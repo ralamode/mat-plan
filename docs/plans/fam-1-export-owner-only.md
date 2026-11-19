@@ -1,7 +1,7 @@
 # FAM-1 export follow-ups: a rate limit on the export, and the export for the household owner only
 
 _Lane E, 2026-11-19. One plan, **two PRs**: (A) the rate limit first, then (B) the export for the
-household owner only. Rev 4: reshaped by the panel, then by the maintainer's answers (2026-11-19,
+household owner only. Rev 5: reshaped by the panel, then by the maintainer's answers (2026-11-19,
 § Decisions). Code follows the plan's merge._
 
 ## Where this sits
@@ -173,38 +173,69 @@ owner gets everything; any other login is refused the export.**_
 **B1. `packages/db/src/queries/export-month.ts`** (EDIT): `loggedMonths` takes `scope: OwnerScope`,
 and its WHERE gains `isOwnerOf(args.scope)`, as `archiveProfile` does.
 
-- It is the export's first read, and every file is built from the months it returns. So one
-  conjunct gates the whole export: a member scope cast past the type gets no months and therefore no
-  files.
-- The type catches an accidental caller; the conjunct is the guard.
-- The three file reads keep `HouseholdScope` and are unchanged. That leaves no edit to
-  `bodyweightMonthRows` and none to its five proof call sites.
+- **What it gates, said exactly** (correctness, rev 4):
+  - The export's first read, and the DAL builds every file from the months it returns. So a member
+    scope cast past the type gets no months and no files.
+  - The three file reads (`strengthMonthRows`, `bodyweightMonthRows`, `checkinMonthRows`) keep
+    `HouseholdScope` and carry no owner conjunct. That's on purpose: under Q2 their rows are
+    member-visible in the app. The owner rule is about the export artifact, not the rows.
+  - Each of the three gets one docblock line: _not owner-gated; the export's gate is
+    `loggedMonths`_.
+- The type catches an accidental caller; the conjunct is the backstop. If the narrowing were ever
+  lost, the backstop answers with a `200` empty zip and no refusal event: it fails closed on data,
+  in a different shape from the `404`.
 
-**B2. `apps/web/lib/dal/export.ts`** (EDIT): `buildExportEntries` narrows once, with
-`const owner = ownerScope(scope)`.
+**B2. `apps/web/lib/dal/export.ts`** (EDIT): `buildExportEntries` returns `ZipEntry[] | null`, where
+`null` is the refusal and `[]` means only "owner, no months".
 
-- With no owner, it returns a refusal, `null`, before any month query. `buildExportZip` passes the
-  `null` through.
-- The owner's path passes `owner` to `loggedMonths` and is otherwise unchanged.
-- A non-owner's refusal is reported with `reportAuthorityRefusal(AUTHORITY_ACTION.exportProfile)`,
-  a new member of the existing const, the same id-free signal `archiveAthlete` sends.
+- **`null` for:** an unknown or erased profile, a null scope (both `[]` today, `:87`, `:89`), and a
+  scope `ownerScope()` narrows to `null`. All three return before any month query, and
+  `buildExportZip` passes the `null` through.
+- **The owner's path** passes `owner` to `loggedMonths` and is otherwise unchanged.
+- **A non-owner's refusal** is reported with `reportAuthorityRefusal(AUTHORITY_ACTION.exportProfile)`,
+  a new member of the const at `apps/web/lib/dal/household.ts:383`.
+  - The report's once-per-login cap is keyed `owner_only:<userId>` (`:270`), with no action in
+    it. So an earlier archive refusal would swallow the export's event, and the reverse.
+  - The action joins the cap key, and a `household.test.ts` case (archive then export) shows two
+    events.
 
 **B3. `apps/web/app/p/[profileId]/export/route.ts`** (EDIT): a `null` zip answers `notFound()`, the
 same byte-identical miss as an unknown id.
 
 - A member can already see that the athlete exists in the app, so the `404` hides nothing new, and
   the route keeps one miss shape (#643).
-- The order is session, profile, limiter, then build. A member spends one unit of budget per
-  refused attempt, which is harmless.
+- The order is session, profile, limiter, then build. A member spends one unit of budget per refused
+  attempt, which is harmless.
+- The compiler enforces the `null` check, because `zip.byteLength` at `:86` won't compile without
+  it.
 
-**B4. The link** (EDIT): `householdState()` gains `canExportAthletes: ownerScope(scope) !== null`
-(`apps/web/lib/dal/household.ts:376`, one capability per boolean, beside `canArchiveAthletes`).
+**B4. The control** (EDIT; UX reviewer, 2026-11-19):
 
-- `apps/web/app/p/[profileId]/page.tsx:279` and `apps/web/app/settings/athlete-list.tsx:328` render
-  the export link only when it's true, so the UI never offers what the endpoint refuses.
-- A non-owner sees no link and no replacement copy. Q3 says the notice carries it until `INVITE-1`.
-- It's a small visual change, so one UX reviewer reads it before code (AGENTS.md → UI PR rules).
-  Today nobody sees the difference: every login is an owner.
+- **The capability.** `householdState()` gains `canExportAthletes: ownerScope(scope) !== null`
+  (`apps/web/lib/dal/household.ts:376`, one capability per boolean, beside `canArchiveAthletes`).
+- **One component.** NEW `apps/web/components/profiles/export-control.tsx`, a small sync component
+  `ExportControl({ profileId, hasHistory, canExport, className })`, replaces the ternary written
+  twice today (`apps/web/app/p/[profileId]/page.tsx:278-284`,
+  `apps/web/app/settings/athlete-list.tsx:322-345`). It renders
+  `canExport ? (hasHistory ? link : NOTHING_TO_EXPORT) : null`.
+  - The whole branch is gated, not only the link: a non-owner never sees "nothing to export"
+    either, which would tell them an export exists for them.
+  - `components/profiles/` holds the other athlete-level components.
+- **The two call sites:**
+  - The day page gains a `householdState()` call. `getHouseholdScope` is `cache()`d, so no second
+    query.
+  - Settings passes `canExport` beside `canArchive` (`apps/web/app/settings/page.tsx:55`).
+  - The V1-13b comment above the day-page link and the N3 comment in the settings row are restated
+    with the new condition.
+- **Who sees what.** A non-owner sees no control and no replacement copy (Q3: the notice carries it
+  until a member login exists). Today nobody sees a difference, because every login is an owner.
+- **Layout and focus** (UX reviewer): removing the control only removes content.
+  - The day page's foot becomes the rename link alone (the D11 width math, 328px usable).
+  - A settings archived row becomes Restore alone (about 294px usable).
+  - Focus order keeps rename last on the day page and Restore on the row.
+- **The follow-up copy.** The deferred copy is recorded where the next author will find it. The
+  roadmap thread adds one line to `ID-1`'s row: _owes in-app copy where a non-owner's export
+  control is hidden (FAM-1 export Q3), likely the `SETTINGS_COPY.ownerOnly` pattern_.
 
 **B5. `db:verify`** (EDIT):
 
@@ -229,15 +260,25 @@ same byte-identical miss as an unknown id.
 **B6. Tests:**
 
 - **`apps/web/lib/dal/export-prescribed.test.ts`** (EDIT, the existing harness). The scope becomes
-  mutable, built with `HOUSEHOLD_ROLE.owner` / `.member`, which also fixes the hand-typed
-  `role: 'owner'` at `:32`. The real `ownerScope` is used. Cases:
+  mutable, built with `HOUSEHOLD_ROLE.owner` / `.member` (which also fixes `role: 'owner'` at
+  `:32`). The real `ownerScope` is used, and the `./household` mock gains the reporter. Cases:
   - (a) owner: `entries.map(e => e.path)` equals strength, bodyweight, check-ins for each month,
     as today;
-  - (b) member: the result is `null`, no month or file read is called, and one authority refusal is
-    reported.
-- **`export/route.test.ts`**: a `null` zip gives today's `404` with `no-store`.
-- **`household.test.ts`**: `canExportAthletes` is true for an owner scope and false for a member.
-- The page tests or e2e: the seeded owner still sees the link.
+  - (b) member: the result is `null`, no month or file read is called, and the reporter gets
+    `AUTHORITY_ACTION.exportProfile` from the real const;
+  - (c) unknown profile and null scope: `null`.
+- **`export/route.test.ts`:** a `null` zip, through the file's `answer()` helper, `toEqual`s the
+  signed-out answer.
+- **`household.test.ts`:**
+  - `canExportAthletes` is true for an owner and false for a member, and the existing
+    `toStrictEqual` cases, `none` included, gain the field;
+  - the two-events cap case from B2.
+- **NEW `export-control.test.tsx`:**
+  - owner with history: the link;
+  - owner without history: the reason text;
+  - non-owner: neither, with no `a[download]` and no `NOTHING_TO_EXPORT`.
+- **e2e:** the seeded owner still sees the link and downloads. No e2e can sign in as a member, so
+  the component test is the member check.
 
 **B7. Docs** (the privacy lens re-reads every sentence in the PR):
 
@@ -248,7 +289,8 @@ same byte-identical miss as an unknown id.
     the household sees weigh-ins in the app._
   - Limitation 3 (`:150-153`) is reworded: anyone signed in can see any athlete's history in the
     app; only the owner can download it.
-  - `:109` becomes "the household owner".
+  - `:109` becomes "the household owner", and `:257`'s "Open an athlete's page and use the export"
+    gains "if you set up the household".
   - The archived-athlete export lines (`:272-274`, `:287`) say "the owner".
   - `:122`'s "shared login" goes; sign-in is per person.
   - A dated "What changed on …" entry, worded as a rule that now exists. The sign-off line
@@ -268,8 +310,11 @@ same byte-identical miss as an unknown id.
   - An adult athlete's own access is `ID-1`'s question.
 - **`docs/runbooks.md`:** `:1461`, `:1973` and `:2195` say the owner runs the in-app export.
   `:1466`'s "no check-ins" went false at #655 and is fixed in the same edit.
-- **The feature guides:** `docs/features/write-path.md` invariant 16 (the export reads take an
-  owner scope at `loggedMonths`) and the mutations README (row 610, plus any re-cut).
+- **The feature guides:**
+  - `docs/features/write-path.md` invariant 16: the export is gated at `loggedMonths` and in the
+    DAL, and the three file reads are deliberately not owner-gated (Q2);
+  - `docs/features/day-page.md`: the export control's new condition;
+  - and the mutations README and the mutations README (row 610, plus any re-cut).
 - Plus a changelog fragment.
 - **Not in this repo PR:** the `ID-1` requirement and the feed rule go to the roadmap thread to
   record in `docs/plan.md` (`ID-1`) and the program plan; lane E edits neither.
@@ -390,3 +435,15 @@ to `loggedMonths` (one conjunct gates every file; B5 lists its six call sites in
 link is hidden through a `canExportAthletes` capability (B4, one UX reviewer before code). Rev 3's
 member month-skip and its tests are gone. Q2 removes the day-page question, and SECURITY.md:134 is
 reworded around it.
+
+### Rev 5 (2026-11-19): light re-review of rev 4 (correctness, one UX reviewer)
+
+No BLOCKING finding.
+
+| #   | Lens            | Critique (short)                                                                           | Verdict      | Resolution                                                  |
+| --- | --------------- | ------------------------------------------------------------------------------------------ | ------------ | ----------------------------------------------------------- |
+| U1  | UX, Correctness | Gating only the link leaves "nothing to export" for a member; the hidden state is untested | **accepted** | B4: one `ExportControl` gates the branch; B6 component test |
+| U2  | UX              | Q3's deferred copy has no home                                                             | **accepted** | B4: the roadmap thread adds a line to `ID-1`'s row          |
+| K2  | Correctness     | "One conjunct gates the whole export" overstates; the file reads aren't gated              | **accepted** | B1 says exactly what it gates, and why (Q2); docblock lines |
+| K3  | Correctness     | The refusal report's cap key has no action, so archive and export swallow each other       | **accepted** | B2: action joins the key; two-events test                   |
+| N   | both            | Mixed `[]`/`null` misses; backstop shape; exact assertions; day-page fetch; notice `:257`  | **accepted** | B2, B1, B6, B4, B7                                          |
