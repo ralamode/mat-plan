@@ -1,0 +1,21 @@
+diff --git a/packages/db/src/writers/program/assign.ts b/packages/db/src/writers/program/assign.ts
+index 1b443276..72fc8b39 100644
+--- a/packages/db/src/writers/program/assign.ts
++++ b/packages/db/src/writers/program/assign.ts
+@@ -74,7 +74,15 @@ export async function openAssignments(
+   return tx
+     .select({ id: a.id, blockId: a.blockId, idx: a.idx })
+     .from(a)
+-    .where(and(eq(a.profileId, profileId), isNull(a.deletedAt), isNull(a.activeTo)))
++    .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, a.blockId))
++    .where(
++      and(
++        eq(a.profileId, profileId),
++        isNull(a.deletedAt),
++        isNull(a.activeTo),
++        isNull(schema.programBlocks.deletedAt),
++      ),
++    )
+     .orderBy(asc(a.idx), asc(a.id));
+ }
+ 
