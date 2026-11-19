@@ -219,10 +219,14 @@ describe('the preview harness', () => {
       for (const part of DAY_PARTS) expect(latest(part).props.plan).toBe(day.props.plan);
       expect(latest('program-line').props.actions).toBe(day.props.actions);
 
-      // Nothing the page adds for its own layout or for a page that does not exist yet.
+      // Nothing the page adds for its own layout. The notice gets the page's two props since
+      // 15 PR 2: the plan, and the Programs link (its value is the next test's).
       expect(Object.keys(latest('athlete-switcher').props).sort()).toEqual(['hrefFor', 'plan']);
       expect(Object.keys(latest('program-line').props).sort()).toEqual(['actions', 'plan']);
-      expect(Object.keys(latest('not-on-a-program').props)).toEqual(['plan']);
+      expect(Object.keys(latest('not-on-a-program').props).sort()).toEqual([
+        'plan',
+        'programsHref',
+      ]);
 
       // Top to bottom: the switcher, the line, the notice, then the screen.
       // First occurrences, so a double render (StrictMode) cannot make a wrong order look right.
@@ -293,6 +297,32 @@ describe('the preview harness', () => {
       cleanup();
     }
     expect(archived).toEqual(['archived-athlete-today', 'archived-athlete-nothing-logged']);
+  });
+
+  it('🔴 passes the Programs link as the page does: by the page’s own rule, to the preview’s list', async () => {
+    const { offersProgramsLink } = await import('@/components/day/day-notices');
+    const { previewHref } = await import('./preview-registry');
+    const href = previewHref({
+      screen: 'programs-list',
+      fixture: 'programs-list',
+      failNext: false,
+    });
+    const linked: string[] = [];
+    const unlinked: string[] = [];
+    for (const fixture of Object.keys(DAY_PLAN_FIXTURES) as (keyof typeof DAY_PLAN_FIXTURES)[]) {
+      const { world, athlete: id } = DAY_PLAN_FIXTURE_SOURCES[fixture];
+      const athlete = world.athletes.find((a) => a.id === id)!;
+      render(<PreviewHarness screen="day" fixture={fixture} failNext={false} />);
+      const offered = offersProgramsLink({ archived: athlete.archived === true });
+      expect(latest('not-on-a-program').props.programsHref, fixture).toBe(
+        offered ? href : undefined,
+      );
+      (offered ? linked : unlinked).push(fixture);
+      cleanup();
+    }
+    // Both arms are real fixtures: a live athlete gets the link, an archived one never does.
+    expect(linked).toContain('no-program');
+    expect(unlinked).toEqual(expect.arrayContaining(['archived-athlete-today']));
   });
 
   it('the day preview supplies the page’s <h1>, which on the real page is not the screen’s', () => {
