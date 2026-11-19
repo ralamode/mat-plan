@@ -573,7 +573,14 @@ The shapes those lanes agree on, the fakes and the preview route are
      profile's live row holds the id, same metric and day) → **`day_taken`** (a practice, and a live
      practice holds `practiceSlot`) → **`own_hidden`** (this profile's hidden row holds the id; the day
      is free) → **`conflict`** (any other holder) → one retry of the items nothing explains (a holder
-     cleared mid-write) → the throw. The day decides before `own_hidden`, as
+     cleared mid-write; a retry that finds the day held again answers `day_taken`, proved by
+     `verifyRetryLandsOnTakenDay`) → the throw. Before any of it the writer folds each `client_id` to
+     lower case, because the classifier matches by JS string and Postgres by `uuid`, and **throws on a
+     repeated id**: two items under one id write one row. That is a precondition every caller keeps
+     (`logCheckinsAction` refuses a repeat as a field error first; the unwired `/api/sync` **must**
+     collapse identical replays and refuse different items sharing an id per item before calling;
+     nothing does yet), not an answer. The writer also refuses an id that is not hyphenated
+     (`lowerCaseUuidSchema`), since Postgres would read braces or bare hex as the same uuid. The day decides before `own_hidden`, as
      bodyweight's slot does. The bodyweight and strength inserts cannot hit this index (their metric
      is never `practice_minutes`). Since 3b-life-b, `logLifeActivitiesAction` (typed minutes, practice only)
      refuses `day_taken`, `conflict` and `own_hidden`, each with its own copy, and the form mints a new

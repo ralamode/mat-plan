@@ -312,3 +312,34 @@ export async function orFail<T>(what: string, run: () => Promise<T>): Promise<T>
     assert.fail(`${what} (threw: ${String((e as Error).message).slice(0, 120)})`);
   }
 }
+
+/**
+ * A second phone's hide, staged inside an insert: a statement-level `AFTER INSERT` trigger hides the
+ * live row named by `arm`. Statement triggers fire on a statement that inserted nothing, so a writer
+ * whose insert skipped on that row re-reads to find no insert, no holder and no taken day, exactly as
+ * a hide landing between its statements would leave them. Idempotent, so later inserts pass through;
+ * `disarm` names nothing. It all rolls back with the transaction (DDL is transactional). Used by the
+ * check-in and bodyweight race (`single-values.ts`) and the ✓ race (`day.ts`).
+ */
+export async function stageHideDuringInsert(tx: VerifyTx) {
+  await tx.execute(sql`create temp table race_target (public_id uuid not null)`);
+  await tx.execute(sql`create function verify_race_hide() returns trigger language plpgsql as $$
+    begin
+      update entries set deleted_at = now()
+        where public_id in (select public_id from race_target) and deleted_at is null;
+      return null;
+    end $$`);
+  await tx.execute(
+    sql`create trigger race_hide after insert on entries for each statement execute function verify_race_hide()`,
+  );
+  const disarm = async () => {
+    await tx.execute(sql`delete from race_target`);
+  };
+  return {
+    arm: async (publicId: string) => {
+      await disarm();
+      await tx.execute(sql`insert into race_target values (${publicId}::uuid)`);
+    },
+    disarm,
+  };
+}

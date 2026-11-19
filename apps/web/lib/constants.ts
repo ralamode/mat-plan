@@ -874,6 +874,15 @@ const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
 )!.label;
 
 /**
+ * The check-in submit's per-field refusal for an item it cannot write as sent: a missing or malformed
+ * `client_id`, or one another field of the same submit also carries. The form mints a fresh id per
+ * field on every load, so a reload is the true remedy.
+ */
+export const CHECKIN_COPY = {
+  itemNotSubmitted: 'Could not submit this item. Reload and try again.',
+} as const;
+
+/**
  * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
  * the day's TOTAL, and the hint says so (plan A3).
  */
