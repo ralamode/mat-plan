@@ -2,11 +2,12 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
-# One version for the database client packages both workspaces declare (tech-debt: "apps/web's
-# drizzle peers"). apps/web declares them only so its drizzle-orm peer key is stated rather than
-# inferred; if the two workspaces named different ranges, a Dependabot bump to one could leave two
-# copies of drizzle-orm, which fails `next build` in files it never touched (docs/lessons.md →
-# pnpm / build). Both package.json files say `catalog:`, so there is one range to bump.
+# One version for the database client packages both workspaces declare. apps/web declares them only
+# so its drizzle-orm peer key is stated rather than inferred; if the two workspaces named different
+# ranges, a Dependabot bump to one could leave two copies of drizzle-orm, which fails `next build` in
+# files it never touched (docs/lessons.md → pnpm / build). Both package.json files say `catalog:`, so
+# there is one range to bump. ⚠️ Not enforced: pnpm's default `catalogMode` is manual, so a
+# `pnpm add pg@x --filter <one workspace>` writes a literal range there; keep both on `catalog:`.
 catalog:
   '@electric-sql/pglite': ^0.5.15
   '@types/pg': ^8.23.1
