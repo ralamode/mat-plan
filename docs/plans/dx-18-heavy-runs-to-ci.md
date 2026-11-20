@@ -212,9 +212,9 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
     holds only `issues: write`.
 - **As built after #700 (2026-11-19, CI runs queued for most of an hour):** a `mutations-plan` job runs
   the scopes once and outputs `run_mutations` and the shard list, written once in its "Shard count"
-  step: **8 on a push to main, 4 on a PR**; **4 on every event since 2026-11-19** (maintainer), after
-  eleven queued main runs of 8 shards each held every PR behind them. Every push to main still runs
-  every patch, and a red run still sits on its own commit. `mutations` and `mutations-total` skip at job level when
+  step: **4 on every event** (8 on a push to main until 2026-11-19, maintainer, after eleven queued
+  main runs of 8 shards each held every PR behind them). Every push to main still runs every patch,
+  and a red run still sits on its own commit. `mutations` and `mutations-total` skip at job level when
   `run_mutations` is `false`, so a PR that cannot affect a patch takes one runner for the proof, not
   nine. A failed plan leaves the output empty, which still runs `mutations-total`, and it goes red.
 - **No cron.** A scheduled run tells nobody, and public-repo schedules lapse after 60 days.
