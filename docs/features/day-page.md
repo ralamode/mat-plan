@@ -233,7 +233,8 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     never fold. **The body is hidden, never unmounted** (rows hold typed text and un-tick tokens).
     "Collapse" is **never offered while the part is busy**: a write in flight, a Change typed
     (`useChange`), or an added set not ticked (`set-table.tsx`), each reported through
-    `setRowBusy`. Focus goes to "Collapse" after a tap on the line and to the line after "Collapse";
+    `setRowBusy` **under its own key** (`rowKey`, `rowKey/change`, `…/extra`): one source's cleanup
+    must never end another's (#773). Focus goes to "Collapse" after a tap on the line and to the line after "Collapse";
     when either control goes by itself while focused, to the part's name. A focused Collapse that
     turns held hands focus to the name too, whether the button keeps it (jsdom) or a browser drops
     it to the page when it is disabled (`useCollapse` records that Collapse was focused last). Nothing is announced: the

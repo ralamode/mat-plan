@@ -164,8 +164,9 @@ export function useChange(
       !sameValues(values, seenValues)
     ) {
       // A failed save's "Couldn’t save. Still 27.5 lb" names what is no longer stored: it gives way
-      // to the draft's own "Not saved. Was 35 lb". Only a failed save (`counts`): a failed Undo or a
-      // Reload notice leaves no draft, so never reaches here, and is the line block's below.
+      // to the draft's own "Not saved. Was 35 lb". Only a failed save (`counts`): a Reload notice
+      // leaves no draft, and a failed Undo's draft (typed back) is no edit, so it is dropped below
+      // and the line block clears its message.
       if (r.error?.write === 'amend' && r.error.counts) r.clearError();
       const was = textOf(item, seenValues);
       const drafted = Object.keys(draft) as RowField[];
@@ -207,14 +208,15 @@ export function useChange(
   if (!dirty && r.error?.write === 'amend' && r.error.counts) r.clearError();
   const shownLine = editable && !dirty ? line : null;
 
-  // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered).
+  // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered). Its
+  // own key: the row's message reports under `rowKey`, and its cleanup must not end this one's.
   const { setRowBusy } = day;
-  const { rowKey } = r;
+  const changeKey = `${r.rowKey}/change`;
   useEffect(() => {
     if (!dirty) return;
-    setRowBusy(rowKey, true);
-    return () => setRowBusy(rowKey, false);
-  }, [dirty, rowKey, setRowBusy]);
+    setRowBusy(changeKey, true);
+    return () => setRowBusy(changeKey, false);
+  }, [dirty, changeKey, setRowBusy]);
 
   function clearChangeError() {
     if (r.error?.write === 'amend') r.clearError();
