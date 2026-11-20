@@ -6,6 +6,6 @@
   programs and a new athlete of its own, puts the athlete on both, moves the first program down,
   and checks the announcement, the programs line, the links and the workouts' order, before and
   after a reload. The builder's e2e steps it shares (open Programs, create a program, copy a
-  workout onto every weekday, Put on from today) move into `e2e/steps.ts`, unchanged. The privacy
+  workout onto every weekday, Put on from today) move into `e2e/steps.ts`, unchanged, except that the a11y spec's `reachProgram` now also checks the Programs heading, which `openPrograms` always did. The privacy
   notice now says anyone signed in can change the order an athlete's programs show in. The two
   `owed.test.ts` lines for 15c are deleted.

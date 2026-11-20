@@ -259,6 +259,11 @@ export async function settled(button: Locator, pressed: boolean) {
  * Adds an athlete through `/p/new`, as a parent does (PROF-1 a-1u); they land on their day page.
  * `track` collects the name BEFORE the add, so `archiveAdded` cleans up even if the add's answer
  * is lost. Lifted from `athletes.spec.ts` at FAM-1 15, when the builder's spec became the second.
+ *
+ * ⚠️ **The athlete budget is shared.** Archiving does not free a slot, and a fresh e2e run spends
+ * about 20 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
+ * 4 seeded, about 10 in `athletes.spec.ts`, one each in six more), leaving about 5 for retries. A new
+ * spec that adds athletes counts itself here first.
  */
 export async function addAthlete(
   page: Page,
@@ -343,7 +348,7 @@ export async function copyOntoEveryWeekday(
   { from, workout, to }: { from: string; workout: string; to: string },
 ): Promise<void> {
   await page.goto(PROGRAMS_PATH);
-  await page.getByRole('link', { name: from }).click();
+  await page.getByRole('link', { name: from, exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(from);
   await page.getByRole('button', { name: copyToLabel(workout) }).click();
   const copy = page.getByRole('dialog', { name: copyTitle(workout) });

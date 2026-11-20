@@ -3,7 +3,6 @@ import { addDays, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
 import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
-import { programPath } from '../components/program-builder/routes';
 import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
 
 import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
@@ -420,10 +419,7 @@ test.describe('Program order on real data', () => {
         await expect(links.nth(index), `${when}: link ${index + 1}`).toHaveAccessibleName(
           program.name,
         );
-        await expect(links.nth(index)).toHaveAttribute(
-          'href',
-          programPath(program.path.split('/').at(-1)!),
-        );
+        await expect(links.nth(index)).toHaveAttribute('href', program.path);
       }
       await expect(workoutHeadings(page), `${when}: the workouts`).toHaveText(
         moved.map((p) => p.workout),
