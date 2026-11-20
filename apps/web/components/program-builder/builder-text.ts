@@ -22,7 +22,7 @@ import {
   type Weekday,
 } from '@mat-plan/shared';
 
-import { itemCountText } from '@/lib/constants';
+import { HOME_LINK, itemCountText } from '@/lib/constants';
 import { formatDayShort, onDayText } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -41,7 +41,7 @@ export const BUILDER_COPY = {
   programsNavLink: `${PROGRAMS} ›`,
   /** The program page's document title: never the program's name (PROF-1 D8). */
   programTitle: 'Program',
-  home: '← Home',
+  home: HOME_LINK,
   backToPrograms: '← Programs',
   noPrograms: 'No programs yet.',
   noOneYet: 'No one yet',

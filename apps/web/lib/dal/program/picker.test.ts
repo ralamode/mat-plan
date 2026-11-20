@@ -1,5 +1,6 @@
 import {
   catalogHowToOf,
+  equipmentInOrder,
   TRACKING_TYPE,
   type CatalogOptionTaxonomy,
   type Unit,
@@ -123,7 +124,8 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
     expect(option).toMatchObject({
       modality: library.modality,
       pattern: library.pattern,
-      equipment: library.equipment,
+      // The vocabulary's order, not the authored one (maintainer, 2026-11-19: Q2).
+      equipment: equipmentInOrder(library.equipment),
       primaryMuscle: library.primaryMuscle,
       supervision: library.supervision ?? null,
       hasInstructions: library.instructions !== undefined,

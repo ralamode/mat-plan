@@ -1,0 +1,18 @@
+diff --git a/packages/db/src/writers/checkin.ts b/packages/db/src/writers/checkin.ts
+index 3cac7420..6054c949 100644
+--- a/packages/db/src/writers/checkin.ts
++++ b/packages/db/src/writers/checkin.ts
+@@ -138,7 +138,12 @@ export async function writeCheckinEntries(
+   if (missed.length === 0) return first as CheckinWriteResult[];
+ 
+   const retried = await attemptCheckinEntries(exec, { ...args, values: missed });
+-  const byClientId = new Map(missed.map((v, i) => [v.clientId, retried[i]]));
++  const byClientId = new Map(
++    missed.map((v, i) => {
++      const r = retried[i];
++      return [v.clientId, r && r.outcome !== 'created' ? { clientId: v.clientId, outcome: 'created' as const, publicId: v.publicId } : r];
++    }),
++  );
+   return values.map((v, i) => {
+     const result = first[i] ?? byClientId.get(v.clientId);
+     if (result == null) {

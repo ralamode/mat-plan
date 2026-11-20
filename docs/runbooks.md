@@ -1244,8 +1244,8 @@ be a cross-tenant linkage over minors' health data.
 ## An owner-only athlete action was refused (the PROF-1 b alert)
 
 **What fired.** A Sentry event `athlete authority refused`, tagged
-`authority_outcome: owner_only`. A signed-in member of a household asked to **archive** an athlete
-in **their own** household, and the server refused because they are not the owner.
+`authority_outcome: owner_only`. A signed-in member of a household asked to **archive** an athlete, or
+(since 2026-11-19) to **download an athlete's export**, in **their own** household, and the server refused because they are not the owner.
 
 🔴 **This is not a cross-household event, and that is why it has its own alert.** The scope-miss
 alert above covers an id reached from the wrong household. This one is _inside_ the caller's own
@@ -1261,7 +1261,7 @@ household, so every tenancy predicate matched and `reportScopeMiss` is silent by
 | Action   | notify the issue's suggested assignees, else the recently active members           |
 | Throttle | none: it notifies on every trigger                                                 |
 
-The event's tags are `authority_outcome: owner_only` and `authority_action: archive_profile`; the
+The event's tags are `authority_outcome: owner_only` and `authority_action: archive_profile` or `export_profile`; the
 alert filters on the message, not on them.
 
 🔴 **There was no such alert before 2026-11-17 (UTC)**, for the reason the scope-miss section above
@@ -1275,15 +1275,16 @@ be one issue (Sentry groups by message; check under Issues): the first creates i
 a later one notifies only if Sentry calls the issue escalating or the issue had been resolved.
 **Resolve the issue when triage is done**, or the next refusal is quiet.
 
-⚠️ **How many events to expect.** The app reports this event at most once per account per server
-instance, and not at all once the per-principal bound it shares with the unresolved-scope events
+⚠️ **How many events to expect.** The app reports this event at most once per account **per act** (archive, export) per
+server instance, and not at all once the per-principal bound it shares with the unresolved-scope events
 fills (100 keys, held in memory; it emits `report_cap_reached` first). A caller with no user id
 shares one key. And the event carries no account id. So several events mean several accounts or
 several instances, and Sentry cannot tell which: read the count as "this happened more than once",
 never as "one account tried N times".
 
-**What makes it interesting rather than noise:** the UI renders **no Archive control for a member**,
-so this path cannot be reached by using the app. Reaching it takes a crafted POST. One event is
+**What makes it interesting rather than noise:** the UI renders **no Archive control and no export control for a
+member**, so this path cannot be reached by using the app. Reaching it takes a crafted POST (archive)
+or a typed export URL. One event is
 plausible as a stale tab (a member whose role changed mid-session, once `INVITE-1` can change roles);
 repeated events are someone probing an owner-only control (from how many accounts, the events cannot say).
 
@@ -1466,10 +1467,12 @@ forgotten you are left with orphan Clerk accounts — an email address and a Goo
 nothing in the database to find them by. Capture them now; the ledger is the recovery path.
 
 **1. The household exports its own data, in the app, while it still has access.**
-`/p/<profileId>/export` per athlete.
+`/p/<profileId>/export` per athlete, **downloaded by the household's owner** (only an owner login gets
+an export, since 2026-11-19). An adult who is not an owner may ask for the full copy of **their own**
+data, on their own verified channel; a child's copy goes only to an owner's channel.
 
-⚠️ **That export is a partial copy** — no check-ins or life activities, no readiness colours, no "how
-it felt" notes, no per-athlete prescribed targets
+⚠️ **That export is a partial copy** — no readiness colours, no "how it felt" notes (check-ins are in
+it since FAM-1 14b), no per-athlete prescribed targets
 ([data-inventory.md](./privacy/data-inventory.md) §6). The notice promises a full copy on request, so
 **ask whether they want one**, and if they do, produce it by hand **before step 4**, **including
 hidden rows** (`deleted_at IS NOT NULL`: a cleared weigh-in is one, and it is in no export). Handing
@@ -1975,8 +1978,8 @@ adult athlete also asks for **their account** to go, delete their Clerk user as 
 step 6 does (record its id at the ledger first); their `household_members` row is hidden by removing
 the membership and keeps its `clerk_user_id` until the household goes.
 
-**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`), and the full copy on
-request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
+**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`, which only the
+household's owner can download), and the full copy on request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
 adult's own** for an adult athlete. Afterwards there is nothing to export.
 
 **2. Resolve the athlete by `public_id`** on the **production** database, and assert their household and
@@ -2197,7 +2200,8 @@ principle that also binds any later in-app removal:
 **0. Record the request** in the ledger (below).
 
 **1. The export is offered at step 3**, once its list says who trained on it: the in-app export
-(`/p/<profileId>/export`) for each of them, and the full copy on request. The in-app export holds no
+(`/p/<profileId>/export`, downloaded by the household's owner) for each of them, and the full copy on
+request. The in-app export holds no
 program, no targets and no record of who was on which program, which is what a removal deletes.
 
 **2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**

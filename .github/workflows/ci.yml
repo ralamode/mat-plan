@@ -420,8 +420,13 @@ jobs:
       - name: EVAL-0 gates (accuracy + invariant)
         run: pnpm eval
 
-      - name: DB drift guard + migration/seed verify
+      # `drizzle-kit check` first: it exits 1 when two snapshots claim one parent (the collision two
+      # lanes sharing the migration queue produce), and needs no database. It does NOT catch a
+      # snapshot whose prevId is its own id (#139, docs/lessons.md): it passes that. Only the
+      # forward-only guard's inline chain check above catches it, on PRs only. Keep both.
+      - name: DB snapshot parent collisions + drift guard + migration/seed verify
         run: |
+          pnpm --filter @mat-plan/db db:check
           pnpm --filter @mat-plan/db db:generate
           git diff --exit-code packages/db/migrations \
             || (echo '::error::Schema drift — run `pnpm --filter @mat-plan/db db:generate` and commit.' && exit 1)

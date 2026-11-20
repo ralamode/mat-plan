@@ -4,6 +4,8 @@ import { movementNameSchema, type MovementPattern, type TrackingType } from '../
 import type { Unit } from '../units';
 import { catalogInstructionsSchema, type CatalogMovement } from './entry';
 import {
+  EQUIPMENT,
+  MUSCLES,
   supervisionSchema,
   type Equipment,
   type Modality,
@@ -30,14 +32,36 @@ export type CatalogOptionTaxonomy = {
   readonly modality: Modality;
   /** The lift pattern: set on every strength movement, `null` on most others. */
   readonly pattern: MovementPattern | null;
-  /** Everything it needs. Empty means no equipment. In the entry's authored order. */
+  /** Everything it needs. Empty means no equipment. In the vocabulary's order (`equipmentInOrder`). */
   readonly equipment: readonly Equipment[];
   readonly primaryMuscle: Muscle | null;
+  /** In the vocabulary's order (`musclesInOrder`). */
   readonly secondaryMuscles: readonly Muscle[];
   /** `null` on all but the few movements the maintainer marks (K14). Shown as text, never a gate. */
   readonly supervision: Supervision | null;
   readonly hasInstructions: boolean;
 };
+
+/**
+ * A movement's equipment in the one order every reader lists it: the vocabulary's (`EQUIPMENT`).
+ *
+ * **The order an entry was written in means nothing** (spec K31; maintainer, 2026-11-19). The
+ * tables that hold a movement's equipment keep no order either, so a read that returned "whatever
+ * came back" and a mapping that returned "as authored" would word one movement's "what it needs"
+ * two ways. Both call this instead. Returns a new array; a value named twice comes back once.
+ *
+ * ⚠️ **A code that is not in the vocabulary is left out, without an error.** An entry cannot hold
+ * one (`equipmentSchema`). A read that takes codes from the tables parses them with
+ * `equipmentSchema` / `muscleSchema` first, so an unknown code fails there and does not vanish here.
+ */
+export function equipmentInOrder(equipment: readonly Equipment[]): Equipment[] {
+  return EQUIPMENT.filter((item) => equipment.includes(item));
+}
+
+/** A movement's muscles in the vocabulary's order (`MUSCLES`): `equipmentInOrder`'s rule, for muscles. */
+export function musclesInOrder(muscles: readonly Muscle[]): Muscle[] {
+  return MUSCLES.filter((muscle) => muscles.includes(muscle));
+}
 
 /**
  * One library movement as the picker's option read returns it (P11): the option's own fields and
@@ -61,6 +85,10 @@ export type CatalogOption = {
  * entry: so the three cannot disagree about which field of the entry feeds which field of the
  * option. Pure, and it copies the arrays, so an option never aliases the library const.
  *
+ * **Equipment and secondary muscles come back in the vocabulary's order**, whatever order the
+ * entry lists them in (`equipmentInOrder`, `musclesInOrder`; spec K31). Aliases keep the entry's
+ * order: search ranks by it.
+ *
  * ⏳ **Until the catalog's fresh start the real picker's option is not always this** (spec K22,
  * FAM-1 7a-ii). The database's global rows are still the old built-ins, and the web DAL lists
  * every one. For a built-in the library has an entry for, on its slug, it takes the taxonomy,
@@ -81,9 +109,9 @@ export function catalogOptionOf(entry: CatalogMovement, publicId: string): Catal
     isBodyweight: entry.isBodyweight,
     modality: entry.modality,
     pattern: entry.pattern,
-    equipment: [...entry.equipment],
+    equipment: equipmentInOrder(entry.equipment),
     primaryMuscle: entry.primaryMuscle,
-    secondaryMuscles: [...entry.secondaryMuscles],
+    secondaryMuscles: musclesInOrder(entry.secondaryMuscles),
     supervision: entry.supervision ?? null,
     hasInstructions: entry.instructions !== undefined,
   };

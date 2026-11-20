@@ -55,16 +55,16 @@ pnpm e2e:local e2e/<spec>.ts -g "<name>"                        # one Playwright
 A timeout that passes when re-run alone is load, not a defect: see
 [lessons.md](../../../docs/lessons.md) → "load timeouts that look like failures".
 
-| CI step (`ci.yml`)               | Local reproduction                                                                                |
-| -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Forward-only migration guard     | `git diff --name-status origin/main -- packages/db/migrations` (only `A` allowed)                 |
-| Squawk (new migrations)          | `npx squawk-cli@2.66.0 -c .squawk.toml <new .sql>`                                                |
-| Feature guides                   | `pnpm guides:check`                                                                               |
-| format / lint / typecheck / test | `pnpm format:check` · `pnpm lint` · `pnpm typecheck` · `pnpm test` (or `pnpm verify`)             |
-| DB drift guard + db:verify       | `pnpm db:generate && git status packages/db/migrations` · `pnpm db:verify`                        |
-| `pnpm build`                     | `pnpm build` (CI uses placeholder env)                                                            |
-| e2e                              | `pnpm e2e:local` (args pass through: `pnpm e2e:local <spec>`), never bare `pnpm --filter web e2e` |
-| gitleaks                         | `gitleaks detect --redact` (report the rule and location, **never the value**)                    |
+| CI step (`ci.yml`)                | Local reproduction                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Forward-only migration guard      | `git diff --name-status origin/main -- packages/db/migrations` (only `A` allowed)                 |
+| Squawk (new migrations)           | `npx squawk-cli@2.66.0 -c .squawk.toml <new .sql>`                                                |
+| Feature guides                    | `pnpm guides:check`                                                                               |
+| format / lint / typecheck / test  | `pnpm format:check` · `pnpm lint` · `pnpm typecheck` · `pnpm test` (or `pnpm verify`)             |
+| DB collisions + drift + db:verify | `pnpm db:check` · `pnpm db:generate && git status packages/db/migrations` · `pnpm db:verify`      |
+| `pnpm build`                      | `pnpm build` (CI uses placeholder env)                                                            |
+| e2e                               | `pnpm e2e:local` (args pass through: `pnpm e2e:local <spec>`), never bare `pnpm --filter web e2e` |
+| gitleaks                          | `gitleaks detect --redact` (report the rule and location, **never the value**)                    |
 
 Remember: `typecheck` runs **four** projects — `apps/web`, `packages/db` (`src/**` plus `scripts/**`,
 so `verify.ts` and `corrections/` are covered), `packages/evals` and `packages/shared` (tests included). An error names the failing project's own
