@@ -341,7 +341,7 @@ gantt
   3b-0                         :done, s3, 6, 7
   3b-life, B2-0 (merged)       :done, s4, 7, 8
   B1-2                         :done, s5, 8, 9
-  B2 (three PRs, one merged)   :active, s6, 10, 11
+  B2 (B2-prep merged)          :active, s6, 10, 11
 
   section Slices
   1 · walking skeleton on preview (after 12c) :milestone, m1, 10, 10
@@ -363,7 +363,7 @@ gantt
 - **The two steps planned by their rows are merged**: 12d-iii (#688) and 12c-ii (#694).
 - **The count moved from 63 to 70** with the three plans: 15c is three PRs (+2), 12c-iii is two (+1) and 12f is five (+4). None of the ten is on the critical path.
 - **And from 70 to 72 the same evening**, when B2's plan made it three PRs (#727, +2; plan L60). Its screen, B2-ii, is the one that takes B2's turn on `page.tsx`. Clear this day is now offered on today only; Restore all stays on today and yesterday.
-- **Step 15's plan had moved the count from 61 to 63** earlier the same day. The critical path's end did not move: 15 PR 1 makes Put on live, and its e2e is the check the switch waits for (slice 2's done-when, below). 15 PR 2 and 15 PR 3 follow it in lane B, and the chart does not draw the switch as waiting for them; when the family switches is the maintainer's call.
+- **Step 15's plan had moved the count from 61 to 63** earlier the same day. The critical path's end did not move: 15 PR 1 makes Put on live, and its e2e is the check the switch waits for (slice 2's done-when, below). 15 PR 2 and 15 PR 3 follow it in lane B (both merged since, #679 and #687), and the chart does not draw the switch as waiting for them; when the family switches is the maintainer's call.
 
 **What it shows**
 
