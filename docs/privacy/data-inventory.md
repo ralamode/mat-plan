@@ -7,6 +7,10 @@ walking `packages/db/src/schema.ts` and the third-party call sites — **not fro
 only way a notice about minors' health data is worth anything.
 
 > **Derived at `38f62de`, 2026-10-07** (PRIV-1, [plan](../plans/priv-1-privacy-review.md)).
+> 🔴 **§3 re-read 2026-11-19 for `CAT-3` P11-ii-a** ([plan](../plans/cat-3-p11-ii-option-taxonomy.md)): the
+> builder's picker also lists every library row, so it is no longer the same list as the strength form's
+> picker. It is reference data on global rows only (`movementIsCatalog()`, inside the global and live
+> conditions), with no new category, reader, column or retention.
 > 🔴 **§7 re-read 2026-11-19 for `CAT-3` A2-i** ([plan](../plans/cat-3-a2-i-catalog-seed.md)): the seed's
 > public `migrate.yml` log carries counts only. The shadow report no longer names a slug a household also
 > holds, and the catalog writer (`seedCatalog`) writes reference data only, with production's seed giving
