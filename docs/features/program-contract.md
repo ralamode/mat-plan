@@ -748,7 +748,11 @@ under its own CAT-3 heading).
     miss or a some-words row, 🔴 and a filter does not change that: a custom item set apart
     under a filter counts as something to pick only if it MATCHED. One filtered match beside
     one custom match is two to choose from.
-19. **One mapping from an entry to an option** (`catalogOptionOf`, spec P11). The option read is
+19. **One mapping from an entry to an option** (`catalogOptionOf`, spec P11). The option read
+    applies it through `catalogArmOption` (`packages/db/src/queries/program/catalog-arm-option.ts`,
+    since P11-ii-a): this mapping's fields on the database row's identity, in the four cases that
+    file tables, and the web DAL copies the result. The read, "How to" and `newItem` take one
+    library, `CATALOG_LIBRARY` in `apps/web/lib/dal/catalog-library.ts`. The option read is
     compared with it, the preview's options are built with it (`CATALOG_FIXTURE_OPTIONS`), and it
     never carries the instructions: an option says `hasInstructions`, and `catalogHowToOf` reads
     the steps by slug when "How to" is opened, 🔴 always with the supervision label (K17).
