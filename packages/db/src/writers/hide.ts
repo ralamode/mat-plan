@@ -560,8 +560,8 @@ export type ClearDayResult = ClearEvent | { notFound: true } | { closed: true };
  *
  * The lock also queues the clear with every other writer of the profile row: restore, rename, the
  * routine, a soft delete, Put on / Take off / Program order (`lockAthletes`, `FOR NO KEY UPDATE`) and
- * the erasure (`FOR UPDATE`). It does NOT block an entry insert or hide: those take only `KEY SHARE`
- * on `profiles`, which `FOR SHARE` allows. The order stays cycle-free only while no writer locks
+ * the erasure (`FOR UPDATE`). It does NOT block an entry insert, whose FK check takes only `KEY SHARE`
+ * on `profiles` (which `FOR SHARE` allows), nor a hide or amend, which takes no profile lock. The order stays cycle-free only while no writer locks
  * entries and then takes a profile lock stronger than `KEY SHARE`; `db:verify` pins the mode and
  * the order from this source (PGlite cannot show a wait), and the wait is bounded
  * (`setLocalLockTimeout`).

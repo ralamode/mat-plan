@@ -42,6 +42,7 @@ import {
   asTx,
   columnCatalogShape,
   expectRejectedBy,
+  lockTimeoutSetBy,
   orFail,
   rolledBack,
   rowsOf,
@@ -1473,7 +1474,11 @@ async function verifyClearDay(): Promise<void> {
       .update(schema.profiles)
       .set({ archivedAt: null })
       .where(eq(schema.profiles.id, athlete.id));
-    assert.ok('hiddenAt' in (await clear(D12)), 'B2 race proof 14: restored, the same clear runs');
+    const { set: clearBounded, result: restoredClear } = await lockTimeoutSetBy(tx, () =>
+      clear(D12),
+    );
+    assert.ok(clearBounded, 'B2 race proof 14: clearDay bounds its lock waits (lock_timeout)');
+    assert.ok('hiddenAt' in restoredClear, 'B2 race proof 14: restored, the same clear runs');
     // The lock's mode and order, from the source (the erasure's pattern, `verify/erasure.ts`):
     // `FOR SHARE` on the profile conflicts with an archive's `FOR NO KEY UPDATE`; `KEY SHARE` would
     // not, and the race would be back with every proof above still green.
@@ -1486,9 +1491,11 @@ async function verifyClearDay(): Promise<void> {
       /\.from\(schema\.profiles\)[\s\S]{0,120}?\.for\('share'\)/,
     );
     const entriesLock = clearDayBody.indexOf(".for('update', { of: schema.entries })");
+    // Inside the transaction: a profile lock lifted above it would release at once.
+    const txStart = clearDayBody.indexOf('exec.transaction(');
     assert.ok(
-      profileLock !== -1 && entriesLock !== -1 && profileLock < entriesLock,
-      "B2 race proof 14: clearDay locks the profile FOR SHARE before it locks the day's entries",
+      txStart !== -1 && profileLock > txStart && entriesLock !== -1 && profileLock < entriesLock,
+      "B2 race proof 14: clearDay locks the profile FOR SHARE inside its transaction, before the day's entries",
     );
 
     // 13 · Scope, both directions, on a day both owners have cleared (D8): another household reads

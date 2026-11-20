@@ -8,7 +8,8 @@
   between let the clear hide an archived athlete's day, which Restore all then refused.
 - `db:verify` proof 14 and mutations 425 (the check removed) and 426 (the lock weakened to
   `KEY SHARE`); a source pin holds the lock's mode and its place before the entries lock, since
-  PGlite cannot show a wait. The clear's transaction now bounds its lock waits (`lock_timeout`).
+  PGlite cannot show a wait. The clear's transaction now bounds its lock waits (`lock_timeout`),
+  proved with `lockTimeoutSetBy` and mutation 427.
 - The clear's refusal names both causes: "only today can, and not for an archived athlete".
 - `clearDayOpenFor`'s docblock no longer says the page "never" offers a clear the action refuses:
   a page rendered before midnight can submit after it, and the action checks again.
