@@ -22,10 +22,12 @@ import {
 import {
   parsePreview,
   PREVIEW_FAIL_NEXT,
+  PREVIEW_PROGRAMS_HREF,
   PREVIEW_SCREENS,
   previewEntries,
   previewHref,
   PROGRAM_PREVIEW_PATH,
+  programPreviewHref,
 } from './preview-registry';
 
 /** A URL's search params in the shape Next hands a page. */
@@ -86,6 +88,43 @@ describe('the preview registry', () => {
     expect(parsePreview({ ...base, fail: PREVIEW_FAIL_NEXT })?.failNext).toBe(true);
     expect(parsePreview({ ...base, fail: '1' })?.failNext).toBe(false);
     expect(parsePreview(base)?.failNext).toBe(false);
+  });
+});
+
+describe('where a program’s name goes on the day preview (FAM-1 15c, D49)', () => {
+  const listed = new Set(previewEntries().map(previewHref));
+
+  it('a program the preview has a page for opens its first Program page state', () => {
+    expect(programPreviewHref(familyProgram.programPublicId)).toBe(
+      previewHref({ screen: 'program', fixture: 'family-program', failNext: false }),
+    );
+  });
+
+  it('a program with no page state opens the preview’s Programs list', () => {
+    expect(PREVIEW_PROGRAMS_HREF).toBe(
+      previewHref({ screen: 'programs-list', fixture: 'programs-list', failNext: false }),
+    );
+    expect(programPreviewHref('00000000-0000-4000-8000-000000000000')).toBe(PREVIEW_PROGRAMS_HREF);
+  });
+
+  it('🔴 every program a day fixture names links to a state this route lists', () => {
+    const paged = new Set(Object.values(PROGRAM_VIEW_FIXTURES).map((v) => v.programPublicId));
+    let withPage = 0;
+    let withoutPage = 0;
+    for (const [fixture, plan] of Object.entries(DAY_PLAN_FIXTURES)) {
+      for (const program of plan.programs) {
+        const href = programPreviewHref(program.programPublicId);
+        expect(listed.has(href), `${fixture} · ${program.name}`).toBe(true);
+        // A page of its own when the fixtures hold one, the list otherwise: never a guess.
+        const hasPage = paged.has(program.programPublicId);
+        expect(href === PREVIEW_PROGRAMS_HREF, `${fixture} · ${program.name}`).toBe(!hasPage);
+        if (hasPage) withPage += 1;
+        else withoutPage += 1;
+      }
+    }
+    // Both arms are real: the day fixtures name the Family program and at least one other.
+    expect(withPage).toBeGreaterThan(0);
+    expect(withoutPage).toBeGreaterThan(0);
   });
 });
 

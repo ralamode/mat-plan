@@ -220,9 +220,14 @@ describe('the preview harness', () => {
       expect(latest('program-line').props.actions).toBe(day.props.actions);
 
       // Nothing the page adds for its own layout. The notice gets the page's two props since
-      // 15 PR 2: the plan, and the Programs link (its value is the next test's).
+      // 15 PR 2: the plan, and the Programs link (its value is the next test's). The line gets the
+      // page's third since 15c PR 3: where a program's name goes (its value is two tests down).
       expect(Object.keys(latest('athlete-switcher').props).sort()).toEqual(['hrefFor', 'plan']);
-      expect(Object.keys(latest('program-line').props).sort()).toEqual(['actions', 'plan']);
+      expect(Object.keys(latest('program-line').props).sort()).toEqual([
+        'actions',
+        'plan',
+        'programHrefFor',
+      ]);
       expect(Object.keys(latest('not-on-a-program').props).sort()).toEqual([
         'plan',
         'programsHref',
@@ -297,6 +302,15 @@ describe('the preview harness', () => {
       cleanup();
     }
     expect(archived).toEqual(['archived-athlete-today', 'archived-athlete-nothing-logged']);
+  });
+
+  it('🔴 passes the line the preview’s own link for a program’s name, as the page passes its own', async () => {
+    const { programPreviewHref } = await import('./preview-registry');
+    for (const fixture of Object.keys(DAY_PLAN_FIXTURES)) {
+      render(<PreviewHarness screen="day" fixture={fixture} failNext={false} />);
+      expect(latest('program-line').props.programHrefFor, fixture).toBe(programPreviewHref);
+      cleanup();
+    }
   });
 
   it('🔴 passes the Programs link as the page does: by the page’s own rule, to the preview’s list', async () => {

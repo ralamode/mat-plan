@@ -32,7 +32,12 @@ import {
   type FakePrograms,
 } from './fakes';
 import { pickerOptions, previewHowTo } from './picker-options';
-import { dayPreviewHrefFor, previewHref, type PreviewSelection } from './preview-registry';
+import {
+  dayPreviewHrefFor,
+  PREVIEW_PROGRAMS_HREF,
+  programPreviewHref,
+  type PreviewSelection,
+} from './preview-registry';
 
 /**
  * Mounts one screen with one named fixture and the fakes, exactly as a real route mounts it with
@@ -169,13 +174,6 @@ function ProgramsPreview({
   return children(state, fake.actions);
 }
 
-/** Where the day preview's Programs link goes: the preview's own Programs list. */
-const PREVIEW_PROGRAMS_HREF = previewHref({
-  screen: 'programs-list',
-  fixture: 'programs-list',
-  failNext: false,
-});
-
 /**
  * The day page, as far as the plan's lanes build it: the page's `<h1>`, then the three parts the
  * page places itself (FAM-1 plan D34), then the day screen. The order is the page's
@@ -215,7 +213,10 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
           {SETTINGS_COPY.archivedNotice(athlete.name)} {SETTINGS_COPY.heading}.
         </p>
       ) : null}
-      <ProgramLine plan={plan} actions={fake.actions} />
+      {/* As the page does since 15c PR 3 (invariant 11): each program's name is a link. The page
+          passes `programPath`; the preview has no `/programs/<id>`, so a name opens the preview's
+          Program page for that program, or its Programs list when it has no page for it. */}
+      <ProgramLine plan={plan} actions={fake.actions} programHrefFor={programPreviewHref} />
       {/* As the page does since 15 PR 2 (invariant 11): the Programs link under the page's own
           rule, `offersProgramsLink`. The preview has no `/programs`, so here it opens the preview's
           Programs list. */}
