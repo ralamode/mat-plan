@@ -96,7 +96,6 @@ export function ProgramOrderDialog({
    * sentence, so the announce effect (declared after it, so it runs after) skips the status line
    * rather than have the sentence heard twice.
    */
-  const focusMovedToDone = useRef(false);
   /** The arrow that last had focus: if it goes while the dialog holds focus nowhere, Done takes it. */
   const focusedArrow = useRef<string | null>(null);
   /** The page's latest order, and whether one arrived while a save was in flight. */
@@ -137,7 +136,6 @@ export function ProgramOrderDialog({
   // program ends today now). Only then: a re-read of the page that happens to re-render the list
   // must not pull focus from wherever it is now, unless it removed the arrow that had it.
   useEffect(() => {
-    focusMovedToDone.current = false;
     // A refocus asked for while the dialog is closed (a save that failed after Done) is dropped:
     // the next open's focus is the sheet's, not an old arrow's.
     if (!open) {
@@ -149,7 +147,6 @@ export function ProgramOrderDialog({
       const key = lastTapped.current;
       const target = key ? (arrows.current.get(key) ?? done.current) : null;
       target?.focus();
-      focusMovedToDone.current = target !== null && target === done.current;
       return;
     }
     const had = focusedArrow.current;
@@ -160,7 +157,6 @@ export function ProgramOrderDialog({
     if (had && !arrows.current.has(had) && (!dialog?.contains(active) || active === dialog)) {
       focusedArrow.current = null;
       done.current?.focus();
-      focusMovedToDone.current = true;
     }
   }, [order, open]);
 
@@ -257,12 +253,15 @@ export function ProgramOrderDialog({
         : PROGRAM_COPY.orderEmpty(athlete);
 
   // Said when the sentence changes while open (a list to none, or one empty sentence to the other):
-  // the deps keep a re-read with the same sentence silent. Not when this commit moved focus to
-  // Done, which the sentence describes, so it is not heard twice.
+  // the deps keep a re-read with the same sentence silent. Said even when this commit moved focus
+  // to Done, which the sentence also describes: iOS VoiceOver reads a description only as a delayed
+  // hint that a person can turn off, so a possible second reading is the safer cost (UX pass).
+  // Starts at the sentence shown on mount: a dialog that opens already empty says it as its body.
+  const lastSaid = useRef<string | null>(emptyText);
   useEffect(() => {
-    const movedToDone = focusMovedToDone.current;
-    focusMovedToDone.current = false;
-    if (emptyText !== null && open && !movedToDone) announce(emptyText);
+    if (!open) return;
+    if (emptyText !== null && emptyText !== lastSaid.current) announce(emptyText);
+    lastSaid.current = emptyText;
   }, [emptyText, open]);
 
   const arrow = (program: Program, by: Move, index: number) => {

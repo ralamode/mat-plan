@@ -787,7 +787,7 @@ describe('ProgramLine and the Program order dialog', () => {
     ] as const;
 
     it.each(cases)(
-      '%s, from an arrow: one sentence is the body; focus goes to Done, described by it, and the status stays silent',
+      '%s, from an arrow: one sentence is the body; focus goes to Done, described by it, and the status says it too',
       (_case, next, text) => {
         const view = mountLine(plan, withReorder(plan, vi.fn()));
         fireEvent.click(orderButton());
@@ -800,11 +800,11 @@ describe('ProgramLine and the Program order dialog', () => {
         expect(within(dialog).queryAllByRole('list')).toHaveLength(0);
         expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(1), { exact: false })).toBeNull();
         expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(3), { exact: false })).toBeNull();
-        // The arrow that had focus is gone: Done takes it, described by the sentence alone, so the
-        // status does not say it a second time.
+        // The arrow that had focus is gone: Done takes it, described by the sentence alone, and the
+        // status says it as well, since a description may be only a hint (iOS VoiceOver).
         expect(document.activeElement).toBe(doneButton());
         expect(doneButton().getAttribute('aria-describedby')).toBe(message.id);
-        expect(statusNode()?.textContent).toBe('');
+        expect(statusNode()?.textContent).toBe(text);
       },
     );
 
