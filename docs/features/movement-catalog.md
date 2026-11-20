@@ -81,7 +81,9 @@ and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutati
   Neon branch is the maintainer's, before the merge (the plan's "Risks, the rehearsal, and rollback").
 - **A fixtures seed checks it owns the database before writing** (`assertSeedOwnsDatabase`, A2-ii D2).
   The fixture library is global: written into a database the seed does not own and then refused, it
-  would stay, and production's next seed would keep it on a shared slug (E2). Mutation `603`.
+  would stay, and production's next seed would keep it on a shared slug (E2). Mutation `603`. ⚠️ It
+  does not guard production before the fresh start: production's family household still carries the
+  seed's `public_id` (erased at R2), so there the check passes, and the URL allowlist is the only guard.
 - **A proof that a catalog write fails as a whole runs on `db`, outside any transaction.**
   `expectRejectedBy(…, tx)` runs its probe in a savepoint, which rolls the partial rows back itself,
   so a writer with no transaction could not fail it (mutation `502`).

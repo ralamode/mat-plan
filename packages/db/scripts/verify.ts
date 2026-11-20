@@ -65,7 +65,7 @@ import {
 } from '@mat-plan/shared';
 import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { FIXTURE_ITEMS } from '@mat-plan/shared/program/fixtures';
-import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
@@ -433,10 +433,30 @@ console.log(
         .update(schema.units)
         .set({ label: 'CAT-3 A2-ii stale' })
         .where(eq(schema.units.code, first.code));
+      // The test library's rows retired in this transaction (a slug of their own, and `deleted_at`),
+      // so a seed that wrote before refusing would leave fresh ones on its slugs.
+      await tx
+        .update(schema.movements)
+        .set({ slug: sql`'a2ii_retired_' || ${schema.movements.id}`, deletedAt: sql`now()` })
+        .where(and(isNull(schema.movements.householdId), isNotNull(schema.movements.modality)));
       await assert.rejects(
         () => seed(asDb(tx), { fixtures: true }),
         /refusing to seed into a household this seed does not own/,
         'CAT-3 A2-ii A3: the fixtures seed refuses a database it does not own',
+      );
+      const written = await tx
+        .select({ slug: schema.movements.slug })
+        .from(schema.movements)
+        .where(
+          and(
+            isNull(schema.movements.householdId),
+            inArray(schema.movements.slug, [...FIXTURE_LIBRARY_SLUGS]),
+          ),
+        );
+      assert.deepEqual(
+        written,
+        [],
+        'CAT-3 A2-ii A3: a refused fixtures seed writes no test-library row',
       );
       const [unit] = await tx
         .select({ label: schema.units.label })

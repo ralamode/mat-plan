@@ -172,8 +172,9 @@ export const FIXTURES_TARGET_REFUSED =
  * The rule is `isFixturesDatabase` (`db-environment.ts`), the same one the app uses to choose the
  * fixture movement library (CAT-3 K29), so a database the seed fills with fixtures is the database
  * the app reads with them. Accepted limits, shared with OPS-1's guards: a production database named
- * `*preview*`, or a tunnel to production on localhost, would pass. `seed` then checks it owns the
- * database before writing anything (`assertSeedOwnsDatabase`).
+ * `*preview*`, or a tunnel to production on localhost, would pass. ⚠️ Until CAT-3's fresh start (R2)
+ * nothing else stops that: production's family household still carries the seed's `public_id`, so
+ * `assertSeedOwnsDatabase` passes there. It refuses a database another household owns, not production.
  */
 export function assertFixturesTargetAllowed(connectionString: string): void {
   if (!isFixturesDatabase(connectionString)) throw new Error(FIXTURES_TARGET_REFUSED);
@@ -218,7 +219,10 @@ export function resolveSeedOptions(
  *
  * 🔴 **With fixtures, ownership is checked before ANY write** (plan D2). The fixture library is global
  * reference data, shown to every household: written into a database the seed does not own and then
- * refused, it would stay, and on a shared slug production's next seed would keep it (E2).
+ * refused, it would stay, and on a shared slug production's next seed would keep it (E2). ⚠️ The check
+ * cannot tell production from a fixtures database before the fresh start: production's family
+ * household still carries the seed's `public_id` (migration 0001; erased at R2). There, only the URL
+ * allowlist (`assertFixturesTargetAllowed`) and the operator stand in the way.
  *
  * ⚠️ **A household-scoped write belongs inside the `fixtures` branch**, never in `seedReference`
  * (`docs/features/write-path.md` → Traps).
@@ -580,6 +584,10 @@ export const SEED_HOUSEHOLD_REFUSED =
  * the same database, but only after `seedReference` has committed the fixture library, which is global
  * and would stay. This is the same decision taken first: a live household exists, and none carries
  * the seed's `public_id`. `seedFixtures` keeps its own check, so neither can drift alone.
+ *
+ * ⚠️ **What it does not cover:** production before CAT-3's fresh start, whose family household is the
+ * seed's (migration 0001's `public_id`), so it passes. It is a guard against a database another
+ * household owns, never a production guard.
  */
 export async function assertSeedOwnsDatabase(db: NodePgDatabase<typeof schema>): Promise<void> {
   const [live] = await db

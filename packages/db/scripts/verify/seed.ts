@@ -19,7 +19,7 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 
 import { schema } from '../../src/client';
 import { graphTableName, HOUSEHOLD_GRAPH, REFERENCE_TABLES } from '../../src/erasure/graph';
-import { seed } from '../../src/seed';
+import { assertSeedOwnsDatabase, seed } from '../../src/seed';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { insertMovementOwnedBy } from '../../src/writers/ownership';
 import {
@@ -143,11 +143,41 @@ async function householdTableCounts(exec: Exec): Promise<Record<string, string>>
   return out;
 }
 
-/** The live global movements' slugs: what `assertOnlyLibraryRowsAdded` compares across a seed. */
-async function globalSlugs(exec: Exec): Promise<Set<string>> {
-  return new Set(
-    (await keysOf(exec, schema.movements, sql`slug`, sql`household_id IS NULL`)).map((r) => r.k),
-  );
+/** The global movements' slugs, and a digest of those rows and their join rows. */
+interface GlobalSnapshot {
+  readonly slugs: ReadonlySet<string>;
+  readonly digest: string;
+}
+
+/** A digest of the global movements on `slugs` (every one when omitted) and of their join rows. */
+async function globalDigest(exec: Exec, slugs?: readonly string[]): Promise<string> {
+  if (slugs && slugs.length === 0) return 'none';
+  const on = (col: ReturnType<typeof sql>) =>
+    slugs
+      ? sql` AND ${col} IN (${sql.join(
+          slugs.map((s) => sql`${s}`),
+          sql`, `,
+        )})`
+      : sql``;
+  const parts: string[] = [];
+  for (const query of [
+    sql`SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS d FROM movements t WHERE t.household_id IS NULL${on(sql`t.slug`)}`,
+    sql`SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS d FROM movement_equipment t JOIN movements m ON m.id = t.movement_id WHERE m.household_id IS NULL${on(sql`m.slug`)}`,
+    sql`SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS d FROM movement_muscles t JOIN movements m ON m.id = t.movement_id WHERE m.household_id IS NULL${on(sql`m.slug`)}`,
+  ]) {
+    parts.push(rowsOf<{ d: string }>(await exec.execute(query))[0].d);
+  }
+  return parts.join(':');
+}
+
+/** What `assertOnlyLibraryRowsAdded` compares across a seed. */
+async function globalSnapshot(exec: Exec): Promise<GlobalSnapshot> {
+  return {
+    slugs: new Set(
+      (await keysOf(exec, schema.movements, sql`slug`, sql`household_id IS NULL`)).map((r) => r.k),
+    ),
+    digest: await globalDigest(exec),
+  };
 }
 
 /**
@@ -157,10 +187,17 @@ async function globalSlugs(exec: Exec): Promise<Set<string>> {
  */
 async function assertOnlyLibraryRowsAdded(
   tx: VerifyTx,
-  before: ReadonlySet<string>,
+  before: GlobalSnapshot,
   what: string,
 ): Promise<void> {
-  const added = [...(await globalSlugs(tx))].filter((slug) => !before.has(slug));
+  // E2: every global row that was there before, and its join rows, is exactly as it was. Production
+  // keeps its 35 legacy rows until R2, so this is what catches a seed that rewrites one.
+  assert.equal(
+    await globalDigest(tx, [...before.slugs]),
+    before.digest,
+    `CAT-3 A2-ii ${what}: production’s seed leaves every global row it found, and its join rows, unchanged`,
+  );
+  const added = [...(await globalSnapshot(tx)).slugs].filter((slug) => !before.slugs.has(slug));
   const stray = added.filter((slug) => !CATALOG_SLUGS.has(slug));
   assert.deepEqual(stray, [], `CAT-3 A2-ii ${what}: production’s seed adds only library slugs`);
   if (added.length > 0) {
@@ -197,6 +234,13 @@ for (const entry of CATALOG_MOVEMENTS) {
  */
 export async function verifySeedOnAFreshDatabase(): Promise<void> {
   await rolledBack(async (tx) => {
+    // ⚠️ CAT-3 A2-ii, the documented limit, pinned: a freshly migrated database holds migration 0001's
+    // household under the seed's own public_id, so the fixtures ownership check passes on it. So it
+    // passes on production too until the fresh start erases that household (docs/tech-debt.md).
+    await assert.doesNotReject(
+      () => assertSeedOwnsDatabase(asDb(tx)),
+      'CAT-3 A2-ii: the fixtures ownership check passes on a freshly migrated database (the limit tech-debt records)',
+    );
     let afterFirst: string | undefined;
     for (const run of ['first', 'second']) {
       await assert.doesNotReject(
@@ -354,7 +398,7 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
       householdId: h.id,
     });
     const before = await householdTableCounts(tx);
-    const globalBefore = await globalSlugs(tx);
+    const globalBefore = await globalSnapshot(tx);
     await productionSeedResolves(
       tx,
       'OPS-2 B1: with another household, seed({ fixtures: false }) resolves',
@@ -376,7 +420,7 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
       .where(isNull(schema.households.deletedAt));
     assert.equal(await liveHouseholds(tx), 0, 'OPS-2 B2 fixture: no live household is left');
     const before = await householdTableCounts(tx);
-    const globalBefore = await globalSlugs(tx);
+    const globalBefore = await globalSnapshot(tx);
     await productionSeedResolves(
       tx,
       'OPS-2 B2: with no live household, seed({ fixtures: false }) resolves',
@@ -394,7 +438,7 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
     await removeSeedHousehold(tx);
     assert.ok((await liveHouseholds(tx)) > 0, 'OPS-2 B3 fixture: another household is live');
     const before = await householdTableCounts(tx);
-    const globalBefore = await globalSlugs(tx);
+    const globalBefore = await globalSnapshot(tx);
     await productionSeedResolves(
       tx,
       'OPS-2 B3: with only a foreign household live, seed({ fixtures: false }) resolves',
@@ -439,7 +483,7 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
       .set({ deletedAt: sql`now()` })
       .where(isNull(schema.households.deletedAt));
     const before = await householdTableCounts(tx);
-    const globalBefore = await globalSlugs(tx);
+    const globalBefore = await globalSnapshot(tx);
     await productionSeedResolves(
       tx,
       'OPS-2 B5: with the seed household soft-deleted, seed({ fixtures: false }) resolves',

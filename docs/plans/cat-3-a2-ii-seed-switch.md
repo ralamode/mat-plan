@@ -184,8 +184,10 @@ recorded as accepted, each with what it costs:
   switch read it with `CATALOG_MOVEMENTS`.
 - **The preview database keeps the household items earlier seeds made** (Goblet squat, Side plank, Jump rope,
   Easy run), now shadowed by fixture rows: a mixed state until the preview is reset. A runbook line.
-- **A production database named `*preview*`:** OPS-1's limit. `VERCEL_ENV` is the guard for the app, and D2 is
-  the guard for the seed.
+- **A production database named `*preview*`:** OPS-1's limit. `VERCEL_ENV` is the guard for the app. ⚠️ D2 is
+  **not** the seed's guard there before the fresh start: production's family household carries the seed's
+  `public_id` until R2, so the check passes (code review, 2026-11-20). Until R2 the seed's only guard is
+  the URL allowlist.
 - **The seed reads `DATABASE_URL_UNPOOLED ?? DATABASE_URL`, and the app reads `DATABASE_URL`.** They agree on
   every wired estate:
   - locally, both are set to one URL (`embedded-pg.ts:141-142`, `dev-local.ts:91-92`);
@@ -381,3 +383,21 @@ The proofs as planned, with their mutations: A1 (`598`), A2 (`599`), A3 (`603`),
 (`600`), the TEN-2 discriminator (`602`), the household digests (`604`); `515` re-pointed to an early
 empty-list proof; `506` retired; `326`, `328`, `329`, `45`, `502`, `507`, `514`, `517` and `588`
 re-cut against the new code.
+
+## Code review (2026-11-20)
+
+Lenses on #770: db-safety, correctness, security and privacy, on Opus 5.5. No P0.
+
+| #                       | Lens                   | Finding                                                                                         | Response                                                                                                                                                                                                                                                                  |
+| ----------------------- | ---------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DS-P1-1                 | db-safety              | 318 and 319 now first-fail in Proof A, which sees the library's join rows                       | `.expect` and README rows re-pointed to Proof A's two messages                                                                                                                                                                                                            |
+| DS-P1-2, S-P1-1, C-P1-1 | all three              | D2 does not refuse on production before R2: its family household carries the seed's `public_id` | stated plainly in six places; pinned in Proof A (the check resolves on a freshly migrated database); a tech-debt row for a real marker. The stronger check (a non-fixture `household_members` principal) is left for that row, since the preview's members are unverified |
+| C-P1-2, DS-P2-2         | correctness, db-safety | `movement-ownership.ts`'s docblock still named only the seed-id set                             | restated: a legacy seed id, or a modality and a library slug. A shared `isCuratedMovement` helper is not added: the report checks `CATALOG_MOVEMENTS`, `db:verify` checks `CATALOG_FIXTURE`, and each is one line                                                         |
+| DS-P2-1, C-P2-3         | db-safety, correctness | B1–B5 no longer saw a production seed rewrite a global row                                      | `assertOnlyLibraryRowsAdded` also digests every global row it found, and their join rows, before and after                                                                                                                                                                |
+| DS-P2-3                 | db-safety              | the runbook entry covered only constraint errors                                                | a timeout line: re-run, do not fix forward, and compare the rehearsal's wall time                                                                                                                                                                                         |
+| DS (also)               | db-safety              | A3 used a unit label as a stand-in                                                              | A3 also retires the test library's rows in its transaction and asserts the refused run wrote none (603 re-pointed)                                                                                                                                                        |
+| C-P2-1                  | correctness            | the runbook said the picker lists both                                                          | reworded: the four household items are hidden, still prescribed                                                                                                                                                                                                           |
+| C-P2-2                  | correctness            | the `SKIP_ENV_VALIDATION` case could not fail                                                   | a local-database half that must still read the test library                                                                                                                                                                                                               |
+| C-P2-4                  | correctness            | `write-path.md` gave the old signature                                                          | fixed                                                                                                                                                                                                                                                                     |
+| S-P2-1                  | security               | `seedReference` takes two values again                                                          | pushed back: recorded in "As built"; `seed()` builds it only through `seedLibraryOf`, pinned by `seed.test.ts`; `db:verify` needs one-entry libraries                                                                                                                     |
+| S-P2-2                  | security               | the report checks `CATALOG_MOVEMENTS` on a fixtures database too                                | pushed back: it is production's census and says which library it checked; on a fixtures database the test library's own slugs show on the "modality but no library slug" line                                                                                             |

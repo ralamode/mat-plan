@@ -255,8 +255,9 @@ export function assertMigrationTarget(
  * fixture movement library only on one of these (`catalogLibraryNameFor`).
  *
  * Accepted limits, shared with the guards above: a production database named `*preview*`, or a
- * tunnel to production on localhost, passes. `VERCEL_ENV` is the app's second check; the seed's is
- * that it checks it owns a database before writing any fixture (`seed`).
+ * tunnel to production on localhost, passes. `VERCEL_ENV` is the app's second check. The seed has no
+ * second check against production until CAT-3's fresh start: its ownership check (`seed`) refuses only
+ * a database whose live households none carry the seed's `public_id`, and production's still does.
  */
 export function isFixturesDatabase(connectionString: string): boolean {
   return (

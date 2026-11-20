@@ -62,11 +62,16 @@ describe('the movement library this process reads (CAT-3 K29)', () => {
     expect(info).not.toHaveBeenCalled();
   });
 
-  it('🔴 SKIP_ENV_VALIDATION does not change the choice', async () => {
+  it('🔴 SKIP_ENV_VALIDATION does not change the choice, either way', async () => {
     vi.stubEnv('SKIP_ENV_VALIDATION', '1');
     vi.stubEnv('VERCEL_ENV', 'production');
     vi.stubEnv('DATABASE_URL', PROD_DB);
-    const { catalogLibraryName } = await importEnv();
-    expect(catalogLibraryName()).toBe('catalog');
+    expect((await importEnv()).catalogLibraryName()).toBe('catalog');
+    // …and a local database still reads the test library and says so, so the flag cannot make the
+    // choice by skipping it (an env read through zod would come back undefined here).
+    vi.stubEnv('VERCEL_ENV', '');
+    vi.stubEnv('DATABASE_URL', LOCAL_DB);
+    expect((await importEnv()).catalogLibraryName()).toBe('fixture');
+    expect(info.mock.calls).toEqual([[CATALOG_LIBRARY_FIXTURE_NOTICE]]);
   });
 });
