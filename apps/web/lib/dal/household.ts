@@ -80,8 +80,9 @@ import { getCurrentUser } from './session';
  * landed before its consumers.
  *
  * ⚠️ **`queries/household-scope.ts` did NOT go with it**, contrary to what that module and this
- * docblock both said until 1c-4. `liveHouseholdIds` survives for two script consumers — the
- * screenshot harness's fixture scope and `db:verify` section 0 — neither of which is a request.
+ * docblock both said until 1c-4. `liveHouseholdIds` survives for one script consumer, `db:verify`
+ * section 0, which is not a request (the screenshot harness's fixture scope was the other until
+ * FAM-1 12f retired it).
  *
  * 🔴 **This is what makes `1d` safe.** Before it, a session proved only *that* you are someone the
  * Clerk instance admits; the household came from "whichever one is live". Deleting the access gate

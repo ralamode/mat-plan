@@ -448,16 +448,13 @@ The shapes those lanes agree on, the fakes and the preview route are
    - **Zero live households → `null` (the app goes dark); ≥2 → THROW.** Different states, different
      paths: `null` for both would render _"Seed the database to get started"_ for an invariant
      violation, telling a parent their data does not exist and suggesting a production write.
-   - **One fixture script outside `lib/dal/` names a constructor, and it is named in the guard**
-     (TEN-1 1c). `apps/web/scripts/screenshot-ephemeral.ts` writes fixtures through `packages/db`'s
-     write cores into a throwaway embedded Postgres, so since 1c it needs a scope — and the module
-     boundary above means it cannot use the _script_ constructor. It **derives** one from the
-     throwaway database through `liveHouseholdIds` — ⚠️ **no longer "the resolver's own probe"**, since
-     `AUTH-1` 1c-4 moved the resolver onto the membership lookup; `liveHouseholdIds` survives for this
-     script and `db:verify` only — and throws on anything
-     but exactly one live household. `scope.test.ts` allowlists that one path **and** adds a second,
-     absolute assertion that nothing under `app/`, `lib/` or `components/` mints a scope at all. If
-     you need a scope in a script, put the script under `scripts/` and derive — never name an id.
+   - **No file outside `lib/dal/` names a scope constructor.** `apps/web/scripts/screenshot-ephemeral.ts`
+     used to (TEN-1 1c: `fixtureScope` derived one from its throwaway database for fixture writers),
+     and `scope.test.ts` allowlisted it by name. FAM-1 12f retired those writers, so the function and
+     the allowance were removed (2026-11-19). The guard is now absolute: exactly one module derives a
+     scope, and a second assertion keeps `app/`, `lib/` and `components/` free of any constructor.
+     A script that needs a scope again argues for it in that guard, sits under `scripts/`, and
+     derives from the database rather than naming an id.
    - ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so
      TEN-1 buys _consistent scoping_ — B's data is unreachable from a request scoped to A. It does
      not prove the requester is who they claim. That is the most likely thing to over-claim here.

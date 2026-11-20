@@ -9,9 +9,6 @@ import { join } from 'node:path';
 import {
   createDb,
   createDbPool,
-  type HouseholdScope,
-  householdScopeForRequest,
-  liveHouseholdIds,
   schema,
   SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
@@ -23,7 +20,6 @@ import {
   DEFAULT_BODYWEIGHT_UNIT,
   E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
-  HOUSEHOLD_ROLE,
   MAX_HOUSEHOLD_ATHLETES,
   METRIC_KEYS,
   newId,
@@ -132,56 +128,11 @@ const EPHEMERAL_DB_PASSWORD = 'screenshot';
  * `/design/tokens` inventory cell instead.
  */
 /**
- * The household scope the fixture writers pass into `packages/db`'s write cores (TEN-1 1c).
- *
- * ⚠️ **This is the ONE place in `apps/web` outside `lib/dal/household.ts` that names a scope
- * constructor, and `packages/db/src/scope.test.ts` allowlists exactly this file with this reason.**
- * Why it is legitimate, and why it is not a hole:
- *
- * - This script has a **database and no request**, which is the `db:verify` / `db:correct` case —
- *   but `householdScopeForScript` lives in a module `packages/db`'s `exports` map makes unreachable
- *   from `apps/web` **by module resolution**, deliberately. So a fixture script in `apps/web` has to
- *   derive instead, and deriving is the stronger half of the rule: it **never names a household
- *   id**, it asks the database which household is live, through `liveHouseholdIds`. ⚠️ **That is no
- *   longer "the resolver's own probe"**: `AUTH-1` 1c-4 moved `getHouseholdScope()` onto the
- *   membership lookup, so `liveHouseholdIds` now serves this script and `db:verify` only. Deriving
- *   is still the stronger half of the rule — the script asks the database rather than naming an id.
- * - It runs only under `pnpm --filter web screenshot:ephemeral`, against a **throwaway embedded
- *   Postgres** this script created seconds earlier. It is never on a request path, and a scope it
- *   mints can never reach one.
- * - `≥2` throws rather than picking — for the same reason `getHouseholdScope()` throws on a principal
- *   holding two memberships, though no longer by the same query: a fixture written into the wrong
- *   household would produce a screenshot of a leak and call it a feature.
- *
- * ⚠️ **No seeder calls it since FAM-1 12f.** Its three callers wrote legacy strength sessions for
- * capture states of the retired forms. It stays because `packages/db/src/scope.test.ts` pins this
- * file as the one fixture script that derives a scope: removing the function means removing that
- * pin in the same change, and a later fixture that writes through a write core needs it again.
- */
-async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdScope> {
-  const live = await liveHouseholdIds(db);
-  if (live.length !== 1) {
-    throw new Error(
-      `screenshot fixture: expected exactly one live household in the throwaway DB, found ${live.length} ` +
-        `— did db:seed run, or did a fixture create a second household?`,
-    );
-  }
-  // PROF-1 b-s: the fixture is the maintainer's own throwaway database, so `owner` is the honest
-  // role — it is what the seeded membership would carry. A capture that needs the MEMBER view (PR b's
-  // read-only settings) passes `'member'` here, deliberately and visibly.
-  return householdScopeForRequest(live[0].id, HOUSEHOLD_ROLE.owner);
-}
-
-/**
  * AUTH-1 1c-2 — soft-delete the HOUSEHOLD, so the picker renders `NoHouseholdState`.
  *
- * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** (none does since 12f PR 2;
- * the warning stands for the next one). `fixtureScope` asserts *"expected exactly one live household in the
- * throwaway DB"* and throws on 0, which is precisely the state this function creates. (There is no
- * scope-derivation pass to order against — ⚠️ **there is one since `1c-4a`**: `runEphemeral` runs
- * `migrateAndSeed`, then `linkFixtureMember` (which resolves the live household through the
- * correction's `requireLiveHouseholdScope`), then exactly one
- * `STATES[state]` seeder; no seeder calls `fixtureScope()` since 12f PR 2.)
+ * It runs after `migrateAndSeed` and `linkFixtureMember` (which resolves the live household through
+ * the correction's `requireLiveHouseholdScope`), as the only `STATES[state]` seeder, so nothing reads
+ * the live household after this hides it.
  *
  * This is the only way to see this screen outside the design-token harness: the Playwright suite runs
  * `fullyParallel` against one shared seeded database, and a hidden household breaks `selectProfile`

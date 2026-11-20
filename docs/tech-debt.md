@@ -286,8 +286,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   recorded reasons (a layout cannot read the pathname, cannot pass data to children, and uncached
   data in one blocks navigation). The other option — a route group giving `/p` its own boundary and
   dropping the day-subtree fallback — trades the skeleton away on a slow connection.
-- **Where it belongs:** `PICK-1` PR 4 adds the third grid track and is the next PR to touch this
-  seam; the plan's § For PR 4 is the place to settle it.
+- **Where it belongs:** no PR is scheduled for it now. `PICK-1` PR 4 was to mount into the strength
+  form, which FAM-1 12f deleted (#725), so settle it in the next PR that touches the day page's
+  `loading.tsx` or `AppShell`'s grid.
 
 ### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
 
