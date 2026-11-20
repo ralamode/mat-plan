@@ -460,6 +460,8 @@ test.describe('A finished workout on real data', () => {
     const programPage = new URL(page.url()).pathname;
     await copyOntoEveryWeekday(page, { from: stretching.name, workout: daily.name, to: program });
     await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    // The add has landed on their day page before its URL is read, or Put on finds no such athlete.
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
     const dayPage = page.url();
     await page.goto(programPage);
     await putOnFromToday(page, program, athlete);
