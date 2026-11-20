@@ -796,6 +796,17 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- 🔴 **An import guard written as a regex meets a new spelling with each fix.** The program-tables
+  pins (#552) matched specifier text, and each hardening met another form that reached the same
+  module: a comment inside the braces, a backtick, `require (`, a `../node_modules` path, an `@/`
+  walking out of `apps/web`, a dot segment (`@mat-plan/./db`) that also gets past `exports`. The
+  cause: the guard matched TEXT, while the bundler follows the module GRAPH.
+  → Resolve every specifier the way the compiler does (`ts.resolveModuleName` with the project's
+  tsconfig, from an explicit directory, never `process.cwd()`), compare the **resolved file**, and
+  fail closed on a first-party specifier that does not resolve. Pin the premises the resolver rests
+  on (the alias, `exports`, the bundler config) as assertions. `importsOf` in
+  `apps/web/test/import-graph.ts`; the guard is `apps/web/test/program-imports.test.ts`.
+
 - 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
   mutation patch is still applied in your worktree.** `pnpm verify` runs `db:mutations`, which
   applies each patch in `packages/db/scripts/mutations/`, runs the proofs and reverts it. Run a

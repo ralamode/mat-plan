@@ -116,23 +116,6 @@ describe('listEntriesForDay — sets through readLiveSets', () => {
     vi.doUnmock('./db');
     vi.resetModules();
   });
-
-  it('only lib/dal/entries.ts imports readLiveSets from @mat-plan/db', async () => {
-    const { globSync } = await import('node:fs');
-    const { join, resolve } = await import('node:path');
-    const { code, WEB_DIR } = await import('@/test/source-scan');
-    const importers = globSync('**/*.{ts,tsx}', { cwd: WEB_DIR })
-      .filter(
-        (f) => !f.includes('node_modules') && !f.includes('.next/') && !/\.test\.tsx?$/.test(f),
-      )
-      .filter((f) =>
-        /\{[^}]*\breadLiveSets\b[^}]*\}\s*from\s*['"]@mat-plan\/db['"]/.test(
-          code(resolve(join(WEB_DIR, f))),
-        ),
-      );
-    // Internal ids in, no ownership of its own: a new importer is a reviewed change.
-    expect(importers).toEqual(['lib/dal/entries.ts']);
-  });
 });
 
 // TEN-1 1c: `logCheckinEntries` resolves the profile itself (it is not behind a `packages/db` write

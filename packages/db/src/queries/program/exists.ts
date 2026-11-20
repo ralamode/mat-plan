@@ -10,7 +10,7 @@ import { liveTemplateBlockIn } from '../../writers/ownership';
 /**
  * Scoped existence reads for the program builder's DAL (FAM-1 lane B's 7a-i asked for them): whether
  * an id names one of this household's live programs, or a live workout of one. Built on
- * `liveTemplateBlockIn`, which the app must not name (`program-tables-stay-dark.test.ts`).
+ * `liveTemplateBlockIn`, which the app must not import (`apps/web/test/program-imports.test.ts`).
  *
  * The DAL calls them after a writer answers `not_found` (every miss is that one answer), to report
  * which id missed the scope; 7b's pages reuse them. An id that is not a uuid is `false`.
