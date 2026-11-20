@@ -1253,6 +1253,53 @@ describe('the other-unit note, once per exercise (#688 follow-up)', () => {
     await gate.resolve();
   });
 
+  it('the note goes when the workout changes back to the unit its sets were logged in', async () => {
+    const control = mount(inKg([1]), { change: true });
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    const back: DayPlan = structuredClone(control.plan);
+    back.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!.unit = 'lb';
+    await act(async () => control.setPlan(back));
+    // Never "Logged in pounds before the workout changed to pounds".
+    expect(within(bench()).queryByText(/before the workout changed/)).toBeNull();
+    noDangling();
+  });
+
+  it('a row never points at a note naming another unit than its own (a distance in two units)', async () => {
+    const logged = (set: number, unit: 'm' | 'yd', value: number) => ({
+      entryPublicId: `01930000-0000-7000-8000-0000000000f${set}`,
+      values: { quantities: [{ slot: 'distance' as const, unit, value }] },
+      prescribedText: '40 m',
+    });
+    const withRun = (unit: 'm' | 'mi', rows: Array<ReturnType<typeof logged> | null>): DayPlan => {
+      const plan: DayPlan = structuredClone(everyTypeOnce);
+      const item = plan.workouts
+        .flatMap((w) => w.items)
+        .find((i) => i.trackingType === 'distance')!;
+      item.unit = unit;
+      item.rows = rows.map((l, i) => ({ set: i + 1, previous: null, logged: l }));
+      return plan;
+    };
+    const control = mount(withRun('m', [logged(1, 'yd', 40), null]), { change: true });
+    const workout = control.plan.workouts.find((w) =>
+      w.items.some((i) => i.trackingType === 'distance'),
+    )!;
+    const item = workout.items.find((i) => i.trackingType === 'distance')!;
+    const el = () => card(workout.name, item.name);
+    // The item goes to miles; set 2 was logged in metres meanwhile: two other units now.
+    await act(async () =>
+      control.setPlan(withRun('mi', [logged(1, 'yd', 40), logged(2, 'm', 40)])),
+    );
+    const tick = (set: number) =>
+      within(el()).getByRole('button', {
+        name: DAY_COPY.logLabel(DAY_COPY.setLabel(item.name, set)),
+      });
+    expect(describedTexts(tick(2)).join(' ')).toMatch(/metres|meters/);
+    expect(describedTexts(tick(2)).join(' ')).not.toMatch(/yards/);
+    expect(describedTexts(tick(1)).join(' ')).toMatch(/yards/);
+    for (const set of [1, 2])
+      expect(describedTexts(tick(set)).join(' ')).not.toContain('(missing #');
+  });
+
   it('no description dangles in any state: logged, un-ticked, re-ticked', async () => {
     mount(inKg(), { change: true });
     noDangling();

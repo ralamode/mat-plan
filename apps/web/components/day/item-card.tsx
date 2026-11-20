@@ -109,7 +109,7 @@ function SingleItem({
   // only when it differs (un-ticked) or there is no note (`rowUnitLine`).
   const noteUnit = useOtherUnitNote(item);
   const noteId = useId();
-  const unitNoteId = noteUnit ? noteId : undefined;
+  const unitNote = noteUnit ? { id: noteId, unit: noteUnit } : undefined;
 
   return (
     <li
@@ -129,7 +129,7 @@ function SingleItem({
               name={item.name}
               lineId={errorId}
               described={status}
-              unitLineId={rowUnitLine(r, errorId, unitNoteId).id}
+              unitLineId={rowUnitLine(r, errorId, unitNote).id}
               tickRef={tickRef}
               inputRef={(el) => {
                 fields.current.quantity = el;
@@ -160,7 +160,7 @@ function SingleItem({
               field="quantity"
               name={item.name}
               errorId={errorId}
-              unitNoteId={unitNoteId}
+              unitNote={unitNote}
               tickRef={tickRef}
               inputRef={(el) => {
                 fields.current.quantity = el;
@@ -180,7 +180,7 @@ function SingleItem({
           described={status}
           label={item.name}
           errorId={errorId}
-          unitNoteId={unitNoteId}
+          unitNote={unitNote}
           tickRef={tickRef}
         />
       </div>
@@ -189,15 +189,9 @@ function SingleItem({
       </div>
       {/* 12d-iii: a sibling after the status slot, as in the set table, so a message never
           replaces it and the status stays next to the row. */}
-      {rowUnitLine(r, errorId, unitNoteId).own ? (
+      {rowUnitLine(r, errorId, unitNote).own ? (
         <div className="mt-2">
-          <OtherUnitLine
-            r={r}
-            item={item}
-            errorId={errorId}
-            unitNoteId={unitNoteId}
-            onTint={onTint}
-          />
+          <OtherUnitLine r={r} item={item} errorId={errorId} unitNote={unitNote} onTint={onTint} />
         </div>
       ) : null}
     </li>

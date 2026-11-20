@@ -31,6 +31,7 @@ import {
   secondaryText,
   Tick,
   useOtherUnitNote,
+  type UnitNote,
   TINT_CLASS,
   useFocusRefusedField,
 } from './row-parts';
@@ -168,7 +169,7 @@ export function SetItem({
               showPrevious={showPrevious}
               onTint={onTint}
               onMessage={reportMessage}
-              unitNoteId={noteUnit ? noteId : undefined}
+              unitNote={noteUnit ? { id: noteId, unit: noteUnit } : undefined}
               focusRef={row.set === nextSet - 1 && !fromPage.has(row.set) ? addedFocus : undefined}
             />
           ))}
@@ -220,7 +221,7 @@ function SetRow({
   showPrevious,
   onTint,
   onMessage,
-  unitNoteId,
+  unitNote,
   focusRef,
 }: {
   workout: DayWorkout;
@@ -232,8 +233,8 @@ function SetRow({
   onTint: boolean;
   /** Reports whether this row shows a message, so the card drops its tint. */
   onMessage: (set: number, has: boolean) => void;
-  /** The item's other-unit note, when it shows: a logged row points at it (`rowUnitLine`). */
-  unitNoteId?: string;
+  /** The item's other-unit note, when it shows: a logged row in its unit points at it (`rowUnitLine`). */
+  unitNote?: UnitNote;
   focusRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const inputs = useRef<Partial<Record<RowField, HTMLInputElement | null>>>({});
@@ -254,7 +255,7 @@ function SetRow({
   }, [hasMessage, onMessage, set]);
   const shownValues = r.logged ?? r.kept;
   // The second line: Change's or a message (`status`), then the other-unit line when the row has one.
-  const unitLine = rowUnitLine(r, errorId, unitNoteId);
+  const unitLine = rowUnitLine(r, errorId, unitNote);
   const changeFields = change.fields;
   const previous = row.previous ? valueParts(row.previous) : null;
 
@@ -326,7 +327,7 @@ function SetRow({
                 field={field}
                 name={name}
                 errorId={errorId}
-                unitNoteId={unitNoteId}
+                unitNote={unitNote}
                 tickRef={tickRef}
                 inputRef={(el) => {
                   inputs.current[field] = el;
@@ -347,7 +348,7 @@ function SetRow({
               described={status}
               label={name}
               errorId={errorId}
-              unitNoteId={unitNoteId}
+              unitNote={unitNote}
               tickRef={tickRef}
             />
           </div>
@@ -375,7 +376,7 @@ function SetRow({
               r={r}
               item={item}
               errorId={errorId}
-              unitNoteId={unitNoteId}
+              unitNote={unitNote}
               onTint={onTint}
             />
           </td>

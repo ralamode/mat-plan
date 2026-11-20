@@ -2,6 +2,8 @@ import { QUANTITY_SLOT, quantityCeiling, UNIT_CODES, type DayItem } from '@mat-p
 import { everyTypeOnce } from '@mat-plan/shared/program/fixtures';
 import { describe, expect, it } from 'vitest';
 
+import { rowUnitLine } from './row-parts';
+
 import {
   changeableFields,
   itemOtherUnit,
@@ -400,5 +402,31 @@ describe('itemOtherUnit (#688 follow-up)', () => {
 
   it('two other units: none, so each row keeps its own line (one sentence names one unit)', () => {
     expect(itemOtherUnit({ ...run, rows: [row(1, 'yd', 400), row(2, 'mi', 1)] })).toBeNull();
+  });
+});
+
+describe('rowUnitLine (#688 follow-up)', () => {
+  /** A row's `otherUnit` as `useRow` reports it; nothing else of the row matters here. */
+  const rowIn = (from: 'yd' | 'm', unticked = false) =>
+    ({
+      otherUnit: {
+        from,
+        to: 'mi',
+        unticked: unticked ? { was: '40 yards', canPutBack: true } : null,
+      },
+    }) as unknown as Parameters<typeof rowUnitLine>[0];
+  const note = { id: 'note', unit: 'yd' as const };
+
+  it('a logged row in the note’s unit points at the note and shows no line', () => {
+    expect(rowUnitLine(rowIn('yd'), 'row', note)).toEqual({ id: 'note', own: false });
+  });
+
+  it('a row in another unit than the note names keeps its own line (its own data ran ahead)', () => {
+    expect(rowUnitLine(rowIn('m'), 'row', note)).toEqual({ id: 'row-unit', own: true });
+  });
+
+  it('an un-ticked row keeps its own line; no note means its own line too', () => {
+    expect(rowUnitLine(rowIn('yd', true), 'row', note).own).toBe(true);
+    expect(rowUnitLine(rowIn('yd'), 'row', undefined).own).toBe(true);
   });
 });

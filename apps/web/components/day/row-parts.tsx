@@ -17,8 +17,8 @@ import { useDay } from './day-context';
 import { DAY_COPY } from './day-copy';
 import {
   fieldsOf,
-  itemOtherUnit,
   otherUnitOf,
+  otherUnitsOf,
   placeholderOf,
   unitSpoken,
   unitSuffix,
@@ -147,7 +147,7 @@ export function Tick({
   described,
   label,
   errorId,
-  unitNoteId,
+  unitNote,
   tickRef,
 }: {
   r: ReturnType<typeof useRow>;
@@ -156,7 +156,7 @@ export function Tick({
   label: string;
   errorId: string;
   /** The item's other-unit note, when it shows (`rowUnitLine`). */
-  unitNoteId?: string;
+  unitNote?: UnitNote;
   tickRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   if (r.canWrite) {
@@ -182,7 +182,7 @@ export function Tick({
           [
             described ? errorId : null,
             r.pending ? `${errorId}-saving` : null,
-            rowUnitLine(r, errorId, unitNoteId).id,
+            rowUnitLine(r, errorId, unitNote).id,
           ]
             .filter(Boolean)
             .join(' ') || undefined
@@ -299,7 +299,7 @@ export function RowInput({
   field,
   name,
   errorId,
-  unitNoteId,
+  unitNote,
   tickRef,
   inputRef,
   className,
@@ -311,7 +311,7 @@ export function RowInput({
   name: string;
   errorId: string;
   /** The item's other-unit note, when it shows (`rowUnitLine`). */
-  unitNoteId?: string;
+  unitNote?: UnitNote;
   tickRef: React.RefObject<HTMLButtonElement | null>;
   inputRef: (el: HTMLInputElement | null) => void;
   className: string;
@@ -345,7 +345,7 @@ export function RowInput({
       aria-label={DAY_COPY.fieldLabel(name, spoken)}
       aria-invalid={invalid || undefined}
       aria-describedby={
-        [r.error ? errorId : null, rowUnitLine(r, errorId, unitNoteId).id]
+        [r.error ? errorId : null, rowUnitLine(r, errorId, unitNote).id]
           .filter(Boolean)
           .join(' ') || undefined
       }
@@ -371,10 +371,13 @@ export function fieldHeader(item: DayItem, field: RowField): string {
 export function rowUnitLine(
   r: ReturnType<typeof useRow>,
   errorId: string,
-  unitNoteId: string | undefined,
+  unitNote: UnitNote | undefined,
 ): { id: string | null; own: boolean } {
   if (!r.otherUnit) return { id: null, own: false };
-  if (!r.otherUnit.unticked && unitNoteId) return { id: unitNoteId, own: false };
+  // Only a note that names THIS row's unit explains it (a distance can be logged in two units).
+  if (!r.otherUnit.unticked && unitNote?.unit === r.otherUnit.from) {
+    return { id: unitNote.id, own: false };
+  }
   return { id: otherUnitLineId(errorId), own: true };
 }
 
@@ -384,11 +387,19 @@ export function rowUnitLine(
  * and move every row below it; a reload decides afresh.
  */
 export function useOtherUnitNote(item: DayItem): Unit | null {
-  const live = itemOtherUnit(item);
+  const units = otherUnitsOf(item);
+  const live = units.size === 1 ? [...units][0]! : null;
   const [held, setHeld] = useState(live);
+  // A new single other unit replaces the held one; two at once mean no note (one sentence names one
+  // unit, so each row keeps its own line). None keeps what was held, for the visit.
   if (live !== null && live !== held) setHeld(live);
-  return held;
+  if (units.size > 1 && held !== null) setHeld(null);
+  // Never a note that names the item's own unit: the workout changed back, nothing is "other" now.
+  return held !== null && held !== item.unit ? held : null;
 }
+
+/** The item's other-unit note as the rows see it: its id, and the unit it names (`rowUnitLine`). */
+export type UnitNote = { id: string; unit: Unit };
 
 /**
  * The note under an item's heading for its rows logged in another unit (#688 follow-up): once per
@@ -429,17 +440,17 @@ export function OtherUnitLine({
   r,
   item,
   errorId,
-  unitNoteId,
+  unitNote,
   onTint,
 }: {
   r: ReturnType<typeof useRow>;
   item: DayItem;
   errorId: string;
-  /** The item's note, when it shows: a logged row then points at it and shows no line of its own. */
-  unitNoteId?: string;
+  /** The item's note, when it shows: a logged row in its unit points at it and shows no line. */
+  unitNote?: UnitNote;
   onTint: boolean;
 }) {
-  if (!r.otherUnit || !rowUnitLine(r, errorId, unitNoteId).own) return null;
+  if (!r.otherUnit || !rowUnitLine(r, errorId, unitNote).own) return null;
   const { from, to, unticked } = r.otherUnit;
   return (
     <p id={otherUnitLineId(errorId)} className={cn('text-sm', secondaryText(onTint))}>

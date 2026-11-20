@@ -92,14 +92,19 @@ export function otherUnitOf(item: DayItem, values: RowValues): Unit | null {
  * could name only one of them, so each row keeps its own line instead.
  */
 export function itemOtherUnit(item: DayItem): Unit | null {
-  if (!item.unit) return null;
-  const units = new Set(
+  const units = otherUnitsOf(item);
+  return units.size === 1 ? [...units][0]! : null;
+}
+
+/** Every other unit the item's logged rows hold (the page's data); empty when none, or no unit. */
+export function otherUnitsOf(item: DayItem): ReadonlySet<Unit> {
+  if (!item.unit) return new Set();
+  return new Set(
     item.rows.flatMap((row) => {
       const unit = row.logged ? otherUnitOf(item, row.logged.values) : null;
       return unit ? [unit] : [];
     }),
   );
-  return units.size === 1 ? [...units][0]! : null;
 }
 
 /** That quantity as the row writes it ("25 lb"), or `null` when it is in the item's unit. */
