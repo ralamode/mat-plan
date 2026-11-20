@@ -50,6 +50,7 @@ import {
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso } from '../lib/date';
 import {
+  bodyweightSection,
   changePrefix,
   logPractice,
   openIfCollapsed,
@@ -1250,10 +1251,7 @@ function practiceSection(page: Page) {
 /** Type the practice minutes and tap ✓ unless the row is already logged (the three widths share one day). */
 /** A logged Bodyweight arrives folded to one line (12c-iii PR 2): open it before acting on it. */
 async function openBodyweight(page: Page): Promise<void> {
-  await openIfCollapsed(
-    page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true }),
-    BODYWEIGHT_COPY.heading,
-  );
+  await openIfCollapsed(bodyweightSection(page), BODYWEIGHT_COPY.heading);
 }
 
 async function logPracticeOnce(page: Page): Promise<void> {
