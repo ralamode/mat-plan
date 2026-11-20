@@ -374,17 +374,21 @@ records that output.
    per-commit attribution: a red run covers a range of commits, bisected with `--only`. That goes to
    the maintainer as Q-coalesce (scope S3).
 
-## Open questions (for the maintainer; recommended option first)
+## Decided _(maintainer, 2026-11-19, relayed by the board)_
 
-- **Q-a.** Defer (a) until a merge queue exists _(recommended)_, or build it now with the six
-  safeguards above.
-- **Q-coalesce.** Keep D6's per-commit runs on main _(recommended, unless the queue stays the
-  bottleneck after PR 1)_, or coalesce main's mutation runs and accept range attribution.
-- **Q-merge.** Turn off rebase-merge and merge-commit merges in the repository settings, so squash is
-  enforced. It is an outward-facing settings change, so the maintainer makes it. It removes
-  deferred-(a)'s first hazard and matches AGENTS.md's "Merge = squash".
-- **Q3.** Confirm the fix-forward duty: the merging lane merges nothing else and fixes or reverts the
-  same day.
+- **The plan: approved.**
+- **Q-a. (a) is deferred** until a merge queue exists (§ Deferred keeps its design and safeguards).
+- **Q-coalesce. Coalesce main's runs**, which reverses D6's per-commit groups: every push to `main`
+  shares one concurrency group, so GitHub keeps one run going and the newest pending, and drops the
+  pending runs between them. A burst of merges costs at most two runs. A red run then covers the
+  commits since the last green one, narrowed with `db:mutations --only <n>`. Recorded as the
+  maintainer's revision of D6 in `dx-18-heavy-runs-to-ci.md`. Built first, in its own PR, ahead of
+  PR 1.
+- **Q-merge. Squash only:** the maintainer changes the repository setting.
+- **Q3. Not confirmed**, so it is not written as a rule. The existing practice stands: watch `main`
+  and fix forward.
+
+**Build order:** the coalescing PR, then PR 1 (c), then PR 2 (narrow b) only if still needed.
 
 ## Unverified claims, and the probe for each
 
