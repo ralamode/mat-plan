@@ -255,6 +255,11 @@ and panelled; the milestones order them.
   is Logging & Measurement's next item**, and it is deliberately **not a P0**: the hazard is latent,
   not live — what is missing is a capability.
 
+  ⚠️ _2026-11-19:_ `strength-form.tsx` was deleted by FAM-1 12f PR 1 (#725), and **Add movement**
+  and its text box went with it. What is left of this row (PR 4) needs re-scoping against the day
+  page ([day-page](./features/day-page.md)) and the workout editor's item picker
+  ([program-builder](./features/program-builder.md)).
+
   ⚠️ **One correction to the framing that opened this row**, recorded because the rest of it depends
   on the distinction: the ad-hoc case is **not** unreachable. It is reachable only by typing, on a
   phone, between sets, over a silent and unrecoverable catalog hazard. There is no **picker**; there
@@ -990,6 +995,10 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     footer left the root layout and that screen no longer mounts it at all.
   - **Still open, and now `PICK-1` PR 4's to land:** the **context rail** — the third grid track,
     with the movement picker as its first real consumer.
+  - ⚠️ _2026-11-19:_ `strength-form.tsx` was deleted by FAM-1 12f PR 1 (#725), so the form `PICK-1`
+    PR 4 was to mount the picker into is gone. PR 4 and the context rail need re-scoping against
+    the day page ([day-page](./features/day-page.md)) and the workout editor, where the picker is
+    mounted now ([program-builder](./features/program-builder.md)).
 
 - ✅ **UI-6 — a 404 page that renders under the production CSP.** _(maintainer, 2026-11-15; shipped
   2026-11-15.)_ The app
@@ -1023,6 +1032,11 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   summary, one open at a time (V1-19, against the ~6,600px of blank inputs a flat scaffold renders at
   360px). This makes that the default instead of hiding it behind a tap, and puts `target_reps` on the
   summary — the V1-23 follow-up, which never carries `load`.
+
+  ⚠️ _2026-11-19:_ `strength-form.tsx`, `program-reference.tsx` and `strength-section.tsx` were
+  deleted by FAM-1 12f PR 1 (#725), so the mechanism above and the docblock below are gone. The day
+  page now shows each workout's items as the rows an athlete ticks, with no program card
+  ([day-page](./features/day-page.md)). This row needs re-scoping against it before any work.
 
   ⚠️ **One trap, and one stale reason not to worry about it.**
   - `program-reference.tsx` says the card sits outside the form because "the form remounts on
@@ -1878,6 +1892,11 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   of them, and
   `.github/scripts/changed-scopes.mjs` decides which heavy steps a pull request needs. `pnpm verify`
   becomes optional before a PR.
+  **Follow-up, planned 2026-11-19** ([plan](./plans/dx-18-mutation-savings.md), draft): a catalog
+  batch stops running the mutation proof on its PR (PR 1), and a PR whose only trigger is a patch's
+  target file outside the packages runs just that patch (PR 2, built only if PR 1 is not enough).
+  `main` still runs every patch. Skipping main's run after a PR proof is deferred, pending the
+  maintainer.
 
 - **DX-18b — per-pillar test projects.** _(Deferred by DX-18, D9.)_ `pnpm test:pillar <name>`, and CI
   running only the affected pillars' vitest files. **Trigger:** CI's Test step passes 3 minutes (53s
@@ -2635,6 +2654,10 @@ new user features.
 > came along in `PICK-1` PR 3 — the PR that adds a helper should not leave the nearest duplicate
 > behind.)_
 >
+> ⚠️ _2026-11-19:_ `lib/programming/program-day.ts` (and its `setsLabel`) and `set-display.ts` were
+> deleted by FAM-1 12f PR 1 (#725), and `e2e/scaffold-submit.spec.ts` is gone too. The list of plural
+> sites above is out of date: re-list them from the code when this row is planned.
+>
 > ⚠️ **A rule this row inherits, worth stating once:** a `one` form must carry its count
 > (`` `${n} match.` ``, never `'1 match.'`). `one` is a CLDR category, not the number one — Russian,
 > Ukrainian and Croatian put 21, 31 and 101 in it. In English the two are indistinguishable, so the
@@ -2771,6 +2794,10 @@ no filter"` → three, because a name became typeable), which is a real accuracy
      `apps/web/lib/programming/day-role-schedule.ts` — Ray's Mon/Wed/Fri split, in code. Changing a
      training day is **a deploy, not an edit**, and a second household silently inherits Ray's split
      ([tech-debt](./tech-debt.md)).
+     ⚠️ _2026-11-19:_ `DAY_ROLE_BY_WEEKDAY` left the code in #151 (2026-09-25), when this file became
+     the A/B date-parity `resolveDayRole`. FAM-1 12f PR 1 (#725) deleted the file. A household now
+     sets which workouts run on which weekday in its own program's week
+     ([program-builder](./features/program-builder.md)).
   2. **`routine_config` has no schedule at all** — it is implicitly every day, so "this kid does mobility
      only on practice days" is unrepresentable.
   3. **MOT-1's streak needs to know what is DUE today**, or it breaks on a correctly-taken rest day.
@@ -2969,6 +2996,11 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   ⚠️ Do **not** solve this by changing the constant to 5: it is Ray's number for his kids, not a
   default for a stranger's first session (ONB-0/ONB-2 own that).
 
+  ⚠️ _2026-11-19:_ `strength-form-scaffold.ts` was deleted by FAM-1 12f PR 1 (#725), and
+  `DEFAULT_SCAFFOLD_SETS` and the scaffold button went with it. A parent now gives each item its
+  number of sets in the workout editor ([program-builder](./features/program-builder.md)). Check
+  what is left of this ask against that before planning it.
+
   ### 2. ~~Pre-select BW on bodyweight movements, and clear it when a weight is typed~~ ✅ shipped as V1-26 PR-A, DIFFERENTLY
 
   **Both halves of this were dropped on review, and the plan says why**
@@ -3074,6 +3106,10 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   comes from state, so a submit is probably right, but after a rejected save the VISIBLE select may show
   the wrong unit. **First step: a probe** (reject a strength save with a non-default unit, read the
   select); fix only if it reproduces, with an e2e.
+  ⚠️ _2026-11-19:_ `strength-form.tsx` was deleted by FAM-1 12f PR 1 (#725), so the selects this row
+  would probe are gone. Before closing it, check whether any select on the day page or in the workout
+  editor sits inside a form action the same way ([day-page](./features/day-page.md),
+  [program-builder](./features/program-builder.md)).
 
 - **V1-32 — several weigh-ins a day, one per time-of-day slot.** 🟢 **Feature, deferred** (Ray,
   2026-09-30). Weigh on waking and before bed, and see the **overnight change** (bedtime on day D →

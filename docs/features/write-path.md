@@ -930,31 +930,27 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   form. Any spec or fixture that logs a bodyweight through the action must use an in-range value (the
   e2e warm-up used `0.5`).
 
-- **`logStrengthSessionAction` returns the session's PUBLIC id as `savedId` (V1-24 3a-ii).** The form
-  announces and focuses its save from it, so it must stay a public id (never an internal one) and be
-  returned on a replay too (the writer re-selects the session, so a retried submit still lands focus).
+- **`logStrengthSessionAction` returns the session's PUBLIC id as `savedId` (V1-24 3a-ii).** It must
+  stay a public id (never an internal one) and be returned on a replay too (the writer re-selects the session, so a retried submit gets the same id back).
 
 - **A strength-session zod issue renders as `<movement name>, set M: <message>` (V1-30).** `flatten()`
   loses the index, so `logStrengthSessionAction` rebuilds each message from the issue path: `path[1]`
   is the movement — **named, never numbered**, because `path[1]` indexes the SUBMITTED list, which
-  drops untouched scaffolded cards, so a number can point at the wrong card on screen (`Movement N`
+  need not match what was on screen, so a number can point at the wrong movement (`Movement N`
   only when the name is empty), and `path[2] === 'sets'` with a numeric `path[3]` adds the set. A refine that wants
   a message to point at a row must file its issue on that path (the non-mass BW/band check uses
   `['movements', i, 'sets', j, 'weight']`). Without the set number, three bad sets repeat one string,
-  which is unlocatable and also a duplicate React key in the form's error list.
+  which is unlocatable and also a duplicate React key in an error list.
 
 - **⚠️ React 19 resets UNCONTROLLED fields in a `<form action>` when the action settles — even when
   it returns `{ ok: false }`.** A rejection that names the typed value ("check the decimal point")
   then points at an empty input, and a `<select>` snaps back to its `defaultValue`. On the weigh-in
   that turned a kg user's corrected `84.5` into a saved 84.5 **lb** — in range, so nothing caught
-  it. `bodyweight-form.tsx` therefore holds `value` and `unit` in state (`checkin-form.tsx` is the
-  older precedent); `e2e/a11y.spec.ts` pins that both survive a rejection. Any form whose fields
+  it. `bodyweight-form.tsx` therefore holds `value` and `unit` in state; `e2e/a11y.spec.ts` pins that both survive a rejection. Any form whose fields
   must outlive a rejected submit needs the same. **⚠️ Controlling a `<select>` is not enough:** the
   reset is a native `form.reset()`, and React keeps a controlled input's `value` attribute in sync
   but never a select's `defaultSelected`, so the select shows the first option while state holds
-  another. The form re-asserts it in a layout effect. (`strength-form.tsx`'s Measuring/Unit selects
-  are controlled the same bare way inside `<form action>`; their data rides a JSON field built from
-  state, so the payload stays right, but the visible select may not after a rejection — unverified.)
+  another. The form re-asserts it in a layout effect.
   🔴 **A RADIO is the same family, and `defaultChecked` is the fix — not a layout effect** (PROF-1
   a-1u). React freezes a controlled radio's `defaultChecked` at mount, so a native `form.reset()`
   returns it to unchecked no matter what `checked` renders. Probed three ways on the add-athlete form:
