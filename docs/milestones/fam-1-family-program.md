@@ -351,14 +351,14 @@ gantt
 
 **What is not fully planned** _(maintainer, 2026-11-18: a timeline says what in it still needs planning, because an estimate over unplanned work is not a true estimate)_
 
-**As of 2026-11-19 every step left in this milestone has an approved plan.** No step left has only a row. The end of this chart is drawn over planned work only. It is still a shape, not a date: one unit is one PR-length. Of the 3 PRs left:
+**As of 2026-11-19 every step left in this milestone has an approved plan.** No step left has only a row. The end of this chart is drawn over planned work only. It is still a shape, not a date: one unit is one PR-length. Of the 3 PRs left (one more piece of work is not among the 72 and has no bar: lane C's follow-up to the programs line, which makes it match the prototype, plan D52; as #696 and #754 were not):
 
 - **None has a plan of its own any more**: B2's three are merged (B2-prep, B2-i and B2-ii, as #730 and #731 on the night of 2026-11-19 and #740 on 2026-11-20, so Clear this day is in the app. The plan `docs/plans/v1-9b-delete-and-restore.md` made B2 three PRs after its re-review, in #727; the maintainer, relayed by the board, 2026-11-19: "Three PRs, can split amongst lanes if they have bandwidth". The board assigned B2-prep to the Native Scaling thread and B2-i and B2-ii to lane S). Step 15's last PR and 11c-ii also had one, and merged that night and evening as #687 and #685 (step 15's three are #664, #679 and #687; lane B's plan `docs/plans/fam-1-15-put-on-wired.md`, #650, approved by the maintainer on 2026-11-19).
 - **All three are in two of the three plans the maintainer approved on 2026-11-19** ("Approve (Recommended)"; the three held ten, and all of 15c and 12f PR 1 to 4 have merged; 12c-iii's two and 12f PR 5 are left). Each was drafted by the plan owner from lane C's notes, hardened by a panel and checked by lane C for feasibility. These were the three steps with only a row:
   - [15c, program order on the day page](../plans/fam-1-15c-program-order-wired.md): **three PRs** (15c PR 1 to 3). Lane C built PR 1 and lane B PR 2 and PR 3; all three are merged (#752, #726, #753), so program order is on the day page. 15c PR 1 waited for one contract PR, merged as #699 on 2026-11-19. Program names become links, and the order's list is capped at 50 (plan D49).
   - [12c-iii, the collapse](../plans/fam-1-12c-iii-collapse.md): **two PRs** (12c-iii PR 1 and PR 2). The six differences from its prototype are accepted (plan D50).
   - [12f, retire the old forms](../plans/fam-1-12f-retire-old-forms.md): **five PRs** (12f PR 1 to 5). Lane E builds PR 1, the unmounted forms (merged, #725), and PR 4, the "This week" card (merged, #749); lane B builds PR 2, what the forms left behind (a second hand-over that night, plan L61; merged, #743); lane S builds PR 3, the three actions, after its B2 (merged, #741); PR 5, the routine trim, is lane E's too since a third hand-over on 2026-11-20 (plan L62). The legacy strength write path is retired under its own row after FAM-1 (plan D51).
-- **Who builds changed on 2026-11-19, and nothing else did** (lane C's offer, cleared by the board under the maintainer's rule that work is spread when lanes sit idle; plan L59). Six of lane C's ten PRs left went to lanes E, S and B (five at first, then 12f PR 2, plan L61), as the 15c and 12f bullets above say. The chart keeps all ten in lane C's section and in "Lane C's 20 PRs", where the plan's wave table draws them; a bar's name says when another lane builds it.
+- **Who builds changed on 2026-11-19 and 2026-11-20, and nothing else did** (lane C's offers, cleared by the board under the maintainer's rule that work is spread when lanes sit idle; plan L59). Seven of lane C's ten PRs left went to lanes E, S and B (five at first, then 12f PR 2, plan L61, and 12f PR 5 on 2026-11-20, plan L62), as the 15c and 12f bullets above say. The chart keeps all ten in lane C's section and in "Lane C's 20 PRs", where the plan's wave table draws them; a bar's name says when another lane builds it.
 - **What is still open inside those plans.** The 12f plan's Q5 is answered: the maintainer ran its two read-only checks on production on 2026-11-19, and the gate for 12f PR 5 is met. One allowed split: the 12c-iii plan lets its builder land a small PR 0 before 12c-iii PR 1 if that PR grows, which would make the count 71.
 - **The two steps planned by their rows are merged**: 12d-iii (#688) and 12c-ii (#694).
 - **The count moved from 63 to 70** with the three plans: 15c is three PRs (+2), 12c-iii is two (+1) and 12f is five (+4). None of the ten is on the critical path.
@@ -367,7 +367,7 @@ gantt
 
 **What it shows**
 
-- **In a row, 72 PR-lengths; in lanes, about 16.** The lanes' end moved from 15 to 16 on 2026-11-19: 12f is a chain three PRs deep (12f PR 1, then PR 3, then PR 5), and 12c-iii's two PRs come one after the other. The PRs left in lane C's section (three since all of 15c and 12f PR 1 to 4 merged; six of the original ten are built by lanes B, E and S since 2026-11-19) are drawn one bar each, where their gates allow, three or four side by side. That is still more than the lanes may carry at once, so 16 is the earliest end, not a forecast. The lanes do the same work. They finish sooner
+- **In a row, 72 PR-lengths; in lanes, about 16.** The lanes' end moved from 15 to 16 on 2026-11-19: 12f is a chain three PRs deep (12f PR 1, then PR 3, then PR 5), and 12c-iii's two PRs come one after the other. The PRs left in lane C's section (three since all of 15c and 12f PR 1 to 4 merged; seven of the original ten are built by lanes B, E and S since 2026-11-19) are drawn one bar each, where their gates allow, three or four side by side. That is still more than the lanes may carry at once, so 16 is the earliest end, not a forecast. The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
@@ -430,9 +430,9 @@ fixture data, not at home.
 day page, and step 13b is what replaces the legacy strength form there. Before slice 3, switching
 would lose in-app strength logging on lifting days.
 
-**Stretching before slice 4:** no longer a constraint. 15c is merged (#752, #726, #753,
-2026-11-20): an athlete on several programs sets their order on the day page, so stretching can be a
-program of its own from the first day. (Until then this said stretching lived inside the family
+**Stretching before slice 4:** no longer a constraint. An athlete can be on several programs since
+step 15 (#664), and sets their order on the day page since 15c (#752, #726, #753, 2026-11-20), so
+stretching can be a program of its own. (Until then this said stretching lived inside the family
 program until slice 4, and offered moving 15c into slice 3.)
 
 **For d2 to confirm:** the chart has step 6 waiting on step 1. In slice 1, step 6 lands **dark**:

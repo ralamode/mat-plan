@@ -183,11 +183,13 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 above). The tables below were written with lane C as the builder of all five, and their marks stand
 with one change of reading:
 
-- **PR 1, PR 4 and PR 5 (lane E).** PR 5's files in lane S's area (`life-section.tsx` and its test) and its `e2e/landing.spec.ts` edit keep Q1's clearance, which passes to lane E; lane S reads its hunks and lane C the rest. For PR 1 and PR 4: Every unmarked app file (`app/p/[profileId]/`, `components/`, `lib/`,
-  `test/`) is lane E's guest edit, which lane C reviews. Lane E takes over two clearances the board
-  gave lane C: Q2's, to edit the token preview in PR 1, and Q1's, for PR 4's comment in
-  `ownership.ts` (the board's hand-over, 2026-11-19). PR 4's `packages/db` hunks are still reviewed
-  by lane P.
+- **PR 1, PR 4 and PR 5 (lane E).** Every unmarked app file in the three (`app/p/[profileId]/`,
+  `components/`, `lib/`, `test/`) is lane E's guest edit, which lane C reviews. PR 5's GUEST EDIT
+  rows keep Q1's clearance, which passes to lane E: lane S reads `life-section.tsx` and its test,
+  and `e2e/landing.spec.ts` (no lane's) stays as Q1 set it, with the security reviewer confirming
+  on that PR. For PR 1 and PR 4, lane E also takes over two clearances the board gave lane C:
+  Q2's, to edit the token preview in PR 1, and Q1's, for PR 4's comment in `ownership.ts` (the
+  board's hand-over, 2026-11-19). PR 4's `packages/db` hunks are still reviewed by lane P.
 - **PR 2 (lane B).** Its files (`lib/entries/activity-totals*`, `app/p/[profileId]/day-nav.tsx`,
   `lib/constants*`, `scripts/screenshot-ephemeral.ts`, the comment in `use-on-action-success.ts`) are
   lane B's guest edits, which lane C reviews. Q1's clearance for the comment-only sweeps (the
@@ -451,7 +453,7 @@ prototype's day page has no such card.
 
 **Answered by the board (2026-11-19):**
 
-- **Q1: yes.** Lane C makes the edits in lane S's files for the routine trim (`life-section.tsx`'s Wake
+- **Q1: yes** (the builder is lane B for PR 2 and lane E for PR 4 and PR 5 since L59, L61 and L62; read "lane C" below as that builder). Lane C makes the edits in lane S's files for the routine trim (`life-section.tsx`'s Wake
   filter and its test) as guest edits lane S reviews, and the comment-only sweeps in other lanes'
   files, each named in its PR's body. `e2e/landing.spec.ts` belongs to no lane; lane C edits it in the
   routine-trim PR and names it the same way. It is the `SEC-1` witness test, so the change swaps the

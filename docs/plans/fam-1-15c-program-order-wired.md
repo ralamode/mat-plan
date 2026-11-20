@@ -9,7 +9,8 @@
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes, each checked against the code. Hardened by a
 > five-lens panel the same day (the log is at the end). Amended the same day for the maintainer's
-> answers to Q5 and Q6: "Links in 15c; cap at 50" (the Amendment section).
+> answers to Q5 and Q6: "Links in 15c; cap at 50" (the Amendment section). **Overtaken in part on
+> 2026-11-20** (FAM-1 plan D52): how the linked names look and what sits between them.
 
 ## Where this sits
 
