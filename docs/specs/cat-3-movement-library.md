@@ -222,8 +222,8 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   since its split, **P11-ii-b**, which retires that test's `describe` for these tables with lane
   A's agreement and says in its PR what protects them instead; _as built, #767, 2026-11-20: that
   `describe` is retired, cleared by the board since lane A is retired, and the read's `db:verify`
-  proofs (b1) to (b3) with mutations 605 to 609 protect the tables instead, with (b4)'s parse throws held by
-  vitest and made unreachable by `verify/catalog.ts`'s S1 parity, which mutation 321 pins_)
+  proofs (b1) to (b3) with mutations 605 to 609 protect the tables instead, with (b4)'s parse throws
+  held by vitest and made unreachable by `verify/catalog.ts`'s S1 parity, which mutation 321 pins_)
   (`apps/web/test/program-tables-stay-dark.test.ts`'s pattern), and A1's migration shall carry a
   deploy-window header: Drizzle names every column on insert ([lessons](../lessons.md), "shipped
   dark fails `42703`").

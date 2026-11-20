@@ -763,8 +763,9 @@ under its own CAT-3 heading).
     `MUSCLES`; `equipmentInOrder`, `musclesInOrder`; spec K31, maintainer 2026-11-19), whatever
     order an entry or a table row gives them, so a mapping and a read cannot word one movement's
     "what it needs" two ways. The read's assembly from the tables (`catalogTaxonomyOf`) calls the
-    same two functions, after parsing each code with `equipmentSchema` / `muscleSchema`: the two functions
-    leave out a code the vocabulary does not have, without an error. Aliases keep the entry's order.
+    same two functions, after parsing each code with `equipmentSchema` / `muscleSchema`: the two
+    functions leave out a code the vocabulary does not have, without an error. Aliases keep the
+    entry's order.
 20. **"All movements" opens to the kind of training, then a family** (`browseTree`, spec P12):
     for strength the lift pattern under a plain label, for the other kinds the body area of the
     primary muscle. Kinds in `BROWSE_KINDS`' order; families biggest first, then by label;

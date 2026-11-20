@@ -94,10 +94,10 @@ export type CatalogOption = {
  * (`packages/db/src/queries/program/catalog-arm-option.ts`, which owns the four-case table), with
  * the entry's aliases (after the const's), supervision label and `hasInstructions` on the database
  * row's identity, an old built-in's taxonomy from its entry, and, since P11-ii-b, a catalog row's
- * taxonomy from the tables (`catalogTaxonomyOf`, in the same vocabulary order): the row's name, tracking type, unit and
- * bodyweight flag always win, since the row is what a save and a log use. The web DAL only copies
- * what the read built. After the fresh start every global row is a catalog row seeded from the
- * const, and the option is this mapping again.
+ * taxonomy from the tables (`catalogTaxonomyOf`, in the same vocabulary order): the row's name,
+ * tracking type, unit and bodyweight flag always win, since the row is what a save and a log use.
+ * The web DAL only copies what the read built. After the fresh start every global row is a catalog
+ * row seeded from the const, and the option is this mapping again.
  */
 export function catalogOptionOf(entry: CatalogMovement, publicId: string): CatalogOption {
   return {
