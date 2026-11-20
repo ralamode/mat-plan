@@ -11,11 +11,13 @@ import { PracticeAmend } from './practice-amend';
 import { SingleValueLive } from './single-value-live';
 
 /**
- * The life activities the day page shows: the routine's, minus Wake (V1-24 3b-page). The tap time is
- * not the wake time, so Wake leaves the page, and since 3b-life-b the action refuses it too.
+ * The life activities the day page shows: the routine's. The catalog decides: since FAM-1 12f PR 5 it
+ * holds no Wake, so a stored `wake` key drops in `lifeActivitiesForKeys` (V1-24 3b-page had filtered it
+ * here, because the tap time is not the wake time). The action refuses Wake too: it logs practice only
+ * (`logPracticeSchema`). Kept as a function, the one seam for what the Life section shows.
  */
 function shownLifeActivities(activityKeys: readonly string[]) {
-  return lifeActivitiesForKeys(activityKeys).filter((a) => a.key !== ACTIVITY_TYPE_KEYS.wake);
+  return lifeActivitiesForKeys(activityKeys);
 }
 
 /**
