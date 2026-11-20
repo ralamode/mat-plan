@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { PROFILE_KIND, PROFILE_KIND_LABELS, TRACKING_TYPE, WEEKDAYS } from '@mat-plan/shared';
+import { PROFILE_KIND, PROFILE_KIND_LABELS, TRACKING_TYPE } from '@mat-plan/shared';
 import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -18,13 +18,9 @@ import {
   lastDayText,
   NO_PROGRAM_YET_LINE,
   PUT_ON_COPY,
-  putOnTitle,
   renameLabel,
-  startingNamesText,
-  startLabel,
   takenOffText,
   takeOffLabel,
-  weekdayName,
 } from '../components/program-builder/builder-text';
 import {
   newWorkoutPath,
@@ -37,7 +33,17 @@ import { SHEET_COPY } from '../components/ui/sheet';
 import { APP_HOME_PATH, MIN_TAP_TARGET_PX, NOT_FOUND_COPY, SETTINGS_COPY } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
 import { NARROW_VIEWPORT } from './contexts';
-import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from './steps';
+import {
+  addAthlete,
+  archiveAdded,
+  copyOntoEveryWeekday,
+  createProgram,
+  isoDaysAgo,
+  openPrograms,
+  programRowTick,
+  putOnFromToday,
+  settled,
+} from './steps';
 
 /**
  * FAM-1 7b-i and 7b-ii — the program builder's pages, end to end against the fixture world
@@ -58,25 +64,6 @@ import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from '.
 test.use({ viewport: NARROW_VIEWPORT });
 
 const FIXTURE_WORKOUT = 'Heavy A';
-
-/** Home → Programs, by the Household nav's row. */
-async function openPrograms(page: Page) {
-  await page.goto(APP_HOME_PATH);
-  await page
-    .getByRole('navigation', { name: 'Household' })
-    .getByRole('link', { name: BUILDER_COPY.programsNavLink })
-    .click();
-  await expect(page).toHaveURL(PROGRAMS_PATH);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(BUILDER_COPY.programs);
-}
-
-/** "+ Create a program", named `name`; lands on its page. */
-async function createProgram(page: Page, name: string) {
-  await page.getByRole('button', { name: BUILDER_COPY.createProgram }).click();
-  await page.getByLabel(BUILDER_COPY.programName, { exact: true }).fill(name);
-  await page.getByRole('button', { name: BUILDER_COPY.create, exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-}
 
 test('a parent creates and renames a program, then copies a workout into it', async ({
   page,
@@ -337,17 +324,11 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await openPrograms(page);
   await createProgram(page, program);
   const mine = page.url();
-  await page.goto(PROGRAMS_PATH);
-  await page.getByRole('link', { name: familyProgram.name }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
-  await page.getByRole('button', { name: copyToLabel(CHECK_WORKOUT.name) }).click();
-  const copy = page.getByRole('dialog', { name: copyTitle(CHECK_WORKOUT.name) });
-  await copy.getByLabel(COPY_COPY.to, { exact: true }).selectOption({ label: program });
-  for (const day of WEEKDAYS) {
-    await copy.getByRole('checkbox', { name: weekdayName(day), exact: true }).check();
-  }
-  await copy.getByRole('button', { name: COPY_COPY.copy, exact: true }).click();
-  await expect(copy).toBeHidden();
+  await copyOntoEveryWeekday(page, {
+    from: familyProgram.name,
+    workout: CHECK_WORKOUT.name,
+    to: program,
+  });
 
   // 2. This run's athlete, added as a parent does. They land on their day page, which is on no
   //    program yet and links to Programs (15 PR 2); following it reaches the Programs page.
@@ -376,12 +357,7 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
 
   // 3. Put them on from today. The dialog names who is starting.
   await page.goto(mine);
-  await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
-  const putOn = page.getByRole('dialog', { name: putOnTitle(program) });
-  await putOn.getByRole('checkbox', { name: athlete, exact: true }).check();
-  await expect(putOn.getByText(startingNamesText([athlete]))).toBeVisible();
-  await putOn.getByRole('button', { name: startLabel(1, program) }).click();
-  await expect(putOn).toBeHidden();
+  const putOn = await putOnFromToday(page, program, athlete);
 
   // 3b. Home's tile now names the program, in the day page's words, with no overflow at 360px (15 PR 3).
   await page.goto(APP_HOME_PATH);
