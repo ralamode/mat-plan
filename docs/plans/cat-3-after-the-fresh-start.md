@@ -215,13 +215,12 @@ procedure this PR removes.
   `lib/dal/program/picker.test.ts:321-359` and `lib/programming/contract.test.ts:183`. The comments
   that name the old list are corrected: `schema.ts:815`, `movement-ownership.ts:137`,
   `catalog/fixture.ts:31-33`, `seed-ids.ts:52`, `strength-session-schema.test.ts:234`.
-- **Production's seed changes in one way:** the legacy-slug shadow count (`seed.ts:393-396`), which
+- **Production's seed changes in one way:** the legacy-slug shadow count (`seed.ts:391-394`), which
   runs on every push, is retired with the list it reads, and the catalog count's legacy-slug filter
-  (`:396-399`) goes with it, so a household's row on one of the 12 shared slugs is still counted.
+  (`:396-400`) goes with it, so a household's row on one of the 12 shared slugs is still counted.
   Proved in `db:verify`: OPS-2 A (`verify/seed.ts:130-198`), which already seeds a fresh database in
   production mode twice, asserts the report's lines less the shadow count; a household row on a
-  shared slug is counted once, with the count-only privacy assertion re-pointed; and a mutation
-  restores the filter. `runbooks.md`'s "The seed's shadow guard fired" is updated to the new log
+  shared slug is counted once, with the count-only privacy assertion re-pointed; and a mutation restores the filter. Mutation 518 retires with the filter, and A2-i's E5 pin (`verify/catalog.ts:685-706` on #770, "counted once, as legacy") becomes "counted once, as a library slug". `runbooks.md`'s "The seed's shadow guard fired" is updated to the new log
   line. The first deploy's seed log is read after merge.
 - **Deleted, Native Scaling's commits.** The code of the two one-shot corrections
   (`erase-seeded-household-2026-11-19`, `delete-legacy-movements-2026-11-20`), on the rule change of
