@@ -108,9 +108,8 @@ npx squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/NNNN_*.sql
 
 CI adds: the **forward-only guard** (migrations may only be ADDED; `_journal.json` append-only and in
 time order), `snapshots:check` (each snapshot's `prevId` is the id before it, never its own),
-`drizzle-kit check` (two snapshots claiming one parent); where each runs is AGENTS.md → "Local hooks
-vs CI merge-gates"; **Squawk** on added `.sql`, and the **drift guard**. There is **no
-Neon-branch apply** yet (tech-debt.md), so don't cite one.
+`drizzle-kit check` (two snapshots claiming one parent), **Squawk** on added `.sql`, and the **drift guard**. There is **no
+Neon-branch apply** yet (tech-debt.md), so don't cite one. Where each of these runs: AGENTS.md → "Local hooks vs CI merge-gates".
 
 ⚠️ **Generate on top of the newest migration on main, never before it.** drizzle's migrator applies a
 migration only when its journal `when` is later than the newest one already applied, so a migration

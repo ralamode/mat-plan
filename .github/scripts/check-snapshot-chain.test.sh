@@ -77,14 +77,26 @@ d="$(meta noid 0000_snapshot.json=a:$Z)"
 printf '{"prevId":"a"}' >"$d/0001_snapshot.json"
 expect 'a missing id' "$d" 2 '"0001_snapshot.json" is not an object'
 
-# A value that would be a workflow command if printed raw reaches the log only quoted.
+d="$(meta noprev 0000_snapshot.json=a:$Z)"
+printf '{"id":"b"}' >"$d/0001_snapshot.json"
+expect 'a missing prevId' "$d" 2 '"0001_snapshot.json" is not an object'
+
+d="$(meta numid 0000_snapshot.json=a:$Z)"
+printf '{"id":5,"prevId":"a"}' >"$d/0001_snapshot.json"
+expect 'a non-string id' "$d" 2 '"0001_snapshot.json" is not an object'
+
+# A value that would be a workflow command if printed raw reaches the log only quoted: the case is
+# reported as a broken link with the value escaped, and no line of the output starts with it.
 d="$(meta inject 0000_snapshot.json=a:$Z)"
 printf '{"id":"b","prevId":"x\\n::error::forged"}' >"$d/0001_snapshot.json"
-out="$(node "$guard" --dir "$d" 2>&1)"
+expect 'a value is printed escaped' "$d" 1 'prevId="x\n::error::forged"'
 if grep -q '^::error::forged' <<<"$out"; then
   printf '✗ a value cannot become a workflow command\n%s\n' "$out"
   fails=$((fails + 1))
 else printf '✓ a value cannot become a workflow command\n'; fi
+
+# The sort: APFS lists names in order, so on macOS no case here can catch a missing sort. On the
+# Linux runner, ext4 lists them in hash order, and "the real meta/" case above is what catches it.
 
 if [ "$fails" -gt 0 ]; then
   echo "check-snapshot-chain self-test: $fails failure(s)"

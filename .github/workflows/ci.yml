@@ -288,9 +288,10 @@ jobs:
 
       # ── Local gates in CI (DX-5(b); docs/plans/dx-5b-local-gates-in-ci.md) ──
       # Through pnpm, so package.json stays the single definition. Steps that must
-      # run before `Setup pnpm` (action pins, feature guides, the snapshot chain) call
-      # `node` directly; that is the only exception. These are integrity checks for honest authors,
-      # not a security boundary: a PR runs its own copy of every script here.
+      # run before `Setup pnpm` (action pins, feature guides, catalog records, the snapshot
+      # chain) call `node` directly; that is the only exception. These are integrity checks
+      # for honest authors, not a security boundary: a PR runs its own copy of every script
+      # here.
       - name: Skills guard
         run: pnpm skills:check
 

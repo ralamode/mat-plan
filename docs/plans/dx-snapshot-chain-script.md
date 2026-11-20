@@ -37,10 +37,10 @@ break that shipped in #139 (probed on 0.31.11 in #711).
    `0017`'s `id`. Only adjacent existing files are compared. The script's header says so, so nobody
    tightens it into requiring consecutive numbers and turns `main` red.
 3. Output: each finding names the file and the ids, printed with `JSON.stringify` so a value cannot
-   inject a workflow command, then the repair text moved verbatim from `ci.yml:187-197`. On CI it
+   inject a workflow command, then the repair text moved from `ci.yml:187-197`, with the gap rule added. On CI it
    ends with one fixed `::error::` line of its own.
 4. CI runs it on **every** event as its own step, `Migration snapshot chain`, with no `if:`, directly
-   after the forward-only guard and before `Setup pnpm`, as `node .github/scripts/check-snapshot-chain.mjs`.
+   BEFORE the forward-only guard (a red guard would skip a step after it) and before `Setup pnpm`, as `node .github/scripts/check-snapshot-chain.mjs`.
    It runs on the runner's preinstalled Node, so it uses `readdirSync` and a regex, no `fs.glob*`.
    It is the second pre-pnpm exception to "CI runs the `package.json` script", next to
    `actions:check`, and AGENTS.md says so.
@@ -140,3 +140,15 @@ pre-install step and no new tech-debt entry._
 | 14  | correctness N8                                        | Copying the 2.6 MB tree per case; `jq` in local runs                                                                            | **accepted** | Synthetic files written with `node`; one real copy.                                                                                                             |
 | 15  | reuse N5, N6, N7; scope N3, N4, N5                    | Restated gate locations; AGENTS :456; the mirror clause; the probe as an acceptance item; the time-order option; template shape | **accepted** | Pointers to AGENTS.md; :456 added; clause dropped; probes in the PR body; time order out of scope with no entry; Test plan section added; no "Where this sits". |
 | 16  | scope N1                                              | Exit 2 is YAGNI for a tree-only check                                                                                           | **rejected** | It keeps "could not check" from reading as "broken", the repo's audit rule; both exit codes fail CI.                                                            |
+
+### Implementation review (#724)
+
+| #   | Lens        | Critique (short)                                                       | Verdict      | Resolution                                                                    |
+| --- | ----------- | ---------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------- |
+| R1  | correctness | No case pins the string-`prevId` refusal, or a non-string `id`         | **accepted** | Two cases.                                                                    |
+| R2  | correctness | The injection case passed even if the script crashed                   | **accepted** | It asserts exit 1 and the escaped value too.                                  |
+| R3  | correctness | Acceptance 4 said "after the guard"; the step is before it, rightly    | **accepted** | Acceptance 4 reworded. Acceptance 3 says the repair text gained the gap rule. |
+| R4  | correctness | The self-reference line names no id                                    | **accepted** | It prints the id.                                                             |
+| R5  | correctness | The db-migration skill's sentence was split by the pointer             | **accepted** | The pointer is its own sentence.                                              |
+| R6  | correctness | No local case catches a missing sort (APFS lists in order)             | **accepted** | A comment in the test: the real-`meta/` case on the Linux runner catches it.  |
+| R7  | correctness | The ci.yml pre-pnpm list omitted the catalog records step (since #531) | **accepted** | Added.                                                                        |

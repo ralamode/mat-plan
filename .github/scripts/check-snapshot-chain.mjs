@@ -92,7 +92,9 @@ export function chainProblems(snapshots) {
       );
     }
     if (s.prevId === s.id) {
-      problems.push(`${JSON.stringify(s.name)}: prevId === id (self-referential)`);
+      problems.push(
+        `${JSON.stringify(s.name)}: prevId === id (self-referential), id=${JSON.stringify(s.id)}`,
+      );
     }
   });
   return problems;
