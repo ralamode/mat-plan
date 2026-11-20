@@ -16,6 +16,16 @@ import { catalogOptionOf, type CatalogOption } from './option';
  * none; a movement logged two ways as two entries (the rowing machine); and the shapes the search's vectors need (a compact "trapbar" and "medball", a short
  * alias, a "db" short form). `catalog.test.ts` holds each of those.
  *
+ * 🔴 **An entry that shares a name with an item of the fixture world logs the way that item does**
+ * (`FIXTURE_ITEMS`; `program/fixtures/fixtures.test.ts` holds it, by name and by alias). On a
+ * fixtures database the seed resolves each of the world's items by name through `newItem`, which
+ * selects a library row of that name whatever its tracking type, and the seed then skips a program
+ * whose item came back as another type. So a pair that differs would silently drop that program from
+ * every test, CI and preview database. Four names are in both today: Goblet squat, Side plank, Jump
+ * rope and Easy run. Until 2026-11-20 the last two differed (a count and a duration here, a duration
+ * and a distance in the world, which is the accepted prototype's); the count this library must cover
+ * moved to the medicine ball chest pass, which no world item names.
+ *
  * Its slugs and name keys are disjoint from the legacy `MOVEMENT_SEED_ROWS`, which a fixtures
  * database also holds until that list is retired (spec V3, F1), **and so are its aliases from the
  * legacy picker's** (`MOVEMENT_PICKER_ALIASES`): a query must never alias-hit one movement in each
@@ -142,7 +152,7 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     name: 'Medicine ball chest pass',
     aliases: ['Med-ball chest pass'],
     pattern: 'horizontal_push',
-    trackingType: 'reps',
+    trackingType: 'count',
     equipment: ['medicine_ball', 'wall'],
     primaryMuscle: 'chest',
     secondaryMuscles: ['triceps'],
@@ -273,7 +283,7 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     slug: 'easy_run',
     name: 'Easy run',
     modality: 'conditioning',
-    trackingType: 'duration',
+    trackingType: 'distance',
     isBodyweight: true,
     equipment: [],
     primaryMuscle: null,
@@ -285,7 +295,7 @@ export const CATALOG_FIXTURE: readonly CatalogMovement[] = [
     slug: 'jump_rope',
     name: 'Jump rope',
     modality: 'conditioning',
-    trackingType: 'count',
+    trackingType: 'duration',
     isBodyweight: true,
     equipment: ['jump_rope'],
     primaryMuscle: 'calves',

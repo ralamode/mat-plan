@@ -149,11 +149,9 @@ describe('where a program’s name goes on the day preview (FAM-1 15c, D49)', ()
 });
 
 describe('the picker-options fixture', () => {
-  /** In both lists and logged the same way: one row each, the library's, under the item's id. */
-  const SHARED = ['Goblet squat', 'Side plank'];
-  /** In both lists and logged differently: the household's item stays, the library's is left out. */
-  const KEPT_AS_ITEM = ['Jump rope', 'Easy run'];
-  const library = CATALOG_FIXTURE.filter((entry) => !KEPT_AS_ITEM.includes(entry.name));
+  /** In both lists, and logged the same way in both: one row each, the library's, under the item's id. */
+  const SHARED = ['Goblet squat', 'Side plank', 'Jump rope', 'Easy run'];
+  const library = CATALOG_FIXTURE;
   const itemNamed = (name: string) => {
     const item = FIXTURE_ITEMS.find((candidate) => candidate.name === name);
     if (!item) throw new Error(`no fixture item named ${name}`);
@@ -162,7 +160,7 @@ describe('the picker-options fixture', () => {
 
   it('lists the test library and the prototype’s items, each movement once', () => {
     expect(pickerOptions).toEqual([...catalogPickerOptions, ...householdPickerOptions]);
-    expect(catalogPickerOptions).toHaveLength(CATALOG_FIXTURE.length - KEPT_AS_ITEM.length);
+    expect(catalogPickerOptions).toHaveLength(CATALOG_FIXTURE.length);
     expect(householdPickerOptions).toHaveLength(FIXTURE_ITEM_KEYS.length - SHARED.length);
     expect(new Set(pickerOptions.map((option) => option.publicId)).size).toBe(pickerOptions.length);
     // No two rows answer to one name: the real read never lists an item a library row shadows.
@@ -211,7 +209,7 @@ describe('the picker-options fixture', () => {
     const inBoth = FIXTURE_ITEMS.filter((item) =>
       CATALOG_FIXTURE.some((entry) => movementNameKey(entry.name) === movementNameKey(item.name)),
     );
-    expect(inBoth.map((item) => item.name).sort()).toEqual([...SHARED, ...KEPT_AS_ITEM].sort());
+    expect(inBoth.map((item) => item.name).sort()).toEqual([...SHARED].sort());
     for (const name of SHARED) {
       const item = itemNamed(name);
       const rows = pickerOptions.filter((option) => option.name === name);
@@ -220,22 +218,7 @@ describe('the picker-options fixture', () => {
       // The pair logs the same way, or every fixture that names the item would show the wrong card.
       expect(rows[0]?.trackingType, name).toBe(item.trackingType);
     }
-    // A pair that logs differently: the fixtures' item is the row, as they log it.
-    for (const name of KEPT_AS_ITEM) {
-      const item = itemNamed(name);
-      const entry = CATALOG_FIXTURE.find((candidate) => candidate.name === name);
-      expect(entry?.trackingType, name).not.toBe(item.trackingType);
-      expect(
-        pickerOptions.filter((option) => option.name === name),
-        name,
-      ).toEqual([
-        expect.objectContaining({
-          owner: 'household',
-          publicId: item.itemPublicId,
-          trackingType: item.trackingType,
-        }),
-      ]);
-    }
+    // No pair logs differently: the module would have thrown on import (see `picker-options.ts`).
     // Every other library row keeps the test library's own id.
     for (const entry of library.filter((candidate) => !SHARED.includes(candidate.name))) {
       expect(pickerOptions.find((option) => option.name === entry.name)?.publicId).toBe(
@@ -269,9 +252,9 @@ describe('the picker-options fixture', () => {
     expect(await previewHowTo(noStepsRow?.publicId ?? 'missing')).toBeNull();
     expect(await previewHowTo(householdPickerOptions[0]?.publicId ?? 'missing')).toBeNull();
     expect(await previewHowTo('019826b4-0000-7000-8000-00000000ffff')).toBeNull();
-    // 🔴 A library row that is NOT listed (its name is the household's item here) gives nothing
-    // by its own id, though its entry has steps: the read answers for listed rows only.
-    for (const name of KEPT_AS_ITEM) {
+    // 🔴 A library row listed under the household item's id gives nothing by the test library's own
+    // id for it, though its entry has steps: the read answers for the ids it lists, and no other.
+    for (const name of SHARED) {
       const entry = CATALOG_FIXTURE.find((candidate) => candidate.name === name);
       expect(
         await previewHowTo(CATALOG_FIXTURE_IDS[entry?.slug ?? ''] ?? 'missing'),
