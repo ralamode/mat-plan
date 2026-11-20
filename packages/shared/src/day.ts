@@ -52,10 +52,10 @@ export function inWritableWindow(day: string, today: string): boolean {
  * otherwise), and what a day's Restore all is held to (FAM-1 plan D32; the maintainer, 2026-11-17:
  * an archived athlete's day is never writable; contract change C34).
  *
- * ⚠️ **As of C34 only the contract's fixture world and the day page's `dayPageFlags` (plan step 12c,
- * `apps/web/lib/entries/declared-day.ts`) call this.** The day resolver and the row
- * writer call lane E's `rowDayOpen`, and Restore all calls lane S's `dayIsOpen`
- * (`clear-day-actions.ts`): the same rule, written twice more. Each switches in its own lane's PR.
+ * ⚠️ **Callers: the contract's fixture world, the day page's `dayPageFlags` (plan step 12c,
+ * `apps/web/lib/entries/declared-day.ts`) and Restore all (`clear-day-actions.ts`, since V1-9b
+ * B2-i).** The day resolver and the row writer call lane E's `rowDayOpen`: the same rule, written
+ * once more, which switches in its own lane's PR.
  *
  * One function, so the page and every writer answer alike: a second copy that forgot the archived
  * half would offer a ✓ the writer then refuses. Call this wherever the athlete is known;

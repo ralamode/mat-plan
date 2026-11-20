@@ -35,24 +35,26 @@ export const restoreClearSchema = rowRetickSchema.omit({ entryPublicId: true });
 export type RestoreClearInput = z.input<typeof restoreClearSchema>;
 
 /**
- * Why a Restore all did not run. The words are `ROW_REFUSALS`' (the `satisfies` below keeps them so),
- * so the banner on the day screen speaks the rows' vocabulary.
+ * Why a day-level action did not run: Clear this day or Restore all. One list for both (plan § B2 as
+ * amended, P17). The words are `ROW_REFUSALS`' (the `satisfies` below keeps them so), so the day
+ * screen speaks the rows' vocabulary.
  *
- * - `bad_value`: the input failed `restoreClearSchema`.
+ * - `bad_value`: the input failed its schema (for a clear, a missing or wrong confirm word too).
  * - `not_found`: no such athlete in this household; also the transport's "no session".
- * - `closed_day`: the day is before yesterday or after today, or the athlete is archived. One word for
- *   both, as `rowDayOpen` has it: either way the day is read-only.
+ * - `closed_day`: the day is outside the action's window, or the athlete is archived. One word for
+ *   both, as `rowDayOpen` has it: either way the day is read-only for that action. Restore all's
+ *   window is today and yesterday; a clear's is today only (maintainer, 2026-11-19).
  * - `retry`: the transport's rate limit.
  */
-export const RESTORE_CLEAR_REFUSALS = [
+export const DAY_CLEAR_REFUSALS = [
   'bad_value',
   'not_found',
   'closed_day',
   'retry',
 ] as const satisfies readonly RowRefusal[];
-export type RestoreClearRefusal = (typeof RESTORE_CLEAR_REFUSALS)[number];
-export const RESTORE_CLEAR_REFUSAL = keyBySelf(RESTORE_CLEAR_REFUSALS);
-export const restoreClearRefusalSchema = z.enum(RESTORE_CLEAR_REFUSALS);
+export type DayClearRefusal = (typeof DAY_CLEAR_REFUSALS)[number];
+export const DAY_CLEAR_REFUSAL = keyBySelf(DAY_CLEAR_REFUSALS);
+export const dayClearRefusalSchema = z.enum(DAY_CLEAR_REFUSALS);
 
 /**
  * What Restore all resolves to. One success shape: the copy branches on the counts.
@@ -73,9 +75,50 @@ export const restoreClearResultSchema = z.discriminatedUnion('ok', [
     restored: z.number().int().nonnegative(),
     keptHidden: z.number().int().nonnegative(),
   }),
-  z.object({ ok: z.literal(false), reason: restoreClearRefusalSchema }),
+  z.object({ ok: z.literal(false), reason: dayClearRefusalSchema }),
 ]);
 export type RestoreClearActionResult = z.infer<typeof restoreClearResultSchema>;
 
+/**
+ * Clear this day's confirm word (plan § B2 as amended). The person types it in the dialog, and the
+ * server takes it again. ⚠️ **A check against a client bug, not a control**: any caller who can POST
+ * can send the word. Case and surrounding spaces are ignored, so `'Delete '` passes.
+ */
+export const CLEAR_DAY_CONFIRM_WORD = 'delete';
+/** The longest confirm a caller may send, and the dialog input's `maxLength`: one bound, two readers. */
+export const CLEAR_DAY_CONFIRM_MAX = 32;
+
+/** What the dialog and the server both compare with `CLEAR_DAY_CONFIRM_WORD`. */
+export function normalizeClearConfirm(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Clear this day: hide every live entry of one athlete's day as one event. The server finds the
+ * entries (`clearDay`), so the page sends only the athlete, the day and the confirm word.
+ */
+export const clearDaySchema = restoreClearSchema.omit({ hiddenAt: true }).extend({
+  confirm: z
+    .string()
+    .max(CLEAR_DAY_CONFIRM_MAX)
+    .transform(normalizeClearConfirm)
+    .pipe(z.literal(CLEAR_DAY_CONFIRM_WORD)),
+});
+export type ClearDayInput = z.input<typeof clearDaySchema>;
+
+/**
+ * What Clear this day resolves to. `count` is the entries the clear holds hidden.
+ *
+ * **`count: 0` is "nothing was left to clear"**, never a refusal: another phone emptied the day first
+ * (a blank Change, an un-tick), or a replay raced a Restore all. The person asked for an empty day and
+ * has one, so a refusal would tell them a clear that did what they wanted had failed (the reasoning
+ * of Restore all's 0 and 0). The banner reads the day's clears itself, so no token leaves here.
+ */
+export const clearDayResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), count: z.number().int().nonnegative() }),
+  z.object({ ok: z.literal(false), reason: dayClearRefusalSchema }),
+]);
+export type ClearDayActionResult = z.infer<typeof clearDayResultSchema>;
+
 // The transport's refusals must be reasons this result can carry. Checked at compile time.
-TRANSPORT_REFUSALS satisfies Record<string, RestoreClearRefusal>;
+TRANSPORT_REFUSALS satisfies Record<string, DayClearRefusal>;

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  RESTORE_CLEAR_REFUSALS,
+  CLEAR_DAY_CONFIRM_MAX,
+  CLEAR_DAY_CONFIRM_WORD,
+  DAY_CLEAR_REFUSALS,
+  clearDayResultSchema,
+  clearDaySchema,
   clearEventSchema,
   restoreClearResultSchema,
   restoreClearSchema,
@@ -53,14 +57,14 @@ describe('restoreClearSchema', () => {
   });
 });
 
-describe('RESTORE_CLEAR_REFUSALS', () => {
+describe('DAY_CLEAR_REFUSALS', () => {
   it('is a subset of the row contract’s words, so the day screen speaks one vocabulary', () => {
-    for (const reason of RESTORE_CLEAR_REFUSALS) expect(ROW_REFUSALS).toContain(reason);
+    for (const reason of DAY_CLEAR_REFUSALS) expect(ROW_REFUSALS).toContain(reason);
   });
 
   it('can carry every transport refusal (enterMutation’s answers)', () => {
     for (const reason of Object.values(TRANSPORT_REFUSALS)) {
-      expect(RESTORE_CLEAR_REFUSALS).toContain(reason);
+      expect(DAY_CLEAR_REFUSALS).toContain(reason);
     }
   });
 });
@@ -90,4 +94,53 @@ describe('clearEventSchema', () => {
     expect(clearEventSchema.safeParse({ hiddenAt: TOKEN, count: 2 }).success).toBe(true);
     expect(clearEventSchema.safeParse({ hiddenAt: TOKEN, count: 0 }).success).toBe(false);
   });
+});
+
+describe('clearDaySchema', () => {
+  const clear = { profilePublicId: ID, day: '2026-11-17' };
+
+  it('pins the confirm word (a contract test: the dialog and the server read this one const)', () => {
+    expect(CLEAR_DAY_CONFIRM_WORD).toBe('delete');
+  });
+
+  it.each(['delete', 'Delete ', '  DELETE'])(
+    'takes %j: case and surrounding spaces ignored',
+    (confirm) => {
+      expect(clearDaySchema.parse({ ...clear, confirm })).toEqual({ ...clear, confirm: 'delete' });
+    },
+  );
+
+  it.each(['del', '', 'delete it', 'deleted'])('refuses %j', (confirm) => {
+    expect(clearDaySchema.safeParse({ ...clear, confirm }).success).toBe(false);
+  });
+
+  it('refuses a missing confirm word', () => {
+    expect(clearDaySchema.safeParse(clear).success).toBe(false);
+  });
+
+  it('refuses a confirm longer than the bound, before it is trimmed', () => {
+    const padded = `${' '.repeat(CLEAR_DAY_CONFIRM_MAX)}delete`;
+    expect(clearDaySchema.safeParse({ ...clear, confirm: padded }).success).toBe(false);
+  });
+
+  it('carries no token and no entry id: the server finds the day’s entries itself', () => {
+    expect(Object.keys(clearDaySchema.shape).sort()).toEqual(['confirm', 'day', 'profilePublicId']);
+  });
+});
+
+describe('clearDayResultSchema', () => {
+  it.each([
+    { ok: true, count: 3 },
+    { ok: true, count: 0 },
+    { ok: false, reason: 'closed_day' },
+  ])('parses %o', (result) => {
+    expect(clearDayResultSchema.safeParse(result).success).toBe(true);
+  });
+
+  it.each([{ ok: true }, { ok: true, count: -1 }, { ok: false, reason: 'slot_taken' }])(
+    'refuses %o',
+    (result) => {
+      expect(clearDayResultSchema.safeParse(result).success).toBe(false);
+    },
+  );
 });

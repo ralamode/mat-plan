@@ -375,6 +375,12 @@ only way a notice about minors' health data is worth anything.
 > §8 too: a failed entry or athlete write no longer puts the row's values in Vercel's runtime log
 > (`quietDbErrors`). Less reaches that log, so the notice, which promises no more than §8, stays true.
 
+> 🔴 **§5 re-read 2026-11-19 for `V1-9b` B2-i** ([plan](../plans/v1-9b-delete-and-restore.md)):
+> no column, processor, reader audience or retention change. Clear this day is built
+> (`clearDayAction`, `app/p/[profileId]/clear-day-actions.ts`) with **no screen until B2-ii**; any
+> member may call it, on today only. It answers a count, so no clear's token or entry value leaves the
+> server. B2-ii writes §4, §5, §6 and §8's lines, and the notice, with the screen.
+
 > 🔴 **§1a / §5 re-read 2026-11-17 for `V1-9b` B2-0** ([plan](../plans/v1-9b-delete-and-restore.md)):
 > `entries.hide_reason`, one fixed value on hidden rows only. No new processor, reader audience or
 > export change (the export already omits hidden rows); retention is the hidden row's (§5, §8).
