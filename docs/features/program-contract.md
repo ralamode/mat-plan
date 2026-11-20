@@ -249,6 +249,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     for every day fixture, a live athlete's and an archived one's. The rule today: a live athlete,
     on any day (plan D48, #683). The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
+    **`ProgramLine` gets `programHrefFor`** (plan D49; 15c PR 3 passes `programPath` on the page):
+    the preview passes `programPreviewHref`, which opens the Program page fixture for that program,
+    or the preview's Programs list when the fixtures hold no page for it. So each name is a link to
+    a state the route lists, and the preview walk measures it as a 44px target
+    (`preview-registry.test.ts` holds it for every program a day fixture names).
     The parts are lane C's; their props are a contract with the page and this harness.
 12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
     from the fake's Programs list by the draft's `programPublicId`, as the real page will load it
