@@ -49,7 +49,10 @@ import {
  * Every id in this contract, a public id or a client id: any uuid, **handed back in lower case**
  * (contract change C25, from FAM-1 step 6a-ii's review).
  *
- * `uuidSchema` takes a uuid in either case and hands it back as written. Postgres reads the two
+ * **`uuidSchema` (`../id.ts`) folds the case itself now**, for every id the app parses, so this is
+ * the same schema under the contract's name: the shapes keep saying `lowerCaseUuidSchema`, and
+ * `id-case.test.ts` keeps holding them to it. Until that root fix `uuidSchema` handed a uuid back
+ * as written, which is why C25 added this one. The reason is unchanged: Postgres reads the two
  * spellings as one uuid and always answers in lower case, while everything in JS that compares ids
  * (`===`, a `Map`, a `Set`, the "no two the same" checks in `./program-shapes`) reads them as two.
  * So an id written in upper case could pass a distinctness check beside its lower-case twin, or
@@ -61,8 +64,12 @@ import {
  *
  * It changes nothing for an id the app made: `newId`, `crypto.randomUUID` and Postgres all write
  * lower case.
+ *
+ * 🔴 **An alias, with no fold of its own.** The fold is on one line, in `../id.ts`. A second
+ * `.toLowerCase()` here would hide a mutation of that line, and that line would hide a mutation
+ * of this one (`db:mutations` patch 142 found it).
  */
-export const lowerCaseUuidSchema = uuidSchema.toLowerCase();
+export const lowerCaseUuidSchema = uuidSchema;
 
 const ONE_LINE = 'one line of text, with no control characters';
 /**
