@@ -362,7 +362,7 @@ gantt
 - **What is still open inside those plans.** The 12f plan's Q5 is answered: the maintainer ran its two read-only checks on production on 2026-11-19, and the gate for 12f PR 5 is met. One allowed split: the 12c-iii plan lets its builder land a small PR 0 before 12c-iii PR 1 if that PR grows, which would make the count 71.
 - **The two steps planned by their rows are merged**: 12d-iii (#688) and 12c-ii (#694).
 - **The count moved from 63 to 70** with the three plans: 15c is three PRs (+2), 12c-iii is two (+1) and 12f is five (+4). None of the ten is on the critical path.
-- **And from 70 to 72 the same evening**, when B2's plan made it three PRs (#727, +2; plan L60). Its screen, B2-ii, is the one that takes B2's turn on `page.tsx`. Clear this day is now offered on today only; Restore all stays on today and yesterday.
+- **And from 70 to 72 the same evening**, when B2's plan made it three PRs (#727, +2; plan L60). Its screen, B2-ii, took B2's turn on `page.tsx`. Clear this day is now offered on today only; Restore all stays on today and yesterday.
 - **Step 15's plan had moved the count from 61 to 63** earlier the same day. The critical path's end did not move: 15 PR 1 makes Put on live, and its e2e is the check the switch waits for (slice 2's done-when, below). 15 PR 2 and 15 PR 3 follow it in lane B (both merged since, #679 and #687), and the chart does not draw the switch as waiting for them; when the family switches is the maintainer's call.
 
 **What it shows**
