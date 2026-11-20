@@ -5,7 +5,7 @@
 > exit criterion. Branch for this plan: `docs/oss-1-scan-every-ref-plan`.
 >
 > **Draft 3, not yet approved.** Drafted by the plan owner on 2026-11-20 from the docs and the refs
-> on the remote that day. Two panel rounds (the privacy lens) are applied; the log is at the end. The
+> on the remote that day. Three panel rounds (the privacy lens) are applied; the log is at the end. The
 > maintainer approves it before its PR is built.
 
 ## Where this sits
@@ -82,8 +82,7 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
    - **Two classes of term.** Third-party terms must match nowhere. Household terms may match only
      in what Q1 accepts: objects reachable from the refs as they stood at the sign-off, author
      fields, and pull-request text written before the sign-off date. The sign-off records that
-     snapshot of refs locally (commit ids are not personal data) and its date in the inventory. Any
-     later match fails. The scan exits zero only when both classes hold.
+     snapshot of refs locally (commit ids are not personal data) and its date in the inventory. Any later match fails. A household match in a commit, message or pull-request text dated after 2026-10-08, when the working tree was renamed, is shown at the sign-off as its own line: the only accepted carry-forward is the applied migration's comment, and any other such match is fixed, not accepted. The scan exits zero only when both classes hold.
    - **Matching.** Fixed strings, case-insensitive. A term under four characters is matched on word
      boundaries. A term may carry a local list of blob ids it is allowed to match, for a name that
      is also a common word.
@@ -101,7 +100,7 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
    term scan over the commits being pushed. It looks for the term file under the main checkout, not
    the worktree it runs in, or at a path in `MAT_PLAN_PII_TERMS`, and passes with one line, "no term
    list here", when there is none. So it checks every push from the machine that holds the list,
-   worktrees included, and never blocks another machine.
+   worktrees included, and never blocks another machine. It covers `git push` only: screenshots published through the API, edits made on the site and pull-request text are covered by running the full scan again before each invite.
 3. **A test**, which also covers a push from a worktree, on a scratch repository with a planted made-up term on a branch, in a pull-request
    style ref, in an old commit, in a commit message and in a path. Each is found. Nothing of the
    term appears in any output, error output included. A term file in a tracked path is refused. The
@@ -135,8 +134,7 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
 2. Run `pnpm scan:refs`. Read the result in the terminal.
 3. **Check that nothing accepted under Q1 names a person outside the household.** If the scan's
    household class or a read of the old notes shows one, it moves to the third-party class. **Look
-   at the `screenshots` branch's images from the weeks of the roster pull requests**, locally: if
-   one shows a third party, Q2's answer is to delete the branch.
+   at the `screenshots` branch's images from the weeks of the roster pull requests**, locally: if one shows a third party, the branch is deleted and its last commit id goes into the Support request, with the same proof.
 4. File the Support request, and remove the workflow runs and preview deployments.
 5. Run the scan and the proof again after Support answers. Record the dated outcome.
 6. Run it again before each new family is invited.
@@ -176,8 +174,7 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
   party's data on any public surface of the repo, proved by commit id; the household's own given
   names, ages and bodyweight values in any commit, pull-request ref, commit message or pull-request
   text before the sign-off date, one given name in an applied migration's
-  comment, the maintainer's commit author and email, and the `screenshots` branch's images are
-  accepted residuals; numbers and images are not scannable." This is an exception to AGENTS.md's
+  comment, the maintainer's commit author and email, and the `screenshots` branch's images, once checked to show no third party, are accepted residuals; numbers and images are not scannable." This is an exception to AGENTS.md's
   rule that a real value committed anywhere is a P0 and that deleting it from `HEAD` is not removing
   it; the same PR names the exception there. The history rewrite stays available. The alternative is
   to rewrite history before Beta 0 ends. A rewrite is the only way to make that rule true without
@@ -220,3 +217,7 @@ accepted.
 | 14  | P1       | The accepted places were undefined, and left out old pull-request refs, commit messages and pull-request text | A dated snapshot of refs at the sign-off; Q1's wording                 |
 | 15  | P1       | Accepting the `screenshots` branch could sweep in a third party's image                                       | The maintainer's step 3; Q2 depends on it                              |
 | 16  | P1       | A hook that reads a path relative to a worktree would silently skip most pushes                               | It finds the list under the main checkout, and says when there is none |
+
+**Round 3, 2026-11-20.** A final check: SHIP, with three non-blocking points, all applied: a household
+match dated after the 2026-10-08 rename is fixed and not accepted; the `screenshots` branch's images
+are accepted only once checked; and what the push hook does not cover.
