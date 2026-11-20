@@ -17,7 +17,8 @@ import { ProgramOrderButton } from './program-order-dialog';
  *
  * One sentence ("Programs: Family program, Stretching") rather than a row of chips. **Given
  * `programHrefFor`, each name is a link to its program's page**, with the prototype's "›" hidden
- * from a screen reader (D49, maintainer, 2026-11-19); a linked name moves to the next line whole.
+ * from a screen reader (D49, maintainer, 2026-11-19). A linked name is one box: a short one moves to
+ * the next line whole, and a long one still wraps inside it (`NAME_WRAP_CLASS`).
  * Without it the names are text, as on the preview.
  *
  * **Program order shows** when the viewed day has two or more programs, the day is writable, the
@@ -62,7 +63,10 @@ export function ProgramLine({
                     className={cn(QUIET_LINK_CLASS, NAME_WRAP_CLASS)}
                   >
                     {program.name}
-                    <span aria-hidden="true"> ›</span>
+                    {/* The link lays out as flex items, so the gap is a margin, not a space. */}
+                    <span aria-hidden="true" className="ml-1">
+                      ›
+                    </span>
                   </Link>
                 </Fragment>
               ))}

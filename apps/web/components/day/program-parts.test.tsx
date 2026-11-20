@@ -733,7 +733,7 @@ describe('ProgramLine and the Program order dialog', () => {
         // The "›" is hidden from a screen reader: the link's name is the program's name alone.
         const link = screen.getByRole('link', { name: program.name });
         expect(link.getAttribute('href')).toBe(programPath(program.programPublicId));
-        expect(link.textContent).toBe(`${program.name} ›`);
+        expect(link.textContent).toBe(`${program.name}›`);
         expect(link.className).toContain(NAME_WRAP_CLASS);
       }
       expect(screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: false })).toBeTruthy();
