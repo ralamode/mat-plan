@@ -76,6 +76,12 @@ const DAY_PAGE = 'apps/web/app/p/[profileId]/page.tsx';
  * (DX-18). Keyed on the importing directory and the exact target.
  */
 const SCRIPTS_MAY_LAND = { from: 'apps/web/scripts/', to: '.github/scripts/heavy-slot.mjs' };
+/**
+ * Only the runners themselves and the end-to-end specs may reach `apps/web/scripts/`. Without this,
+ * a bundled file importing a runner would carry `SCRIPTS_MAY_LAND`'s target, and its whole closure,
+ * into a route (security re-check of #785).
+ */
+const SCRIPTS_REACHED_FROM = [SCRIPTS_MAY_LAND.from, 'apps/web/e2e/'];
 /** Shared code any package may import, and third-party code (a realpath under the root store). */
 const SHARED_SOURCES = ['packages/shared/src/', 'packages/engine/src/'];
 const THIRD_PARTY = 'node_modules/';
@@ -235,6 +241,8 @@ function violations(file: string, text?: string, landing = webLanding()): Violat
     } else if (r.startsWith(DB_DIR)) v(i.line, 'deep packages/db', r);
     else if (r.startsWith(WEB)) {
       if (r.startsWith(WEB_TEST) && !file.startsWith(WEB_TEST)) v(i.line, 'test helper', r);
+      else if (r.startsWith(SCRIPTS_MAY_LAND.from) && !under(file, SCRIPTS_REACHED_FROM))
+        v(i.line, 'local runner', r);
       else if (!landing.has(r)) v(i.line, 'outside the domain', r);
     } else if (
       !under(r, [THIRD_PARTY, ...SHARED_SOURCES]) &&
@@ -573,6 +581,29 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           'apps/web/scripts/x.ts',
           "import { slot } from '../../../.github/scripts/heavy-slot.mjs';",
         ),
+        // A bundled file may not reach a runner, by any spelling: the runner's closure holds the slot.
+        fixture(
+          C,
+          "import { r } from '@/scripts/e2e-local';",
+          'local runner: apps/web/scripts/e2e-local.ts',
+        ),
+        fixture(
+          C,
+          "import { r } from '@/./scripts/e2e-local';",
+          'local runner: apps/web/scripts/e2e-local.ts',
+        ),
+        fixture(
+          C,
+          "import { r } from '@/lib/../scripts/e2e-local';",
+          'local runner: apps/web/scripts/e2e-local.ts',
+        ),
+        fixture(
+          'apps/web/app/programs/page.tsx',
+          'const m = await import(`@/scripts/e2e-local`);',
+          'local runner: apps/web/scripts/e2e-local.ts',
+        ),
+        fixture('apps/web/scripts/x.ts', "import { r } from './e2e-local';"),
+        fixture('apps/web/e2e/x.spec.ts', "import { r } from '../scripts/e2e-local';"),
         fixture(C, "import { x } from '@mat-plan/shared';"),
         fixture(C, "import styles from '@/app/globals.css';"),
       ],
