@@ -694,6 +694,8 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
   prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
   at 15c, which wires that dialog.
+  ✅ **Closed (FAM-1 15c PR 1, 2026-11-20)**: `Sheet` takes `statusKey`, passed to its region as
+  `messageKey`, and the dialog's status is `{ text, n }`. No U+00A0 idiom is left.
 - **Severity:** low.
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
