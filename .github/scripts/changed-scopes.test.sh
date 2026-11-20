@@ -21,6 +21,17 @@ cp "$ROOT/packages/db/scripts/mutations.mjs" "$R/packages/db/scripts/"
 printf 'export const scope = "household";\n' >"$R/apps/web/lib/scoped.ts"
 printf 'export const x = 1;\n' >"$R/apps/web/lib/other.ts"
 printf '# doc\n' >"$R/docs/a.md"
+# The catalog's shape (DX-18 (c)): shared's exports map, its data behind ./catalog/data, and a db file
+# that imports shared the way packages/db does today, so nothing it runs reaches the data.
+CAT=packages/shared/src/catalog
+mkdir -p "$R/$CAT/data" "$R/packages/db/src"
+printf '{"name":"@mat-plan/shared","exports":{".":"./src/index.ts","./catalog/data":"./src/catalog/data/index.ts","./catalog/fixture":"./src/catalog/fixture.ts"}}\n' >"$R/packages/shared/package.json"
+printf "export * from './catalog/fixture';\n" >"$R/packages/shared/src/index.ts"
+printf 'export const fixture = 1;\n' >"$R/$CAT/fixture.ts"
+printf "export * from './batch-01';\n" >"$R/$CAT/data/index.ts"
+printf 'export const batch01 = [];\n' >"$R/$CAT/data/batch-01.ts"
+printf "import { fixture } from '@mat-plan/shared/catalog/fixture';\nimport { y } from './y';\nimport { z } from 'drizzle-orm';\nexport { fixture, y, z };\n" >"$R/packages/db/src/seed.ts"
+printf 'export const y = 1;\n' >"$R/packages/db/src/y.ts"
 g() { git -C "$R" -c user.email=t@t -c user.name=t "$@"; }
 g init -q
 g add -A && g commit -qm base
@@ -111,6 +122,138 @@ printf 'more\n' >>"$R/docs/a.md"; g add docs && g commit -qm docs
 cp "$HERE/scopes-step.sh" "$R/.github/scripts/" # untracked: the step is the PR's own file
 [ "$(step "$BASE")" = "run_mutations=false run_build=false run_e2e=false " ] && ok "scopes-step: the base's script decides a docs-only PR" || no "scopes-step docs: $(cat "$T/out") $(cat "$T/step.log")"
 g reset -q --hard "$BASE"
+
+# ── (c) catalog data is not a mutation trigger (docs/plans/dx-18-mutation-savings.md C1–C5) ────────
+# Each case: an optional PRE commit on top of BASE (what main already holds), then the PR: a batch
+# file plus a docs change, plus the case's own extra. The flags are read with SCRIPT, the copy under
+# test, run from outside the repo as CI runs the base's copy. Only run_mutations is compared, except
+# C-1. A setup that belongs on main goes in PRE: a PR that edited packages/db or shared itself would
+# trigger on that file and prove nothing about the catalog rule.
+c_pre_c2() { printf "import { batch01 } from '@mat-plan/shared/catalog/data';\nexport { batch01 };\n" >"$R/packages/db/src/reads-data.ts"; }
+c_pre_c3() {
+  sed -i.bak 's/\[\]/[1]/' "$R/$CAT/data/batch-01.ts" && rm "$R/$CAT/data/batch-01.ts.bak"
+  g diff >"$R/packages/db/scripts/mutations/02-catalog.patch"
+  g checkout -q -- "$CAT/data/batch-01.ts"
+}
+c_pr_c4() { mkdir -p "$R/packages/shared/src" && printf 'export const x = 1;\n' >"$R/packages/shared/src/x.ts"; }
+c_pre_c5() { printf "import './nope';\nexport const fixture = 1;\n" >"$R/$CAT/fixture.ts"; }
+c_pre_c7() { printf "import './data/batch-01';\nexport const fixture = 1;\n" >"$R/$CAT/fixture.ts"; }
+# A git that fails on the walk's `ls-files`, and only there: the diff still works.
+SHIM="$T/shim"
+mkdir -p "$SHIM"
+printf '#!/bin/sh\n[ "$1" = ls-files ] && { echo "shim: git failed" >&2; exit 128; }\nexec "%s" "$@"\n' "$(command -v git)" >"$SHIM/git"
+chmod +x "$SHIM/git"
+
+# c_flags <script> <pre-fn|-> <pr-fn|-> [path-prefix]: prints "mutations build e2e".
+c_flags() {
+  local script="$1" pre="$2" pr="$3" path="${4:-}" base
+  g reset -q --hard "$BASE"
+  [ "$pre" = - ] || "$pre"
+  g add -A && g commit -qm pre --allow-empty
+  base="$(g rev-parse HEAD)"
+  printf 'export const batch01 = [2];\n' >"$R/$CAT/data/batch-01.ts"
+  printf 'more\n' >>"$R/docs/a.md"
+  [ "$pr" = - ] || "$pr"
+  g add -A && g commit -qm pr
+  (cd "$R" && PATH="${path}${PATH}" GITHUB_EVENT_NAME=pull_request BASE_SHA="$base" node "$script" 2>/dev/null) |
+    sed 's/^[a-z0-9_]*=//' | tr '\n' ' ' | sed 's/ $//'
+  g reset -q --hard "$BASE"
+}
+# c_cases <script>: one "<case>=<ok|RED>" line per case, against that copy of the script.
+c_cases() {
+  local s="$1" got
+  got="$(c_flags "$s" - -)"
+  [ "$got" = "false true true" ] && echo "C-1=ok" || echo "C-1=RED(${got// /,})"
+  got="$(c_flags "$s" c_pre_c2 -)"
+  [ "${got%% *}" = true ] && echo "C-2=ok" || echo "C-2=RED(${got// /,})"
+  got="$(c_flags "$s" c_pre_c3 -)"
+  [ "${got%% *}" = true ] && echo "C-3=ok" || echo "C-3=RED(${got// /,})"
+  got="$(c_flags "$s" - c_pr_c4)"
+  [ "${got%% *}" = true ] && echo "C-4=ok" || echo "C-4=RED(${got// /,})"
+  got="$(c_flags "$s" c_pre_c5 -)"
+  [ "${got%% *}" = true ] && echo "C-5=ok" || echo "C-5=RED(${got// /,})"
+  got="$(c_flags "$s" - - "$SHIM:")"
+  [ "${got%% *}" = true ] && echo "C-6=ok" || echo "C-6=RED(${got// /,})"
+  got="$(c_flags "$s" c_pre_c7 -)"
+  [ "${got%% *}" = true ] && echo "C-7=ok" || echo "C-7=RED(${got// /,})"
+  # C-8: one home for the path. check-catalog-append-only.mjs keeps DIR private; its exported FILES
+  # sit directly in it.
+  got="$(node --input-type=module -e "
+    import { CATALOG_DATA } from '$s';
+    import { FILES } from '$HERE/check-catalog-append-only.mjs';
+    import { dirname } from 'node:path';
+    const dirs = [...new Set(FILES.map((f) => dirname(f)))];
+    console.log(dirs.length === 1 && dirs[0] === CATALOG_DATA ? 'equal' : 'CATALOG_DATA=' + CATALOG_DATA + ' DIR=' + dirs);
+  " 2>&1 | tail -1)"
+  [ "$got" = equal ] && echo "C-8=ok" || echo "C-8=RED(${got// /,})"
+}
+C_DESC=(
+  "C-1 a batch file plus docs: no mutations; build and e2e still run"
+  "C-2 a db file on main imports @mat-plan/shared/catalog/data: mutations run"
+  "C-3 a patch on main targets batch-01.ts: mutations run (the target branch)"
+  "C-4 a batch file plus packages/shared/src/x.ts: mutations run"
+  "C-5 a fixture's relative specifier does not resolve: mutations run"
+  "C-6 git fails during the walk: mutations run"
+  "C-7 fixture.ts on main imports ./data/batch-01: mutations run (the walk, not a grep)"
+  "C-8 CATALOG_DATA equals check-catalog-append-only.mjs's DIR"
+)
+cp "$HERE/changed-scopes.mjs" "$T/under-test.mjs"
+results="$(c_cases "$T/under-test.mjs")"
+i=0
+for line in $results; do
+  [ "${line#*=}" = ok ] && ok "${C_DESC[$i]}" || no "${C_DESC[$i]}: ${line#*=}"
+  i=$((i + 1))
+done
+[ "$i" -eq 8 ] || no "the (c) cases: expected 8 results, got $i"
+
+# C-1 again, through scopes-step.sh with the BASE's copy (R3: a decider that imported a sibling would
+# throw from $RUNNER_TEMP and run everything, so the saving would never save).
+g reset -q --hard "$BASE"
+printf 'export const batch01 = [2];\n' >"$R/$CAT/data/batch-01.ts"
+printf 'more\n' >>"$R/docs/a.md"
+g add -A && g commit -qm batch
+cp "$HERE/scopes-step.sh" "$R/.github/scripts/"
+[ "$(step "$BASE")" = "run_mutations=false run_build=true run_e2e=true " ] && ok "C-1 through scopes-step.sh: the base's copy skips the mutations for a batch file" || no "C-1 scopes-step: $(cat "$T/out") $(cat "$T/step.log")"
+g reset -q --hard "$BASE"
+
+# The (c) mutants (H5): each is one from/to literal on a copy of the script. `from` must occur exactly
+# once (probe.mjs's rule) and the copy must compile, or the mutant proves nothing. Then the cases in
+# its red list must go RED and every other case stay green.
+# mutant <name> <red cases, space-separated> <from> <to>
+mutant() {
+  local name="$1" want="$2" from="$3" to="$4" copy="$T/mutant-$1.mjs" got red
+  if ! FROM="$from" TO="$to" SRC="$HERE/changed-scopes.mjs" OUT="$copy" node -e '
+    const fs = require("node:fs");
+    const s = fs.readFileSync(process.env.SRC, "utf8");
+    const n = s.split(process.env.FROM).length - 1;
+    if (n !== 1) { console.error(`from occurs ${n} times`); process.exit(1); }
+    fs.writeFileSync(process.env.OUT, s.replace(process.env.FROM, () => process.env.TO));
+  '; then
+    no "mutant $name: its from literal must occur exactly once"
+    return
+  fi
+  if ! node --check "$copy" 2>/dev/null; then
+    no "mutant $name: does not compile"
+    return
+  fi
+  got="$(c_cases "$copy")"
+  red="$(printf '%s\n' $got | grep -v '=ok$' | sed 's/=.*//' | tr '\n' ' ' | sed 's/ $//')"
+  [ "$red" = "$want" ] && ok "mutant $name: turns $want red, the rest stay green" || no "mutant $name: want red '$want', got red '$red'"
+}
+# Ignoring relative specifiers also hides C-5's unresolved RELATIVE specifier: both go red.
+mutant c-walk-ignores-relative "C-5 C-7" \
+  "if (spec.startsWith('.')) {" "if (spec.startsWith('.')) { return undefined;"
+mutant c-unresolved-is-fine "C-5" \
+  "if (next === null) return true;" "if (next === null) continue;"
+mutant c-any-throw-is-no-match "C-6" \
+  "return true; // an error proves nothing" "return false; // an error proves nothing"
+
+# The mutants live here, never as markers in the shipped source.
+if grep -rln '@mutant' "$HERE" | grep -v '/changed-scopes\.test\.sh$'; then
+  no "a @mutant marker in .github/scripts/ outside this test"
+else
+  ok "no @mutant marker in .github/scripts/ outside this test"
+fi
 
 # The polarity rule, on the real workflows: a step skips only on a literal false. Any comparison of
 # a scope (or an env var carrying one) with true, quoted or not, is refused.

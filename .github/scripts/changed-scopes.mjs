@@ -16,11 +16,19 @@
  *   so a PR cannot reclassify itself. The PR's own copy is exercised by its test. This catches
  *   mistakes, not a hostile author (the residual SECURITY.md accepts for the pin checker).
  *
+ * - **Catalog data is not a mutation trigger** (DX-18 savings (c), docs/plans/dx-18-mutation-savings.md
+ *   C1–C5): a file under `CATALOG_DATA` stops counting while `catalogReachable` proves that nothing
+ *   `packages/db` runs, nor any other `@mat-plan/shared` export, reaches it. **What it gives up:** a
+ *   batch file that changes a proof without an import, which the walk cannot see. The data is plain
+ *   constants read only by two web DAL files no patch targets, and `main` still runs every patch on
+ *   the merge, so the proof is moved to after the merge, not dropped.
+ *
  * What never skips (format, lint, typecheck, tests, db:verify, gitleaks, the guards, the audit, the
  * status check) is not decided here: those steps take no flag.
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -52,18 +60,80 @@ const MUTATION_TRIGGERS = [
 const ALL_RUN = { run_mutations: true, run_build: true, run_e2e: true };
 
 /**
+ * The catalog's data. Pinned to `check-catalog-append-only.mjs`'s `DIR` by `changed-scopes.test.sh`:
+ * CI runs this file alone, from the base (header), so it cannot import that one.
+ */
+export const CATALOG_DATA = 'packages/shared/src/catalog/data';
+const inCatalogData = (f) => f.startsWith(`${CATALOG_DATA}/`);
+
+// The specifier scan and relative resolution of packages/shared/src/test-support/source-graph.ts,
+// in plain JS for the same reason.
+const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+const specifiersOf = (text) =>
+  [...code(text).matchAll(/\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g)].map(([, s]) => s);
+const SHARED = '@mat-plan/shared';
+
+/**
+ * Whether anything a mutation run executes can reach the catalog's data. The entries are every
+ * `@mat-plan/shared` export except `./catalog/data`, and every non-test `.ts`/`.tsx` file in
+ * `packages/db/`. The walk follows relative specifiers and `@mat-plan/shared[/x]` through the
+ * exports map. A reached data file, or a first-party specifier that does not resolve, answers true.
+ * `io` is `{ read(path), isFile(path), listDb() }`, repo-relative; any error it throws is the
+ * caller's to read as true.
+ */
+export function catalogReachable(io) {
+  const exportsMap = JSON.parse(io.read('packages/shared/package.json')).exports;
+  const fromExports = (target) => posix.join('packages/shared', target);
+  // undefined: a third-party package, not followed. null: first-party, and it does not resolve.
+  const resolve = (from, spec) => {
+    if (spec.startsWith('.')) {
+      const base = posix.join(posix.dirname(from), spec);
+      return [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`].find(io.isFile) ?? null;
+    }
+    if (spec !== SHARED && !spec.startsWith(`${SHARED}/`)) return undefined;
+    const target = exportsMap[`.${spec.slice(SHARED.length)}`];
+    return typeof target === 'string' ? fromExports(target) : null;
+  };
+  const entries = [
+    ...Object.entries(exportsMap)
+      .filter(([key]) => key !== './catalog/data')
+      .map(([, target]) => fromExports(target)),
+    ...io.listDb().filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f)),
+  ];
+  const seen = new Set();
+  const stack = [...entries];
+  while (stack.length > 0) {
+    const file = stack.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    if (inCatalogData(file)) return true;
+    for (const spec of specifiersOf(io.read(file))) {
+      const next = resolve(file, spec);
+      if (next === null) return true; // unresolved: it could be the data
+      if (next !== undefined) stack.push(next);
+    }
+  }
+  return false;
+}
+
+/**
  * The flags for one list of changed files. `patchPaths()` returns every path a mutation patch
  * touches (`mutations.mjs --list-paths`): a change to one of those runs the proof even outside the
  * packages. It is called only when no trigger already decided, so it usually does not run.
+ * `catalogReaches()` says whether catalog data still triggers (`catalogReachable`); it is asked only
+ * when catalog data is all that would trigger, and without it the data triggers, as it always did.
  */
-export function scopesFor(files, patchPaths) {
+export function scopesFor(files, patchPaths, catalogReaches = () => true) {
   if (files.length === 0) return { ...ALL_RUN };
   const inert = files.every((f) => INERT.some((re) => re.test(f)));
   const touchesWorkflowsOrScripts = files.some(
     (f) => f.startsWith('.github/') && !INERT.some((re) => re.test(f)),
   );
+  const trigger = (f) => MUTATION_TRIGGERS.some((re) => re.test(f));
   const triggered =
-    touchesWorkflowsOrScripts || files.some((f) => MUTATION_TRIGGERS.some((re) => re.test(f)));
+    touchesWorkflowsOrScripts ||
+    files.some((f) => !inCatalogData(f) && trigger(f)) ||
+    (files.some(inCatalogData) && catalogReaches());
   const mutations =
     triggered ||
     (() => {
@@ -104,7 +174,22 @@ function decide() {
         .split('\n')
         .filter(Boolean),
     );
-  return { flags: scopesFor(files, patchPaths), why: `${files.length} changed file(s)` };
+  // HEAD's tree, as the shards would see it. Any error keeps the catalog data a trigger.
+  const catalogReaches = () => {
+    try {
+      return catalogReachable({
+        read: (path) => readFileSync(path, 'utf8'),
+        isFile: (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false,
+        listDb: () => git(['ls-files', '-z', '--', 'packages/db']).split('\0').filter(Boolean),
+      });
+    } catch {
+      return true; // an error proves nothing: the catalog data still triggers
+    }
+  };
+  return {
+    flags: scopesFor(files, patchPaths, catalogReaches),
+    why: `${files.length} changed file(s)`,
+  };
 }
 
 function main() {
