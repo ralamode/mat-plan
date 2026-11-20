@@ -337,7 +337,12 @@ only way a notice about minors' health data is worth anything.
 >
 > **§1 re-read 2026-11-18 for FAM-1 step 6d-ii**: `reorderPrograms` rewrites `program_assignments.idx`
 > (an athlete's own order of their programs), inside the household only. No new column, processor, log
-> or export. Called by no action until step 15c.
+> or export. Called by `reorderProgramsAction` (`app/p/[profileId]/row-actions.ts`) since 15c PR 2,
+> which no page passes until 15c PR 3; the action changes no column, processor or export. §7: a
+> refused Program order reports at most one public id through the existing scope-miss path: the
+> athlete's on `not_found`, or, on `invalid`, the first program id that is not one of the household's
+> live programs; a stale list of the household's own programs reports nothing; a thrown database error
+> carries no ids (`quietDbErrors`).
 >
 > **§1 / §7 re-read 2026-11-18 for FAM-1 step 6c-ii**: two reads of `program_assignments` (the
 > program page and the Programs list) show an athlete's name and programs to their own household, as
@@ -933,7 +938,7 @@ nothing, and the Programs list names no id, so it sends nothing either. "How to"
 (`app/programs/how-to/[optionId]/route.ts`, 7b PR 1) reports no miss at all: every miss answers the
 same 404, and the option id reaches Sentry only as the request path, masked to `:id` (below). Since 12b,
 `apps/web/lib/dal/day/report-miss.ts` sends a workout or a prescription id: only when a ✓ is refused
-`not_found`, it checks the workout and then the prescription and sends at most one event. Retention is Sentry's, in
+`not_found`, it checks the workout and then the prescription and sends at most one event. Since step 15, a refused Put on or Take off (`reportAssignMiss`) sends the program's id, or the first athlete id the household does not have. Since 15c PR 2, a refused Program order sends the athlete's id on `not_found` (`reportAthleteMiss`), or on `invalid` the first program id that is not one of the household's live programs (`reportOrderProgramMiss`); a stale list of its own programs sends nothing. Still one event at most. Retention is Sentry's, in
 §8. The alert
 that reads it is in [runbooks.md](../runbooks.md) → "A cross-household scope miss".
 

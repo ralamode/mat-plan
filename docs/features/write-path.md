@@ -345,8 +345,11 @@ The shapes those lanes agree on, the fakes and the preview route are
    untested.
    **Each registry entry is `{ refusal, scope }` or `{ excluded: { reason, provenBy } }`** — one
    discriminated union, not a list beside a list. `scope` is **addressing**, never `HouseholdScope`:
-   `profile` means the body carries a `profileId` the wrong-household matrix can make foreign;
-   `household` means it does not, so a household matrix drives a DAL scope miss instead. Because the
+   `profile` means the action resolves the athlete its body names (`getProfileByPublicId`), which the
+   wrong-household matrix can make foreign; `household` means it resolves none itself, so a household
+   matrix drives a DAL scope miss instead. A body may carry an athlete's id and still be
+   household-addressed when the writer makes the one check of that athlete inside the scope (Put on,
+   Take off, Program order: FAM-1 15 and 15c); such an action owes invariant 13's foreign-id row. Because the
    two members are exclusive — **which required `excluded?: never` on one and `scope?: never` on the
    other; WP-1 claimed exclusivity without them and it was not true, since TypeScript's
    excess-property check on a non-discriminated union only needs each property to exist in SOME
@@ -688,6 +691,10 @@ The shapes those lanes agree on, the fakes and the preview route are
     id, is also `scope: 'household'`, and would pass every row while its DAL accepted another
     household's id. Such an action owes its own foreign-id row in its module's test (the same
     refusal bytes, no write) and a `db:verify` proof of the writer's refusal against two households.
+    The same holds for an action whose body carries an ATHLETE id that the writer checks
+    (`reorderProgramsAction`, FAM-1 15c, in `app/p/[profileId]/row-actions.ts`: lane P's
+    `lockAthletes` is the one check, so it is `household` and its test hands it another household's
+    athlete id).
 
 14. 🔴 **A MOVEMENT is resolved in `packages/db`, ids before inserts, and re-checked inside the
     transaction** (`PICK-1` PR 2, `writers/movement-catalog.ts`). Three parts, each load-bearing:

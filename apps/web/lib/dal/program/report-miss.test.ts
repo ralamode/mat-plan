@@ -14,6 +14,11 @@ vi.mock('@mat-plan/db', () => ({
   workoutIn: vi.fn(async () => false),
   workoutInHousehold: vi.fn(async () => true),
   programWorkoutIds: vi.fn(async () => new Set<string>()),
+  // The household's live programs: the one read a Program order's probes share (15c).
+  readProgramList: vi.fn(async () => [
+    { programPublicId: PROGRAM_ID, name: 'Strength', athletes: [] },
+    { programPublicId: OTHER_PROGRAM_ID, name: 'Stretching', athletes: [] },
+  ]),
 }));
 // The household's athletes, archived ones included: the one read the athlete probes share.
 vi.mock('../profiles', () => ({
@@ -23,14 +28,23 @@ vi.mock('../profiles', () => ({
   ]),
 }));
 
-import { programIn, programWorkoutIds, workoutInHousehold } from '@mat-plan/db';
+import { programIn, programWorkoutIds, readProgramList, workoutInHousehold } from '@mat-plan/db';
 
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
 import { listHouseholdAthletes } from '../profiles';
-import { reportAssignMiss, reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import {
+  reportAssignMiss,
+  reportAthleteMiss,
+  reportCopyMiss,
+  reportOrderProgramMiss,
+  reportProgramMiss,
+  reportWeekMiss,
+} from './report-miss';
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
+const OTHER_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a2';
+const FOREIGN_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000af';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
 const SCOPE = { householdId: 7 } as never;
 const ATHLETE_ID = '019826b4-0000-7000-8000-000000000001';
@@ -238,6 +252,75 @@ describe('a Put on or a Take off (FAM-1 15): the program, then the first athlete
   it('a failed read reports nothing, and does not throw', async () => {
     vi.mocked(listHouseholdAthletes).mockRejectedValueOnce(new Error('connection reset'));
     await expect(reportAssignMiss(SCOPE, assign(FOREIGN_ID))).resolves.toBeUndefined();
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Program order (FAM-1 15c): the athlete alone', () => {
+  const profileMiss = (publicId: string) => ({
+    action: SCOPE_MISS_ACTION.resolveProfile,
+    resource: { kind: SCOPE_MISS_KIND.profile, publicId },
+  });
+
+  it('🔴 a foreign athlete id is reported once, and no program is probed', async () => {
+    await reportAthleteMiss(SCOPE, FOREIGN_ID);
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[profileMiss(FOREIGN_ID)]]);
+    expect(listHouseholdAthletes).toHaveBeenCalledTimes(1);
+    expect(programIn).not.toHaveBeenCalled();
+  });
+
+  it('an archived athlete of this household is found: nothing is reported', async () => {
+    await reportAthleteMiss(SCOPE, ARCHIVED_ID);
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+
+  it('a live athlete of this household is found: nothing is reported', async () => {
+    await reportAthleteMiss(SCOPE, ATHLETE_ID);
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+
+  it('no scope: the athlete is reported (as no_scope, by reportScopeMiss) and nothing is read', async () => {
+    await reportAthleteMiss(null, ATHLETE_ID);
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[profileMiss(ATHLETE_ID)]]);
+    expect(listHouseholdAthletes).not.toHaveBeenCalled();
+  });
+
+  it('a failed read reports nothing, and does not throw', async () => {
+    vi.mocked(listHouseholdAthletes).mockRejectedValueOnce(new Error('connection reset'));
+    await expect(reportAthleteMiss(SCOPE, FOREIGN_ID)).resolves.toBeUndefined();
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Program order refused as invalid (FAM-1 15c): the first program id the household lacks', () => {
+  const TODAY = '2026-11-21';
+  const programMissOf = (publicId: string) => ({
+    action: SCOPE_MISS_ACTION.resolveProgram,
+    resource: { kind: SCOPE_MISS_KIND.program, publicId },
+  });
+
+  it('🔴 another household’s program in the order is reported once, with ONE read of the household’s programs', async () => {
+    await reportOrderProgramMiss(
+      SCOPE,
+      [PROGRAM_ID, FOREIGN_PROGRAM_ID, OTHER_PROGRAM_ID, FOREIGN_PROGRAM_ID],
+      TODAY,
+    );
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMissOf(FOREIGN_PROGRAM_ID)]]);
+    expect(vi.mocked(readProgramList).mock.calls).toEqual([[db, SCOPE, TODAY]]);
+    expect(programIn).not.toHaveBeenCalled();
+  });
+
+  it('a stale order of the household’s own programs (one left out) reports nothing', async () => {
+    await reportOrderProgramMiss(SCOPE, [OTHER_PROGRAM_ID], TODAY);
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+    expect(readProgramList).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed read reports nothing, and does not throw', async () => {
+    vi.mocked(readProgramList).mockRejectedValueOnce(new Error('connection reset'));
+    await expect(
+      reportOrderProgramMiss(SCOPE, [FOREIGN_PROGRAM_ID], TODAY),
+    ).resolves.toBeUndefined();
     expect(reportScopeMiss).not.toHaveBeenCalled();
   });
 });
