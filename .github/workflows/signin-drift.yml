@@ -82,6 +82,14 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter web exec playwright install chromium
 
+      # Chromium's sandbox needs unprivileged user namespaces, which Ubuntu 23.10+ restricts through
+      # AppArmor ("No usable sandbox!", the first run of this check). Lifting the restriction on this
+      # throwaway VM is Chromium's documented fix (docs/security/apparmor-userns-restrictions.md),
+      # and it keeps the browser sandboxed, which matters for the one job here that runs live
+      # third-party JavaScript.
+      - name: Allow Chromium's sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Run the drift check
         env:
           DRIFT_BASE_URL: ${{ inputs.url || env.PRODUCTION_URL }}
