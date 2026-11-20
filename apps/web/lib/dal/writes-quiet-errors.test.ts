@@ -95,6 +95,8 @@ vi.mock('@mat-plan/db', async (importOriginal) => ({
   ownerScope: (scope: unknown) => scope,
 }));
 
+import { PROFILE_NOT_FOUND } from '@mat-plan/shared';
+
 import * as entries from './entries';
 import * as profiles from './profiles';
 import { DbWriteError } from './quiet-db-errors';
@@ -258,7 +260,7 @@ describe('a failed write carries no data out (V1-9b B1-2)', () => {
       })
       .catch((error: unknown) => error);
     expect(thrown).not.toBeInstanceOf(DbWriteError);
-    expect((thrown as Error).message).toBe('Profile not found');
+    expect((thrown as Error).message).toBe(PROFILE_NOT_FOUND);
     expect(writers.restoreClear).not.toHaveBeenCalled();
   });
 });

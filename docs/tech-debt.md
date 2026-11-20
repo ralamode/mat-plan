@@ -29,23 +29,6 @@ liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `repor
   changes.
 - **Severity:** low.
 
-### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
-
-- **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in
-  `<main>`, all undersized ones collected) and `a11y.spec.ts`'s `expectLinkTapTargets(root, context,
-expected?)` (any root, an optional exact count, fail-fast) measure the same 44px rule for links.
-  #720 merged the control checks but left these, because merging them edits
-  `program-preview-a11y.spec.ts`, which lanes do not edit (the contract's). Separately,
-  `athletes.spec.ts` (about :862-865) loops `main button, main a[href^="/p/"]` with no visibility
-  skip, no label measurement and no zero-match guard.
-- **Impact:** a change to the link rule made in one copy leaves the other on the old rule; the
-  `athletes.spec.ts` loop passes vacuously if its selector ever matches nothing.
-- **The fix:** one exported `expectLinkTargets(root: Locator, context, expected?)` that collects every
-  undersized link and names it with `describeControl`; its 7 call sites move to it (3 of them in the
-  contract's spec, so the roadmap thread makes those). `athletes.spec.ts` calls `expectTapTargets`
-  and the link check instead of its loop.
-- **Severity:** low. Tests only; both copies hold the same 44px bar today.
-
 ### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
 
 - **What & why it's debt:** `getProgramsByAthlete` is one DAL call, but lane P's
@@ -328,25 +311,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   the rename, each with an unhydrated e2e of its refusal. `profile-actions.ts` is owned by
   `write-path.md`.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
-
-### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
-
-- **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in
-  linear light** — its own docblock says so, and `luminance()` takes linear sRGB. Browsers composite a
-  translucent border in **gamma-encoded** sRGB (and `color-mix(in oklch, …)` in OKLCH). For an opaque
-  token the two agree; for a translucent one they do not, and the error is not in a safe direction:
-  for a 28% foreground mix the helper reports ≈1.36 light / ≈6.03 dark where a browser draws ≈1.93 /
-  ≈2.35 — i.e. it would **pass** a dark border that fails SC 1.4.11.
-- **Why it surfaced:** `PROF-1 a-1`'s plan proposed a dashed add-tile border "at a measured ≥3:1
-  foreground mix". The measurement would have been taken with this helper. a-1 side-steps it by using
-  an **opaque** token, which makes the model moot — so this is recorded, not fixed, and nothing today
-  depends on the translucent answer except the pinned hairline figure below.
-- **Also affected:** `token-sets.test.ts`'s "hairlines miss SC 1.4.11 — 1.26:1 light, **2.69:1 dark**"
-  pins a dark figure computed this way. The assertion (`< 3`) is still correct; the number in its name
-  is not. ⚠️ Verify the arithmetic before editing it — the claim here is structural (read the two
-  docblocks), the specific ratios are a reviewer's calculation.
-- **The fix, when taken:** composite in gamma-encoded sRGB (or match whatever `color-mix` space the
-  token uses), and re-derive the pinned figures.
 
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
 
