@@ -1173,7 +1173,10 @@ before the dry run), then `create-household-2026-11-17`'s dry run and `--apply`.
 
 ### Step 8 — the report, then unfreeze
 
-`movements-ownership-2026-10-11` (R4): every `R4 (1)` to `R4 (4)` line reads 0. Then `unset PROD_DB`, unfreeze merges, and
+`movements-ownership-2026-10-11` (R4): every `R4 (1)` to `R4 (4)` line reads 0, and so does the line
+"global rows with a modality but no CATALOG_MOVEMENTS slug" (A2-ii's). **A non-zero on any of them is
+a stop**: something wrote a row only the seed should, so investigate at the console before going on;
+step 5 does not delete those rows (lane P, 2026-11-20). Then `unset PROD_DB`, unfreeze merges, and
 merge the close-out notice PR. **If the run stopped after step 3**, the close-out's athlete and
 household sentences still merge: they became true at step 3.
 
