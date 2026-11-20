@@ -448,7 +448,8 @@ are clean.
 ## The seed's shadow guard fired (a WARNING since `TEN-2c` — it no longer refuses)
 
 **When:** a `migrate.yml` run is **green** and its `db:seed` step logs
-`seed: N seeded movement slug(s) are ALSO owned by a household …`. Added at `TEN-2b` as a **throw**;
+`seed: N household-owned movement(s) share a legacy seed slug and M share a library slug …` (since
+`CAT-3` A2-i, 2026-11-19; before that, `seed: N seeded movement slug(s) are ALSO owned by a household …`). Added at `TEN-2b` as a **throw**;
 **demoted to a warning at `TEN-2c`** (2026-10-12), when migration `0017` removed the premise it was
 built on. ⚠️ **If a run went RED on that message, it is running a deploy older than `TEN-2c`** — the
 refusal and its recovery are at the end of this section.
@@ -472,13 +473,30 @@ nothing complaining loudly — a loud confidentiality guard turned into a silent
 reference data, which is strictly worse than what it replaced. So the filter is **gone** and the
 `throw` is a `console.warn`: `packages/db/src/seed.ts` → the long note above the `movements` insert.
 
-**If you want the shadowed row gone anyway — adopt or rename, never null.** Pick one, per named slug:
+**To see which rows, run this from your own console** (never in a workflow step, whose log is public):
+
+```sql
+-- Slugs and counts only. Never select `name` or a household's `public_id`: a row's name is a
+-- household's free text, and this output must never be pasted into a PR, issue, plan, changelog
+-- fragment or commit. Soft-deleted rows are included, as the seed's count includes them.
+SELECT m.slug, count(*) AS household_rows
+FROM movements m
+WHERE m.household_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM movements g WHERE g.household_id IS NULL AND g.slug = m.slug)
+GROUP BY m.slug
+ORDER BY m.slug;
+```
+
+**If you want the shadowed row gone anyway — adopt or rename, never null.** Pick one, per slug the
+query lists:
 
 1. **The household's row is the real one** (someone typed a movement the catalog later added): the
    household row and the curated row must be merged. That is `TEN-2c-1`'s split machinery in reverse —
    repoint that household's `entries.movement_id` / `prescriptions.movement_id` to the curated row,
    then delete the household row. Needs a guarded, dry-run-first correction
-   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`.
+   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`. 🔴 **The correction takes the slug
+   from the environment** (as `household-claim-2026-10-25` takes its targets), never as a committed
+   constant: a slug a household holds says what they typed, and `git log -S` keeps it after any removal.
 2. **The seed row is the mistake** (the slug should not have been added globally): revert the
    `MOVEMENT_SEED_ROWS` entry in its own PR. The seed then stops adding it and the warning stops.
 
@@ -487,10 +505,10 @@ that promotes one household's free text into the global reference namespace, whi
 `ON DELETE NO ACTION` exists to prevent (`packages/db/src/schema.ts` → the `movements` docblock).
 
 ⚠️ **The message is published, and a warning is published exactly as widely as the refusal was.**
-`migrate.yml` logs are world-readable on a public repo, so the message names **seed slugs only** — a
-public const — and never the colliding row's `name`, which is uncontrolled household free text.
-`db:verify` asserts both halves against the captured `console.warn`; keep that property if you extend
-it, because the privacy half is the one a rewrite loses first.
+`migrate.yml` logs are world-readable on a public repo, so since `CAT-3` A2-i the message is **counts
+only**: no slug (a slug a household also holds says what they typed) and never a row's `name`.
+`db:verify` asserts both against everything printed to stdout and stderr; keep that property if you
+extend it, because the privacy half is the one a rewrite loses first.
 
 **The refusal this replaced, for anyone reading an older run.** While the non-partial
 `movements_slug_unique` lived, Postgres inferred **both** arbiters for

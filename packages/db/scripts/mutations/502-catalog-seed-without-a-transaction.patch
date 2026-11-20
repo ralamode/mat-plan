@@ -1,0 +1,23 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..6a8f91ae 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -452,7 +452,8 @@ export async function seedCatalog(
+   }
+   const unique = [...bySlug.values()];
+ 
+-  return db.transaction(async (tx) => {
++  const tx = db;
++  return (async () => {
+     const inserted = await tx
+       .insert(schema.movements)
+       .values(
+@@ -519,7 +520,7 @@ export async function seedCatalog(
+       catalogHeldByLegacy: held - catalogPresent,
+       catalogDuplicates,
+     };
+-  });
++  })();
+ }
+ 
+ /**
