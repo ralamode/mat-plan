@@ -30,6 +30,9 @@ only way a notice about minors' health data is worth anything.
 > opens (it was the draft's). §7: a workout page's miss is reported as the workout read's was, and a
 > workout of another of the household's own programs is no longer sent as a scope miss. The notice
 > drops "aren't in the app yet" and its two "once … is in the app" sentences.
+> 🔴 **§5 re-read 2026-11-19 for `CAT-3` R0** ([plan](../plans/priv-3-fresh-start-prep.md) D1): the
+> fresh start's one-shot erasure is built, not run; §5 gains its paragraph. Nothing new is stored,
+> received or kept, and the notice changes at the fresh start's close-out.
 > 🔴 **§1 / §2 / §3 / §4 / §5 / §7 re-read 2026-11-18 for FAM-1 7b-i**
 > ([plan](../plans/fam-1-7b-builder-pages.md) §Privacy): the Programs list and a program's page are
 > real pages, so every builder action is registered; screens for the workout editor and "+ New
@@ -716,6 +719,16 @@ removal procedures** (`runbooks.md` → "Delete a household", "Erase one athlete
 put it back. `CAT-3`'s fresh start (K7) removes the seeded household with everything in it; see
 `runbooks.md` → "A household or athlete with a seed id (`OPS-2`)". This is the row behind the notice's
 "cannot be erased one at a time yet". (`OPS-2` PR 1, 2026-11-18.)
+
+**The fresh start's one-shot erasure** (`erase-seeded-household-2026-11-19`, `CAT-3` R0, built
+2026-11-19, not yet run) is that removal path. It hard-deletes the seeded household and every row in
+it, hidden rows included, through the erasure core, once per seeded household found (it stays the
+remedy if old seed code re-creates one), against production only, and only with the current total
+its dry run printed. At step 0 the household takes each athlete's in-app export and is offered the
+full copy, hidden rows included, or the go records that it declined. It deletes the household's `household_members` rows but **no sign-in
+account**: the accounts step 7 binds are kept (K15); its dry run counts live and hidden memberships,
+and an account whose only membership was hidden is decided at the go and recorded in the ledger. It prints counts
+only. The notice's sentences change at the fresh start's close-out, not here.
 
 ⚠️ **Updated 2026-11-13 (`V1-9b` B1-1b).** This paragraph said soft delete was "written in exactly
 one place in the app tree (a committed data correction)". There are now **three** writers of
