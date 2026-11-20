@@ -35,6 +35,7 @@ import {
   CENSUS_REFERENCE_TABLES,
   foreignKeysIntoMovements,
   MOVEMENT_JOIN_TABLES,
+  movementFkTable,
 } from '../../src/queries/movement-ownership';
 import { lineText } from '../corrections/summary';
 import {
@@ -1665,7 +1666,7 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
   // (1) The reader against this module's hand list: a new FK into movements turns both red together.
   const fks = await foreignKeysIntoMovements(db);
   assert.deepEqual(
-    sorted(fks.map((f) => f.table)),
+    sorted(fks.map(movementFkTable)),
     sorted([...CENSUS_REFERENCE_TABLES, ...MOVEMENT_JOIN_TABLES]),
     "CAT-3 R1: the FKs into movements (pg_constraint) are exactly the census's tables plus the two join tables",
   );
@@ -1674,6 +1675,32 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
       (f) => f.columns.length === 1 && f.referencedColumns.join() === 'id' && f.deleteRule === 'a',
     ),
     'CAT-3 R1: every FK into movements today is one NO ACTION column onto movements.id',
+  );
+  // The census's hand list is the tables its joins read, not a third copy beside them.
+  const census = readFileSync(
+    new URL('../../src/queries/movement-ownership.ts', import.meta.url),
+    'utf8',
+  );
+  const joins = census.slice(
+    census.indexOf('const entryMovementRefs = '),
+    census.indexOf('/**', census.indexOf('const prescriptionMovementRefs = ')),
+  );
+  assert.deepEqual(
+    sorted([...joins.matchAll(/select count\(\*\)::int from (\w+) \w+\s/g)].map((m) => m[1]!)),
+    sorted(CENSUS_REFERENCE_TABLES),
+    "CAT-3 R1: CENSUS_REFERENCE_TABLES is exactly the tables the census's two joins read",
+  );
+  // Step 5 deletes join rows; a key INTO a join table would be a third level it does not read.
+  const intoJoins = rowsOf<{ n: number }>(
+    await db.execute(sql`
+      SELECT count(*)::int AS n FROM pg_constraint
+       WHERE contype = 'f'
+         AND confrelid IN ('public.movement_equipment'::regclass, 'public.movement_muscles'::regclass)`),
+  )[0]!.n;
+  assert.equal(
+    intoJoins,
+    0,
+    'CAT-3 R1: no foreign key points into movement_equipment or movement_muscles',
   );
 
   // (2) The lock and the locked-ids delete, from the source: PGlite has one connection, so no proof
@@ -1716,7 +1743,11 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
   await rolledBack(async (tx) => {
     const asDb = tx as unknown as Database;
     const run = (env: Record<string, string | undefined>, apply: boolean, sink?: string[]) =>
-      withEnv({ ...NO_LEGACY_ENV, ...env }, () => step5.run(asDb, apply), sink);
+      withEnv(
+        { ...NO_LEGACY_ENV, DATABASE_URL: undefined, DATABASE_URL_UNPOOLED: REMOTE, ...env },
+        () => step5.run(asDb, apply),
+        sink,
+      );
     const expectEnv = (c: { movements: number; equipment: number; muscles: number }) => ({
       [LEGACY_COUNT_ENV.movements]: String(c.movements),
       [LEGACY_COUNT_ENV.equipment]: String(c.equipment),
@@ -1726,7 +1757,7 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
       rowsOf<{ n: number }>(await tx.execute(sql`SELECT count(*)::int AS n FROM movements`))[0]!.n;
 
     // The plant: a catalog row with join rows (must survive); a legacy row with NO modality and join
-    // rows (D2-N1: a predicate that could be NULL must still select it); a seed row hand-UPDATEd to
+    // rows (D2-N1, defensive: `IS NOT TRUE` keeps it selected under a predicate that could be NULL); a seed row hand-UPDATEd to
     // carry a modality (D3's count 2, must go); a household's own row (must survive).
     const plantJoins = async (movementId: number) => {
       await tx
@@ -1828,8 +1859,15 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
           dryHere.some((l) => l.startsWith('would refuse --apply: ') && why.test(l)),
           `CAT-3 R1: the dry run says --apply would refuse ${what}`,
         );
+        assert.ok(
+          dryHere.some((l) => l.startsWith('--apply would refuse (see the note above)')) &&
+            !dryHere.some((l) => l.includes('EXPECT_LEGACY_')),
+          `CAT-3 R1: a dry run that would refuse offers no counts to apply with (${what})`,
+        );
         await assert.rejects(
-          withEnv({ ...NO_LEGACY_ENV, ...expectEnv(byHand) }, () => step5.run(spDb, true)),
+          withEnv({ ...NO_LEGACY_ENV, DATABASE_URL_UNPOOLED: REMOTE, ...expectEnv(byHand) }, () =>
+            step5.run(spDb, true),
+          ),
           why,
           `CAT-3 R1: --apply refuses ${what}`,
         );
@@ -1880,6 +1918,44 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
         );
       },
       /from cat3_r1_setnull into movements does not abort a delete/,
+    );
+
+    // A deleted count short of the locked count rolls back: a trigger that skips the planted legacy
+    // row's delete (on movements only; on a join table the movement's delete would abort 23503 first).
+    await rolledBack(async (sp) => {
+      await sp.execute(sql`
+        CREATE FUNCTION cat3_r1_skip() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF OLD.slug = 'cat3_r1_legacy' THEN RETURN NULL; END IF;
+          RETURN OLD;
+        END $$`);
+      await sp.execute(
+        sql`CREATE TRIGGER cat3_r1_skip BEFORE DELETE ON movements FOR EACH ROW EXECUTE FUNCTION cat3_r1_skip()`,
+      );
+      const spDb = sp as unknown as Database;
+      await assert.rejects(
+        withEnv({ ...NO_LEGACY_ENV, DATABASE_URL_UNPOOLED: REMOTE, ...expectEnv(byHand) }, () =>
+          step5.run(spDb, true),
+        ),
+        /not the locked count: rolled back/,
+        'CAT-3 R1: --apply refuses when the delete removes fewer movements than it locked',
+      );
+      const [{ n }] = rowsOf<{ n: number }>(
+        await sp.execute(sql`SELECT count(*)::int AS n FROM movements`),
+      );
+      assert.equal(n, before, 'CAT-3 R1: …and deletes nothing (the short delete)');
+    }, tx);
+
+    // --apply reads the direct string only: unset, with a DATABASE_URL beside it, refuses.
+    await assert.rejects(
+      run({ ...expectEnv(byHand), DATABASE_URL_UNPOOLED: undefined, DATABASE_URL: REMOTE }, true),
+      /DATABASE_URL_UNPOOLED is not set/,
+      'CAT-3 R1: --apply refuses without DATABASE_URL_UNPOOLED, never falling back to DATABASE_URL',
+    );
+    await assert.rejects(
+      run({ ...expectEnv(byHand), [LEGACY_COUNT_ENV.equipment]: '1.5' }, true),
+      /EXPECT_LEGACY_EQUIPMENT is not a whole number/,
+      'CAT-3 R1: --apply refuses a malformed count',
     );
 
     // --apply without the counts, or with another one, refuses; nothing deleted.
@@ -1970,26 +2046,36 @@ async function verifyFreshStartCounts(): Promise<void> {
     // (1) hidden rows included: hiding a seeded household changes nothing; re-keying a seeded athlete
     // takes one off.
     const [h1, p1] = await r4Counts(tx, 1);
+    assert.equal(h1, 1, 'CAT-3 R1: R4 (1) counts the one seeded household here');
     await tx
       .update(schema.households)
       .set({ deletedAt: sql`now()` })
       .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
-    const [seedProfile] = rowsOf<{ id: number }>(
+    const seedProfiles = rowsOf<{ id: number }>(
       await tx.execute(sql`
         SELECT id FROM profiles WHERE public_id::text IN (${sql.join(
           [...SEED_PUBLIC_IDS].map((id) => sql`${id}`),
           sql`, `,
-        )}) ORDER BY id LIMIT 1`),
+        )}) ORDER BY id LIMIT 2`),
     );
-    assert.ok(seedProfile, 'CAT-3 R1: the verify database holds a seeded profile');
+    assert.equal(seedProfiles.length, 2, 'CAT-3 R1: the verify database holds two seeded profiles');
+    await tx
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.profiles.id, seedProfiles[0]!.id));
+    assert.deepEqual(
+      await r4Counts(tx, 1),
+      [h1, p1!],
+      'CAT-3 R1: R4 (1) counts a hidden seed household and a hidden seed profile',
+    );
     await tx
       .update(schema.profiles)
       .set({ publicId: newId() })
-      .where(eq(schema.profiles.id, seedProfile.id));
+      .where(eq(schema.profiles.id, seedProfiles[1]!.id));
     assert.deepEqual(
       await r4Counts(tx, 1),
-      [h1!, p1! - 1],
-      'CAT-3 R1: R4 (1) counts seed-namespace households and profiles, hidden ones included',
+      [h1, p1! - 1],
+      'CAT-3 R1: R4 (1) counts seed-namespace profiles by public_id',
     );
 
     // (2) every row, a modality or not; (3) global rows that are not catalog rows.
@@ -2016,19 +2102,50 @@ async function verifyFreshStartCounts(): Promise<void> {
         (r) => r.slug,
       ),
     );
-    const [free, other] = [...CATALOG_SLUGS].filter((slug) => !held.has(slug));
-    assert.ok(free && other, 'CAT-3 R1: two catalog slugs have no row here');
-    await tx
-      .insert(schema.movements)
-      .values({ publicId: newId(), slug: free, name: free, modality: MODALITY.skill });
+    const [free, other, plain, hiddenSlug] = [...CATALOG_SLUGS].filter((slug) => !held.has(slug));
+    assert.ok(
+      free && other && plain && hiddenSlug,
+      'CAT-3 R1: four catalog slugs have no row here',
+    );
+    await tx.insert(schema.movements).values({
+      publicId: newId(),
+      slug: plain,
+      name: plain,
+      pattern: MOVEMENT_PATTERNS[0],
+    });
+    assert.deepEqual(
+      await r4Counts(tx, 4),
+      [m4!],
+      'CAT-3 R1: R4 (4) does not count a global row with no modality as a catalog row',
+    );
+    await tx.insert(schema.movements).values({
+      publicId: newId(),
+      slug: hiddenSlug,
+      name: hiddenSlug,
+      modality: MODALITY.skill,
+      deletedAt: sql`now()`,
+    });
+    assert.deepEqual(
+      await r4Counts(tx, 4),
+      [m4!],
+      'CAT-3 R1: R4 (4) does not count a hidden catalog row as present',
+    );
     const owner = await newHousehold(tx, 'r1-r4-owner');
     await tx
       .insert(schema.movements)
       .values({ publicId: newId(), slug: other, name: other, householdId: owner });
     assert.deepEqual(
       await r4Counts(tx, 4),
+      [m4!],
+      "CAT-3 R1: R4 (4) does not count a household's row as a catalog row",
+    );
+    await tx
+      .insert(schema.movements)
+      .values({ publicId: newId(), slug: free, name: free, modality: MODALITY.skill });
+    assert.deepEqual(
+      await r4Counts(tx, 4),
       [m4! - 1],
-      "CAT-3 R1: R4 (4) counts catalog slugs with no global catalog row, read from the table (a household's row is not one)",
+      'CAT-3 R1: R4 (4) counts catalog slugs with no live global catalog row, read from the table',
     );
   });
   console.log(

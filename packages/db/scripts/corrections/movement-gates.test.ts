@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MovementForeignKey } from '../../src/queries/movement-ownership';
-import { legacyMovementDeletionIssue, type LegacyMovementCounts } from './movement-gates';
+import {
+  deletedCountIssue,
+  legacyMovementDeletionIssue,
+  legacyMovementTargetIssue,
+  parseExpectedLegacyCounts,
+  type LegacyMovementCounts,
+} from './movement-gates';
 
 const fk = (table: string, over: Partial<MovementForeignKey> = {}): MovementForeignKey => ({
   name: `${table}_movement_id_movements_id_fk`,
@@ -88,7 +94,7 @@ describe('step 5 deletes legacy movements only while nothing references them (CA
   });
 
   it('under --apply, refuses a missing count, naming each one missing', () => {
-    expect(issue({ expected: { movements: 35, equipment: null, muscles: null } })).toMatch(
+    expect(issue({ expected: { movements: 35, equipment: 'unset', muscles: 'unset' } })).toMatch(
       /--apply needs EXPECT_LEGACY_EQUIPMENT, EXPECT_LEGACY_MUSCLES/,
     );
   });
@@ -106,9 +112,53 @@ describe('step 5 deletes legacy movements only while nothing references them (CA
     const all = {
       foreignKeys: [...TODAY, fk('cascading', { deleteRule: 'c' })],
       references: [{ table: 'entries', column: 'movement_id', rows: 1 }],
-      expected: { movements: null, equipment: null, muscles: null },
+      expected: { movements: 'unset', equipment: 'unset', muscles: 'unset' } as const,
     };
     expect(issue(all)).toMatch(/does not abort/);
     expect(issue({ ...all, foreignKeys: TODAY })).toMatch(/still reference/);
+  });
+});
+
+describe("step 5's --apply inputs", () => {
+  it('refuses a malformed count, naming it', () => {
+    expect(issue({ expected: { movements: 35, equipment: 'malformed', muscles: 3 } })).toMatch(
+      /^EXPECT_LEGACY_EQUIPMENT is not a whole number; nothing deleted$/,
+    );
+  });
+
+  it('calls the counts a restatement of the current counts, not a sitting', () => {
+    const why = issue({ expected: { movements: 'unset', equipment: 2, muscles: 3 } }) ?? '';
+    expect(why).toMatch(/a restatement of the current count/);
+    expect(why).not.toMatch(/sitting/);
+  });
+
+  it('parses each EXPECT_LEGACY_* as unset, malformed or a whole number', () => {
+    const env: Record<string, string> = {
+      EXPECT_LEGACY_MOVEMENTS: ' 35 ',
+      EXPECT_LEGACY_EQUIPMENT: '2.5',
+    };
+    expect(parseExpectedLegacyCounts((n) => env[n])).toEqual({
+      movements: 35,
+      equipment: 'malformed',
+      muscles: 'unset',
+    });
+    expect(parseExpectedLegacyCounts(() => '')).toEqual({
+      movements: 'unset',
+      equipment: 'unset',
+      muscles: 'unset',
+    });
+  });
+
+  it('refuses --apply without the direct string', () => {
+    expect(legacyMovementTargetIssue(undefined)).toMatch(/DATABASE_URL_UNPOOLED is not set/);
+    expect(legacyMovementTargetIssue('')).toMatch(/DATABASE_URL_UNPOOLED is not set/);
+    expect(legacyMovementTargetIssue('postgres://u:secret@h.invalid/x')).toBeNull();
+  });
+
+  it('refuses a delete that removed fewer rows than it locked, naming each count', () => {
+    expect(deletedCountIssue(FOUND, FOUND)).toBeNull();
+    expect(deletedCountIssue(FOUND, { ...FOUND, movements: 34, muscles: 2 })).toMatch(
+      /removed 34 movements, 2 muscles, not the locked count: rolled back/,
+    );
   });
 });

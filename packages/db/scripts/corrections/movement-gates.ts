@@ -1,3 +1,4 @@
+import { parseExpectedRows } from './erasure-gates';
 import {
   isCountableMovementFk,
   movementFkTable,
@@ -33,12 +34,64 @@ export const LEGACY_COUNT_ENV = {
   muscles: EXPECT_LEGACY_MUSCLES,
 } as const satisfies Record<keyof LegacyMovementCounts, string>;
 
+/** One `EXPECT_LEGACY_*` as given: a whole number, unset, or something else. */
+export type ExpectedLegacyCount = number | 'unset' | 'malformed';
+
 /**
- * What `--apply` was given: each count parsed (`parseExpectedRows`), `null` when unset or not a whole
- * number. `'dry-run'` skips the comparison, so a dry run reports only the refusals `--apply` would hit.
+ * What `--apply` was given (`parseExpectedLegacyCounts`). `'dry-run'` skips the comparison, so a dry
+ * run reports only the refusals `--apply` would hit.
+ *
+ * ⚠️ **A restatement of the current counts, not a binding to one dry run** (as R0's
+ * `EXPECT_ERASED_ROWS`): a bare `--apply` refuses, and so does an earlier number once a count has
+ * changed, but a stale number that still equals the count passes. It is compared under the lock.
  */
 export type ExpectedLegacyCounts =
-  { readonly [K in keyof LegacyMovementCounts]: number | null } | 'dry-run';
+  { readonly [K in keyof LegacyMovementCounts]: ExpectedLegacyCount } | 'dry-run';
+
+/** Each `EXPECT_LEGACY_*` read through `read` (the environment, in the entry). */
+export function parseExpectedLegacyCounts(
+  read: (name: string) => string | undefined,
+): Exclude<ExpectedLegacyCounts, 'dry-run'> {
+  const one = (name: string): ExpectedLegacyCount => {
+    const raw = read(name);
+    if (raw === undefined || raw.trim() === '') return 'unset';
+    return parseExpectedRows(raw) ?? 'malformed';
+  };
+  return {
+    movements: one(LEGACY_COUNT_ENV.movements),
+    equipment: one(LEGACY_COUNT_ENV.equipment),
+    muscles: one(LEGACY_COUNT_ENV.muscles),
+  };
+}
+
+/**
+ * Under `--apply`, step 5 reads `DATABASE_URL_UNPOOLED` only (`correctionTargetUrl({ kind:
+ * 'erasure' })`): never a `DATABASE_URL` fallback, which is pooled or a leftover local string. Not a
+ * production gate (D2 has none on purpose), only "the operator named the direct string".
+ */
+export function legacyMovementTargetIssue(url: string | undefined): string | null {
+  return url === undefined || url === ''
+    ? 'DATABASE_URL_UNPOOLED is not set: step 5 writes through the direct string only; nothing deleted'
+    : null;
+}
+
+/**
+ * After the three deletes: each deleted count must equal the count found under the lock, or the
+ * transaction rolls back. A row the lock held cannot vanish, but a rule or trigger that skips a
+ * delete would, and this is the last check before commit.
+ */
+export function deletedCountIssue(
+  found: LegacyMovementCounts,
+  deleted: LegacyMovementCounts,
+): string | null {
+  const differ = (Object.keys(LEGACY_COUNT_ENV) as (keyof LegacyMovementCounts)[]).filter(
+    (k) => deleted[k] !== found[k],
+  );
+  return differ.length > 0
+    ? `the delete removed ${differ.map((k) => `${deleted[k]} ${k}`).join(', ')}, not the locked ` +
+        'count: rolled back, nothing deleted; re-run the dry run'
+    : null;
+}
 
 const NO_ACTION_OR_RESTRICT = ['a', 'r'];
 
@@ -51,7 +104,7 @@ const NO_ACTION_OR_RESTRICT = ['a', 'r'];
  *   counted. A key whose delete rule is not NO ACTION or RESTRICT refuses: a `SET NULL` or `CASCADE`
  *   edge would let the delete change rows silently (the household graph's `NON_ABORTING_EDGES`).
  * - `references`: each countable key's rows on a found movement, hidden rows included. Any refuses.
- * - `expected` and `found`: under `--apply`, each count must be given and equal.
+ * - `expected` and `found`: under `--apply`, each count must be given, a whole number, and equal.
  *
  * Every message is built from table names, column names and counts only: never a row's value.
  */
@@ -90,12 +143,16 @@ export function legacyMovementDeletionIssue({
   }
   if (expected === 'dry-run') return null;
   const keys = Object.keys(LEGACY_COUNT_ENV) as (keyof LegacyMovementCounts)[];
-  const missing = keys.filter((k) => expected[k] === null);
+  const missing = keys.filter((k) => expected[k] === 'unset');
   if (missing.length > 0) {
     return (
-      `--apply needs ${missing.map((k) => LEGACY_COUNT_ENV[k]).join(', ')}, the count(s) this ` +
-      "sitting's dry run printed; nothing deleted"
+      `--apply needs ${missing.map((k) => LEGACY_COUNT_ENV[k]).join(', ')}, a restatement of the ` +
+      'current count(s) the dry run prints; nothing deleted'
     );
+  }
+  const malformed = keys.filter((k) => expected[k] === 'malformed');
+  if (malformed.length > 0) {
+    return `${malformed.map((k) => LEGACY_COUNT_ENV[k]).join(', ')} is not a whole number; nothing deleted`;
   }
   const differ = keys.filter((k) => expected[k] !== found[k]);
   if (differ.length > 0) {

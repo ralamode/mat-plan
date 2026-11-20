@@ -67,8 +67,11 @@ import {
   movementIsGlobal,
 } from '../../src/writers/ownership';
 import {
+  deletedCountIssue,
   LEGACY_COUNT_ENV,
   legacyMovementDeletionIssue,
+  legacyMovementTargetIssue,
+  parseExpectedLegacyCounts,
   type LegacyMovementCounts,
 } from './movement-gates';
 
@@ -650,10 +653,14 @@ const nullRoutineToFull: Correction = {
  * 1. households and profiles whose `public_id` is in `SEED_PUBLIC_IDS`;
  * 2. movements whose `public_id` is in `MOVEMENT_SEED_PUBLIC_IDS`, every row, so an old row
  *    hand-`UPDATE`d to carry a `modality` still shows;
- * 3. global movements that are not catalog rows (`movementIsCatalog()`, NULL-safe);
- * 4. `CATALOG_MOVEMENTS` slugs with no global catalog row, read from the TABLE: the seed's insert is
- *    `ON CONFLICT DO NOTHING`, which reports success while inserting nothing, so a seed log's skip
- *    count cannot see a missing row (`docs/lessons.md` → Database).
+ * 3. global movements that are not catalog rows (`movementIsCatalog()` under a defensive `IS NOT TRUE`);
+ * 4. `CATALOG_MOVEMENTS` slugs with no LIVE global catalog row, read from the TABLE: the seed's insert
+ *    is `ON CONFLICT DO NOTHING`, which reports success while inserting nothing, so a seed log's skip
+ *    count cannot see a missing row (`docs/lessons.md` → Database). ⚠️ A HIDDEN catalog row counts as
+ *    missing: it holds the slug, so the seed skips it, while the app hides it, so nobody can pick it.
+ *
+ * Every count but (4) is non-zero before the fresh start; they read 0 only after step 7. So R4 prints
+ * after the report's TEN-2c "EXPECTED" line, under its own expectation.
  *
  * Separate lines from A2-ii's (`#770`), which re-predicates the curated/legacy line above.
  */
@@ -680,7 +687,7 @@ async function freshStartCounts(db: Database) {
       await db
         .select({ slug: schema.movements.slug })
         .from(schema.movements)
-        .where(movementIsCatalog())
+        .where(and(movementIsCatalog(), isNull(schema.movements.deletedAt)))
     ).map((r) => r.slug),
   );
   return {
@@ -694,10 +701,11 @@ async function freshStartCounts(db: Database) {
 
 function freshStartLines(c: Awaited<ReturnType<typeof freshStartCounts>>): string[] {
   return [
+    "R4, the fresh start's counts (CAT-3 R1): each reads 0 only after the fresh start's step 7; before it, they size steps 3 and 5.",
     `R4 (1) households and profiles with a SEED_PUBLIC_IDS public_id, hidden included: ${c.households} households, ${c.profiles} profiles`,
     `R4 (2) movements with a MOVEMENT_SEED_PUBLIC_IDS public_id, every row: ${c.seedMovements}`,
     `R4 (3) global movements that are not catalog rows (movementIsCatalog() IS NOT TRUE): ${c.notCatalog}`,
-    `R4 (4) CATALOG_MOVEMENTS slugs with no global catalog row (read from the table): ${c.missingCatalog}`,
+    `R4 (4) CATALOG_MOVEMENTS slugs with no live global catalog row (read from the table): ${c.missingCatalog}`,
   ];
 }
 
@@ -794,8 +802,8 @@ const movementsOwnershipReport: Correction = {
       `TEN-2b-2 input (global, non-curated, unreferenced): ${residualOrphan.length}`,
       `runbooks.md pre-flight (d) — references crossing a household boundary: ${crossRefs.total} (${crossRefs.entries} entries, ${crossRefs.prescriptions} prescriptions)`,
       `TEN-2d blocker — global rows movements_global_row_has_pattern rejects (no pattern, and not a non-strength catalog row): ${checkViolations}`,
-      ...freshStartLines(r4),
       'EXPECTED, every line: zero in every residual/blocker count. A non-zero count blocks TEN-2c’s merge (ten-2a measured zero on 2026-10-09, and a dated zero is not an invariant).',
+      ...freshStartLines(r4),
     ];
   },
 };
@@ -1269,9 +1277,13 @@ export const DELETE_LEGACY_MOVEMENTS_NAME = 'delete-legacy-movements-2026-11-20'
 
 /**
  * The rows step 5 deletes: a GLOBAL movement that is not a catalog row (`movementIsCatalog()`, the
- * spec's one predicate, NULL-safe through `IS NOT TRUE`), or one whose `public_id` is in the legacy
+ * spec's one predicate, under `IS NOT TRUE`), or one whose `public_id` is in the legacy
  * seed namespace, so an old row hand-`UPDATE`d to carry a `modality` goes too. Never a slug test.
  * Restricted to the global namespace in both arms: a household's own row is never step 5's.
+ *
+ * `IS NOT TRUE` is **defensive**, not load-bearing today: `movementIsCatalog()` is built from `IS NULL`
+ * and `IS NOT NULL`, which are never NULL, so `NOT` would select the same rows. It keeps a future
+ * rewrite of the predicate that can be NULL from selecting nothing and reporting "nothing to do".
  */
 const legacyMovement = () =>
   and(
@@ -1347,9 +1359,11 @@ const expectLine = (found: LegacyMovementCounts) =>
  *   the household is back) and, on purpose, no database gate: against a local or preview database it
  *   deletes unreferenced legacy rows, which the seed puts back.
  * - **The dry run always prints every count**, and any "would refuse" reason, and exits 0.
+ * - **`--apply` reads `DATABASE_URL_UNPOOLED` only** (`correctionTargetUrl({ kind: 'erasure' })`),
+ *   never the `DATABASE_URL` fallback, and refuses when it is unset.
  * - **`--apply`, one transaction:** timeouts; the legacy rows locked `FOR UPDATE`; the keys and the
- *   references re-read under the lock; the three counts compared with `EXPECT_LEGACY_*` (the dry
- *   run's); the join rows, then the movements, deleted by the LOCKED ids only, so a row committed after
+ *   references re-read under the lock; the three counts compared with `EXPECT_LEGACY_*`, a
+ *   restatement of the current counts (not a binding to one dry run, as R0's total); the join rows, then the movements, deleted by the LOCKED ids only, so a row committed after
  *   the lock is never swept up; each deleted count checked against the locked count. PGlite has one
  *   connection, so the lock and the locked-ids delete are held by `db:verify`'s source pin.
  * - **Counts only:** table and column names and numbers, never a slug, a name or a `public_id`.
@@ -1377,9 +1391,19 @@ const deleteLegacyMovements: Correction = {
           expected: 'dry-run',
           found,
         });
+        // A refusing dry run gives no counts to copy (summary.ts: a line that describes no write
+        // must not tell the operator to write).
+        if (issue) {
+          return [
+            ...lines,
+            note(`would refuse --apply: ${issue}`),
+            summaryLine(
+              '--apply would refuse (see the note above); nothing would be deleted until it is resolved.',
+            ),
+          ];
+        }
         return [
           ...lines,
-          ...(issue ? [note(`would refuse --apply: ${issue}`)] : []),
           summaryLine(
             `${found.movements} legacy movement(s) would be deleted. To apply, re-run with ` +
               `${expectLine(found)} and --apply.`,
@@ -1387,11 +1411,9 @@ const deleteLegacyMovements: Correction = {
         ];
       }
 
-      const expected = {
-        movements: parseExpectedRows(process.env[LEGACY_COUNT_ENV.movements]),
-        equipment: parseExpectedRows(process.env[LEGACY_COUNT_ENV.equipment]),
-        muscles: parseExpectedRows(process.env[LEGACY_COUNT_ENV.muscles]),
-      };
+      const target = legacyMovementTargetIssue(correctionTargetUrl({ kind: 'erasure' }));
+      if (target) throw new CorrectionRefusal(target);
+      const expected = parseExpectedLegacyCounts((name) => process.env[name]);
       return await db.transaction(async (tx) => {
         await setLocalTimeouts(tx, '30s');
         const locked = (
@@ -1432,15 +1454,8 @@ const deleteLegacyMovements: Correction = {
               .returning({ id: schema.movements.id })
           ).length,
         };
-        const differ = (Object.keys(found) as (keyof LegacyMovementCounts)[]).filter(
-          (k) => deleted[k] !== found[k],
-        );
-        if (differ.length > 0) {
-          throw new CorrectionRefusal(
-            `the delete removed ${differ.map((k) => `${deleted[k]} ${k}`).join(', ')}, not the ` +
-              'locked count: rolled back, nothing deleted; re-run the dry run',
-          );
-        }
+        const short = deletedCountIssue(found, deleted);
+        if (short) throw new CorrectionRefusal(short);
         return [
           ...legacyLines(deleted, references, 'deleted'),
           summaryLine(`✓ deleted ${deleted.movements} legacy movement(s) and their join rows.`),
