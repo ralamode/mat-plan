@@ -2033,9 +2033,21 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     const options = await movementOptions(exec, A_SCOPE, CATALOG_MOVEMENTS);
     const ids = options.map((o) => o.publicId);
     const catalog = options.filter((o) => o.owner === 'catalog');
+    // CAT-3 A2-ii: the shared database is a fixtures database, so the catalog arm is the old built-ins
+    // AND the test library's rows (P11-ii-a lists every library row).
+    const libraryRows = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(
+        and(
+          movementIsGlobal(),
+          isNotNull(schema.movements.modality),
+          isNull(schema.movements.deletedAt),
+        ),
+      );
     assert.equal(
       catalog.length,
-      Object.keys(MOVEMENT_PICKER_ENTRIES).length,
+      Object.keys(MOVEMENT_PICKER_ENTRIES).length + libraryRows.length,
       'FAM-1 6a-iii-a: the read lists every catalog row the picker map names',
     );
     const rdl = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('RDL'));
@@ -3604,20 +3616,16 @@ async function verifyNewItemLocksTheHousehold(): Promise<void> {
  */
 async function verifySeedFixturesUseTheirLibrary(): Promise<void> {
   const BURPEES = 'Burpees';
-  // Anti-vacuity: neither real list answers to it, so only the given library can make the match.
-  for (const list of [CATALOG_MOVEMENTS, CATALOG_FIXTURE]) {
-    assert.deepEqual(
-      list
-        .filter((e) =>
-          [e.name, ...(e.aliases ?? [])].some(
-            (n) => movementNameKey(n) === movementNameKey(BURPEES),
-          ),
-        )
-        .map((e) => e.slug),
-      [],
-      'CAT-3 A2-ii A6: no shipped library entry answers to "Burpees"',
-    );
-  }
+  // Anti-vacuity: the test library does not answer to it, so only the given change can make the match.
+  // (The real library has a `burpee` entry, but no row of it is on this fixtures database; the proof
+  // below also checks that no live global row is named "Burpees".)
+  assert.deepEqual(
+    CATALOG_FIXTURE.filter((e) =>
+      [e.name, ...(e.aliases ?? [])].some((n) => movementNameKey(n) === movementNameKey(BURPEES)),
+    ).map((e) => e.slug),
+    [],
+    'CAT-3 A2-ii A6: the test library does not answer to "Burpees"',
+  );
   const library = CATALOG_FIXTURE.map((e) =>
     e.slug === 'squat_jump' ? { ...e, aliases: [...(e.aliases ?? []), BURPEES] } : e,
   );
@@ -3631,6 +3639,20 @@ async function verifySeedFixturesUseTheirLibrary(): Promise<void> {
     assert.ok(
       squatJump,
       'CAT-3 A2-ii A6: the shared database holds the test library’s squat_jump row',
+    );
+    assert.deepEqual(
+      await tx
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(
+          and(
+            movementIsGlobal(),
+            isNull(schema.movements.deletedAt),
+            eq(schema.movements.name, BURPEES),
+          ),
+        ),
+      [],
+      'CAT-3 A2-ii A6: no live global row is named "Burpees"',
     );
     await seedProgramFixtures(exec, scope, library);
     const onIt = await tx
