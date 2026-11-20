@@ -407,7 +407,10 @@ async function lockedCreate(
   // erasure commits. With the row lock this read waits, re-checks under READ COMMITTED and finds no
   // row. No deadlock: the core never takes this advisory lock, and `profiles` references only
   // `households`, which this transaction already holds compatibly, so the insert waits on nothing the
-  // core holds. The wait is bounded by the `lock_timeout` above (past it, 55P03).
+  // core holds. The `client_id` arbiter does not wait on it either: the core's row locks are
+  // lock-only (a dirty-snapshot check ignores them), and the core deletes nothing until it holds the
+  // household row this read keeps in KEY SHARE. The wait is bounded by the `lock_timeout` above
+  // (past it, 55P03).
   const locked = await exec
     .select({
       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
