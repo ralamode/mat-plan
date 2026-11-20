@@ -79,6 +79,19 @@ describe('an old built-in with a library entry', () => {
   });
 });
 
+describe('the coach-supervision label', () => {
+  it('🔴 a supervised entry’s label is on its option (a test that names supervision can fail on it)', () => {
+    const library = entry('back_bridge');
+    expect(library.supervision).toBe('coach');
+    const option = catalogArmOption(
+      row({ slug: library.slug, name: library.name, trackingType: library.trackingType }),
+      undefined,
+      library,
+    );
+    expect(option.supervision).toBe('coach');
+  });
+});
+
 describe('⏳ an old built-in with no library entry (K22)', () => {
   it('the row and the const’s aliases and group, with NO taxonomy, never a placeholder one', () => {
     const option = catalogArmOption(

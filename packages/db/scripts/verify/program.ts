@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import {
+  catalogOptionOf,
+  pickerEntryOf,
   trackingTypeSchema,
   existingItem,
   matchableOption,
@@ -1679,26 +1681,60 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
         trackingType: schema.movements.trackingType,
       })
       .from(schema.movements)
-      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)));
+      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)))
+      .orderBy(asc(schema.movements.slug));
+  /**
+   * The option the plan describes, written here from `catalogOptionOf` and the row (not through
+   * `catalogArmOption`, the function under test): the row's identity, the const's aliases then the
+   * library's, the library's taxonomy, supervision and `hasInstructions`, and the const's group.
+   */
+  const expectedOption = (
+    identity: {
+      publicId: string;
+      slug: string;
+      name: string;
+      unitDefault: unknown;
+      isBodyweight: boolean;
+      trackingType: string;
+    },
+    picker: { group: string; aliases?: readonly string[] } | undefined,
+    entry: (typeof CATALOG_MOVEMENTS)[number] | undefined,
+  ) => {
+    const o = entry && catalogOptionOf(entry, identity.publicId);
+    return {
+      ...identity,
+      owner: 'catalog',
+      ...(picker ? { group: picker.group } : {}),
+      aliases: joinAliases(picker?.aliases ?? [], o?.aliases ?? []),
+      taxonomy: o
+        ? {
+            modality: o.modality,
+            pattern: o.pattern,
+            equipment: o.equipment,
+            primaryMuscle: o.primaryMuscle,
+            secondaryMuscles: o.secondaryMuscles,
+          }
+        : null,
+      supervision: o?.supervision ?? null,
+      hasInstructions: o?.hasInstructions ?? false,
+    };
+  };
 
   await rolledBack(async (tx) => {
     await seedCatalog(asDb(tx), LIB);
     const options = await listedOn(tx, A_SCOPE);
+    const libraryRows = await catalogRowsOf(tx);
+    assert.equal(
+      libraryRows.length,
+      LIB.length,
+      'CAT-3 P11-ii-a (a1): the proof wrote one library row per entry',
+    );
 
     // (a1) Every library row is listed, through the one mapping, on the database row's identity.
-    for (const r of await catalogRowsOf(tx)) {
-      const listed = options.find((o) => o.publicId === r.publicId);
+    for (const r of libraryRows) {
       assert.deepEqual(
-        listed,
-        catalogArmOption(
-          {
-            ...r,
-            unitDefault: r.unitDefault as never,
-            trackingType: trackingTypeSchema.parse(r.trackingType),
-          },
-          undefined,
-          libraryEntry(r.slug),
-        ),
+        options.find((o) => o.publicId === r.publicId),
+        expectedOption(r, undefined, libraryEntry(r.slug)),
         `CAT-3 P11-ii-a (a1): the library row ${r.slug} is listed through catalogArmOption`,
       );
     }
@@ -1713,18 +1749,23 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
       Object.keys(MOVEMENT_PICKER_ENTRIES).length,
       'CAT-3 P11-ii-a (a2): every old built-in is still listed (K22)',
     );
-    for (const o of legacy) {
-      if (o.owner !== 'catalog') continue;
-      const entry = CATALOG_MOVEMENTS.find((e) => e.slug === o.slug);
-      const picker = MOVEMENT_PICKER_ENTRIES[o.slug as keyof typeof MOVEMENT_PICKER_ENTRIES];
+    for (const seedRow of MOVEMENT_SEED_ROWS) {
+      const o = legacy.find((x) => x.owner === 'catalog' && x.slug === seedRow.slug)!;
       assert.deepEqual(
-        [o.group, o.aliases, o.taxonomy === null],
-        [
-          picker.group,
-          joinAliases(picker.aliases ?? [], entry?.aliases ?? []),
-          entry === undefined,
-        ],
-        `CAT-3 P11-ii-a (a2): the old built-in ${o.slug} keeps its group, joins the library's aliases, and has taxonomy exactly when the library has an entry`,
+        o,
+        expectedOption(
+          {
+            publicId: o.publicId,
+            slug: seedRow.slug,
+            name: seedRow.name,
+            unitDefault: seedRow.unitDefault,
+            isBodyweight: seedRow.isBodyweight,
+            trackingType: seedRow.trackingType,
+          },
+          pickerEntryOf(seedRow.slug),
+          CATALOG_MOVEMENTS.find((e) => e.slug === seedRow.slug),
+        ),
+        `CAT-3 P11-ii-a (a2): the old built-in ${seedRow.slug} keeps its group, joins the library's aliases, and has taxonomy exactly when the library has an entry`,
       );
     }
 
@@ -1752,21 +1793,40 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
     );
 
     // (a6) K23: Enter and newItem pick the same row, because both match over this list.
-    for (const typed of ['OHP', 'Strict press', 'Dips', 'Dip', 'Hex-bar deadlift']) {
+    // Pinned literally (not only "the same as existingItem"), so a divergence in WHICH row is picked
+    // shows: OHP is both the old built-in's alias and the library row's; "Overhead press" sorts first.
+    // Pinned literally, so a divergence in WHICH row is picked shows. "OHP" is both the old built-in's
+    // alias and the library row's; "Overhead press" sorts first. "Dips" and "Dip" share one name key
+    // (the fold drops a plural s), so both are exact matches and the tie goes to the name that sorts
+    // first: the library's "Dip". The picker's search breaks it the same way, which is K23.
+    const expectedSlug: Record<string, string> = {
+      OHP: OHP.slug,
+      'Strict press': OHP.slug,
+      Dips: DIP.slug,
+      Dip: DIP.slug,
+      'Hex-bar deadlift': 'trap-bar_deadlift',
+    };
+    const slugOf = (publicId: string) => {
+      const o = options.find((x) => x.publicId === publicId);
+      return o?.owner === 'catalog' ? o.slug : undefined;
+    };
+    for (const [typed, slug] of Object.entries(expectedSlug)) {
       const hit = existingItem(options.map(matchableOption), typed);
       const answer = await newItem(
         asTx(tx),
         A_SCOPE,
-        {
-          name: typed,
-          trackingType: TRACKING_TYPE.check,
-        },
+        { name: typed, trackingType: TRACKING_TYPE.check },
         CATALOG_MOVEMENTS,
       );
       assert.deepEqual(
         answer.ok && [answer.existed, answer.itemPublicId],
         [true, hit?.publicId],
         `CAT-3 P11-ii-a (a6): "${typed}" — newItem selects the row the picker's search does (K23)`,
+      );
+      assert.equal(
+        slugOf(answer.ok ? answer.itemPublicId : ''),
+        slug,
+        `CAT-3 P11-ii-a (a6): "${typed}" selects ${slug}`,
       );
     }
     const trapBar = options.find((o) => o.owner === 'catalog' && o.slug === 'trap-bar_deadlift');
@@ -1783,6 +1843,25 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
       hexBar.ok && hexBar.itemPublicId,
       trapBar?.publicId,
       'CAT-3 P11-ii-a (a6): an alias only the library entry of an old built-in has selects that built-in',
+    );
+    // …and a household item NAMED it wins: an exact name beats an alias, on both sides (bestFirst).
+    const ownHex = newId();
+    await insertMovementOwnedBy(asTx(tx), A_SCOPE, {
+      publicId: ownHex,
+      slug: 'a_hex_bar_deadlift_item',
+      name: 'Hex-bar deadlift',
+      isBodyweight: false,
+    });
+    const named = await newItem(
+      asTx(tx),
+      A_SCOPE,
+      { name: 'Hex-bar deadlift', trackingType: TRACKING_TYPE.check },
+      CATALOG_MOVEMENTS,
+    );
+    assert.deepEqual(
+      named.ok && [named.existed, named.itemPublicId],
+      [true, ownHex],
+      'CAT-3 P11-ii-a (a6): a household item named like a library alias is selected by its own name',
     );
   });
 
@@ -1948,6 +2027,18 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
         ),
       ),
       "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases (CAT-3 P11-ii-a: and the library's by slug, through catalogArmOption)",
+    );
+    const boxListed = catalog.find((o) => o.name === boxJump.name);
+    assert.deepEqual(
+      boxListed?.owner === 'catalog' && [boxListed.group, boxListed.aliases],
+      [
+        MOVEMENT_PICKER_ENTRIES.box_jump.group,
+        [
+          ...(MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? []),
+          ...(CATALOG_MOVEMENTS.find((e) => e.slug === 'box_jump')?.aliases ?? []),
+        ],
+      ],
+      "FAM-1 6a-iii-a: the old built-in keeps the picker map's group, and its aliases are the map's then the library's",
     );
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
     assert.ok(

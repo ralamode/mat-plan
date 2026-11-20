@@ -4,10 +4,10 @@ import { cache } from 'react';
 
 import { movementOptions, type MovementOption } from '@mat-plan/db';
 import { catalogHowToOf, uuidSchema, type CatalogHowTo } from '@mat-plan/shared';
-import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
 
+import { CATALOG_LIBRARY } from '../catalog-library';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from '../quiet-db-errors';
@@ -81,7 +81,7 @@ const householdMovementRows = cache(async function householdMovementRows() {
   // Through `quietDbErrors`, as the writes are: a failed query's parameters stay out of the logs.
   // The library is chosen HERE, and only here (with `writes.ts`): ⏳ the K29 PR derives it from the
   // database, so a fixtures database is read with the fixture library.
-  return quietDbErrors('movementOptions', () => movementOptions(db, scope, CATALOG_MOVEMENTS));
+  return quietDbErrors('movementOptions', () => movementOptions(db, scope, CATALOG_LIBRARY));
 });
 
 /** The picker's data for the caller's household, or `null` with no household. */
@@ -105,5 +105,5 @@ export async function getHowTo(optionId: string): Promise<CatalogHowTo | null> {
   if (!uuidSchema.safeParse(optionId).success) return null;
   const id = optionId.toLowerCase();
   const row = (await householdMovementRows())?.find((option) => option.publicId === id);
-  return row?.owner === 'catalog' ? catalogHowToOf(CATALOG_MOVEMENTS, row.slug) : null;
+  return row?.owner === 'catalog' ? catalogHowToOf(CATALOG_LIBRARY, row.slug) : null;
 }

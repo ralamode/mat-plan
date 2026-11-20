@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
-
 import {
   copyWorkout,
   createProgram,
@@ -26,6 +24,7 @@ import {
   type WorkoutDraft,
 } from '@mat-plan/shared';
 
+import { CATALOG_LIBRARY } from '../catalog-library';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from '../quiet-db-errors';
@@ -117,7 +116,7 @@ export async function newHouseholdItem(input: NewItem): Promise<ProgramAnswer<'n
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
   // The same library the picker's read gets (`picker.ts`), so they match the same aliases (K23).
-  return quietDbErrors('newItem', () => newItem(db, scope, input, CATALOG_MOVEMENTS));
+  return quietDbErrors('newItem', () => newItem(db, scope, input, CATALOG_LIBRARY));
 }
 
 /**

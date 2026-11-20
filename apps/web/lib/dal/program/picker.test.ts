@@ -135,10 +135,11 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
   });
 
   it('the taxonomy, supervision and instructions are copied from the read, field by field', () => {
-    const row = builtIn({});
+    // A supervised row, so a DAL that dropped the label fails here.
+    const row = builtIn({ supervision: 'coach', hasInstructions: true });
     const option = pickerOptionOf(row)!;
     expect(option.owner).toBe('catalog');
-    if (option.owner !== 'catalog' || row.taxonomy === null) return;
+    if (row.taxonomy === null) throw new Error('fixture: the row has no taxonomy');
     expect(option).toMatchObject({
       ...row.taxonomy,
       supervision: row.supervision,
