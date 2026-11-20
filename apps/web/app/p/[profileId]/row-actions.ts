@@ -28,7 +28,7 @@ import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 /**
  * The day page's writes, `DayActions`' five members: four row writes, `logRow`, `untickRow` and
  * `retickRow` (FAM-1 step 12b) and `amendRow` (12d, Change), and the athlete's Program order,
- * `reorderPrograms` (15c; no page passes it until 15c PR 3, so the screen keeps the control hidden).
+ * `reorderPrograms` (15c; the day page passes it since 15c PR 3).
  * Each action is a PUBLIC endpoint and re-checks the boundary itself (AGENTS.md → Server
  * conventions). The four row writes:
  *

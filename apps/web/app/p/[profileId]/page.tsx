@@ -8,7 +8,7 @@ import { DayScreen } from '@/components/day/day-screen';
 import { dayPageView, lookAheadFallsBack, offersProgramsLink } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
-import { PROGRAMS_PATH } from '@/components/program-builder/routes';
+import { programPath, PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { ExportControl } from '@/components/profiles/export-control';
 import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
@@ -47,7 +47,13 @@ import { ClearDayBanner } from './clear-day-banner';
 import { clearedNoticeLine } from './clear-day-notice';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
-import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
+import {
+  amendRowAction,
+  logRowAction,
+  reorderProgramsAction,
+  retickRowAction,
+  untickRowAction,
+} from './row-actions';
 import { WeeklyAdherence } from './weekly-adherence';
 
 // Route-segment config must be a static inline literal (Next can't follow an
@@ -153,13 +159,14 @@ export default async function TodayPage({
     athleteName: profile.name,
   });
 
-  // The day screen's writes (FAM-1 12b's Server Actions, and 12d's Change). Program order
-  // (`reorderPrograms`) arrives at 15c: an action left out hides its control (plan §6).
+  // The day screen's writes (FAM-1 12b's Server Actions, 12d's Change and 15c's Program order). An
+  // action left out hides its control (plan §6).
   const dayActions = {
     logRow: logRowAction,
     untickRow: untickRowAction,
     retickRow: retickRowAction,
     amendRow: amendRowAction,
+    reorderPrograms: reorderProgramsAction,
   };
 
   return (
@@ -266,8 +273,12 @@ export default async function TodayPage({
       />
 
       {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
-          program.", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
-      <ProgramLine plan={plan} actions={dayActions} />
+          program.", above Bodyweight. Each name on the line links to its program's page (15c, D49). */}
+      <ProgramLine
+        plan={plan}
+        actions={dayActions}
+        programHrefFor={(program) => programPath(program.programPublicId)}
+      />
       <NotOnAProgram
         plan={plan}
         programsHref={

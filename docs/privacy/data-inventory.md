@@ -342,7 +342,7 @@ only way a notice about minors' health data is worth anything.
 > **§1 re-read 2026-11-18 for FAM-1 step 6d-ii**: `reorderPrograms` rewrites `program_assignments.idx`
 > (an athlete's own order of their programs), inside the household only. No new column, processor, log
 > or export. Called by `reorderProgramsAction` (`app/p/[profileId]/row-actions.ts`) since 15c PR 2,
-> which no page passes until 15c PR 3; the action changes no column, processor or export. §7: a
+> which the day page passes since 15c PR 3; the action changes no column, processor or export. §7: a
 > refused Program order reports at most one public id through the existing scope-miss path: the
 > athlete's on `not_found`, or, on `invalid`, the first program id that is not one of the household's
 > live programs; a stale list of the household's own programs reports nothing; a thrown database error
