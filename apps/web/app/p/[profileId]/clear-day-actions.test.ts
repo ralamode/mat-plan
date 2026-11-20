@@ -284,6 +284,15 @@ describe('clearDayAction (V1-9b B2)', () => {
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
+  it('an athlete archived between the check and the clear is closed_day, and the page re-reads', async () => {
+    vi.mocked(clearDayEntries).mockResolvedValueOnce({ closed: true });
+    expect(await clearDayAction(clearInput())).toEqual({
+      ok: false,
+      reason: DAY_CLEAR_REFUSAL.closed_day,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+  });
+
   it('nothing left to clear is a success with count 0, and the page re-reads', async () => {
     vi.mocked(clearDayEntries).mockResolvedValueOnce({ count: 0 });
     const result = await clearDayAction(clearInput());

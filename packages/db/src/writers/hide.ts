@@ -529,8 +529,11 @@ async function restoreOne(
 
 // ── Clear this day (V1-9b B2-0) ─────────────────────────────────────────────────────────────────
 
-/** `count` is the entries under the token carrying `'clear_day'`, the same on a first call and a replay. */
-export type ClearDayResult = ClearEvent | { notFound: true };
+/**
+ * `count` is the entries under the token carrying `'clear_day'`, the same on a first call and a replay.
+ * `closed`: the athlete is archived (read under a lock in the clear's own transaction).
+ */
+export type ClearDayResult = ClearEvent | { notFound: true } | { closed: true };
 
 /**
  * Hide every live entry of one athlete on one day as ONE event, with the reason `'clear_day'`
@@ -543,14 +546,30 @@ export type ClearDayResult = ClearEvent | { notFound: true };
  *   `notFound`, never another kind of event's token.
  *
  * The writer opens its own transaction, as `clearSingleValue` does: the lock and the hide are one
- * unit. ⚠️ Not here: the writable window and the archived athlete. B2's action refuses those, as the
- * single-value amends do (plan § B2-0).
+ * unit. ⚠️ Not here: the writable window, which needs `today`; the action refuses that
+ * (`clearDayOpenFor`).
+ *
+ * 🔴 **The archived athlete IS checked here, under a lock** (maintainer, 2026-11-19, "fix both"). The
+ * action checks too, but before this transaction: an archive committed in between would let the
+ * clear hide an archived athlete's day, which Restore all then refuses until the athlete is
+ * restored. So the clear first takes the athlete's profile row `FOR SHARE`: a concurrent archive's
+ * UPDATE waits for this clear to commit, and an archive that committed first is seen here, and
+ * answers `{ closed: true }`. Profile before entries, the order the erasure takes its locks in.
  */
 export async function clearDay(
   exec: Executor,
   args: { profilePublicId: string; scope: HouseholdScope; day: string },
 ): Promise<ClearDayResult> {
   return exec.transaction(async (tx) => {
+    // The athlete first, locked against a concurrent archive (see the docblock). A profile outside
+    // the scope reads nothing here and falls through to the entries read, which finds nothing.
+    const [athlete] = await tx
+      .select({ archivedAt: schema.profiles.archivedAt })
+      .from(schema.profiles)
+      .where(isLiveProfile(args.profilePublicId, args.scope))
+      .for('share');
+    if (athlete && athlete.archivedAt !== null) return { closed: true };
+
     const live = await tx
       .select({ publicId: schema.entries.publicId })
       .from(schema.entries)
