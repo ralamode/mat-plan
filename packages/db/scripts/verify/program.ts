@@ -92,6 +92,7 @@ import {
 import { createProgram } from '../../src/writers/program/create-program';
 import { copyWorkout } from '../../src/writers/program/copy-workout';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { newItem } from '../../src/writers/program/new-item';
 import { catalogArmOption, matchableOption } from '../../src/queries/program/catalog-arm-option';
 import { seedCatalog } from '../../src/seed';
@@ -3436,7 +3437,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       ).length,
     });
     const before = await snapshotOf();
-    await seedProgramFixtures(exec, A_SCOPE);
+    await seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE);
     assert.deepEqual(
       await snapshotOf(),
       before,
@@ -3463,7 +3464,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       .set({ archivedAt: sql`now()` })
       .where(eq(schema.profiles.publicId, SEED_FIXTURE_ATHLETES.a2!));
     await orFail('FAM-1 6c-i: the seed succeeds with a seed athlete archived', () =>
-      seedProgramFixtures(exec, A_SCOPE),
+      seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE),
     );
     const made = new Set<string>();
     for (const id of SEED_FIXTURE_PROGRAM_CLIENT_IDS) {
@@ -3504,7 +3505,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
     );
     assert.ok(planted.ok && !planted.existed, 'FAM-1 6c-i: B makes its own item named like grip');
     await orFail('FAM-1 6c-i: the seed succeeds when an item has another type', () =>
-      seedProgramFixtures(exec, B_SCOPE),
+      seedProgramFixtures(exec, B_SCOPE, CATALOG_FIXTURE),
     );
     const written = [];
     for (const program of world.programs) {
@@ -3917,7 +3918,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       ).length,
     });
     const before = await snapshot();
-    await seedProgramFixtures(exec, A_SCOPE);
+    await seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE);
     assert.deepEqual(
       await snapshot(),
       before,
@@ -3933,7 +3934,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       .update(schema.profiles)
       .set({ archivedAt: sql`now()` })
       .where(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID));
-    await seedProgramFixtures(exec, A_SCOPE);
+    await seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE);
     assert.equal(
       await programBlockByClientId(exec, A_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
       null,
@@ -3941,7 +3942,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
     );
 
     // A household without Athlete Four gets no test program.
-    await seedProgramFixtures(exec, B_SCOPE);
+    await seedProgramFixtures(exec, B_SCOPE, CATALOG_FIXTURE);
     assert.equal(
       await programBlockByClientId(exec, B_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
       null,
@@ -3962,7 +3963,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
         trackingType: TRACKING_TYPE.reps,
       });
     }
-    const result = await seedProgramFixtures(exec, scope).then(
+    const result = await seedProgramFixtures(exec, scope, CATALOG_FIXTURE).then(
       () => 'ok',
       (e: unknown) => String(e).slice(0, 120),
     );

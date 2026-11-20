@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 
 import {
   assertFixturesTargetAllowed,
+  seedLibraryOf,
   FIXTURES_TARGET_REFUSED,
   resolveSeedOptions,
   SEED_FIXTURES_ENV,
@@ -135,12 +138,29 @@ describe('scripts/seed.ts decides through resolveSeedOptions', () => {
  * plan's D1); A2-ii changes this one argument. Pinned by source, as the fixtures call site is above,
  * and `db:verify`'s Proof A pins the effect (no `modality`, no join row).
  */
-describe('seed() gives the catalog writer nothing yet (CAT-3 A2-i)', () => {
+describe('seed() picks the movement library by its flag (CAT-3 A2-ii, E4)', () => {
   const source = readFileSync(new URL('./seed.ts', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('export async function seed('));
+  const seedBody = body.slice(0, body.indexOf('\n}\n'));
 
-  it('calls seedReference with an empty catalog, once', () => {
-    expect(source.match(/await seedReference\(db, \{ catalog: \[\] \}\)/g)).toHaveLength(1);
+  it('the real library alone without the flag; the test library and the legacy rows with it', () => {
+    expect(seedLibraryOf('catalog')).toEqual({
+      entries: CATALOG_MOVEMENTS,
+      legacyMovements: false,
+    });
+    expect(seedLibraryOf('fixture')).toEqual({ entries: CATALOG_FIXTURE, legacyMovements: true });
+  });
+
+  it('seed() names the library once, from the flag, and only through seedLibraryOf', () => {
+    expect(seedBody.match(/seedLibraryOf\(fixtures \? 'fixture' : 'catalog'\)/g)).toHaveLength(1);
     expect(source.match(/seedReference\(db,/g)).toHaveLength(1);
+    expect(seedBody).toContain('seedReference(db, { library })');
+  });
+
+  it('with fixtures, ownership is checked before seedReference writes anything (plan D2)', () => {
+    const check = seedBody.indexOf('if (fixtures) await assertSeedOwnsDatabase(db);');
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(seedBody.indexOf('seedReference(db,'));
   });
 });
 

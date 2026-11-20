@@ -444,9 +444,10 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
       .where(isNull(schema.movements.householdId));
     assert.equal(before?.n, 0, 'CAT-3 A2-i E1: the proof starts with no global movement');
 
-    const counts = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS }).catch(
-      (e: unknown) =>
-        assert.fail(`CAT-3 A2-i E1: the catalog seed resolves on a fresh database (${String(e)})`),
+    const counts = await seedReference(asDb(tx), {
+      library: { entries: CATALOG_MOVEMENTS, legacyMovements: true },
+    }).catch((e: unknown) =>
+      assert.fail(`CAT-3 A2-i E1: the catalog seed resolves on a fresh database (${String(e)})`),
     );
     const state = await catalogStateOn(tx);
 
@@ -499,7 +500,9 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
     const idsBefore = await joinIds();
     let again: Awaited<ReturnType<typeof seedReference>> | undefined;
     await assert.doesNotReject(async () => {
-      again = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS });
+      again = await seedReference(asDb(tx), {
+        library: { entries: CATALOG_MOVEMENTS, legacyMovements: true },
+      });
     }, 'CAT-3 A2-i rule 7: a second run, with every entry present, resolves');
     assert.deepEqual(
       [again!.catalogInserted, again!.catalogPresent],
@@ -584,7 +587,9 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
         .where(and(eq(schema.movements.slug, entry.slug), isNull(schema.movements.householdId)));
     const before = await legacyOf();
     assert.equal(before.length, 1, 'CAT-3 A2-i E2: one legacy global sled_push before the seed');
-    const counts = await seedReference(asDb(tx), { catalog: [entry] });
+    const counts = await seedReference(asDb(tx), {
+      library: { entries: [entry], legacyMovements: true },
+    });
     assert.deepEqual(
       await legacyOf(),
       before,
@@ -632,7 +637,9 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
     // it reaches the same public log.
     let counts!: Awaited<ReturnType<typeof seedReference>>;
     const printed = await captureOutput(async () => {
-      counts = await seedReference(asDb(tx), { catalog: [entry] });
+      counts = await seedReference(asDb(tx), {
+        library: { entries: [entry], legacyMovements: true },
+      });
       reportSeed(counts);
     });
     assert.deepEqual(
@@ -669,14 +676,18 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
   // A household row on a slug that is both a legacy and a library slug is counted ONCE, as legacy.
   await rolledBack(async (tx) => {
     const entry = CATALOG_MOVEMENTS.find((e) => e.slug === 'sled_push')!;
-    const baseline = await seedReference(asDb(tx), { catalog: [] });
+    const baseline = await seedReference(asDb(tx), {
+      library: { entries: [], legacyMovements: true },
+    });
     await insertMovementOwnedBy(asTx(tx), ctx.A_SCOPE, {
       publicId: newId(),
       slug: entry.slug,
       name: 'A2-i shared-slug item',
       isBodyweight: false,
     });
-    const counts = await seedReference(asDb(tx), { catalog: [entry] });
+    const counts = await seedReference(asDb(tx), {
+      library: { entries: [entry], legacyMovements: true },
+    });
     assert.deepEqual(
       [
         counts.householdRowsOnSeedSlugs - baseline.householdRowsOnSeedSlugs,
