@@ -781,30 +781,73 @@ describe('ProgramLine and the Program order dialog', () => {
       currentPrograms: plan.currentPrograms.map((p) => ({ ...p, endsToday: true as const })),
     };
 
-    it.each([
+    const cases = [
       ['off every program', offEverything, PROGRAM_COPY.orderEmpty(nameOf(plan))],
       ['every program ending today', allEnding, PROGRAM_COPY.orderAllEnding(nameOf(plan))],
-    ])('%s: one sentence is the body, describes Done and is said once', (_case, next, text) => {
+    ] as const;
+
+    it.each(cases)(
+      '%s, from an arrow: one sentence is the body; focus goes to Done, described by it, and the status stays silent',
+      (_case, next, text) => {
+        const view = mountLine(plan, withReorder(plan, vi.fn()));
+        fireEvent.click(orderButton());
+        act(() => arrow('up', staying[1]!.name).focus());
+        view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+        const dialog = screen.getByRole('dialog');
+        const message = shown(text);
+        expect(message.tagName).toBe('P');
+        expect(within(dialog).queryByText(PROGRAM_COPY.orderExplainer)).toBeNull();
+        expect(within(dialog).queryAllByRole('list')).toHaveLength(0);
+        expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(1), { exact: false })).toBeNull();
+        expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(3), { exact: false })).toBeNull();
+        // The arrow that had focus is gone: Done takes it, described by the sentence alone, so the
+        // status does not say it a second time.
+        expect(document.activeElement).toBe(doneButton());
+        expect(doneButton().getAttribute('aria-describedby')).toBe(message.id);
+        expect(statusNode()?.textContent).toBe('');
+      },
+    );
+
+    it.each(cases)(
+      '%s, with focus elsewhere: the status says it once, and a same-sentence re-read is silent',
+      (_case, next, text) => {
+        const view = mountLine(plan, withReorder(plan, vi.fn()));
+        fireEvent.click(orderButton());
+        view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+        expect(document.activeElement).not.toBe(doneButton());
+        expect(statusNode()?.textContent).toBe(text);
+        const said = statusNode()?.firstElementChild;
+        const again = { ...next, currentPrograms: [...next.currentPrograms] };
+        view.rerender(<ProgramLine plan={again} actions={withReorder(again, vi.fn())} />);
+        expect(statusNode()?.firstElementChild).toBe(said);
+      },
+    );
+
+    it('a change of sentence while open is said: all ending, then off every program', () => {
       const view = mountLine(plan, withReorder(plan, vi.fn()));
       fireEvent.click(orderButton());
-      act(() => arrow('up', staying[1]!.name).focus());
-      view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
-      const dialog = screen.getByRole('dialog');
-      const message = shown(text);
-      expect(message.tagName).toBe('P');
-      expect(within(dialog).queryByText(PROGRAM_COPY.orderExplainer)).toBeNull();
-      expect(within(dialog).queryAllByRole('list')).toHaveLength(0);
-      expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(1), { exact: false })).toBeNull();
-      expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(3), { exact: false })).toBeNull();
-      // The arrow that had focus is gone: Done takes it, described by the sentence alone.
-      expect(document.activeElement).toBe(doneButton());
-      expect(doneButton().getAttribute('aria-describedby')).toBe(message.id);
-      // Said once, on the change: a further re-read that is still empty is not a new announcement.
-      expect(statusNode()?.textContent).toBe(text);
-      const said = statusNode()?.firstElementChild;
-      const again = { ...next, currentPrograms: [...next.currentPrograms] };
-      view.rerender(<ProgramLine plan={again} actions={withReorder(again, vi.fn())} />);
-      expect(statusNode()?.firstElementChild).toBe(said);
+      view.rerender(<ProgramLine plan={allEnding} actions={withReorder(allEnding, vi.fn())} />);
+      expect(statusNode()?.textContent).toBe(PROGRAM_COPY.orderAllEnding(nameOf(plan)));
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, vi.fn())} />,
+      );
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(statusNode()?.textContent).toBe(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+    });
+
+    it('a save that succeeds after a re-read emptied the list shows the empty sentence', async () => {
+      const { reorder, answer } = deferredReorder();
+      const view = mountLine(plan, withReorder(plan, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, reorder)} />,
+      );
+      await answer(0, { ok: true });
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(within(screen.getByRole('dialog')).queryAllByRole('list')).toHaveLength(0);
     });
 
     it('wins over the stale refusal’s line: one message shows', async () => {

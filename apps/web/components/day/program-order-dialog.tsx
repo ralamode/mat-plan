@@ -55,7 +55,8 @@ const STALE_REFUSALS: readonly string[] = [PROGRAM_REFUSAL.invalid, PROGRAM_REFU
  *
  * **When nothing stays** (a re-read while it is open: off every program, or every program ends today)
  * one sentence is the whole body: `orderEmpty` or `orderAllEnding`, in place of the explainer and
- * both lists, and over any error line. It describes Done and is announced once, on the change.
+ * both lists, and over any error line. It describes Done, and is announced when it changes while
+ * open, except when that change moved focus to Done (the description already says it).
  */
 export function ProgramOrderDialog({
   plan,
@@ -90,6 +91,12 @@ export function ProgramOrderDialog({
   /** Set by a move or a revert: the next list render puts focus back on the last arrow tapped. */
   const refocus = useRef(false);
   const done = useRef<HTMLButtonElement>(null);
+  /**
+   * Set by the focus effect when it put focus on Done this commit. Done is described by the empty
+   * sentence, so the announce effect (declared after it, so it runs after) skips the status line
+   * rather than have the sentence heard twice.
+   */
+  const focusMovedToDone = useRef(false);
   /** The arrow that last had focus: if it goes while the dialog holds focus nowhere, Done takes it. */
   const focusedArrow = useRef<string | null>(null);
   /** The page's latest order, and whether one arrived while a save was in flight. */
@@ -130,6 +137,7 @@ export function ProgramOrderDialog({
   // program ends today now). Only then: a re-read of the page that happens to re-render the list
   // must not pull focus from wherever it is now, unless it removed the arrow that had it.
   useEffect(() => {
+    focusMovedToDone.current = false;
     // A refocus asked for while the dialog is closed (a save that failed after Done) is dropped:
     // the next open's focus is the sheet's, not an old arrow's.
     if (!open) {
@@ -139,7 +147,9 @@ export function ProgramOrderDialog({
     if (refocus.current) {
       refocus.current = false;
       const key = lastTapped.current;
-      if (key) (arrows.current.get(key) ?? done.current)?.focus();
+      const target = key ? (arrows.current.get(key) ?? done.current) : null;
+      target?.focus();
+      focusMovedToDone.current = target !== null && target === done.current;
       return;
     }
     const had = focusedArrow.current;
@@ -150,6 +160,7 @@ export function ProgramOrderDialog({
     if (had && !arrows.current.has(had) && (!dialog?.contains(active) || active === dialog)) {
       focusedArrow.current = null;
       done.current?.focus();
+      focusMovedToDone.current = true;
     }
   }, [order, open]);
 
@@ -204,9 +215,12 @@ export function ProgramOrderDialog({
     setPending(false);
     // The order is this save's; which programs end today is the page's latest word (a re-read during
     // the save may have marked one), so the list shows it under the note at once.
-    const shown = next.map(
-      (p) => latest.current.find((q) => q.programPublicId === p.programPublicId) ?? p,
-    );
+    // A program the re-read no longer has is gone, not kept: a re-read that empties the list then
+    // shows the empty sentence (15c follow-up).
+    const shown = next.flatMap((p) => {
+      const now = latest.current.find((q) => q.programPublicId === p.programPublicId);
+      return now ? [now] : [];
+    });
     setOrder(shown);
     // "N of M" counts the programs that stay: the ending ones cannot move, and are a list of their own.
     const { staying: settled } = programsByStay(shown);
@@ -242,12 +256,13 @@ export function ProgramOrderDialog({
         ? PROGRAM_COPY.orderAllEnding(athlete)
         : PROGRAM_COPY.orderEmpty(athlete);
 
-  // Said once, on the change from a list to none: never on a re-render that is still empty.
-  const wasEmpty = useRef(emptyText !== null);
+  // Said when the sentence changes while open (a list to none, or one empty sentence to the other):
+  // the deps keep a re-read with the same sentence silent. Not when this commit moved focus to
+  // Done, which the sentence describes, so it is not heard twice.
   useEffect(() => {
-    const isEmpty = emptyText !== null;
-    if (isEmpty && !wasEmpty.current && open) announce(emptyText);
-    wasEmpty.current = isEmpty;
+    const movedToDone = focusMovedToDone.current;
+    focusMovedToDone.current = false;
+    if (emptyText !== null && open && !movedToDone) announce(emptyText);
   }, [emptyText, open]);
 
   const arrow = (program: Program, by: Move, index: number) => {
