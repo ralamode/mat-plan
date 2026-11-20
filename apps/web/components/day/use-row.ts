@@ -504,6 +504,8 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   }
 
   return {
+    /** This row's key in the screen's sets (failures, writes in flight, busy). */
+    rowKey,
     text,
     setText,
     /** The load must be typed (H9): its field shows no prescription to fill from. */

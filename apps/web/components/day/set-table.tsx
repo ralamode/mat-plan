@@ -16,7 +16,7 @@ import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, fieldText, valueParts, type RowField } from './row-values';
 import { changeRowProps, useChange } from './use-change';
-import { rowAccess, rowName, useRow } from './use-row';
+import { itemKeyOf, rowAccess, rowName, useRow } from './use-row';
 import {
   CARD_CLASS,
   fieldHeader,
@@ -101,6 +101,14 @@ export function SetItem({
   // A row beyond the page's data that is not logged: an added set not ticked yet, or an extra
   // set un-ticked. One at a time, so Add set waits for it.
   const pendingExtra = rows.some((r) => !fromPage.has(r.set));
+  // 12c-iii: an added set not ticked keeps its workout open ("Collapse" is not offered).
+  const { setRowBusy } = day;
+  const extraKey = `${workoutKey}/${itemKeyOf(item)}/extra`;
+  useEffect(() => {
+    if (!pendingExtra) return;
+    setRowBusy(extraKey, true);
+    return () => setRowBusy(extraKey, false);
+  }, [pendingExtra, extraKey, setRowBusy]);
   // The next set past the highest shown: the rows need not run without a gap.
   const nextSet = Math.max(0, ...rows.map((r) => r.set)) + 1;
   const canAdd = canLog && !pendingExtra && nextSet <= MAX_SETS_PER_MOVEMENT;

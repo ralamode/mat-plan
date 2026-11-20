@@ -23,6 +23,11 @@ export type DayContextValue = {
   setRowFailed(rowKey: string, failed: boolean): void;
   /** A row reports a write in flight, or none any more, so the page can warn before it is left. */
   setRowPending(rowKey: string, pending: boolean): void;
+  /**
+   * A row reports work not yet saved that is not a write in flight (a Change typed over, an added
+   * set not ticked), or none any more, so its workout does not offer "Collapse" over it (12c-iii).
+   */
+  setRowBusy(rowKey: string, busy: boolean): void;
   /** The first `closed_day` turns the whole screen read-only. */
   closeDay(): void;
   /** Re-reads the page's data, keeping every row's typed text. */

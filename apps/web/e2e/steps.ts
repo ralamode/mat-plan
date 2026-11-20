@@ -378,3 +378,15 @@ export async function putOnFromToday(page: Page, program: string, athlete: strin
   await expect(putOn).toBeHidden();
   return putOn;
 }
+
+/**
+ * FAM-1 12c-iii: a part that arrived finished shows as one line, a button inside its heading. Strict:
+ * it asserts the line is there, then taps it, and focus lands on "Collapse". For a test that acts on
+ * what the line hides.
+ */
+export async function openCollapsed(region: Locator, name: string): Promise<void> {
+  const line = region.getByRole('heading').getByRole('button', { expanded: false });
+  await expect(line, `${name} arrives as one line`).toBeVisible();
+  await line.click();
+  await expect(region.getByRole('button', { name: DAY_COPY.collapseLabel(name) })).toBeFocused();
+}
