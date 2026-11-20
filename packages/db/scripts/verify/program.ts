@@ -175,6 +175,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyReorderPrograms(ctx);
   await verifyCaps();
   await verifyNewItemLocksTheHousehold();
+  await verifySeedFixturesUseTheirLibrary();
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -1672,6 +1673,19 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   const DIP = libraryEntry('dip'); // beside the old built-in "Dips"
   const FOAM = libraryEntry('foam_rolling'); // alias "Foam roll"
   const LIB = [OHP, DIP, FOAM];
+  /**
+   * CAT-3 A2-ii (plan D3): the shared database is a fixtures database, and the test library holds
+   * `overhead_press` and `foam_rolling` too, with these names and aliases. Each case first retires those
+   * rows inside its own rolled-back transaction (a slug of their own, and `deleted_at`, so the read
+   * skips them), then writes the real entries it is about.
+   */
+  const writeLibrary = async (tx: VerifyTx, entries: typeof LIB) => {
+    await tx
+      .update(schema.movements)
+      .set({ slug: sql`'p11a_retired_' || ${schema.movements.id}`, deletedAt: sql`now()` })
+      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)));
+    await seedCatalog(asDb(tx), entries);
+  };
   const listedOn = async (tx: VerifyTx, scope: typeof A_SCOPE, library = CATALOG_MOVEMENTS) =>
     movementOptions(asTx(tx), scope, library);
   const catalogRowsOf = async (tx: VerifyTx) =>
@@ -1685,7 +1699,13 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
         trackingType: schema.movements.trackingType,
       })
       .from(schema.movements)
-      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)))
+      .where(
+        and(
+          movementIsGlobal(),
+          isNotNull(schema.movements.modality),
+          isNull(schema.movements.deletedAt),
+        ),
+      )
       .orderBy(asc(schema.movements.slug));
   /**
    * The option the plan describes, written here from `catalogOptionOf` and the row (not through
@@ -1731,7 +1751,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   };
 
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), LIB);
+    await writeLibrary(tx, LIB);
     const options = await listedOn(tx, A_SCOPE);
     const libraryRows = await catalogRowsOf(tx);
     assert.equal(
@@ -1876,7 +1896,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   // (a3) Nothing another household holds changes what A sees: B's items on a picker slug, a
   // library-only slug and a library alias. (a4) A household item a library row shadows is left out.
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), LIB);
+    await writeLibrary(tx, LIB);
     const before = await listedOn(tx, A_SCOPE);
     for (const [slug, name] of [
       ['box_jump', 'B box jump'],
@@ -1911,7 +1931,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   // newItem matches over the library it is GIVEN, as the picker's read does (K23): with a library
   // that lacks the row's entry, its library alias selects nothing and a household item is made.
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), [FOAM]);
+    await writeLibrary(tx, [FOAM]);
     const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
     const answer = await newItem(
       asTx(tx),
@@ -1927,7 +1947,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
 
   // (a9) A library row with no entry in the library given: listed bare, never dropped (K22).
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), [FOAM]);
+    await writeLibrary(tx, [FOAM]);
     const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
     const listed = (await listedOn(tx, A_SCOPE, without)).find((o) => o.name === FOAM.name);
     assert.deepEqual(
@@ -1939,7 +1959,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
 
   // The catalog arm's live conjunct: a soft-deleted library row is not listed.
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), [FOAM]);
+    await writeLibrary(tx, [FOAM]);
     await tx
       .update(schema.movements)
       .set({ deletedAt: new Date() })
@@ -3572,6 +3592,68 @@ async function verifyNewItemLocksTheHousehold(): Promise<void> {
   console.log(
     '✓ FAM-1 newItem: the household row is read FOR KEY SHARE (an erasure mid-call is not_found)',
   );
+}
+
+/**
+ * 🔴 CAT-3 A2-ii (A6, mutation 601): the seed's fixture world resolves over the library it is GIVEN.
+ * K29's seed half: on a fixtures database the world's items must match the library that database
+ * holds and the app reads. A fresh household (so no item of its own shadows a library row by name),
+ * and the test library with one change: `squat_jump` (reps) also answers to "Burpees", a world item
+ * that logs reps. So the world's Burpees must be the `squat_jump` row, never a household item; under a
+ * `seedProgramFixtures` that ignores its argument, Burpees is made as the household's own.
+ */
+async function verifySeedFixturesUseTheirLibrary(): Promise<void> {
+  const BURPEES = 'Burpees';
+  // Anti-vacuity: neither real list answers to it, so only the given library can make the match.
+  for (const list of [CATALOG_MOVEMENTS, CATALOG_FIXTURE]) {
+    assert.deepEqual(
+      list
+        .filter((e) =>
+          [e.name, ...(e.aliases ?? [])].some(
+            (n) => movementNameKey(n) === movementNameKey(BURPEES),
+          ),
+        )
+        .map((e) => e.slug),
+      [],
+      'CAT-3 A2-ii A6: no shipped library entry answers to "Burpees"',
+    );
+  }
+  const library = CATALOG_FIXTURE.map((e) =>
+    e.slug === 'squat_jump' ? { ...e, aliases: [...(e.aliases ?? []), BURPEES] } : e,
+  );
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { scope, proofId } = await capsHousehold(tx);
+    const [squatJump] = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(and(movementIsGlobal(), eq(schema.movements.slug, 'squat_jump')));
+    assert.ok(
+      squatJump,
+      'CAT-3 A2-ii A6: the shared database holds the test library’s squat_jump row',
+    );
+    await seedProgramFixtures(exec, scope, library);
+    const onIt = await tx
+      .select({ id: schema.prescriptions.id })
+      .from(schema.prescriptions)
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
+      .where(
+        and(
+          eq(schema.programBlocks.householdId, proofId),
+          eq(schema.prescriptions.movementId, squatJump.id),
+        ),
+      );
+    const made = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(and(movementInHousehold(scope), eq(schema.movements.name, BURPEES)));
+    assert.deepEqual(
+      { prescribedOnTheLibraryRow: onIt.length > 0, madeAsTheHouseholdsOwn: made.length },
+      { prescribedOnTheLibraryRow: true, madeAsTheHouseholdsOwn: 0 },
+      'CAT-3 A2-ii A6: seedProgramFixtures resolves the world over the library it is given (Burpees is the squat_jump row)',
+    );
+  });
+  console.log('✓ CAT-3 A2-ii A6: the seed’s fixture world resolves over the library it is given');
 }
 
 /** A new household of its own, so a count is exact: the caps are per household and per program. */

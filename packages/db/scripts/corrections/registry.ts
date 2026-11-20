@@ -11,6 +11,7 @@ import {
   SEED_PUBLIC_IDS,
   type Unit,
 } from '@mat-plan/shared';
+import { CATALOG_SLUGS } from '@mat-plan/shared/catalog/data';
 import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
@@ -680,12 +681,30 @@ const movementsOwnershipReport: Correction = {
         id: schema.movements.id,
         publicId: schema.movements.publicId,
         householdId: schema.movements.householdId,
+        slug: schema.movements.slug,
+        modality: schema.movements.modality,
         pattern: schema.movements.pattern,
       })
       .from(schema.movements);
     const global = rows.filter((r) => r.householdId === null);
-    const curated = global.filter((r) => MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId));
-    const residual = global.filter((r) => !MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId));
+    // CAT-3 A2-ii (plan D4): a library row is curated too, by an EXACT test as well: a modality AND a
+    // slug of the approved library. `movementIsCatalog()` alone (a modality) would let any global row
+    // with one leave the orphan input below, the census the next correction reads. Production's
+    // library is `CATALOG_MOVEMENTS`; on a fixtures database the test library's own slugs are counted
+    // in the line after next, so the report names the library it checked against.
+    const legacy = global.filter((r) => MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId));
+    const library = global.filter(
+      (r) =>
+        !MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId) &&
+        r.modality !== null &&
+        CATALOG_SLUGS.has(r.slug),
+    );
+    const isCurated = (r: (typeof global)[number]) =>
+      MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId) ||
+      (r.modality !== null && CATALOG_SLUGS.has(r.slug));
+    const curated = global.filter(isCurated);
+    const residual = global.filter((r) => !isCurated(r));
+    const modalityNotLibrary = residual.filter((r) => r.modality !== null);
 
     // (2) Who references the global rows — the shared definition, covering `entries` AND
     // `prescriptions`. `>= 1` household is TEN-2c-1's clone/split work; `0` is TEN-2b-2's orphan.
@@ -718,7 +737,8 @@ const movementsOwnershipReport: Correction = {
 
     return [
       `movements rows: ${rows.length} total — ${global.length} global (household_id IS NULL), ${rows.length - global.length} household-owned`,
-      `global rows: ${curated.length} curated (exact members of MOVEMENT_SEED_PUBLIC_IDS), ${residual.length} NOT curated`,
+      `global rows: ${curated.length} curated (${legacy.length} exact members of MOVEMENT_SEED_PUBLIC_IDS, ${library.length} library rows: a modality and a CATALOG_MOVEMENTS slug), ${residual.length} NOT curated`,
+      `global rows with a modality but no CATALOG_MOVEMENTS slug (checked against CATALOG_MOVEMENTS): ${modalityNotLibrary.length}`,
       `TEN-2c-1 input (the read leak's residual): ${residual.length} — of which ${residualShared.length} referenced by MORE THAN ONE household (clone + split), ${residualSingle.length} by exactly one (repoint), ${residualOrphan.length} referenced by NO household`,
       `TEN-2b-2 input (global, non-curated, unreferenced): ${residualOrphan.length}`,
       `runbooks.md pre-flight (d) — references crossing a household boundary: ${crossRefs.total} (${crossRefs.entries} entries, ${crossRefs.prescriptions} prescriptions)`,

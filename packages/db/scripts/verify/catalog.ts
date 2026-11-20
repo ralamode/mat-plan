@@ -13,6 +13,7 @@ import {
   type Muscle,
 } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
@@ -437,6 +438,14 @@ const LEGACY_SLUGS = new Set<string>(MOVEMENT_SEED_ROWS.map((r) => r.slug));
  * are until A2-ii).
  */
 export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
+  // CAT-3 A2-ii (mutation 515): no seed() path passes an empty library any more, so the writer's
+  // empty-list guard (drizzle throws on an empty insert) is proved here, first, on its own.
+  await rolledBack(async (tx) => {
+    await assert.doesNotReject(
+      () => seedReference(asDb(tx), { library: { entries: [], legacyMovements: true } }),
+      'CAT-3 A2-ii: seedReference resolves on an empty library list (A2-i D5.4)',
+    );
+  });
   await rolledBack(async (tx) => {
     const [before] = await tx
       .select({ n: sql<number>`count(*)::int` })
@@ -752,6 +761,43 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
       await blockers(tx),
       before + 1,
       'CAT-3 A2-i: …and a global row with neither a pattern nor a modality is one',
+    );
+  });
+
+  // CAT-3 A2-ii (plan D4, A9): a library row is curated, by an exact test (a modality AND a
+  // CATALOG_MOVEMENTS slug), so it never reaches the orphan input; a global row with a modality on any
+  // other slug is not, and has its own line. Deltas: the shared database holds other proofs' rows.
+  const reportCount = async (tx: VerifyTx, prefix: string) => {
+    const line =
+      ((await report.run(tx as unknown as Database, false)) as string[]).find((l) =>
+        l.startsWith(prefix),
+      ) ?? '';
+    const n = /: (\d+)$/.exec(line)?.[1];
+    assert.ok(n !== undefined, `CAT-3 A2-ii A9: the report has a "${prefix}" count (${line})`);
+    return Number(n);
+  };
+  const ORPHANS = 'TEN-2b-2 input';
+  const STRAY = 'global rows with a modality but no CATALOG_MOVEMENTS slug';
+  await rolledBack(async (tx) => {
+    const before = { orphans: await reportCount(tx, ORPHANS), stray: await reportCount(tx, STRAY) };
+    const entry = CATALOG_MOVEMENTS.find(
+      (e) => !LEGACY_SLUGS.has(e.slug) && !CATALOG_FIXTURE.some((f) => f.slug === e.slug),
+    )!;
+    await seedCatalog(asDb(tx), [entry]);
+    assert.deepEqual(
+      { orphans: await reportCount(tx, ORPHANS), stray: await reportCount(tx, STRAY) },
+      before,
+      'CAT-3 A2-ii A9: a library row is curated: it is not an orphan the next correction would remove',
+    );
+    await tx
+      .insert(schema.movements)
+      .values(
+        movementRow('cat3_a2ii_not_a_library_slug', { modality: MODALITY.mobility, pattern: null }),
+      );
+    assert.deepEqual(
+      { orphans: await reportCount(tx, ORPHANS), stray: await reportCount(tx, STRAY) },
+      { orphans: before.orphans + 1, stray: before.stray + 1 },
+      'CAT-3 A2-ii A9: …but a global row with a modality on a slug the library does not have is not, and is counted on its own line',
     );
   });
 

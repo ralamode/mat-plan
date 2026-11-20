@@ -63,12 +63,14 @@ import {
   type RoutineConfig,
   uuidSchema,
 } from '@mat-plan/shared';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { FIXTURE_ITEMS } from '@mat-plan/shared/program/fixtures';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
 import { writeCheckinEntries } from '../src/writers/checkin';
+import { SEED_PROGRAM_CLIENT_IDS } from '../src/writers/program/seed-fixtures';
 import { hideEntries, restoreHidden } from '../src/writers/hide';
 import { hiddenDayCounts, hiddenEntriesForDay } from '../src/queries/hidden-entries';
 import {
@@ -153,6 +155,7 @@ import { verifyDay } from './verify/day';
 import { verifySeedLeavesHouseholdsAlone, verifySeedOnAFreshDatabase } from './verify/seed';
 import { verifyErasure } from './verify/erasure';
 import {
+  asDb,
   asPg,
   assertCheckCoversConst,
   captureOutput,
@@ -168,6 +171,20 @@ import {
   rolledBack,
   type VerifyContext,
 } from './verify/harness';
+
+/**
+ * CAT-3 A2-ii (plan D3, D4): the shared verify database is a fixtures database, so its library rows
+ * are the test library's. A library row is curated reference data by an EXACT test: global, a
+ * modality, and a `CATALOG_FIXTURE` slug. `movementIsCatalog()` alone (a modality) is not enough.
+ */
+const FIXTURE_LIBRARY_SLUGS: ReadonlySet<string> = new Set(CATALOG_FIXTURE.map((e) => e.slug));
+function isFixtureLibraryRow(m: {
+  householdId: number | null;
+  modality: string | null;
+  slug: string;
+}): boolean {
+  return m.householdId === null && m.modality !== null && FIXTURE_LIBRARY_SLUGS.has(m.slug);
+}
 import { ADVISORY_LOCK } from '../src/writers/locks';
 import { verifyProgram } from './verify/program';
 import { verifySchema } from './verify/schema';
@@ -260,6 +277,49 @@ await seed(asPg, { fixtures: true }).catch((e: unknown) =>
 await seed(asPg, { fixtures: true }).catch((e: unknown) =>
   assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
 );
+
+// 🔴 CAT-3 A2-ii, E4 (A2): a fixtures seed writes the test library, then the legacy rows, then the
+// household fixtures, and EVERY fixture program. Here, before any other proof reads the shared state,
+// so a fixtures seed that writes the wrong library (mutation 599) fails on this line. Every program:
+// since #763 each name the world shares with the test library logs the same way, and a program with
+// one item whose library row logs another way would be skipped whole (`seedProgramFixtures`).
+{
+  const globalRows = await db
+    .select({
+      publicId: schema.movements.publicId,
+      householdId: schema.movements.householdId,
+      slug: schema.movements.slug,
+      modality: schema.movements.modality,
+    })
+    .from(schema.movements)
+    .where(isNull(schema.movements.householdId));
+  assert.deepEqual(
+    {
+      library: globalRows
+        .filter(isFixtureLibraryRow)
+        .map((m) => m.slug)
+        .sort(),
+      legacy: globalRows.filter((m) => MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId)).length,
+      other: globalRows.filter(
+        (m) => !isFixtureLibraryRow(m) && !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+      ).length,
+    },
+    { library: [...FIXTURE_LIBRARY_SLUGS].sort(), legacy: MOVEMENT_SEED_ROWS.length, other: 0 },
+    'CAT-3 A2-ii A2: seed({ fixtures: true }) writes the test library and the 35 legacy rows, and no other global row',
+  );
+  const programs = await db
+    .select({ clientId: schema.programBlocks.clientId })
+    .from(schema.programBlocks)
+    .where(inArray(schema.programBlocks.clientId, [...SEED_PROGRAM_CLIENT_IDS]));
+  assert.deepEqual(
+    programs.map((p) => p.clientId).sort(),
+    [...SEED_PROGRAM_CLIENT_IDS].sort(),
+    'CAT-3 A2-ii A2: …and every fixture program, none skipped for an item the test library logs another way',
+  );
+  console.log(
+    '✓ CAT-3 A2-ii A2: a fixtures seed writes the test library, the legacy rows and every fixture program',
+  );
+}
 
 const units = await db.select().from(schema.units);
 const profiles = await db.select().from(schema.profiles);
@@ -364,11 +424,39 @@ console.log(
       /refusing to seed into a household this seed does not own/,
       'AUTH-1 1c-4: a live household under a foreign public_id makes the seed REFUSE, by the message it throws — not by a TypeError',
     );
+    // 🔴 CAT-3 A2-ii (plan D2, A3): that refusal comes BEFORE any write. The fixture library is global
+    // and would stay; so a stale unit label, which `seedReference` would rewrite, must still be stale
+    // after the refused run (mutation 603 moves the check back after `seedReference`).
+    await rolledBack(async (tx) => {
+      const [first] = UNITS;
+      await tx
+        .update(schema.units)
+        .set({ label: 'CAT-3 A2-ii stale' })
+        .where(eq(schema.units.code, first.code));
+      await assert.rejects(
+        () => seed(asDb(tx), { fixtures: true }),
+        /refusing to seed into a household this seed does not own/,
+        'CAT-3 A2-ii A3: the fixtures seed refuses a database it does not own',
+      );
+      const [unit] = await tx
+        .select({ label: schema.units.label })
+        .from(schema.units)
+        .where(eq(schema.units.code, first.code));
+      assert.equal(
+        unit.label,
+        'CAT-3 A2-ii stale',
+        'CAT-3 A2-ii A3: a refused fixtures seed writes nothing first: ownership is checked before seedReference',
+      );
+    });
     // OPS-2 Proof C: production's seed never refuses: the refusal is the fixtures' alone (`327`).
-    await assert.doesNotReject(
-      () => seed(asPg, { fixtures: false }),
-      'OPS-2 C: with a live household under a foreign public_id, seed({ fixtures: false }) resolves',
-    );
+    // Rolled back since CAT-3 A2-ii: it writes the real library, and the shared database stays a
+    // fixtures database (plan D3).
+    await rolledBack(async (tx) => {
+      await assert.doesNotReject(
+        () => seed(asDb(tx), { fixtures: false }),
+        'OPS-2 C: with a live household under a foreign public_id, seed({ fixtures: false }) resolves',
+      );
+    });
 
     const liveAfter = await db
       .select({ id: schema.households.id })
@@ -650,10 +738,23 @@ assert.equal(
   METRIC_DEFINITION_SEED_ROWS.length,
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
-assert.equal(
-  movements.filter((m) => m.householdId === null).length,
-  MOVEMENT_SEED_ROWS.length,
-  'movements: full catalog seeded from the shared const, exactly once',
+// CAT-3 A2-ii (plan D3): the shared database is a fixtures database, as every e2e and preview one is:
+// the 35 legacy rows plus the test library, each exactly once.
+assert.deepEqual(
+  {
+    legacy: movements.filter(
+      (m) => m.householdId === null && MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+    ).length,
+    library: movements.filter((m) => isFixtureLibraryRow(m)).length,
+    other: movements.filter(
+      (m) =>
+        m.householdId === null &&
+        !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) &&
+        !isFixtureLibraryRow(m),
+    ).length,
+  },
+  { legacy: MOVEMENT_SEED_ROWS.length, library: FIXTURE_LIBRARY_SLUGS.size, other: 0 },
+  'movements: the legacy catalog and the test library seeded from their shared consts, exactly once (CAT-3 A2-ii)',
 );
 // The seed writes household items only through the fixture programs (FAM-1 6c-i): each one in the
 // seed household, and each named for a fixture item the catalog does not already have.
@@ -6709,10 +6810,16 @@ console.log(
     .select({
       publicId: schema.movements.publicId,
       householdId: schema.movements.householdId,
+      slug: schema.movements.slug,
+      modality: schema.movements.modality,
       pattern: schema.movements.pattern,
     })
     .from(schema.movements);
-  const appAuthored = allMovements.filter((m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId));
+  // CAT-3 A2-ii (plan D4): curated is a legacy seed row OR a library row of the library in effect
+  // (here the test library), by an exact test: a modality and one of its slugs.
+  const appAuthored = allMovements.filter(
+    (m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) && !isFixtureLibraryRow(m),
+  );
   assert.ok(
     appAuthored.length > 0,
     'TEN-2a anti-vacuity: at least one movements row was authored by the app’s find-or-create (outside MOVEMENT_SEED_PUBLIC_IDS) — otherwise the dark assertion below holds for want of a writer, not because the writer leaves the column alone',
@@ -6737,6 +6844,8 @@ console.log(
       id: schema.movements.id,
       publicId: schema.movements.publicId,
       householdId: schema.movements.householdId,
+      slug: schema.movements.slug,
+      modality: schema.movements.modality,
     })
     .from(schema.movements)
     .where(inArray(schema.movements.id, TEN2B_RESOLVER_IDS));
@@ -6747,7 +6856,10 @@ console.log(
   );
   assert.deepEqual(
     resolverTouched.filter(
-      (m) => m.householdId === null && !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+      (m) =>
+        m.householdId === null &&
+        !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) &&
+        !isFixtureLibraryRow(m),
     ),
     [],
     'TEN-2b THE COLUMN IS LIVE: every row the REAL findOrCreateMovement returned in this run is either a CURATED global row (resolved, not cloned) or OWNED by the household that asked — none is an app-authored row left in the shared namespace. ⚠️ This replaces TEN-2a’s all-NULL gate; a row appearing here means the resolver wrote outside the asking household’s namespace, which is the leak TEN-2 exists to close. Do NOT relax it',
@@ -6803,6 +6915,7 @@ console.log(
   );
   assert.deepEqual(
     resolverGlobal
+      .filter((m) => !isFixtureLibraryRow(m))
       .map((m) => m.publicId)
       .filter((id) => !MOVEMENT_SEED_PUBLIC_IDS.has(id))
       .sort(),
