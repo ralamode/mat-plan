@@ -16,8 +16,8 @@
 
 _Roadmap alignment (2026-11-19): advances `DX-18`. It does not touch `ID-1` or the household scope.
 (c) depends on CAT-3's file layout (`packages/shared/src/catalog/data/`), and its saving ends when
-CAT-3's data phase ends. Neither PR changes what runs on `main`, so D6 and Q1 of
-dx-18-heavy-runs-to-ci.md stand. Checked against the private roadmap; nothing to add here._
+CAT-3's data phase ends. Neither PR changes what runs on `main`; D6's per-commit runs are
+revised separately, by the maintainer's coalescing decision (§ Decided; #735). Checked against the private roadmap; nothing to add here._
 
 ## Goal
 
@@ -212,8 +212,8 @@ deleted, renamed and sibling edges. Outside them, only those two files are targe
 - **How:** the failing shard prints `✗ <patch>: …` (`mutations.mjs:541`, `:559`). The lane re-runs that
   patch with `pnpm --filter @mat-plan/db db:mutations --only <n>`, which is allowed locally (AGENTS.md
   → "When to run locally"), or pushes the fix and lets CI run.
-- **Attribution:** per-commit concurrency (`ci.yml:8-14`, D6) is unchanged, so a red run still sits on
-  its own commit.
+- **Attribution:** under D6 as revised (#735) main's runs coalesce, so a red run covers the commits
+  since the last green one; (c) and (b) change nothing about that.
 
 ## File-by-file
 
