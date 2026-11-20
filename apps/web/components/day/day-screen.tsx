@@ -85,6 +85,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
   // `n` counts announcements: each one is a new node in the live region, so the same sentence twice
   // in a row is read twice (`Announcer`'s `messageKey`).
   const [message, setMessage] = useState({ text: '', n: 0 });
+  const announcing = useRef(false);
   const closedRef = useRef<HTMLDivElement>(null);
 
   // A row's effect depends on these, so each keeps one identity for the life of the day.
@@ -136,7 +137,14 @@ function DayBody({ plan, actions }: DayScreenProps) {
       day: viewedDay,
       actions: pinned(actions, { day: viewedDay, today }),
       readOnly,
-      announce: (text) => setMessage((was) => ({ text, n: was.n + 1 })),
+      // Two in one task (a ✓ here and another phone's change landing in the same refresh) are both
+      // said, in order: a second call before the next task appends instead of replacing.
+      announce: (text) => {
+        const together = announcing.current;
+        announcing.current = true;
+        if (!together) setTimeout(() => (announcing.current = false), 0);
+        setMessage((was) => ({ text: together ? `${was.text} ${text}` : text, n: was.n + 1 }));
+      },
       setRowFailed,
       setRowPending,
       setRowBusy,

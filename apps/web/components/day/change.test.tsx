@@ -1403,3 +1403,103 @@ describe('a failed save, then another phone’s Change to that entry', () => {
     expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
   });
 });
+
+describe('another phone’s change, said to a screen reader (only for a row this one was changing)', () => {
+  /** Bench set 3: not logged in the fixture. */
+  const UNLOGGED_SET = 3;
+  /** The plan with bench set 1's load at `value` lb, as another phone would leave it. */
+  function loadElsewhere(plan: DayPlan, value: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = value;
+    return next;
+  }
+  const said = (value: number, stillTyped: boolean) =>
+    DAY_COPY.announce.changedElsewhere(setLabel(1), `${value} ${SPOKEN.lb}, 8 reps`, stillTyped);
+
+  it('a row nobody is changing here stays silent', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const before = status();
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(before);
+  });
+
+  it('a number typed back to what was stored (no "Not saved" shown) stays silent', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    const before = status();
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(before);
+  });
+
+  it('a row showing "Not saved": one sentence, with the new number, and that this one is not saved', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(said(35, true));
+    expect(load().value).toBe('30');
+  });
+
+  it('the other phone typed the same number: said, without "Yours isn’t saved"', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '35');
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(said(35, false));
+  });
+
+  it('after a failed save, too', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(said(35, true));
+  });
+
+  it('this phone’s own save is never "changed elsewhere": exactly its own sentence', async () => {
+    mount(yesterdayHalfDone, { change: true, wrap: () => ({ amendRow: amendOk }) });
+    type(load(), '30');
+    await leave(load());
+    expect(status()).toBe(
+      DAY_COPY.announce.changed(
+        setLabel(1),
+        `27.5 ${SPOKEN.lb}, 8 reps`,
+        `30 ${SPOKEN.lb}, 8 reps`,
+      ),
+    );
+  });
+
+  it('a change landing while this phone’s save is in flight: its failure names the new number, and both sentences are read', async () => {
+    const holder: { control?: ReturnType<typeof mount> } = {};
+    holder.control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: (fake) => ({
+        // Set 1's save fails, so its typed number stays while this phone ticks set 3.
+        amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }),
+        // The refresh after this phone's ✓ also carries another phone's change to set 1.
+        logRow: async (input) => {
+          const result = await fake.logRow(input);
+          const setPlan = holder.control!.setPlan as unknown as (
+            f: (p: DayPlan) => DayPlan,
+          ) => void;
+          setPlan((p) => loadElsewhere(p, 35));
+          return result;
+        },
+      }),
+    });
+    type(load(), '30');
+    await press(benchTick(UNLOGGED_SET));
+    // Leaving set 1 for the ✓ sent its save again, still in flight when the change landed: its
+    // failure names the number stored now, so no second sentence is owed. Both are read.
+    const text = status() ?? '';
+    expect(text).toContain(DAY_COPY.announce.logged(setLabel(UNLOGGED_SET)));
+    expect(text).toContain(DAY_COPY.change.failed('35 lb × 8'));
+    expect(text).not.toContain('27.5');
+    expect(within(bench()).getByText(DAY_COPY.change.failed('35 lb × 8'))).toBeTruthy();
+  });
+});

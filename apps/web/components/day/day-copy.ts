@@ -119,6 +119,9 @@ export const DAY_COPY = {
     cancelled: (name: string) => `${name}: change cancelled`,
     unticked: (name: string) => `${name} un-checked`,
     failed: (name: string, message: string) => `${name}: ${message}`,
+    /** Another phone (or tab) changed a row this one was changing: said only for a row "Not saved". */
+    changedElsewhere: (name: string, to: string, stillTyped: boolean) =>
+      `${name} was changed elsewhere to ${to}.${stillTyped ? ' Yours isn’t saved.' : ''}`,
   },
 } as const;
 

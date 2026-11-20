@@ -7,7 +7,7 @@ import {
   type RowRefusal,
   type RowValues,
 } from '@mat-plan/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy } from './day-copy';
@@ -154,6 +154,12 @@ export function useChange(
   // (12c-iii follow-up; the phantom predates the fold, #462.)
   const values = entry?.values ?? null;
   const [seenValues, setSeenValues] = useState(values);
+  // What another phone's change does to a row this one was changing, said by the page's announcer
+  // (never by the line: it is not a live region). Set here, during render; said by the effect below.
+  const [elsewhere, setElsewhere] = useState<{ text: string } | null>(null);
+  // This phone's own write, from the call until its draft is cleared: the answer lands (the row's
+  // values move) one render before `setDraft(null)`, and is never another phone's change.
+  const [saving, setSaving] = useState(false);
   if (values !== seenValues) {
     setSeenValues(values);
     if (
@@ -171,6 +177,18 @@ export function useChange(
       const was = textOf(item, seenValues);
       const drafted = Object.keys(draft) as RowField[];
       const typed = drafted.filter((f) => draft[f] !== was[f]);
+      // Said only for a row that showed "Not saved" or "Couldn’t save" (a draft typed back is
+      // silent), and never for this phone's own save (its answer is announced by `commit`).
+      if (editable && typed.length > 0 && !r.pending && !saving) {
+        const now = textOf(item, values);
+        setElsewhere({
+          text: DAY_COPY.announce.changedElsewhere(
+            name,
+            spokenValues(values),
+            typed.some((f) => draft[f] !== now[f]),
+          ),
+        });
+      }
       if (typed.length === 0) setDraft(null);
       else if (typed.length < drafted.length) {
         setDraft(Object.fromEntries(typed.map((f) => [f, draft[f]])) as Partial<RowText>);
@@ -207,6 +225,13 @@ export function useChange(
   // answer was lost): a failed save's "not saved" no longer says anything true.
   if (!dirty && r.error?.write === 'amend' && r.error.counts) r.clearError();
   const shownLine = editable && !dirty ? line : null;
+
+  // Keyed on the sentence alone: `day` is not a dependency, so a re-render that hands down a new
+  // context value (the announcement's own, say) never says it twice.
+  const announceElsewhere = useEffectEvent((text: string) => day.announce(text));
+  useEffect(() => {
+    if (elsewhere) announceElsewhere(elsewhere.text);
+  }, [elsewhere]);
 
   // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered). Its
   // own key: the row's message reports under `rowKey`, and its cleanup must not end this one's.
@@ -290,8 +315,12 @@ export function useChange(
       }
       return;
     }
+    setSaving(true);
     const result = await r.amend(send);
-    if (!result.ok) return refused(result.reason, from, 'save');
+    // Cleared with the draft (same batch), never before it.
+    setSaving(false);
+    // "Still …" names what is stored when the answer comes, not when the save began.
+    if (!result.ok) return refused(result.reason, latest.current.stored ?? from, 'save');
     setDraft(null);
     const base = baseline ?? from;
     setBaseline(base);
@@ -310,8 +339,10 @@ export function useChange(
   async function undo() {
     if (!baseline || !entry || r.pending) return;
     const still = entry.values;
+    setSaving(true);
     const result = await r.amend(baseline);
-    if (!result.ok) return refused(result.reason, still, 'undo');
+    setSaving(false);
+    if (!result.ok) return refused(result.reason, latest.current.stored ?? still, 'undo');
     setLine({ kind: 'back', to: result.values, kept: null });
     day.announce(DAY_COPY.announce.changedBack(name, spokenValues(result.values)));
   }
@@ -333,10 +364,12 @@ export function useChange(
     return shown.kept ? `${said}. ${shown.kept}` : said;
   }
 
-  // What the ✕'s press watch reads when the press ends, after this render's closures are stale.
-  const latest = useRef({ dirty, pending: r.pending, commit });
+  // What the ✕'s press watch reads when the press ends, after this render's closures are stale;
+  // and what is stored when a write's answer comes back (another phone may have moved it meanwhile).
+  const stored = entry?.values ?? null;
+  const latest = useRef({ dirty, pending: r.pending, commit, stored });
   useEffect(() => {
-    latest.current = { dirty, pending: r.pending, commit };
+    latest.current = { dirty, pending: r.pending, commit, stored };
   });
 
   return {
