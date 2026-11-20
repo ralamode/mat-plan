@@ -28,14 +28,15 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
  * 🔴 **Four names are in both lists** (Goblet squat, Side plank, Easy run, Jump rope), and the real
  * read never lists a household item a library row shadows. So the preview lists ONE row for each:
  *
- * - **Two log the same way in both** (Goblet squat, Side plank): the row is the library's, under
- *   the fixture item's public id, because every other fixture (a workout's draft, a day's plan)
- *   names the item by that id. That is what the fixtures chunk (F1) does for all of them; until
- *   then it is done here, by name.
- * - **Two do not** (Jump rope: a count in the test library, a duration in the prototype; Easy run:
- *   a duration in the test library, a distance in the prototype): the row stays the household's item, since the fixtures log
- *   it that way, and the library's is left out. One entry has one tracking type (spec rule 10),
- *   so a real library would give the two different names; F1 settles it.
+ * **The row is the library's, under the fixture item's public id**, because every other fixture (a
+ * workout's draft, a day's plan) names the item by that id. That is what the fixtures chunk (F1)
+ * does for all of them; until then it is done here, by name.
+ *
+ * 🔴 **All four log the same way in both lists**, and this module throws if a same-named pair ever
+ * differs (a pair that meets by alias is held by the shared test).
+ * `newItem` selects the library row for a typed name whatever its type, so a pair that differed
+ * could not be seeded on a fixtures database (`catalog/fixture.ts` has the rule; Jump rope and Easy
+ * run differed until 2026-11-20, and were kept as the household's items here).
  *
  * It lives here and not with the other named fixtures because its shape is the web's
  * `MovementOptionDTO`.
@@ -75,8 +76,12 @@ function interimGroupOf(option: Parameters<typeof movementFamilyOf>[0]): Movemen
 
 const libraryRows = CATALOG_FIXTURE.flatMap((entry) => {
   const twin = itemByNameKey.get(movementNameKey(entry.name));
-  // A pair that logs differently stays the household's item: see above.
-  if (twin && twin.trackingType !== entry.trackingType) return [];
+  // A pair that logged differently could not be seeded: see above, and `catalog/fixture.ts`.
+  if (twin && twin.trackingType !== entry.trackingType) {
+    throw new Error(
+      `picker-options: ${entry.name} is a ${entry.trackingType} in the test library and a ${twin.trackingType} in the fixture world`,
+    );
+  }
   const publicId = twin?.itemPublicId ?? CATALOG_FIXTURE_IDS[entry.slug];
   if (publicId === undefined) throw new Error(`picker-options: no fixture id for ${entry.slug}`);
   const option = catalogOptionOf(entry, publicId);
