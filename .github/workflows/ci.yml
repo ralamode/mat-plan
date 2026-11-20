@@ -663,18 +663,12 @@ jobs:
           BASE_SHA: ${{ steps.base.outputs.sha }}
         run: bash .github/scripts/scopes-step.sh
 
-      # 🔴 The one place the shard count is written. Every push to main runs 8 (the slowest took
-      # 12m26s on 2026-11-19); a pull request runs 4, so open PRs do not hold 8 runners each.
+      # 🔴 The one place the shard count is written: 4 on every event. A push to main ran 8 until
+      # 2026-11-19, when eleven queued main runs (8 shards each, 16–25 min a shard) held every PR
+      # behind them; 4 shards still run every patch, in fewer, longer jobs (maintainer, 2026-11-19).
       - name: Shard count
         id: shards
-        env:
-          EVENT: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT" = push ]; then
-            echo 'shards=[0,1,2,3,4,5,6,7]' >>"$GITHUB_OUTPUT"
-          else
-            echo 'shards=[0,1,2,3]' >>"$GITHUB_OUTPUT"
-          fi
+        run: echo 'shards=[0,1,2,3]' >>"$GITHUB_OUTPUT"
 
   mutations:
     name: mutations (${{ strategy.job-index }})

@@ -1874,7 +1874,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   tests the change reaches (`pnpm test:changed`), and AGENTS.md has one rule for when to run locally. ✅ **1b (the guard) shipped; the slot follows after #554:** a hook denies
   `pkill`, `killall`, `fuser -k` and the broad `kill` forms in every directory
   (`.claude/hooks/guard-process-kill.mjs`). 🚧 **2 in review:** the mutation proof runs in CI as
-  eight shards plus a total check, every push to `main` runs all of them, and
+  four shards plus a total check (eight on `main` until 2026-11-19), every push to `main` runs all
+  of them, and
   `.github/scripts/changed-scopes.mjs` decides which heavy steps a pull request needs. `pnpm verify`
   becomes optional before a PR.
 
