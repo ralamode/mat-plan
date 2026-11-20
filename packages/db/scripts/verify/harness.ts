@@ -348,8 +348,7 @@ export async function orFail<T>(what: string, run: () => Promise<T>): Promise<T>
  * `ownerScope()`, the one narrowing, rather than a cast (`src/scope.test.ts` → `ALLOWED_CAST`), and a
  * scope that is not an owner's fails here, loudly, instead of reading zero rows.
  *
- * `what` names the proof in the failure. `verify/erasure.ts` still keeps a private copy of this shape
- * (PRIV-3 2a); switching it to this one belongs to that lane.
+ * `what` names the proof in the failure.
  */
 export function asOwner(scope: HouseholdScope, what: string): OwnerScope {
   const owner = ownerScope(scope);

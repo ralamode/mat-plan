@@ -42,7 +42,7 @@ import {
   REFERENCE_TABLES,
 } from '../../src/erasure/graph';
 import { PREFLIGHT_CHECKS, type PreflightCheck } from '../../src/erasure/preflight';
-import { ownerScope, type HouseholdScope, type OwnerScope } from '../../src/scope';
+import { type HouseholdScope } from '../../src/scope';
 import { setLocalTimeouts, type Executor } from '../../src/writers/executor';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import {
@@ -53,6 +53,7 @@ import {
   insertWorkoutOwnedBy,
 } from '../../src/writers/ownership';
 import {
+  asOwner,
   asPg,
   asTx,
   db,
@@ -637,12 +638,6 @@ async function newHousehold(tx: VerifyTx | typeof db, name: string): Promise<num
   return row.id;
 }
 
-function asOwner(scope: HouseholdScope, what: string): OwnerScope {
-  const owner = ownerScope(scope);
-  assert.ok(owner, `PRIV-3 2a: ${what}'s scope is an owner scope`);
-  return owner;
-}
-
 /** Each graph table's ids matched by `scope`'s predicate, by table name. */
 async function idsByTable(tx: VerifyTx, scope: HouseholdScope): Promise<Record<string, number[]>> {
   const out: Record<string, number[]> = {};
@@ -751,7 +746,7 @@ async function verifyCoreErases(): Promise<void> {
   await rolledBack(async (tx) => {
     const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a H'));
     const K_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a K'));
-    const h = asOwner(H_SCOPE, 'H');
+    const h = asOwner(H_SCOPE, 'PRIV-3 2a: H');
     const live = await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-h');
     const hiddenSet = await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-h-hidden');
     // The second set hidden: block, workout, assignment, profile, entry, membership and the rest. The
@@ -940,7 +935,7 @@ async function verifyCoreErases(): Promise<void> {
 async function verifyDeleteCountChecked(): Promise<void> {
   await rolledBack(async (tx) => {
     const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P3b H'));
-    const h = asOwner(H_SCOPE, 'H');
+    const h = asOwner(H_SCOPE, 'PRIV-3 2a: H');
     await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-p3b');
     // A trigger that silently skips every delete of one leaf table. Without the RETURNING-length
     // check the skipped rows would surface later as an untyped 23503 (day_readiness -> profiles);
@@ -975,7 +970,7 @@ async function verifyPreflightsRefuse(): Promise<void> {
   await rolledBack(async (tx) => {
     const H_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P4 H'));
     const K_SCOPE = householdScopeForScript(await newHousehold(tx, 'verify PRIV-3 2a P4 K'));
-    const h = asOwner(H_SCOPE, 'H');
+    const h = asOwner(H_SCOPE, 'PRIV-3 2a: H');
     const H = (await populateEveryGraphTable(tx, H_SCOPE, 'priv-3-2a-p4-h')).planted;
     const K = (await populateEveryGraphTable(tx, K_SCOPE, 'priv-3-2a-p4-k')).planted;
     const one = (m: Map<string, number[]>, t: string) => m.get(t)![0];
@@ -1229,7 +1224,7 @@ async function verifyHiddenHouseholdErased(): Promise<void> {
   });
   const executor: Executor = asPg;
   await assert.doesNotReject(
-    eraseHousehold(executor, asOwner(P5_SCOPE, 'P5'), { apply: true }),
+    eraseHousehold(executor, asOwner(P5_SCOPE, 'PRIV-3 2a: P5'), { apply: true }),
     'PRIV-3 2a: P5 the core erases a hidden household',
   );
   const left = await db.transaction(async (tx) => stillThere(tx, planted));
