@@ -257,6 +257,15 @@ export type LoggedLifeActivity = {
 };
 
 /**
+ * Is this entry a wrestling practice? The Life section's own test (V1-9b B2): one predicate, so the
+ * clear's summary and the section name the same rows. A practice is keyed on its activity, not its
+ * metric, as the section renders it.
+ */
+export function isPracticeEntry(entry: Pick<EntryDTO, 'activityKey'>): boolean {
+  return entry.activityKey === ACTIVITY_TYPE_KEYS.wrestling_practice;
+}
+
+/**
  * Every entry on the day for one of `activityKeys`, in the DAL's order (oldest first). Which
  * activities the page SHOWS (no Wake) is `LifeSection`'s rule, not this one's.
  */

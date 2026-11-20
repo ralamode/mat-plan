@@ -389,7 +389,7 @@ DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:
 takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
 answers the day's newest clear's count: a call that finds nothing live replays that clear, however
 old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
-Restore all; B2-ii's banner and dialog will call them.
+Restore all; the day page's dialog and banner call them (B2-ii).
 
 ```mermaid
 sequenceDiagram
