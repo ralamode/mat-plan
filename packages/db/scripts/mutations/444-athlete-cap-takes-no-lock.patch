@@ -1,9 +1,9 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index 2ff6c433..5d982d7f 100644
+index d4dd5264..2fc1a3dc 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
-@@ -409,7 +409,7 @@ async function lockedCreate(
-   // core holds. The wait is bounded by the `lock_timeout` above (past it, 55P03).
+@@ -413,7 +413,7 @@ async function lockedCreate(
+   // (past it, 55P03).
    const locked = await exec
      .select({
 -      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
