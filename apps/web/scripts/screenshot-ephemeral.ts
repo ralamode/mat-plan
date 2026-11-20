@@ -172,13 +172,13 @@ async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdS
 /**
  * AUTH-1 1c-2 — soft-delete the HOUSEHOLD, so the picker renders `NoHouseholdState`.
  *
- * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** — the way `seedClosedDays`
- * composes `seedWeighIns`. `fixtureScope` asserts *"expected exactly one live household in the
+ * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** (none does since 12f PR 2;
+ * the warning stands for the next one). `fixtureScope` asserts *"expected exactly one live household in the
  * throwaway DB"* and throws on 0, which is precisely the state this function creates. (There is no
  * scope-derivation pass to order against — ⚠️ **there is one since `1c-4a`**: `runEphemeral` runs
  * `migrateAndSeed`, then `linkFixtureMember` (which resolves the live household through the
  * correction's `requireLiveHouseholdScope`), then exactly one
- * `STATES[state]` seeder, and `fixtureScope()` is only ever called from inside a sibling seeder.)
+ * `STATES[state]` seeder; no seeder calls `fixtureScope()` since 12f PR 2.)
  *
  * This is the only way to see this screen outside the design-token harness: the Playwright suite runs
  * `fullyParallel` against one shared seeded database, and a hidden household breaks `selectProfile`
@@ -322,8 +322,8 @@ const STATES = {
   // AUTH-1 1c-2 — the "this account resolves no household" screen. The ONLY way to render it (see
   // `seedNoHousehold`): it needs zero live households, which breaks `selectProfile` in every spec.
   'no-household': seedNoHousehold,
-  // PROF-1 a-g: an ADULT on the day page — no day-role label, "Not a programmed day" as the form
-  // default, and the muted line explaining why the strength card is empty.
+  // PROF-1 a-g: an ADULT on the day page, with no day-role label (the form defaults this once
+  // showed went with the old forms).
   'adult-athlete': seedAdultAthlete,
   // PROF-1 b: an ARCHIVED athlete, so Household settings renders BOTH sections and the athlete's own
   // day page renders its notice. The ONLY way to capture either: the seed produces no archived row,
@@ -786,7 +786,7 @@ function assertDbTargetAllowed(url: string, allowLive: boolean): void {
   );
 }
 
-/** Seed the "already-logged" check-in state: one habit + one brush-teeth metric today. */
+/** Seed the "already-logged" state: one habit and one brush-teeth metric logged today. */
 async function seedAlreadyLogged(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);

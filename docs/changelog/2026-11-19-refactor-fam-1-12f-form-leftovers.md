@@ -15,5 +15,7 @@
   - **The screenshot script** loses the 14 capture states for surfaces gone since #418, their
     seeders (`seedCalisthenics`, the tree's last writer of a ramp target; `seedStrengthSession`,
     `seedStatusBadges`, `seedLengthSession`) and their interactions.
-  - **Comments** that named deleted files or `isEditableSet` now say what is true.
+  - **Comments** that named deleted files or `isEditableSet` now say what is true, in the files this PR
+    was cleared to touch; two in `packages/db/scripts` (`verify.ts`, `corrections/registry.ts`) go to a
+    Tech Debt follow-up with `fixtureScope`.
   - **No page changes,** and nothing logged is touched.
