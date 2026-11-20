@@ -32,6 +32,8 @@ printf "export * from './batch-01';\n" >"$R/$CAT/data/index.ts"
 printf 'export const batch01 = [];\n' >"$R/$CAT/data/batch-01.ts"
 printf "import { fixture } from '@mat-plan/shared/catalog/fixture';\nimport { y } from './y';\nimport { z } from 'drizzle-orm';\nexport { fixture, y, z };\n" >"$R/packages/db/src/seed.ts"
 printf 'export const y = 1;\n' >"$R/packages/db/src/y.ts"
+# Both tsconfigs the walk reads for `paths`/`baseUrl` (C-17); a missing one would run everything.
+printf '{ "compilerOptions": { "strict": true } }\n' | tee "$R/packages/db/tsconfig.json" >"$R/packages/shared/tsconfig.json"
 g() { git -C "$R" -c user.email=t@t -c user.name=t "$@"; }
 g init -q
 g add -A && g commit -qm base
@@ -125,71 +127,58 @@ g reset -q --hard "$BASE"
 
 # ── (c) catalog data is not a mutation trigger (docs/plans/dx-18-mutation-savings.md C1–C5) ────────
 # Each case: an optional PRE commit on top of BASE (what main already holds), then the PR: a batch
-# file plus a docs change, plus the case's own extra. The flags are read with SCRIPT, the copy under
-# test, run from outside the repo as CI runs the base's copy. Only run_mutations is compared, except
-# C-1. A setup that belongs on main goes in PRE: a PR that edited packages/db or shared itself would
-# trigger on that file and prove nothing about the catalog rule.
-c_pre_c2() { printf "import { batch01 } from '@mat-plan/shared/catalog/data';\nexport { batch01 };\n" >"$R/packages/db/src/reads-data.ts"; }
+# file plus a docs change, plus the case's own extra. A setup that belongs on main goes in PRE: a PR
+# that edited packages/db or shared itself would trigger on that file and prove nothing about the
+# catalog rule. The commits are built once; each copy of the script (the real one, every mutant) is
+# then run on them from outside the repo, as CI runs the base's copy. Only run_mutations is
+# compared, except C-1.
+db() { mkdir -p "$(dirname "$R/packages/db/$1")" && printf '%b' "$2" >"$R/packages/db/$1"; }
+c_pre_c2() { db src/reads-data.ts "import { batch01 } from '@mat-plan/shared/catalog/data';\nexport { batch01 };\n"; }
 c_pre_c3() {
-  sed -i.bak 's/\[\]/[1]/' "$R/$CAT/data/batch-01.ts" && rm "$R/$CAT/data/batch-01.ts.bak"
+  printf 'export const batch01 = [1];\n' >"$R/$CAT/data/batch-01.ts"
   g diff >"$R/packages/db/scripts/mutations/02-catalog.patch"
   g checkout -q -- "$CAT/data/batch-01.ts"
 }
 c_pr_c4() { mkdir -p "$R/packages/shared/src" && printf 'export const x = 1;\n' >"$R/packages/shared/src/x.ts"; }
 c_pre_c5() { printf "import './nope';\nexport const fixture = 1;\n" >"$R/$CAT/fixture.ts"; }
 c_pre_c7() { printf "import './data/batch-01';\nexport const fixture = 1;\n" >"$R/$CAT/fixture.ts"; }
-c_pre_c9() { printf "import { x } from '@mat-plan/other';\nexport { x };\n" >"$R/packages/db/src/reads-other.ts"; }
+c_pre_c9() { db src/reads-other.ts "import { x } from '@mat-plan/other';\nexport { x };\n"; }
+c_pre_c10() { db scripts/verify/x.ts "export const load = async () => await import('@mat-plan/shared/catalog/data');\n"; }
+c_pre_c11() { printf "const data = require('./data/batch-01');\nexport const fixture = data;\n" >"$R/$CAT/fixture.ts"; }
+c_pre_c12() { db src/subpath.ts "import '@mat-plan/shared/catalog/data/batch-01';\n"; }
+c_pre_c13() { db src/reads-path.ts "import { readFileSync } from 'node:fs';\nexport const shipped = readFileSync(new URL('../../shared/src/catalog/data/shipped.json', import.meta.url), 'utf8');\n"; }
+c_pre_c14() { db src/hash.ts "import { data } from '#data';\nexport { data };\n"; }
+c_pre_c15() { db src/dynamic.ts "const name = './y';\nexport const load = () => import(name);\n"; }
+c_pre_c16() { db src/cjs.ts "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nexport const y = load('./y');\n"; }
+c_pre_c17() { printf '{ "compilerOptions": { "baseUrl": ".", "paths": { "x": ["y"] } } }\n' >"$R/packages/db/tsconfig.json"; }
+c_pr_c18() { printf '{ "name": "planted" }\n' >"$R/$CAT/data/package.json"; }
 # A git that fails on the walk's `ls-files`, and only there: the diff still works.
 SHIM="$T/shim"
 mkdir -p "$SHIM"
 printf '#!/bin/sh\n[ "$1" = ls-files ] && { echo "shim: git failed" >&2; exit 128; }\nexec "%s" "$@"\n' "$(command -v git)" >"$SHIM/git"
 chmod +x "$SHIM/git"
 
-# c_flags <script> <pre-fn|-> <pr-fn|-> [path-prefix]: prints "mutations build e2e".
-c_flags() {
-  local script="$1" pre="$2" pr="$3" path="${4:-}" base
-  g reset -q --hard "$BASE"
-  [ "$pre" = - ] || "$pre"
-  g add -A && g commit -qm pre --allow-empty
-  base="$(g rev-parse HEAD)"
-  printf 'export const batch01 = [2];\n' >"$R/$CAT/data/batch-01.ts"
-  printf 'more\n' >>"$R/docs/a.md"
-  [ "$pr" = - ] || "$pr"
-  g add -A && g commit -qm pr
-  (cd "$R" && PATH="${path}${PATH}" GITHUB_EVENT_NAME=pull_request BASE_SHA="$base" node "$script" 2>/dev/null) |
-    sed 's/^[a-z0-9_]*=//' | tr '\n' ' ' | sed 's/ $//'
-  g reset -q --hard "$BASE"
-}
-# c_cases <script>: one "<case>=<ok|RED>" line per case, against that copy of the script.
-c_cases() {
-  local s="$1" got
-  got="$(c_flags "$s" - -)"
-  [ "$got" = "false true true" ] && echo "C-1=ok" || echo "C-1=RED(${got// /,})"
-  got="$(c_flags "$s" c_pre_c2 -)"
-  [ "${got%% *}" = true ] && echo "C-2=ok" || echo "C-2=RED(${got// /,})"
-  got="$(c_flags "$s" c_pre_c3 -)"
-  [ "${got%% *}" = true ] && echo "C-3=ok" || echo "C-3=RED(${got// /,})"
-  got="$(c_flags "$s" - c_pr_c4)"
-  [ "${got%% *}" = true ] && echo "C-4=ok" || echo "C-4=RED(${got// /,})"
-  got="$(c_flags "$s" c_pre_c5 -)"
-  [ "${got%% *}" = true ] && echo "C-5=ok" || echo "C-5=RED(${got// /,})"
-  got="$(c_flags "$s" - - "$SHIM:")"
-  [ "${got%% *}" = true ] && echo "C-6=ok" || echo "C-6=RED(${got// /,})"
-  got="$(c_flags "$s" c_pre_c7 -)"
-  [ "${got%% *}" = true ] && echo "C-7=ok" || echo "C-7=RED(${got// /,})"
-  # C-8: one home for the path. check-catalog-append-only.mjs keeps DIR private; its exported FILES
-  # sit directly in it.
-  got="$(node --input-type=module -e "
-    import { CATALOG_DATA } from '$s';
-    import { FILES } from '$HERE/check-catalog-append-only.mjs';
-    import { dirname } from 'node:path';
-    const dirs = [...new Set(FILES.map((f) => dirname(f)))];
-    console.log(dirs.length === 1 && dirs[0] === CATALOG_DATA ? 'equal' : 'CATALOG_DATA=' + CATALOG_DATA + ' DIR=' + dirs);
-  " 2>&1 | tail -1)"
-  [ "$got" = equal ] && echo "C-8=ok" || echo "C-8=RED(${got// /,})"
-  got="$(c_flags "$s" c_pre_c9 -)"
-  [ "${got%% *}" = true ] && echo "C-9=ok" || echo "C-9=RED(${got// /,})"
-}
+# id | pre-fn | pr-fn | PATH prefix | expected (C-1 compares all three flags, the rest run_mutations)
+C_SPEC=(
+  "C-1|-|-||false true true"
+  "C-2|c_pre_c2|-||true"
+  "C-3|c_pre_c3|-||true"
+  "C-4|-|c_pr_c4||true"
+  "C-5|c_pre_c5|-||true"
+  "C-6|-|-|$SHIM:|true"
+  "C-7|c_pre_c7|-||true"
+  "C-8|-|-||equal"
+  "C-9|c_pre_c9|-||true"
+  "C-10|c_pre_c10|-||true"
+  "C-11|c_pre_c11|-||true"
+  "C-12|c_pre_c12|-||true"
+  "C-13|c_pre_c13|-||true"
+  "C-14|c_pre_c14|-||true"
+  "C-15|c_pre_c15|-||true"
+  "C-16|c_pre_c16|-||true"
+  "C-17|c_pre_c17|-||true"
+  "C-18|-|c_pr_c18||true"
+)
 C_DESC=(
   "C-1 a batch file plus docs: no mutations; build and e2e still run"
   "C-2 a db file on main imports @mat-plan/shared/catalog/data: mutations run"
@@ -200,7 +189,63 @@ C_DESC=(
   "C-7 fixture.ts on main imports ./data/batch-01: mutations run (the walk, not a grep)"
   "C-8 CATALOG_DATA equals check-catalog-append-only.mjs's DIR"
   "C-9 a db file imports another @mat-plan package the walk cannot follow: mutations run"
+  "C-10 a packages/db/scripts file await-imports the data: mutations run"
+  "C-11 fixture.ts requires ./data/batch-01: mutations run"
+  "C-12 an import of an unmapped subpath (catalog/data/batch-01): mutations run"
+  "C-13 a db file reads shipped.json by path: mutations run"
+  "C-14 a #imports specifier: mutations run"
+  "C-15 a non-literal import(): mutations run"
+  "C-16 createRequire: mutations run"
+  "C-17 a tsconfig with paths or baseUrl: mutations run"
+  "C-18 a package.json placed in catalog/data still triggers"
 )
+C_BASES=()
+C_HEADS=()
+for spec in "${C_SPEC[@]}"; do
+  IFS='|' read -r id pre pr _path _want <<<"$spec"
+  if [ "$id" = C-8 ]; then
+    C_BASES+=(-) && C_HEADS+=(-)
+    continue
+  fi
+  g reset -q --hard "$BASE"
+  [ "$pre" = - ] || "$pre"
+  g add -A -- packages docs && g commit -qm "pre $id" --allow-empty
+  C_BASES+=("$(g rev-parse HEAD)")
+  printf 'export const batch01 = [2];\n' >"$R/$CAT/data/batch-01.ts"
+  printf 'more\n' >>"$R/docs/a.md"
+  [ "$pr" = - ] || "$pr"
+  g add -A -- packages docs && g commit -qm "pr $id"
+  C_HEADS+=("$(g rev-parse HEAD)")
+done
+g reset -q --hard "$BASE"
+BRANCH="$(g symbolic-ref --short HEAD)"
+
+# c_cases <script>: one "<case>=<ok|RED(flags)>" line per case, against that copy of the script.
+c_cases() {
+  local s="$1" i=0 id pre pr path want got
+  for spec in "${C_SPEC[@]}"; do
+    IFS='|' read -r id pre pr path want <<<"$spec"
+    if [ "$id" = C-8 ]; then
+      # One home for the path. check-catalog-append-only.mjs keeps DIR private; its exported FILES
+      # sit directly in it.
+      got="$(node --input-type=module -e "
+        import { CATALOG_DATA } from '$s';
+        import { FILES } from '$HERE/check-catalog-append-only.mjs';
+        import { dirname } from 'node:path';
+        const dirs = [...new Set(FILES.map((f) => dirname(f)))];
+        console.log(dirs.length === 1 && dirs[0] === CATALOG_DATA ? 'equal' : 'CATALOG_DATA=' + CATALOG_DATA + ' DIR=' + dirs);
+      " 2>&1 | tail -1)"
+    else
+      g checkout -q --detach "${C_HEADS[$i]}"
+      got="$(cd "$R" && PATH="${path}${PATH}" GITHUB_EVENT_NAME=pull_request BASE_SHA="${C_BASES[$i]}" node "$s" 2>/dev/null |
+        sed 's/^[a-z0-9_]*=//' | tr '\n' ' ' | sed 's/ $//')"
+      [ "$want" = true ] && got="${got%% *}"
+    fi
+    [ "$got" = "$want" ] && echo "$id=ok" || echo "$id=RED(${got// /,})"
+    i=$((i + 1))
+  done
+  g checkout -q "$BRANCH" && g reset -q --hard "$BASE"
+}
 cp "$HERE/changed-scopes.mjs" "$T/under-test.mjs"
 results="$(c_cases "$T/under-test.mjs")"
 i=0
@@ -208,14 +253,14 @@ for line in $results; do
   [ "${line#*=}" = ok ] && ok "${C_DESC[$i]}" || no "${C_DESC[$i]}: ${line#*=}"
   i=$((i + 1))
 done
-[ "$i" -eq 9 ] || no "the (c) cases: expected 9 results, got $i"
+[ "$i" -eq "${#C_SPEC[@]}" ] || no "the (c) cases: expected ${#C_SPEC[@]} results, got $i"
 
 # C-1 again, through scopes-step.sh with the BASE's copy (R3: a decider that imported a sibling would
 # throw from $RUNNER_TEMP and run everything, so the saving would never save).
 g reset -q --hard "$BASE"
 printf 'export const batch01 = [2];\n' >"$R/$CAT/data/batch-01.ts"
 printf 'more\n' >>"$R/docs/a.md"
-g add -A && g commit -qm batch
+g add -A -- packages docs && g commit -qm batch
 cp "$HERE/scopes-step.sh" "$R/.github/scripts/"
 [ "$(step "$BASE")" = "run_mutations=false run_build=true run_e2e=true " ] && ok "C-1 through scopes-step.sh: the base's copy skips the mutations for a batch file" || no "C-1 scopes-step: $(cat "$T/out") $(cat "$T/step.log")"
 g reset -q --hard "$BASE"
@@ -223,7 +268,7 @@ g reset -q --hard "$BASE"
 # The (c) mutants (H5): each is one from/to literal on a copy of the script. `from` must occur exactly
 # once (probe.mjs's rule) and the copy must compile, or the mutant proves nothing. Then the cases in
 # its red list must go RED and every other case stay green.
-# mutant <name> <red cases, space-separated> <from> <to>
+# mutant <name> <red cases, space-separated, in case order> <from> <to>
 mutant() {
   local name="$1" want="$2" from="$3" to="$4" copy="$T/mutant-$1.mjs" got red
   if ! FROM="$from" TO="$to" SRC="$HERE/changed-scopes.mjs" OUT="$copy" node -e '
@@ -244,13 +289,34 @@ mutant() {
   red="$(printf '%s\n' $got | grep -v '=ok$' | sed 's/=.*//' | tr '\n' ' ' | sed 's/ $//')"
   [ "$red" = "$want" ] && ok "mutant $name: turns $want red, the rest stay green" || no "mutant $name: want red '$want', got red '$red'"
 }
-# Ignoring relative specifiers also hides C-5's unresolved RELATIVE specifier: both go red.
-mutant c-walk-ignores-relative "C-5 C-7" \
+# Ignoring relative specifiers hides every relative path to the data: C-7's import, C-11's require,
+# and C-5's unresolved RELATIVE specifier.
+mutant c-walk-ignores-relative "C-5 C-7 C-11" \
   "if (spec.startsWith('.')) {" "if (spec.startsWith('.')) { return undefined;"
-mutant c-unresolved-is-fine "C-5 C-9" \
+# Every unresolved first-party specifier passes through this line: a relative one (C-5), another
+# workspace package (C-9), an unmapped shared subpath (C-12) and #imports (C-14).
+mutant c-unresolved-is-fine "C-5 C-9 C-12 C-14" \
   "if (next === null) return true;" "if (next === null) continue;"
 mutant c-any-throw-is-no-match "C-6" \
   "return true; // an error proves nothing" "return false; // an error proves nothing"
+# The scan keeps only `from` and a bare `import '…'`: the dynamic import (C-10) and require (C-11) go.
+mutant c-scan-drops-call-forms "C-10 C-11" \
+  "/\b(?:from|import|require)\s*\(?\s*['\"]([^'\"]+)['\"]/g" "/\b(?:from|import)\s*['\"]([^'\"]+)['\"]/g"
+mutant c-unmapped-export-is-third-party "C-12" \
+  "fromExports(target) : null;" "fromExports(target) : undefined;"
+mutant c-scripts-not-entries "C-10" \
+  "CODE_FILE.test(f) && !TEST_FILE.test(f)" "CODE_FILE.test(f) && !TEST_FILE.test(f) && !f.startsWith('packages/db/scripts/')"
+mutant c-path-reads-ignored "C-13" \
+  "READS_DATA.test(code(text))" "false"
+mutant c-hash-is-third-party "C-14" \
+  "if (spec.startsWith('#')) return null;" "if (spec.startsWith('#')) return undefined;"
+# One pattern covers both: a non-literal call (C-15) and createRequire (C-16).
+mutant c-unfollowable-ignored "C-15 C-16" \
+  "UNFOLLOWABLE.test(code(text))" "false"
+mutant c-tsconfig-paths-ignored "C-17" \
+  "/\"(?:paths|baseUrl)\"/.test(io.read(f))" "false"
+mutant c-data-dir-config-excluded "C-18" \
+  " && !/\/(?:package|tsconfig[^/]*)\.json\$/.test(f)" ""
 
 # The mutants live here, never as markers in the shipped source.
 if grep -rln '@mutant' "$HERE" | grep -v '/changed-scopes\.test\.sh$'; then

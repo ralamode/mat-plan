@@ -19,9 +19,10 @@
  * - **Catalog data is not a mutation trigger** (DX-18 savings (c), docs/plans/dx-18-mutation-savings.md
  *   C1–C5): a file under `CATALOG_DATA` stops counting while `catalogReachable` proves that nothing
  *   `packages/db` runs, nor any other `@mat-plan/shared` export, reaches it. **What it gives up:** a
- *   batch file that changes a proof without an import, which the walk cannot see. The data is plain
- *   constants read only by two web DAL files no patch targets, and `main` still runs every patch on
- *   the merge, so the proof is moved to after the merge, not dropped.
+ *   path to the data the walk cannot see: one built at run time (a name assembled from pieces, a
+ *   directory listing of a parent) rather than an import or a literal path it reads as text. The
+ *   data is plain constants read only by two web DAL files no patch targets, and `main` still runs
+ *   every patch on the merge, so the proof is moved to after the merge, not dropped.
  *
  * What never skips (format, lint, typecheck, tests, db:verify, gitleaks, the guards, the audit, the
  * status check) is not decided here: those steps take no flag.
@@ -65,6 +66,12 @@ const ALL_RUN = { run_mutations: true, run_build: true, run_e2e: true };
  */
 export const CATALOG_DATA = 'packages/shared/src/catalog/data';
 const inCatalogData = (f) => f.startsWith(`${CATALOG_DATA}/`);
+/**
+ * The files the exclusion covers: the data itself, `.ts` and `.json`. A `package.json` or
+ * `tsconfig*.json` placed inside the directory changes resolution, so it still triggers.
+ */
+const isCatalogDataFile = (f) =>
+  inCatalogData(f) && /\.(?:ts|json)$/.test(f) && !/\/(?:package|tsconfig[^/]*)\.json$/.test(f);
 
 // The specifier scan and relative resolution of packages/shared/src/test-support/source-graph.ts,
 // in plain JS for the same reason.
@@ -72,20 +79,37 @@ const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`]
 const specifiersOf = (text) =>
   [...code(text).matchAll(/\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g)].map(([, s]) => s);
 const SHARED = '@mat-plan/shared';
+const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/;
+const TEST_FILE = /\.test\.(?:[cm]?[jt]sx?)$/;
+/**
+ * A code file the walk cannot follow, or that reads the data by path. Any of these answers true:
+ * - a non-literal `import(…)`/`require(…)`, or `createRequire`, names a module the scan cannot read;
+ * - a path to the data as text (`readFileSync(new URL('…/shipped.json', import.meta.url))`, the way
+ *   the proofs read repo files). `@mat-plan/shared/catalog/data` is an import, the walk's to judge.
+ */
+const UNFOLLOWABLE = /\b(?:import|require)\s*\(\s*[^'"\s]|\bcreateRequire\b/;
+const READS_DATA = /(?<!@mat-plan\/shared\/)catalog\/data|shipped\.json|approved\.json/;
+/** Either project's tsconfig remapping specifiers (`paths`, `baseUrl`) is resolution the walk lacks. */
+const TSCONFIGS = ['packages/db/tsconfig.json', 'packages/shared/tsconfig.json'];
 
 /**
  * Whether anything a mutation run executes can reach the catalog's data. The entries are every
- * `@mat-plan/shared` export except `./catalog/data`, and every non-test `.ts`/`.tsx` file in
- * `packages/db/`. The walk follows relative specifiers and `@mat-plan/shared[/x]` through the
- * exports map. A reached data file, or a first-party specifier that does not resolve, answers true.
+ * `@mat-plan/shared` export except `./catalog/data`, and every non-test code file in `packages/db/`
+ * (`.ts`, `.mjs`, `.js`, …; scripts included). The walk follows relative specifiers and
+ * `@mat-plan/shared[/x]` through the exports map. True, so the mutations run, on: a reached data
+ * file; a first-party specifier that does not resolve (`#imports` included); a reached code file the
+ * walk cannot follow or that names the data by path (`UNFOLLOWABLE`, `READS_DATA`); a tsconfig with
+ * `paths` or `baseUrl`; no `packages/db` files at all.
  * `io` is `{ read(path), isFile(path), listDb() }`, repo-relative; any error it throws is the
  * caller's to read as true.
  */
 export function catalogReachable(io) {
+  if (TSCONFIGS.some((f) => /"(?:paths|baseUrl)"/.test(io.read(f)))) return true;
   const exportsMap = JSON.parse(io.read('packages/shared/package.json')).exports;
   const fromExports = (target) => posix.join('packages/shared', target);
   // undefined: a third-party package, not followed. null: first-party, and it does not resolve.
   const resolve = (from, spec) => {
+    if (spec.startsWith('#')) return null; // package.json `imports`: not mapped here
     if (spec.startsWith('.')) {
       const base = posix.join(posix.dirname(from), spec);
       return [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`].find(io.isFile) ?? null;
@@ -98,11 +122,13 @@ export function catalogReachable(io) {
     const target = exportsMap[`.${spec.slice(SHARED.length)}`];
     return typeof target === 'string' ? fromExports(target) : null;
   };
+  const dbFiles = io.listDb();
+  if (dbFiles.length === 0) return true; // nothing listed proves nothing
   const entries = [
     ...Object.entries(exportsMap)
       .filter(([key]) => key !== './catalog/data')
       .map(([, target]) => fromExports(target)),
-    ...io.listDb().filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f)),
+    ...dbFiles.filter((f) => CODE_FILE.test(f) && !TEST_FILE.test(f)),
   ];
   const seen = new Set();
   const stack = [...entries];
@@ -111,7 +137,10 @@ export function catalogReachable(io) {
     if (seen.has(file)) continue;
     seen.add(file);
     if (inCatalogData(file)) return true;
-    for (const spec of specifiersOf(io.read(file))) {
+    const text = io.read(file);
+    if (CODE_FILE.test(file) && (UNFOLLOWABLE.test(code(text)) || READS_DATA.test(code(text))))
+      return true;
+    for (const spec of specifiersOf(text)) {
       const next = resolve(file, spec);
       if (next === null) return true; // unresolved: it could be the data
       if (next !== undefined) stack.push(next);
@@ -136,8 +165,8 @@ export function scopesFor(files, patchPaths, catalogReaches = () => true) {
   const trigger = (f) => MUTATION_TRIGGERS.some((re) => re.test(f));
   const triggered =
     touchesWorkflowsOrScripts ||
-    files.some((f) => !inCatalogData(f) && trigger(f)) ||
-    (files.some(inCatalogData) && catalogReaches());
+    files.some((f) => !isCatalogDataFile(f) && trigger(f)) ||
+    (files.some(isCatalogDataFile) && catalogReaches());
   const mutations =
     triggered ||
     (() => {
