@@ -591,7 +591,16 @@ test.describe('Bodyweight and Life on real data', () => {
     await expect(lineOf(bodyweight)).toHaveCount(0);
     await expect(lineOf(life)).toHaveCount(0);
 
-    // 3. Coming back (a reload): two lines, each region still named by its heading alone.
+    // 3. Coming back: a day away and back with DayNav (a client-side change of day, where the page
+    // itself does not remount), then a reload. Two lines each time, each region still named by its
+    // heading alone. A new athlete can view yesterday (`day-navigation.spec.ts`).
+    const nav = page.getByRole('navigation', { name: 'Change day' });
+    await nav.getByRole('link', { name: /^Previous day/ }).click();
+    await page.waitForURL((u) => u.searchParams.has('d'));
+    await nav.getByRole('link', { name: /^Next day/ }).click();
+    await page.waitForURL((u) => !u.searchParams.has('d'));
+    await expect(lineOf(bodyweight)).toBeVisible();
+    await expect(lineOf(life)).toBeVisible();
     await page.reload({ waitUntil: 'networkidle' });
     await expect(lineOf(bodyweight)).toHaveAccessibleName(
       `${BODYWEIGHT_COPY.heading}, ${shownWeight(WEIGHT)}`,

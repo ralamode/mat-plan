@@ -28,14 +28,25 @@ function shell({
   finished = true,
   busy = false,
   withBusy = true,
+  profileId = 'p1',
+  day = '2026-09-30',
 }: {
   summary?: string | null;
   finished?: boolean;
   busy?: boolean;
   withBusy?: boolean;
+  profileId?: string;
+  day?: string;
 } = {}) {
   return (
-    <CollapsibleSection headingId="h" heading={NAME} summary={summary} finished={finished}>
+    <CollapsibleSection
+      profileId={profileId}
+      day={day}
+      headingId="h"
+      heading={NAME}
+      line={summary === null ? null : { detail: null, count: summary }}
+      finished={finished}
+    >
       {withBusy ? <Busy busy={busy} /> : null}
     </CollapsibleSection>
   );
@@ -47,9 +58,11 @@ const inside = () => screen.queryByRole('button', { name: 'Inside' });
 const nameSpan = () => document.getElementById('h')!;
 
 describe('CollapsibleSection', () => {
-  it('cannot fold (no summary): today’s heading, no line and no Collapse', () => {
+  it('cannot fold (no line): today’s heading, the focus target, no line and no Collapse', () => {
     render(shell({ summary: null }));
-    expect(screen.getByRole('heading', { level: 2 }).id).toBe('h');
+    const heading = screen.getByRole('heading', { level: 2 });
+    expect(heading.id).toBe('h');
+    expect(heading.getAttribute('tabindex')).toBe('-1');
     expect(line()).toBeNull();
     expect(document.querySelector('[aria-controls]')).toBeNull();
     expect(inside()).not.toBeNull();
@@ -129,16 +142,32 @@ describe('CollapsibleSection', () => {
     expect(document.activeElement).toBe(nameSpan());
   });
 
-  it('under StrictMode: a mount moves no focus, the busy count nets to one, and a tap still focuses Collapse', () => {
-    const strict = (busy: boolean) => <StrictMode>{shell({ busy })}</StrictMode>;
-    const { rerender } = render(strict(false));
+  it('under StrictMode a mount moves no focus, and a tap still focuses Collapse', () => {
+    render(<StrictMode>{shell()}</StrictMode>);
     expect(document.activeElement).toBe(document.body);
     fireEvent.click(line()!);
     expect(document.activeElement).toBe(collapse());
-    rerender(strict(true));
+  });
+
+  it('under StrictMode a part mounted busy still holds Collapse: its count survives the second run', () => {
+    const strict = (busy: boolean) => <StrictMode>{shell({ busy })}</StrictMode>;
+    const { rerender } = render(strict(true));
+    fireEvent.click(line()!);
+    expect(inside()).not.toBeNull();
     expect(collapse()).toBeNull();
     rerender(strict(false));
     expect(collapse()).not.toBeNull();
+  });
+
+  it('a new day or a new athlete is a new visit: keyed inside, it folds again', () => {
+    const { rerender } = render(shell());
+    fireEvent.click(line()!);
+    expect(line()).toBeNull();
+    rerender(shell({ day: '2026-10-01' }));
+    expect(line()).not.toBeNull();
+    fireEvent.click(line()!);
+    rerender(shell({ day: '2026-10-01', profileId: 'p2' }));
+    expect(line()).not.toBeNull();
   });
 
   it('outside a section, useSectionBusy does nothing', () => {

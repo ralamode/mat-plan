@@ -54,13 +54,13 @@ export function BodyweightSection({
   const foldable = writable && logged.length === 1;
 
   return (
-    // Keyed on athlete and day: the page does not remount on a change of day, and a new day is a new
-    // visit (12c-iii §1).
+    // Keyed inside on athlete and day: a new day or athlete is a new visit (12c-iii §1).
     <CollapsibleSection
-      key={`fold-${profileId}/${day}`}
+      profileId={profileId}
+      day={day}
       headingId="log-bw-heading"
       heading={BODYWEIGHT_COPY.heading}
-      summary={foldable ? formatLoggedWeights(logged)[0]! : null}
+      line={foldable ? { detail: null, count: formatLoggedWeights(logged)[0]! } : null}
       finished={foldable}
     >
       {/* The live region and the focus hand-off, mounted in BOTH states, so it outlives the form or

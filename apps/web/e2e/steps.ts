@@ -269,9 +269,9 @@ export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g
  * is lost. Lifted from `athletes.spec.ts` at FAM-1 15, when the builder's spec became the second.
  *
  * ⚠️ **The athlete budget is shared.** Archiving does not free a slot, and a fresh e2e run spends
- * about 20 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
- * 4 seeded, about 10 in `athletes.spec.ts`, one each in seven more, the day page's fold journey
- * included since FAM-1 12c-iii), leaving about 4 for retries. A new
+ * about 22 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
+ * 4 seeded, about 10 in `athletes.spec.ts`, one each in eight more, the day page's Bodyweight and
+ * Life journey included since FAM-1 12c-iii PR 2), leaving about 3 for retries. A new
  * spec that adds athletes counts itself here first.
  */
 export async function addAthlete(
@@ -392,19 +392,23 @@ export async function putOnFromToday(page: Page, program: string, athlete: strin
  */
 export async function openCollapsed(region: Locator, name: string): Promise<void> {
   const line = region.getByRole('heading').getByRole('button', { expanded: false });
+  const collapse = region.getByRole('button', { name: DAY_COPY.collapseLabel(name) });
   await expect(line, `${name} arrives as one line`).toBeVisible();
-  await line.click();
-  await expect(region.getByRole('button', { name: DAY_COPY.collapseLabel(name) })).toBeFocused();
+  // A tap before the page has hydrated does nothing: tap again while the line is still there.
+  await expect(async () => {
+    if (await line.isVisible()) await line.click();
+    await expect(collapse).toBeFocused({ timeout: 1_000 });
+  }).toPass();
 }
 
 /**
  * FAM-1 12c-iii PR 2: open `region` if it arrived as one line, else nothing. Only where the state
  * depends on earlier steps or a retry (the logging helpers, an order-dependent spec); a test that
- * expects the line uses the strict `openCollapsed`. ⚠️ `count()` does not wait, so the region's
- * heading, there in both states, is awaited first.
+ * expects the line uses the strict `openCollapsed`. ⚠️ `count()` does not wait, so the region,
+ * there in both states, is awaited first.
  */
 export async function openIfCollapsed(region: Locator, name: string): Promise<void> {
-  await expect(region.getByRole('heading').first()).toBeVisible();
+  await expect(region).toBeVisible();
   const line = region.getByRole('heading').getByRole('button', { expanded: false });
   if ((await line.count()) > 0) await openCollapsed(region, name);
 }

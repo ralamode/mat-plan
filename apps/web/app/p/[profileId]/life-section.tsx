@@ -71,12 +71,14 @@ export function LifeSection({
   const foldable = writable && rows.length > 0;
 
   return (
-    // Keyed on athlete and day, as `BodyweightSection`'s (12c-iii §1).
+    // Keyed inside on athlete and day, as `BodyweightSection`'s (12c-iii §1). The summary is the
+    // line's detail, which wraps: it can hold more than one item.
     <CollapsibleSection
-      key={`fold-${profileId}/${day}`}
+      profileId={profileId}
+      day={day}
       headingId="life-heading"
       heading={LIFE_COPY.heading}
-      summary={foldable ? summary : null}
+      line={foldable ? { detail: summary, count: null } : null}
       finished={foldable && open.length === 0}
     >
       {/* The island in BOTH states, keyed on the day, as `BodyweightSection`'s: its region must exist

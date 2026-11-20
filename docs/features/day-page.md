@@ -229,14 +229,16 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     `setRowBusy`. Focus goes to "Collapse" after a tap on the line and to the line after "Collapse";
     when either control goes by itself while focused, to the part's name. Nothing is announced: the
     focused button says it. The region keeps the bare name in both states.
-    **Bodyweight and Life** (PR 2) fold through `CollapsibleSection`, keyed on athlete and day
-    (the page does not remount on a change of day): Bodyweight with exactly one weight, Life with
-    every shown item logged, on a writable day. Their busy is `useSectionBusy`: the amend editor
-    open or saving, or the island's alert shown. **A section that cannot fold on this visit has no
-    Collapse slot**, unlike a workout's: logging turns its form into a receipt, which changes its
-    height anyway, so a reserved slot would buy nothing and would cost every unlogged section a 44px
-    heading on every visit (lane C, 2026-11-20). A workout keeps its slot because nothing else in
-    its card moves.
+    **Bodyweight and Life** (PR 2) fold through `CollapsibleSection`, which keys itself on athlete
+    and day (the page does not remount on a change of day): Bodyweight with exactly one weight,
+    Life with every shown item logged, on a writable day. Their busy is `useSectionBusy`: the amend
+    editor open or saving, or the island's alert shown. Life's summary is the line's wrapping
+    detail; Bodyweight's weight is its count. **A section's Collapse slot comes and goes during a
+    visit**, unlike a workout's: it comes with the first log (the heading row grows to 44px, about
+    16px) and goes with a clear. Accepted (lane C, 2026-11-20): at that moment the form becomes the
+    receipt, or the receipt the form, which changes the section's height anyway, and a slot reserved
+    on every unlogged section would cost each a taller heading on every visit. A workout keeps its
+    slot from the first ✓ because nothing else in its card moves.
 
 ## Recorded differences from the prototype (v12)
 
@@ -327,7 +329,8 @@ A test that acts on a workout finished in its fixture opens it first: `openFolde
 `day-test-utils.tsx` for component tests, `openCollapsed(region, name)` in `e2e/steps.ts` for e2e
 (12c-iii), since such a workout arrives as one line. A refused write's message also counts as busy
 (`use-row.ts`), so Collapse is never offered over it; a busy part's Collapse stays in place, held
-(`invisible`, disabled, hidden), so the heading row never changes height.
+(`invisible`, disabled, hidden), so a workout's heading row never changes height while it is
+worked on (a section's comes with its first log and goes with a clear: invariant 24).
 Bodyweight and Life fold too (PR 2): the e2e logging helpers (`logBodyweight`, `logPractice`,
 `clearAnyPractice`) open a folded section first with `openIfCollapsed(region, name)`, the
 conditional twin of `openCollapsed`, for state that depends on an earlier spec or a retry. A

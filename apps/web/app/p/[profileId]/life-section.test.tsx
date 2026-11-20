@@ -5,7 +5,7 @@ import {
   PRACTICE_AMEND_REFUSAL,
   PRACTICE_UNIT,
 } from '@mat-plan/shared';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,6 +18,7 @@ import {
   AMEND_ERROR_COPY,
   changeLabel,
   LIFE_COPY,
+  NAME_WRAP_CLASS,
   PRACTICE_COPY,
   RATE_LIMITED,
 } from '@/lib/constants';
@@ -345,7 +346,17 @@ describe('LifeSection — every item logged folds it to one line (FAM-1 12c-iii)
     expect(screen.getByRole('region', { name: LIFE_COPY.heading })).toBeTruthy();
   });
 
+  it('the summary is the line’s detail, which wraps, never its count, which does not', () => {
+    render(section({ logged: [practice(90)] }));
+    const summary = within(line()!).getByText(`${practiceLabel} ${minutes(90)}`);
+    expect(summary.className).toContain(NAME_WRAP_CLASS);
+    expect(summary.className).not.toContain('whitespace-nowrap');
+  });
+
   it('the summary names an item with no value by its label alone, items joined with ", "', () => {
+    // ⚠️ A LEGACY shape: one live practice per day is a database rule since 3b-0, so two rows (one
+    // with no value) exist only from before it. Kept because the join and the label-alone branch are
+    // the prototype's rule for more than one Life item; the summary is the line's wrapping detail.
     render(
       section({
         logged: [

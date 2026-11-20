@@ -69,18 +69,21 @@ describe('BodyweightSection — its states', () => {
   it('is headed "Bodyweight", and named so, in EVERY state (folded too)', () => {
     for (const props of [
       { logged: [] },
-      { logged: [weight(84.5)] },
       { logged: [], writable: false },
       { logged: [weight(84.5)], writable: false },
     ]) {
       render(section(props));
-      expect(screen.getByRole('heading', { level: 2 }).textContent).toContain(
-        BODYWEIGHT_COPY.heading,
-      );
-      // The region keeps its bare name when folded (12c-iii §3): the e2e finds it by exact name.
+      expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(BODYWEIGHT_COPY.heading);
       expect(screen.getByRole('region', { name: BODYWEIGHT_COPY.heading })).toBeTruthy();
       cleanup();
     }
+    // Folded (one weight on a writable day): the heading holds the line, named by its parts; the
+    // region keeps its bare name (12c-iii §3), which the e2e finds it by.
+    render(section({ logged: [weight(84.5)] }));
+    expect(
+      screen.getByRole('heading', { level: 2 }).querySelector('button')!.getAttribute('aria-label'),
+    ).toBe(`${BODYWEIGHT_COPY.heading}, ${shown(weight(84.5))}`);
+    expect(screen.getByRole('region', { name: BODYWEIGHT_COPY.heading })).toBeTruthy();
   });
 
   it('writable + nothing logged → the ✓ row: a text field with a decimal keypad, and an outline ✓', () => {
@@ -584,7 +587,9 @@ describe('BodyweightSection — one weight folds to one line (FAM-1 12c-iii)', (
     expect(collapse()).not.toBeNull();
   });
 
-  it('no Collapse while a save is in flight; it returns once the save lands', async () => {
+  // `editing || pending` in the editor: a save is only ever in flight while the editor is open, so
+  // `|| pending` is a safety net no test can isolate. This proves the two together.
+  it('no Collapse while the editor is open and saving; it returns once the save lands', async () => {
     let resolve!: (r: { ok: true; error: null }) => void;
     vi.mocked(editBodyweightAction).mockImplementationOnce(
       () => new Promise((r) => (resolve = r as typeof resolve)),
