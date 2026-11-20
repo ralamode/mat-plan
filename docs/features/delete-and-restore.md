@@ -191,4 +191,5 @@ is for program rows only _(maintainer, 2026-11-16)_.
   `sessions` row, and its free-text note — a child's own words — with it. The purge must hard-delete
   orphaned grouping rows, recorded as a requirement on `PRIV-3` in the plan. The notice's "Clear this
   day" paragraph and the inventory's §8 say so since B2-ii, and the dialog says it when the day has a
-  workout.
+  workout, as "any note written with it": no page writes or shows `feel` since the strength form
+  went (#725), so the day read no longer selects it (2026-11-20).

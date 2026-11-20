@@ -1459,9 +1459,13 @@ export const CLEAR_DAY_COPY = {
       parts,
     )}. You can put them back with Restore all until ${deadline}, unless something new is logged ` +
     `in their place first.`,
-  /** When the day holds a workout or an older session: its record outlives a clear (PRIV-3 req. 2). */
+  /**
+   * When the day holds a workout or an older session: its record outlives a clear (PRIV-3 req. 2).
+   * "Any note" covers a "How did it feel?" note on an older session without naming a box no page
+   * shows any more (the strength form went in #725).
+   */
   sessionStays:
-    'A workout’s name and its “How did it feel?” note stay with the day; only the entries are hidden.',
+    'A workout’s name, and any note written with it, stays with the day; only the entries are hidden.',
   summaryWorkout: (name: string, count: number) => `${name} (${entriesText(count)})`,
   summaryWeighIns: (n: number) => plural(n, { one: 'bodyweight', other: `${n} weigh-ins` }),
   summaryPractices: (n: number) =>
