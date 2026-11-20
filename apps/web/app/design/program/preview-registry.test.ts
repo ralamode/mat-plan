@@ -244,8 +244,14 @@ describe('the picker-options fixture', () => {
         supervision: entry.supervision ?? null,
       });
     }
-    // Reached by the fixture item's id for a shared name.
-    expect((await previewHowTo(itemNamed('Goblet squat').itemPublicId))?.name).toBe('Goblet squat');
+    // Reached by the fixture item's id for every shared name whose entry has steps.
+    const sharedWithSteps = SHARED.filter(
+      (name) => CATALOG_FIXTURE.find((entry) => entry.name === name)?.instructions !== undefined,
+    );
+    expect(sharedWithSteps.length).toBeGreaterThan(1);
+    for (const name of sharedWithSteps) {
+      expect((await previewHowTo(itemNamed(name).itemPublicId))?.name, name).toBe(name);
+    }
     // Nothing for a row with no instructions, a household's item, or an id that is not listed.
     const noSteps = library.find((entry) => entry.instructions === undefined);
     const noStepsRow = catalogPickerOptions.find((option) => option.name === noSteps?.name);
@@ -254,7 +260,7 @@ describe('the picker-options fixture', () => {
     expect(await previewHowTo('019826b4-0000-7000-8000-00000000ffff')).toBeNull();
     // 🔴 A library row listed under the household item's id gives nothing by the test library's own
     // id for it, though its entry has steps: the read answers for the ids it lists, and no other.
-    for (const name of SHARED) {
+    for (const name of sharedWithSteps) {
       const entry = CATALOG_FIXTURE.find((candidate) => candidate.name === name);
       expect(
         await previewHowTo(CATALOG_FIXTURE_IDS[entry?.slug ?? ''] ?? 'missing'),

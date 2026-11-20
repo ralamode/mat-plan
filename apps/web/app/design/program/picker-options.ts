@@ -32,7 +32,8 @@ import type { MovementOptionDTO } from '@/lib/movements/movement-option';
  * workout's draft, a day's plan) names the item by that id. That is what the fixtures chunk (F1)
  * does for all of them; until then it is done here, by name.
  *
- * 🔴 **All four log the same way in both lists**, and this module throws if a pair ever differs.
+ * 🔴 **All four log the same way in both lists**, and this module throws if a same-named pair ever
+ * differs (a pair that meets by alias is held by the shared test).
  * `newItem` selects the library row for a typed name whatever its type, so a pair that differed
  * could not be seeded on a fixtures database (`catalog/fixture.ts` has the rule; Jump rope and Easy
  * run differed until 2026-11-20, and were kept as the household's items here).

@@ -17,11 +17,13 @@ import { catalogOptionOf, type CatalogOption } from './option';
  * alias, a "db" short form). `catalog.test.ts` holds each of those.
  *
  * 🔴 **An entry that shares a name with an item of the fixture world logs the way that item does**
- * (`FIXTURE_ITEMS`; `program/fixtures/fixtures.test.ts` holds it, by name and by alias). On a
- * fixtures database the seed resolves each of the world's items by name through `newItem`, which
- * selects a library row of that name whatever its tracking type, and the seed then skips a program
- * whose item came back as another type. So a pair that differs would silently drop that program from
- * every test, CI and preview database. Four names are in both today: Goblet squat, Side plank, Jump
+ * (`FIXTURE_ITEMS`; `program/fixtures/fixtures.test.ts` holds it with `existingItem`, `newItem`'s
+ * own rule: a name, an alias or a short form). On a fixtures database the seed resolves each of the
+ * world's items by name through `newItem`, which selects a library row that name finds whatever its
+ * tracking type, and the seed then skips the whole program when an item came back as another type.
+ * So a pair that differs would silently drop that program from every test, CI and preview database.
+ * The test reads this library's own aliases, which is what such a database is matched against once
+ * it is read with this library (spec K29). Four names are in both today: Goblet squat, Side plank, Jump
  * rope and Easy run. Until 2026-11-20 the last two differed (a count and a duration here, a duration
  * and a distance in the world, which is the accepted prototype's); the count this library must cover
  * moved to the medicine ball chest pass, which no world item names.
