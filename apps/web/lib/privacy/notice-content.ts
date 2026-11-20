@@ -347,7 +347,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " The box where a movement can be typed by name;\nan "
+        "text": " An "
       },
       {
         "k": "strong",
@@ -2491,13 +2491,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "\"How it felt\" is no longer listed as a text box."
+            "text": "\"How it felt\" and the box for typing a movement's name are no longer listed as text boxes."
           }
         ]
       },
       {
         "k": "text",
-        "text": " No page shows that box any more. A note typed\nthere before is still kept with its workout, as \"How long we keep it\" says."
+        "text": " No\npage shows either any more. A note or a movement name typed there before is still kept with its\nworkout, as \"How long we keep it\" says. A movement you add in the program builder is still named by\nwhat you type, and is still in that list."
       }
     ]
   },
@@ -3068,7 +3068,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ".\n"
+        "text": ", and so was the old box for typing a movement's name.\n"
       },
       {
         "k": "strong",

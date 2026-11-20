@@ -600,8 +600,12 @@ separately. **Four were reached by the UI** (two until `PROF-1` a-r; the fourth,
    input was on the strength form (deleted in #725), and the action that wrote it went in #741. Rows
    written before keep it. The callerless DAL wrapper (`logStrengthSession`) still accepts it
    (`docs/tech-debt.md`), so wiring a caller back is a re-review trigger for this list.
-2. **The movement-name box** (`strength-form.tsx`) → `entries.movement_name`, **and** a `movements`
-   row. **This is the one that leaves the household**, and since TEN-1 1d that is measured rather
+2. **The movement-name box — historical** (re-read 2026-11-20). Its input was on the strength form
+   (`strength-form.tsx`, deleted in #725), which wrote `entries.movement_name` **and** a `movements`
+   row; no page does now, and the path survives only in the callerless `logStrengthSession`. Today a
+   typed movement name comes only from the program builder's "+ New item", which writes a
+   `movements` row in the household's own namespace. What stays live is the stock below. **This was
+   the one that left the household**, and since TEN-1 1d that is measured rather
    than suspected. 🔴 **`TEN-2b` narrowed it from "global" to one named case.** The row is no longer
    global: it lands in the typing household's own namespace, it is deleted with that household, and a
    prescription in another household can no longer resolve it at all (`seedProgram` reads the global

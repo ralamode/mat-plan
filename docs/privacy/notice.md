@@ -64,8 +64,7 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
 
-**The text boxes have no filter.** The box where a movement can be typed by name;
-an **athlete's name**; and, in the program builder, a program's name, a workout's name and
+**The text boxes have no filter.** An **athlete's name**; and, in the program builder, a program's name, a workout's name and
 description, each exercise's instructions and rest note, the name of a group of exercises, the label
 of a workout on a day (in the week and when copying), and the name of a movement you add with
 "+ New item". Whatever goes in is stored exactly as typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
@@ -371,8 +370,10 @@ Because this cannot be undone, both of the steps below stay in place:
 
 ## What changed on 20 November 2026
 
-**"How it felt" is no longer listed as a text box.** No page shows that box any more. A note typed
-there before is still kept with its workout, as "How long we keep it" says.
+**"How it felt" and the box for typing a movement's name are no longer listed as text boxes.** No
+page shows either any more. A note or a movement name typed there before is still kept with its
+workout, as "How long we keep it" says. A movement you add in the program builder is still named by
+what you type, and is still in that list.
 
 ## What changed on 19 November 2026
 
@@ -468,7 +469,7 @@ one.**
 who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
 2026-11-19** against the export becoming the household owners' and its rate limit, and against
 Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
-the text-box list, which no page renders any more _(the maintainer approved it)_.
+the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out
