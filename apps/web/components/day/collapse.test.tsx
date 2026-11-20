@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { type DayPlan } from '@mat-plan/shared';
+import { ROW_REFUSAL, type DayPlan } from '@mat-plan/shared';
 import {
   archivedAthleteToday,
   closedDayLoggedOnly,
@@ -349,5 +349,38 @@ describe('more of the plan’s rules (12c-iii review)', () => {
       fireEvent.click(collapseButton(name)!);
     });
     expect(document.activeElement).toBe(line(name));
+  });
+});
+
+describe('a failed Change overtaken by another phone (#773)', () => {
+  it('stays busy: Collapse is not offered over the typed number once the failed message goes', async () => {
+    const w = finished(yesterdayHalfDone).find((x) =>
+      x.items.some((i) => i.rows.some((r) => r.logged && r.logged.values.quantities.length > 0)),
+    )!;
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }) }),
+    });
+    act(() => {
+      fireEvent.click(line(w.name)!);
+    });
+    const field = () => within(workout(w.name)).getAllByRole('textbox')[0]! as HTMLInputElement;
+    act(() => {
+      field().focus();
+      fireEvent.change(field(), { target: { value: '99' } });
+    });
+    await act(async () => field().blur());
+    expect(collapseButton(w.name)).toBeNull();
+    const next: DayPlan = structuredClone(control.plan);
+    for (const row of next.workouts.find((x) => x.name === w.name)!.items.flatMap((i) => i.rows)) {
+      if (row.logged && row.logged.values.quantities.length > 0) {
+        row.logged.values.quantities[0]!.value += 1;
+      }
+    }
+    await act(async () => control.setPlan(next));
+    expect(within(workout(w.name)).queryByText(/^Couldn’t save\./)).toBeNull();
+    expect(within(workout(w.name)).getByText(/^Not saved\./)).toBeTruthy();
+    expect(field().value).toBe('99');
+    expect(collapseButton(w.name)).toBeNull();
   });
 });
