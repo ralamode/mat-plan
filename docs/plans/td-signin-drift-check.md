@@ -170,6 +170,31 @@ Estimated at about 300 lines, plus this plan.
 - **What Clerk receives:** the first run's request list and cookie names are recorded in the PR. The
   first failing artefact is unzipped and checked for `__client` / `__session`.
 
+### As built, 2026-11-20 (from CI's runs against production)
+
+- **The sandbox:** Chromium's sandbox failed on the first run, because Ubuntu 24.04's AppArmor
+  restricts unprivileged user namespaces. The workflow lifts that on the throwaway runner, which is
+  Chromium's documented fix, so the browser runs **sandboxed**. § Decisions 5's fallback was not
+  needed and no SECURITY.md residual is recorded.
+- **Links:** production has **4** links in `<main>`. Two are Clerk's and under 44px: the Clerk logo
+  ("Secured by Clerk") at 14px and **"Join waitlist" at 18px**. Both are named exceptions
+  (`VENDOR_LINK_EXCEPTIONS`), each of which must match exactly one link. "Join waitlist" could be
+  sized by an appearance key of its own, which is a UI change for its own PR.
+- **Clerk's styling, our 44px key, one `<h1>`, 360px, tap targets, axe:** all green.
+- 🔴 **The CSP finds real drift on most runs:** Clerk's bot-protection bootstrap
+  (`cdn.protect.clerk.com/…/bootstrap.js`) loads and its `connect-src` probes to
+  `*.client.protect.clerk.com` (five ports) are refused. `runbooks.md` records bot protection as
+  turned off on the production instance on 2026-10-29. Raised to the maintainer; it is not allowlisted.
+- **Red proofs**, each through a temporary CI matrix, since removed:
+  - **Card absent** (`/privacy`): "did not render within 20000ms". ✅
+  - **Link count off by one:** "link count". ✅
+  - **Style-src nonce swapped:** CSP red (`style-src-elem inline … ui.browser.js`) and "Clerk's card is
+    unstyled". ✅ The 44px check went red too, because the swap also refused our own stylesheet
+    chunk, so this run does not show 44px staying green on an unstyled card. That claim rests on the
+    reasoning in § Acceptance 2.
+  - **No URL:** the config throws; checked locally. ✅
+- **Every section is a soft assertion**, so one red run lists every kind of drift.
+
 ## Alternatives considered
 
 - **Pin clerk-js:** rejected by the maintainer. It rolled production back five releases and ends
