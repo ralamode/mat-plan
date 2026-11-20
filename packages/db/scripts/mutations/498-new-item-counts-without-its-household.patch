@@ -5,7 +5,8 @@ index e95cef62..1fea151e 100644
 @@ -86,7 +86,6 @@ async function addOrSelect(
      })
      .from(schema.households)
-     .where(householdRowIs(scope));
+     .where(householdRowIs(scope))
+     .for('key share');
 -  if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  
    const options = await movementOptions(exec, scope, library);

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * The order `newItem` takes its household lock in: `lock_timeout` first, in the same transaction.
  * `db:verify` proves the setting is set (mutation 448); only the emitted SQL shows it comes BEFORE
  * the lock, and a timeout set after the wait bounds nothing. The athlete add is pinned the same way
- * in `../profiles.test.ts`.
+ * in `../profiles.test.ts`. The second test pins `FOR KEY SHARE` in the lock statement itself;
+ * `db:verify` proves the lock mode (mutation 590).
  */
 const { recording } = await vi.hoisted(async () => {
   const { createRecordingDb } = await import('../recording-db');
@@ -42,5 +43,13 @@ describe('newItem — the lock wait is bounded before it starts', () => {
     expect(timeout, 'no transaction-local lock_timeout was set').toBeGreaterThan(begin);
     expect(timeout, 'lock_timeout was set after the lock').toBeLessThan(lock);
     expect(recording.queries[timeout]!.values).toEqual([LOCK_TIMEOUT]);
+  });
+
+  it('reads the household row FOR KEY SHARE, in the lock statement (an erasure mid-call is not_found)', async () => {
+    await newHouseholdItem({ name: 'Order Probe Drill', trackingType: TRACKING_TYPE.reps }).catch(
+      () => undefined,
+    );
+    const lock = recording.queries.find((q) => /pg_advisory_xact_lock/.test(q.text));
+    expect(lock?.text, 'no household-items lock was taken').toMatch(/for key share/i);
   });
 });
