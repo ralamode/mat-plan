@@ -19,56 +19,20 @@ import { moveDown, moveUp } from '@/lib/routine/editor';
 import { cn } from '@/lib/utils';
 
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
+import { PROGRAM_ORDER_SHEET_ID } from './program-order-id';
 
 type Program = DayPlan['currentPrograms'][number];
 type Move = -1 | 1;
 type Reorder = NonNullable<DayActions['reorderPrograms']>;
 
-/** The dialog's sheet id: its status region's id is derived from it (`sheetStatusId`). */
-export const PROGRAM_ORDER_SHEET_ID = 'program-order';
-
 /** Refusals that mean the athlete's programs changed elsewhere: retrying cannot help, re-reading can. */
 const STALE_REFUSALS: readonly string[] = [PROGRAM_REFUSAL.invalid, PROGRAM_REFUSAL.not_found];
 
 /**
- * The Program order button and its dialog (FAM-1 step 13d). The client half of `ProgramLine`, so the
- * line itself renders on the server and the dialog's code loads only where it can be used.
- *
- * `canOrder` false (fewer than two programs stay, D47) hides the button, **never the dialog**: a
- * re-read that leaves one staying while the dialog is open keeps it up with its message, and Done
- * then returns focus through the sheet's fallback (15c plan, UX-B1).
- */
-export function ProgramOrderButton({
-  plan,
-  reorder,
-  canOrder,
-}: {
-  plan: DayPlan;
-  reorder: Reorder;
-  canOrder: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  return (
-    <>
-      {canOrder ? (
-        <Button ref={button} type="button" variant="outline" onClick={() => setOpen(true)}>
-          {PROGRAM_COPY.order}
-        </Button>
-      ) : null}
-      <ProgramOrderDialog
-        plan={plan}
-        reorder={reorder}
-        open={open}
-        onOpenChange={setOpen}
-        returnFocusTo={button}
-      />
-    </>
-  );
-}
-
-/**
  * The athlete's program order (plan D8: the order is the author's, never a label's).
+ *
+ * **Loaded on demand** by `ProgramOrderButton` (`program-order-button.tsx`), so nothing imports this
+ * module eagerly; its sheet id lives in `program-order-id.ts` for that reason.
  *
  * ↑ and ↓ per program, as the week editor has (UX panel: drag fights the sheet's scroll lock). **Each
  * tap saves**, with the whole order at once (`ProgramOrder` is a permutation of `currentPrograms`);
@@ -88,6 +52,11 @@ export function ProgramOrderButton({
  * **A program ending today** (D47, contract C37's `endsToday`) is listed below the movable ones,
  * under a note, with no number and no arrows, and is not counted in "N of M". The order sent is
  * still the whole list, the ending ones last (`programsByStay`, the contract's one split).
+ *
+ * **When nothing stays** (a re-read while it is open: off every program, or every program ends today)
+ * one sentence is the whole body: `orderEmpty` or `orderAllEnding`, in place of the explainer and
+ * both lists, and over any error line. It describes Done, and is announced when it changes while
+ * open, except when that change moved focus to Done (the description already says it).
  */
 export function ProgramOrderDialog({
   plan,
@@ -95,12 +64,15 @@ export function ProgramOrderDialog({
   open,
   onOpenChange,
   returnFocusTo,
+  canOrder,
 }: {
   plan: DayPlan;
   reorder: Reorder;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusTo: RefObject<HTMLElement | null>;
+  /** Whether the page still offers Program order. False, Forward does not bring a closed dialog back. */
+  canOrder: boolean;
 }) {
   const router = useRouter();
   const errorId = useId();
@@ -119,6 +91,11 @@ export function ProgramOrderDialog({
   /** Set by a move or a revert: the next list render puts focus back on the last arrow tapped. */
   const refocus = useRef(false);
   const done = useRef<HTMLButtonElement>(null);
+  /**
+   * Set by the focus effect when it put focus on Done this commit. Done is described by the empty
+   * sentence, so the announce effect (declared after it, so it runs after) skips the status line
+   * rather than have the sentence heard twice.
+   */
   /** The arrow that last had focus: if it goes while the dialog holds focus nowhere, Done takes it. */
   const focusedArrow = useRef<string | null>(null);
   /** The page's latest order, and whether one arrived while a save was in flight. */
@@ -168,7 +145,8 @@ export function ProgramOrderDialog({
     if (refocus.current) {
       refocus.current = false;
       const key = lastTapped.current;
-      if (key) (arrows.current.get(key) ?? done.current)?.focus();
+      const target = key ? (arrows.current.get(key) ?? done.current) : null;
+      target?.focus();
       return;
     }
     const had = focusedArrow.current;
@@ -233,9 +211,12 @@ export function ProgramOrderDialog({
     setPending(false);
     // The order is this save's; which programs end today is the page's latest word (a re-read during
     // the save may have marked one), so the list shows it under the note at once.
-    const shown = next.map(
-      (p) => latest.current.find((q) => q.programPublicId === p.programPublicId) ?? p,
-    );
+    // A program the re-read no longer has is gone, not kept: a re-read that empties the list then
+    // shows the empty sentence (15c follow-up).
+    const shown = next.flatMap((p) => {
+      const now = latest.current.find((q) => q.programPublicId === p.programPublicId);
+      return now ? [now] : [];
+    });
     setOrder(shown);
     // "N of M" counts the programs that stay: the ending ones cannot move, and are a list of their own.
     const { staying: settled } = programsByStay(shown);
@@ -257,6 +238,31 @@ export function ProgramOrderDialog({
 
   const { staying, ending } = programsByStay(order);
   const endingNoteId = `${errorId}-ending`;
+  const emptyId = `${errorId}-empty`;
+  /**
+   * Nothing stays to order (15c follow-up): a re-read while the dialog is open took the athlete off
+   * every program, or left only programs ending today. One sentence replaces the explainer and both
+   * lists, and it wins over any error line, so one message shows.
+   */
+  const athlete = athleteNameOf(plan);
+  const emptyText =
+    staying.length > 0
+      ? null
+      : ending.length > 0
+        ? PROGRAM_COPY.orderAllEnding(athlete)
+        : PROGRAM_COPY.orderEmpty(athlete);
+
+  // Said when the sentence changes while open (a list to none, or one empty sentence to the other):
+  // the deps keep a re-read with the same sentence silent. Said even when this commit moved focus
+  // to Done, which the sentence also describes: iOS VoiceOver reads a description only as a delayed
+  // hint that a person can turn off, so a possible second reading is the safer cost (UX pass).
+  // Starts at the sentence shown on mount: a dialog that opens already empty says it as its body.
+  const lastSaid = useRef<string | null>(emptyText);
+  useEffect(() => {
+    if (!open) return;
+    if (emptyText !== null && emptyText !== lastSaid.current) announce(emptyText);
+    lastSaid.current = emptyText;
+  }, [emptyText, open]);
 
   const arrow = (program: Program, by: Move, index: number) => {
     const end = by === -1 ? index === 0 : index === staying.length - 1;
@@ -299,6 +305,8 @@ export function ProgramOrderDialog({
       onOpenChange={onOpenChange}
       title={PROGRAM_COPY.orderTitle(athleteNameOf(plan))}
       returnFocusTo={returnFocusTo}
+      // Its button hidden (fewer than two stay), Forward must not reopen it (15c follow-up).
+      reopenFromHistory={canOrder}
       status={status.text}
       statusKey={status.n}
       footer={
@@ -309,7 +317,10 @@ export function ProgramOrderDialog({
           // The error, and the note on what cannot move: focus lands here when a re-read takes away
           // the arrow it was on, and the note says why.
           aria-describedby={
-            [error ? errorId : null, ending.length > 0 ? endingNoteId : null]
+            (emptyText !== null
+              ? [emptyId]
+              : [error ? errorId : null, ending.length > 0 ? endingNoteId : null]
+            )
               .filter(Boolean)
               .join(' ') || undefined
           }
@@ -319,53 +330,66 @@ export function ProgramOrderDialog({
         </Button>
       }
     >
-      <p className="text-muted-foreground text-sm">{PROGRAM_COPY.orderExplainer}</p>
-      {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
-      <ol role="list" className="mt-3 flex flex-col gap-2">
-        {staying.map((program, index) => (
-          <li
-            key={program.programPublicId}
-            className="flex items-center gap-1 rounded-lg border py-1 pr-1 pl-3"
-          >
-            {/* The list says the position to a screen reader; the typed number is for sight. */}
-            <span className={cn('min-w-0 flex-1', NAME_WRAP_CLASS)}>
-              <span aria-hidden="true">{index + 1}. </span>
-              {program.name}
-            </span>
-            {arrow(program, -1, index)}
-            {arrow(program, 1, index)}
-          </li>
-        ))}
-      </ol>
-      {ending.length > 0 ? (
+      {emptyText !== null ? (
+        <p id={emptyId} className="text-sm">
+          {emptyText}
+        </p>
+      ) : (
         <>
-          <p id={endingNoteId} className="text-muted-foreground mt-4 text-sm">
-            {PROGRAM_COPY.endingNote(ending.length)}
-          </p>
-          {/* A list of its own, named by the note: no number, no arrows, never counted in N of M. */}
-          <ul role="list" aria-labelledby={endingNoteId} className="mt-2 flex flex-col gap-2">
-            {ending.map((program) => (
+          <p className="text-muted-foreground text-sm">{PROGRAM_COPY.orderExplainer}</p>
+          {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
+          <ol role="list" className="mt-3 flex flex-col gap-2">
+            {staying.map((program, index) => (
               <li
                 key={program.programPublicId}
-                className="flex min-h-11 items-center rounded-lg border py-1 pr-3 pl-3"
+                className="flex items-center gap-1 rounded-lg border py-1 pr-1 pl-3"
               >
-                <span className={cn('min-w-0', NAME_WRAP_CLASS)}>
-                  {/* The break before "·" stays outside the one-line suffix, so a long last word
-                      moves down whole rather than splitting mid-word. */}
-                  {program.name}{' '}
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    <span aria-hidden="true">· </span>
-                    <span className="sr-only">, </span>
-                    {lastDayText(plan.today, plan.today)}
-                  </span>
+                {/* The list says the position to a screen reader; the typed number is for sight. */}
+                <span className={cn('min-w-0 flex-1', NAME_WRAP_CLASS)}>
+                  <span aria-hidden="true">{index + 1}. </span>
+                  {program.name}
                 </span>
+                {arrow(program, -1, index)}
+                {arrow(program, 1, index)}
               </li>
             ))}
-          </ul>
+          </ol>
+          {ending.length > 0 ? (
+            <>
+              <p id={endingNoteId} className="text-muted-foreground mt-4 text-sm">
+                {PROGRAM_COPY.endingNote(ending.length)}
+              </p>
+              {/* A list of its own, named by the note: no number, no arrows, never counted in N of M. */}
+              <ul role="list" aria-labelledby={endingNoteId} className="mt-2 flex flex-col gap-2">
+                {ending.map((program) => (
+                  <li
+                    key={program.programPublicId}
+                    className="flex min-h-11 items-center rounded-lg border py-1 pr-3 pl-3"
+                  >
+                    <span className={cn('min-w-0', NAME_WRAP_CLASS)}>
+                      {/* The break before "·" stays outside the one-line suffix, so a long last word
+                          moves down whole rather than splitting mid-word. */}
+                      {program.name}{' '}
+                      <span className="text-muted-foreground whitespace-nowrap">
+                        <span aria-hidden="true">· </span>
+                        <span className="sr-only">, </span>
+                        {lastDayText(plan.today, plan.today)}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </>
-      ) : null}
-      {/* Mounted before it has text, so a failure is announced (announcer.tsx rule 1). */}
-      <Announcer id={errorId} message={error} className="text-destructive mt-2 min-h-5 text-sm" />
+      )}
+      {/* Mounted before it has text, so a failure is announced (announcer.tsx rule 1). Silent while
+          nothing stays: the empty sentence is the one message. */}
+      <Announcer
+        id={errorId}
+        message={emptyText !== null ? '' : error}
+        className="text-destructive mt-2 min-h-5 text-sm"
+      />
     </Sheet>
   );
 }

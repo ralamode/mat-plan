@@ -3,7 +3,7 @@ import { addDays, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
 import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
-import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
+import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS, MIN_TAP_TARGET_PX } from '../lib/constants';
 
 import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
@@ -16,6 +16,7 @@ import {
   createProgram,
   escapeRegExp,
   isoDaysAgo,
+  openCollapsed,
   openPrograms,
   programRowTick,
   putOnFromToday,
@@ -330,9 +331,12 @@ const workoutHeadings = (page: Page) =>
   page
     .getByRole('region', { name: DAY_COPY.heading, exact: true })
     .getByRole('heading', { level: 3 });
-/** The programs line ("Programs: A, B"), whose names are links to their program pages (D49). */
+/**
+ * The programs line ("Programs:" then "A ›", "B ›"), whose names are links to their program pages
+ * (D49): the label's container, which holds the list of links.
+ */
 const programsLine = (page: Page) =>
-  page.locator('p', { hasText: new RegExp(`^${escapeRegExp(PROGRAM_COPY.lineLabel(2))}`) });
+  page.getByText(PROGRAM_COPY.lineLabel(2), { exact: true }).locator('..');
 
 test.describe('Program order on real data', () => {
   test.use({ viewport: NARROW_VIEWPORT });
@@ -426,7 +430,98 @@ test.describe('Program order on real data', () => {
       );
     };
     await expectOrder('after the move');
+    // At 360px nothing on the line runs past the screen. Only the ordinary wrap: this run's names
+    // are short, so the long-unbroken-name case is the unit tests' (`wrap-anywhere`, `min-w-11`).
+    await expectNoOverflowWithin(programsLine(page), 'the programs line');
+    await expectTapTargets(page, 'the day page with its programs line, 360px');
+    // The links themselves: `expectTapTargets` leaves links out, so each name is measured here.
+    for (const link of await programsLine(page).getByRole('link').all()) {
+      const box = await link.boundingBox();
+      expect(box?.height ?? 0, 'a program link is 44px tall').toBeGreaterThanOrEqual(
+        MIN_TAP_TARGET_PX,
+      );
+      expect(box?.width ?? 0, 'a program link is 44px wide').toBeGreaterThanOrEqual(
+        MIN_TAP_TARGET_PX,
+      );
+    }
     await page.reload();
     await expectOrder('after a reload');
+  });
+});
+
+// ── A finished workout folds to one line (FAM-1 12c-iii) ─────────────────────────────────────────
+//
+// On this run's own athlete and program, as Program order's journey is: finishing a workout changes
+// what every later visit to that day shows, so it never touches a seeded athlete.
+
+test.describe('A finished workout on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('finished during a visit it stays open; coming back it is one line; it opens and folds, at 360px', async ({
+    page,
+  }, info) => {
+    test.setTimeout(180_000);
+    const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
+    const athlete = `E2E fold athlete ${stamp}`;
+    const program = `E2E fold ${stamp}`;
+
+    // 1. A program with the daily stretch on every weekday; a new athlete on it from today.
+    await openPrograms(page);
+    await createProgram(page, program);
+    const programPage = new URL(page.url()).pathname;
+    await copyOntoEveryWeekday(page, { from: stretching.name, workout: daily.name, to: program });
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    // The add has landed on their day page before its URL is read, or Put on finds no such athlete.
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    await page.goto(programPage);
+    await putOnFromToday(page, program, athlete);
+    await page.goto(dayPage);
+
+    // 2. Every row ticked during this visit: the workout stays open, now offering Collapse.
+    const region = page.getByRole('region', { name: daily.name, exact: true });
+    const collapse = region.getByRole('button', { name: DAY_COPY.collapseLabel(daily.name) });
+    // The first ✓ not yet pressed, each time: the query's matches shrink as rows are ticked.
+    // `count()` does not wait: the day page may still be streaming in behind its skeleton.
+    await expect(region).toBeVisible();
+    const open = region.getByRole('button', { pressed: false });
+    await expect(open.first()).toBeVisible();
+    const rows = await open.count();
+    expect(rows, 'the daily stretch has rows to tick').toBeGreaterThan(0);
+    for (let left = rows; left > 0; left--) {
+      await open.first().click();
+      await expect(open).toHaveCount(left - 1);
+    }
+    await expect(collapse).toBeVisible();
+    await expect(region.getByRole('heading').getByRole('button', { expanded: false })).toHaveCount(
+      0,
+    );
+
+    // 3. Coming back (a reload): one line, the region still named for the workout, at 360px.
+    await page.reload();
+    const line = region.getByRole('heading').getByRole('button', { expanded: false });
+    // Named "name, label, count" in a real browser too; and the folded body's ✓s are not reachable.
+    // The slot's label (if the copy has one) sits between; the parts are joined by ", " exactly.
+    await expect(line).toHaveAccessibleName(
+      new RegExp(
+        `^${escapeRegExp(daily.name)}(, [^,]+)?, ${escapeRegExp(DAY_COPY.progress(rows, rows))}$`,
+      ),
+    );
+    await expect(region.getByRole('button', { pressed: true })).toHaveCount(0);
+    await openCollapsed(region, daily.name);
+    await expectNoAxeViolations(page, 'a finished workout, opened, 360px');
+    await expectTapTargets(page, 'a finished workout, opened, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, opened, 360px');
+    await collapse.click();
+    await expect(line).toBeFocused();
+    await expectNoAxeViolations(page, 'a finished workout, folded, 360px');
+    await expectTapTargets(page, 'a finished workout, folded, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, folded, 360px');
   });
 });
