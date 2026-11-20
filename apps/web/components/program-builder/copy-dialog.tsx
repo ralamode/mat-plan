@@ -19,6 +19,7 @@ import { useId, useRef, useState, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
+import { SheetFormFooter } from '@/components/ui/sheet-form-footer';
 import { INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 
 import {
@@ -42,7 +43,6 @@ import {
 import { FieldLabel } from './field-label';
 import { NameField } from './name-field';
 import { workoutPath } from './routes';
-import { SheetFormFooter } from './sheet-form-footer';
 import { focusField, useAttempt } from './use-attempt';
 import { DaysFieldset, SlotLabelField } from './week-editor/days-label-fields';
 

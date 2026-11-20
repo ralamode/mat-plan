@@ -538,6 +538,8 @@ and the gate is what exercises it.
 
 ⚠️ **The v1-9b distinct-ids follow-up regenerated `420` and `424`.** The writer now parses each `client_id` into `values` before the first attempt, which shifted the context `420` matched on; `424` drops only the fold from that parse. Both `.expect` files are unchanged.
 
+⚠️ **FAM-1 15 PR 3 regenerated `499`**: `readProgramsByAthlete`'s entries gained `activeFrom`, which moved the context its hunk matched on. Its claim and `.expect` are unchanged.
+
 ⚠️ **`01` was REGENERATED at `PROF-1 b-s`**, because that chunk added `isOwnerOf` to `ownership.ts` and shifted the context `01`'s hunk matched on. The runner reported it as **"does not apply — regenerate it"** rather than silently passing, which is the gate behaving correctly; its `.expect` is unchanged. Any edit to a mutated file owes the same check.
 
 ⚠️ **`10` also proves a REFUSAL rather than a predicate**, which is why `seed.ts` throws an explicit

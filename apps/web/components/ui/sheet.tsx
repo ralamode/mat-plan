@@ -97,8 +97,8 @@ export type SheetProps = {
    *
    * ⚠️ **A consumer must not point this at a text input on touch.** Focusing a field raises the
    * on-screen keyboard over the list the sheet exists to show (criterion 18). The picker passes its
-   * search ref only when `matchMedia('(pointer: coarse)')` is false, and leaves the default on a
-   * phone.
+   * search ref only when `prefersFineFocus()` (`lib/a11y/pointer.ts`) is true, and leaves the
+   * default on a phone.
    */
   initialFocus?: RefObject<HTMLElement | null>;
   /**

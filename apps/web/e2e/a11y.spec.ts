@@ -19,7 +19,6 @@ import {
   SETTINGS_PATH,
   SIGN_IN_COPY,
   SIGN_IN_PATH,
-  THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
   athleteEditPath,
   athleteRoutinePath,
@@ -42,9 +41,11 @@ import {
 } from './contexts';
 import {
   describeControl,
+  expectActuallyDark,
   expectNoAxeViolations,
   expectNoOverflowWithin,
   expectTapTargets,
+  seedStoredTheme,
 } from './a11y-checks';
 
 /**
@@ -136,18 +137,9 @@ test.describe('dark theme', () => {
 
   for (const route of ROUTES) {
     test(`${route.name} has no WCAG A/AA violations in dark mode`, async ({ page }) => {
-      await page.addInitScript((key) => {
-        try {
-          window.localStorage.removeItem(key as string);
-        } catch {
-          /* ignore */
-        }
-      }, THEME_STORAGE_KEY);
+      await seedStoredTheme(page, null);
       await page.goto(route.path, { waitUntil: 'networkidle' });
-      await expect(
-        page.locator('html'),
-        `${route.name}: not actually rendering dark — this scan would have audited the LIGHT palette`,
-      ).toHaveClass(/\bdark\b/);
+      await expectActuallyDark(page, route.name);
       await expectNoAxeViolations(page, `${route.name} (dark)`);
     });
   }

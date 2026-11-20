@@ -37,7 +37,6 @@ describe('RowAmend: owed by its consumers', () => {
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
   it.todo('15c: reorderPrograms joins DayActions, and the Program order control appears');
-  it.todo('15c: a reorder that is not a permutation of currentPrograms answers invalid');
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');
 });

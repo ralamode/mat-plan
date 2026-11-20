@@ -15,12 +15,10 @@ import {
   weekExceedsDaySlots,
   weekRepeatsAWorkout,
 } from '@mat-plan/shared';
-import { revalidatePath } from 'next/cache';
 
 import { enterMutation } from '@/app/p/mutation-entry';
-import { PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { getActiveLocalDay } from '@/lib/active-timezone';
-import { APP_HOME_PATH, athletePath } from '@/lib/constants';
+import { refreshAssignment, refreshPrograms } from '@/lib/dal/program/revalidate';
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
@@ -62,11 +60,6 @@ const INVALID = { ok: false, reason: PROGRAM_REFUSAL.invalid } as const;
  */
 const ONCE_PER_DAY = { ok: false, reason: PROGRAM_REFUSAL.once_per_day } as const;
 const LIMIT_REACHED = { ok: false, reason: PROGRAM_REFUSAL.limit_reached } as const;
-
-/** The builder's pages: the list, each program and each workout editor live under it. */
-function refreshPrograms() {
-  revalidatePath(PROGRAMS_PATH, 'layout');
-}
 
 export async function createProgramAction(input: unknown): Promise<ProgramAnswer<'createProgram'>> {
   return await Sentry.withServerActionInstrumentation(
@@ -176,16 +169,6 @@ export async function newItemAction(input: unknown): Promise<ProgramAnswer<'newI
       };
     },
   );
-}
-
-/**
- * Who is on a program shows on the builder's pages, on Home's tiles (step 15 PR 3) and on each
- * athlete's day page: a Put on or a Take off changes all three, for every athlete it names.
- */
-function refreshAssignment(profilePublicIds: readonly string[]) {
-  refreshPrograms();
-  revalidatePath(APP_HOME_PATH);
-  for (const id of profilePublicIds) revalidatePath(athletePath(id));
 }
 
 /**

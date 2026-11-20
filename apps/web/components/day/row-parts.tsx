@@ -62,7 +62,7 @@ const FIELD_FOCUS_CLASS = `focus-visible:ring-0 ${TICK_FOCUS_CLASS.replace(
 export const LOGGED_FIELD_CLASS = `${TINT_CLASS} ${LOGGED_CARD_CLASS} ${FIELD_FOCUS_CLASS}`;
 export const CHANGED_FIELD_CLASS = `bg-background border-2 border-foreground ${FIELD_FOCUS_CLASS}`;
 /** A button on the tint (Undo, the Change's ✕, "+ Add set"): the ✓'s outline, so the row's controls focus alike. */
-export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
+export { ON_TINT_BUTTON_FOCUS_CLASS } from '@/lib/constants';
 
 export const TICK_CLASS =
   'flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg';
