@@ -8,10 +8,12 @@ import {
   PROGRAM_REFUSAL,
   trackingTypeSchema,
   type ProgramResult,
+  type CatalogMovement,
   type TrackingType,
 } from '@mat-plan/shared';
 
 import { schema } from '../../client';
+import { matchableOption } from '../../queries/program/catalog-arm-option';
 import { movementOptions } from '../../queries/program/movement-options';
 import type { HouseholdScope } from '../../scope';
 import { setLocalLockTimeout, type Executor } from '../executor';
@@ -35,12 +37,10 @@ type NewItemResult = ProgramResult<{
  *    name (`push ups` is Push-ups), as one of a catalog item's aliases (`RDL` is Romanian
  *    Deadlift), or an abbreviation that spells the item (`db row` is Dumbbell row; C30). That item is the answer, with `existed: true`, **its stored name and its own type**,
  *    whatever type was asked (D25: nothing retypes an item).
- * 2. **Then the resolver's slug**, for an available row the picker does not list (a catalog row
- *    outside `MOVEMENT_PICKER_ENTRIES`): the same answer, with its stored name and own type. The
- *    resolver would reach that row anyway; this step is what makes `existed` truthful for it.
- *    ⚠️ It matches by slug, not by key: once rows outside the picker map exist in bulk (CAT-3's
- *    library), a re-spelled name of one would make a household item, unless those rows join
- *    `movementOptions`. The chunk that seeds them owes that.
+ * 2. **Then the resolver's slug**, for an available row the picker does not list: the same answer,
+ *    with its stored name and own type. The resolver would reach that row anyway; this step is what
+ *    makes `existed` truthful for it. Since CAT-3 P11-ii-a every library row is in `movementOptions`
+ *    with its library aliases, so a re-spelled name of one is selected at step 1, not made again.
  * 3. **Otherwise a new household item** through `findOrCreateTypedMovement`, typed as asked, with
  *    `existed: false`.
  *
@@ -61,11 +61,13 @@ export async function newItem(
   exec: Executor,
   scope: HouseholdScope,
   input: unknown,
+  /** The library step 1 matches catalog aliases from, as the picker's read gets it (K23). */
+  library: readonly CatalogMovement[],
 ): Promise<NewItemResult> {
   const parsed = newItemSchema.safeParse(input);
   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
   const { name, trackingType } = parsed.data;
-  return exec.transaction(async (tx) => addOrSelect(tx, scope, name, trackingType));
+  return exec.transaction(async (tx) => addOrSelect(tx, scope, name, trackingType, library));
 }
 
 async function addOrSelect(
@@ -73,6 +75,7 @@ async function addOrSelect(
   scope: HouseholdScope,
   name: string,
   trackingType: TrackingType,
+  library: readonly CatalogMovement[],
 ): Promise<NewItemResult> {
   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
   await setLocalLockTimeout(exec);
@@ -87,15 +90,8 @@ async function addOrSelect(
     .where(householdRowIs(scope));
   if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
 
-  const options = await movementOptions(exec, scope);
-  const hit = existingItem(
-    options.map((option) => ({
-      ...option,
-      isCatalog: option.owner === 'catalog',
-      aliases: option.owner === 'catalog' ? option.aliases : [],
-    })),
-    name,
-  );
+  const options = await movementOptions(exec, scope, library);
+  const hit = existingItem(options.map(matchableOption), name);
   if (hit) {
     return {
       ok: true,

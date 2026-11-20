@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index a33f1574..70472585 100644
+index e95cef62..9602751f 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -77,13 +77,6 @@ async function addOrSelect(
+@@ -80,13 +80,6 @@ async function addOrSelect(
    // Held until the transaction ends. Reached through the household row, so the tenant id is never
    // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
    // count below never runs without the lock.
@@ -14,5 +14,5 @@ index a33f1574..70472585 100644
 -    .where(householdRowIs(scope));
 -  if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  
-   const options = await movementOptions(exec, scope);
-   const hit = existingItem(
+   const options = await movementOptions(exec, scope, library);
+   const hit = existingItem(options.map(matchableOption), name);
