@@ -1,4 +1,4 @@
-import { RESTORE_REASON } from '@mat-plan/shared';
+import { PROFILE_NOT_FOUND, RESTORE_REASON } from '@mat-plan/shared';
 import { readFileSync } from 'node:fs';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,7 +81,7 @@ describe('restoreClearedDay (V1-9b B1-2)', () => {
 
   it('a null scope THROWS, never a quiet "nothing to restore"', async () => {
     state.scope = null;
-    await expect(restoreClearedDay(ARGS)).rejects.toThrow('Profile not found');
+    await expect(restoreClearedDay(ARGS)).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(restoreClear).not.toHaveBeenCalled();
   });
 });
@@ -136,7 +136,7 @@ describe('clearDayEntries (V1-9b B2)', () => {
 
   it('throws on a null scope, and never reaches the writer', async () => {
     state.scope = null;
-    await expect(clearDayEntries(CLEAR)).rejects.toThrow('Profile not found');
+    await expect(clearDayEntries(CLEAR)).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(clearDay).not.toHaveBeenCalled();
   });
 });

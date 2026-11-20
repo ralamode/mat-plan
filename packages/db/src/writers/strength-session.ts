@@ -2,6 +2,7 @@ import {
   ENTRY_STATUS,
   newId,
   type MovementStatus,
+  PROFILE_NOT_FOUND,
   QUANTITY_SLOT,
   type StrengthSetInput,
   type Unit,
@@ -391,7 +392,7 @@ export async function writeStrengthSession(
       .from(schema.profiles)
       .where(isLiveProfile(args.profilePublicId, args.scope))
       .limit(1);
-    if (!profile) throw new Error('Profile not found');
+    if (!profile) throw new Error(PROFILE_NOT_FOUND);
 
     await assertMovementsAreAvailable(tx, args.scope, args.movements);
 
