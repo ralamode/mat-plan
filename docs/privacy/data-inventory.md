@@ -337,7 +337,12 @@ only way a notice about minors' health data is worth anything.
 >
 > **§1 re-read 2026-11-18 for FAM-1 step 6d-ii**: `reorderPrograms` rewrites `program_assignments.idx`
 > (an athlete's own order of their programs), inside the household only. No new column, processor, log
-> or export. Called by no action until step 15c.
+> or export. Called by `reorderProgramsAction` (`app/p/[profileId]/row-actions.ts`) since 15c PR 2,
+> which no page passes until 15c PR 3; the action changes no column, processor or export. §7: a
+> refused Program order reports at most one public id through the existing scope-miss path: the
+> athlete's on `not_found`, or, on `invalid`, the first program id that is not one of the household's
+> live programs; a stale list of the household's own programs reports nothing; a thrown database error
+> carries no ids (`quietDbErrors`).
 >
 > **§1 / §7 re-read 2026-11-18 for FAM-1 step 6c-ii**: two reads of `program_assignments` (the
 > program page and the Programs list) show an athlete's name and programs to their own household, as
@@ -381,6 +386,12 @@ only way a notice about minors' health data is worth anything.
 > banner renders it (the un-tick's token, `day-shapes.ts`, too). The notice is unchanged until then.
 > §8 too: a failed entry or athlete write no longer puts the row's values in Vercel's runtime log
 > (`quietDbErrors`). Less reaches that log, so the notice, which promises no more than §8, stays true.
+
+> 🔴 **§5 re-read 2026-11-19 for `V1-9b` B2-i** ([plan](../plans/v1-9b-delete-and-restore.md)):
+> no column, processor, reader audience or retention change. Clear this day is built
+> (`clearDayAction`, `app/p/[profileId]/clear-day-actions.ts`) with **no screen until B2-ii**; any
+> member may call it, on today only. It answers a count, so no clear's token or entry value leaves the
+> server. B2-ii writes §4, §5, §6 and §8's lines, and the notice, with the screen.
 
 > 🔴 **§1a / §5 re-read 2026-11-17 for `V1-9b` B2-0** ([plan](../plans/v1-9b-delete-and-restore.md)):
 > `entries.hide_reason`, one fixed value on hidden rows only. No new processor, reader audience or
@@ -691,11 +702,11 @@ put it back. `CAT-3`'s fresh start (K7) removes the seeded household with everyt
 one place in the app tree (a committed data correction)". There are now **three** writers of
 `entries.deleted_at`, and the distinction between them is what matters here:
 
-| Writer                                                            | Reachable by                                                                                                                                                                                                                                                                                               | Touches production?       |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                                                                                                  | **yes** — it has been run |
-| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete. Restore all (`clear-day-actions.ts`, B1-2) is built and has no caller until B2. | **yes, from 3b-bw**       |
-| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                                                                                                  | no                        |
+| Writer                                                            | Reachable by                                                                                                                                                                                                                                                                                                                                                                                                                     | Touches production?       |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                                                                                                                                                                                                                        | **yes** — it has been run |
+| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete. Restore all (`clear-day-actions.ts`, B1-2) is built and has no caller until B2-ii. Clear this day's action (`clearDayAction`, B2-i: today only, any member) is built too, with no screen until B2-ii. | **yes, from 3b-bw**       |
+| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                                                                                                                                                                                                                        | no                        |
 
 ⚠️ **Updated 2026-11-16 (V1-24 3b-bw).** The app now writes `deleted_at`: clearing a weigh-in on the
 day page (Change, empty the field, Clear) **hides** that one row through `hideEntries`. The app does
@@ -933,7 +944,7 @@ nothing, and the Programs list names no id, so it sends nothing either. "How to"
 (`app/programs/how-to/[optionId]/route.ts`, 7b PR 1) reports no miss at all: every miss answers the
 same 404, and the option id reaches Sentry only as the request path, masked to `:id` (below). Since 12b,
 `apps/web/lib/dal/day/report-miss.ts` sends a workout or a prescription id: only when a ✓ is refused
-`not_found`, it checks the workout and then the prescription and sends at most one event. Retention is Sentry's, in
+`not_found`, it checks the workout and then the prescription and sends at most one event. Since step 15, a refused Put on or Take off (`reportAssignMiss`) sends the program's id, or the first athlete id the household does not have. Since 15c PR 2, a refused Program order sends the athlete's id on `not_found` (`reportAthleteMiss`), or on `invalid` the first program id that is not one of the household's live programs (`reportOrderProgramMiss`); a stale list of its own programs sends nothing. Still one event at most. Retention is Sentry's, in
 §8. The alert
 that reads it is in [runbooks.md](../runbooks.md) → "A cross-household scope miss".
 
