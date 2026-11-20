@@ -2,9 +2,9 @@
 
 > Backlog: [plan.md](../plan.md) row FAM-1, step 12f of [the FAM-1 plan](./fam-1-family-program.md)
 > (row 12f, `fam-1-family-program.md:633`). Branch for this plan: `docs/fam-1-12f-retire-old-forms-plan`.
-> Five code PRs, named **12f PR 1 to 5** here. **Lane E builds PR 1 and PR 4, lane B builds PR 2, lane S builds PR 3, and
-> lane C builds PR 5** _(lane C's offers, cleared by the board on 2026-11-19 under the maintainer's rule,
-> relayed by the board: "If we get to a point where lanes are sitting dormant, distribute some of the remaining work to them"; PR 2 went to lane B in a second hand-over that night; until then lane C built all five)_.
+> Five code PRs, named **12f PR 1 to 5** here. **Lane E builds PR 1, PR 4 and PR 5, lane B builds PR 2, and lane S builds
+> PR 3** _(lane C's offers, cleared by the board on 2026-11-19 and 2026-11-20 under the maintainer's rule,
+> relayed by the board: "If we get to a point where lanes are sitting dormant, distribute some of the remaining work to them"; PR 2 went to lane B in a second hand-over, and PR 5 to lane E in a third; until then lane C built all five)_.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at the
 > maintainer's request, from lane C's notes. Panelled the same day by four lenses; every finding is
@@ -179,11 +179,11 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 
 ## File-by-file changes
 
-**Lane E builds PR 1 and PR 4, lane B builds PR 2, lane S builds PR 3, and lane C builds PR 5** (the
-hand-overs above). The tables below were written with lane C as the builder of all five, and their marks stand
+**Lane E builds PR 1, PR 4 and PR 5, lane B builds PR 2, and lane S builds PR 3** (the hand-overs
+above). The tables below were written with lane C as the builder of all five, and their marks stand
 with one change of reading:
 
-- **PR 1 and PR 4 (lane E).** Every unmarked app file (`app/p/[profileId]/`, `components/`, `lib/`,
+- **PR 1, PR 4 and PR 5 (lane E).** PR 5's files in lane S's area (`life-section.tsx` and its test) and its `e2e/landing.spec.ts` edit keep Q1's clearance, which passes to lane E; lane S reads its hunks and lane C the rest. For PR 1 and PR 4: Every unmarked app file (`app/p/[profileId]/`, `components/`, `lib/`,
   `test/`) is lane E's guest edit, which lane C reviews. Lane E takes over two clearances the board
   gave lane C: Q2's, to edit the token preview in PR 1, and Q1's, for PR 4's comment in
   `ownership.ts` (the board's hand-over, 2026-11-19). PR 4's `packages/db` hunks are still reviewed
@@ -251,6 +251,12 @@ deleted whole.
 
 ### 12f PR 4: the "This week" card and `householdHasProgram` (about 315 lines deleted, about 15 added; lane E builds it)
 
+**As built (lane E):** merged as #749 (2026-11-20). The "This week" card, its DAL and its fold are
+deleted. `page.tsx`'s `Promise.all` keeps the entries and B2-ii's `dayClearEvents`. `householdHasProgram`
+(whose docblock still named the add-athlete form, which no longer read it) is deleted with its 5b
+proof, and mutation 56 is a retired README row. `weeklyAdherenceRows` stays with its proofs. Q5's
+first read is in the description.
+
 Waits for PR 1 (`householdHasProgram`'s caller), for B2 on `page.tsx` (B2-ii, since B2 became three PRs in #727), and for lane P's review of the
 `packages/db` hunks. Two of those files are on lane A's list (`fam-1-family-program.md:545-546`); lane
 A's chain is merged, and the board named lane P. Its description records Q5's first read.
@@ -265,7 +271,7 @@ A's chain is merged, and the board named lane P. Its description records Q5's fi
 | `packages/db/src/writers/ownership.ts`                                              | GUEST EDIT | Comment only (`:280-282`): `programBlockInHousehold`'s consumers no longer include `householdHasProgram`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `docs/features/programming.md` · `write-path.md` · `day-page.md`                    | EDIT       | `programming.md:102-111` and `write-path.md:374` (one legacy read is left); `write-path.md` for the deleted DAL file; `day-page.md:39`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
-### 12f PR 5: the routine trim, and `lib/checkins` (about 490 lines deleted, about 165 added)
+### 12f PR 5: the routine trim, and `lib/checkins` (about 490 lines deleted, about 165 added; lane E builds it)
 
 Waits for PR 3 (`actions.ts` imports `lib/checkins`) and for Q5's second read. Its guest edits are
 cleared by the board (2026-11-19), Q1. 282 of its

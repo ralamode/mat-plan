@@ -197,13 +197,21 @@ page, inside this step and not in a later row.
 - **The sentence stays.** The line is still "Programs: A, B" (13d): the label and the commas are
   text between the links. The prototype sets the names apart with a gap and no comma; the commas
   are 13d's and are kept.
+  ⚠️ **Overtaken (maintainer, 2026-11-20, relayed by the board: "Match prototype, no tooltip
+  (Recommended)"; FAM-1 plan D52).** The line as built was checked against the prototype at 360px
+  when the preview first showed it (#754): the comma landed after the "›" ("Family program ›,
+  Stretching ›"). The line takes the prototype's gap and no comma, in lane C's follow-up.
 - **Every day the line shows.** A read-only day links too, and so does a program the athlete has
   since come off: an id in `plan.programs` is one the household can use now (contract change C21).
 - **Size and wrap.** The link takes the class of the page's other inline link, `QUIET_LINK_CLASS`
   (`not-on-a-program.tsx:43`), which holds the 44px tap target (`min-h-11`), with `NAME_WRAP_CLASS`
   so a long unbroken name wraps at 360px.
+  ⚠️ **Overtaken in part (D52).** A name keeps the 44px target and the wrap and takes the prototype's
+  look: the foreground colour at medium weight, with no underline, where the inline-link class is
+  muted and underlined.
 - **Not built.** The prototype's "Since" tooltip on a name. The day's read carries no start date:
-  a program on the line is an id and a name (`programRefSchema`).
+  a program on the line is an id and a name (`programRefSchema`). **Confirmed by the maintainer**
+  (D52: "no tooltip").
 - **15c PR 1** builds the prop, with a component test. With the prop: one link per program, each
   with the right `href` and name. Without it: no link.
 - **15c PR 3** passes it on the real page: `programHrefFor={programPath}`. `programPath` is lane B's
