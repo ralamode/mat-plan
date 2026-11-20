@@ -42,7 +42,7 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
   signed in to your household can create and rename a program, write and change its workouts, add
   a movement of your own, set its week and copy a workout, put an athlete on a program or take
-  them off it, and change the order an athlete's programs show in. What is
+  them off it, and, from an athlete's page, change the order their programs show in. What is
   stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
