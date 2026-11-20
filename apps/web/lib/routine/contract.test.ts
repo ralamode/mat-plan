@@ -191,13 +191,13 @@ describe('parseRoutineKey — no-colon guard', () => {
   });
 });
 
-// Binds the SEEDED routine (packages/db) to the REAL app catalog (CHECKIN_FIELDS / LIFE_ACTIVITY_KEYS,
-// which live app-side): a stale seed key is grammar-valid but silently DROPPED on render, weakening the
-// A≠B demo — this catches that drift at CI time.
+// Binds the SEEDED routine (packages/db) to the REAL app catalog (LIFE_ACTIVITY_KEYS, app-side). Since
+// FAM-1 12f PR 5 the catalog holds no check-in key and no Wake, so Athlete Two's seed (check-ins,
+// strength, Wake) keeps only its strength, with the `conditional` marker, and never the whole catalog.
 describe('the seeded routine binds to the live app catalog', () => {
-  it('every key in Athlete Two’s seed resolves against ROUTINE_CATALOG (nothing dropped)', () => {
+  it('Athlete Two’s seed resolves to strength alone, with its conditional marker', () => {
     const resolved = resolveRoutine(SEED_ATHLETE_TWO_ROUTINE, ROUTINE_CATALOG);
-    expect(resolved.order.length).toBe(SEED_ATHLETE_TWO_ROUTINE.order.length);
+    expect(resolved.order).toEqual([{ key: 'strength', conditional: true }]);
     expect(resolved).not.toEqual(buildDefaultRoutine(ROUTINE_CATALOG)); // A≠B holds against the live catalog
   });
 });

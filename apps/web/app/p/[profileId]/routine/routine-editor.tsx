@@ -1,11 +1,11 @@
 'use client';
 
-import { type RoutineItem, ROUTINE_VERSION } from '@mat-plan/shared';
+import { type RoutineConfig, type RoutineItem, ROUTINE_VERSION } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ROUTINE_COPY, SAVING_LABEL } from '@/lib/constants';
-import { type RoutineCatalogItem } from '@/lib/routine/catalog';
+import { type RoutineCatalogItem, savedOrder } from '@/lib/routine/catalog';
 import { moveDown, moveUp, toggle } from '@/lib/routine/editor';
 
 import { INITIAL_ACTION_STATE } from '../action-state';
@@ -17,10 +17,10 @@ import { useOnActionSuccess } from '../use-on-action-success';
  * dropdown" the UX/kid panels settled on; ▲▼ not drag so it's RSC-friendly + keyboard-usable). Local state
  * is the ordered list of in-routine `RoutineItem`s (seeded from the profile's already-resolved routine, and
  * carrying the opaque `conditional` marker through every edit via the pure transforms). On Save it serializes
- * the whole config into ONE hidden JSON field (the strength-form idiom — an ordered variable-length list
- * can't be encoded as parallel fields); the action re-validates it strictly. Save is disabled at zero items,
- * because an empty routine is not authorable (the read path maps empty → the full default, so "save nothing"
- * would silently render everything). Weigh-in is pinned FIRST on Today by construction — never a routine
+ * the whole config into ONE hidden JSON field (an ordered variable-length list can't be encoded as parallel
+ * fields); the action re-validates it strictly. Since FAM-1 12f PR 5 the state holds the LISTED (Life)
+ * items only, and `savedOrder` builds what Save sends: the listed items with `strength` carried at its
+ * place, or `strength` alone when nothing is left, so Save is disabled only while pending. Weigh-in is pinned FIRST on Today by construction — never a routine
  * member — so it's a caption here, not an editable (and inert) row.
  */
 export function RoutineEditor({
@@ -33,16 +33,20 @@ export function RoutineEditor({
   catalog: readonly RoutineCatalogItem[];
 }) {
   const [state, formAction, pending] = useActionState(editRoutineAction, INITIAL_ACTION_STATE);
-  const [order, setOrder] = useState<RoutineItem[]>(() => [...initialOrder]);
-
   const labelByKey = new Map(catalog.map((c) => [c.key, c.label]));
+  // The listed items only: what the editor does not list (`strength`) is carried by `savedOrder`.
+  const [order, setOrder] = useState<RoutineItem[]>(() =>
+    initialOrder.filter((item) => labelByKey.has(item.key)),
+  );
+
   // The kid's ORIGINAL items, keyed — so re-adding a removed activity restores its opaque `conditional`
   // marker (a day-conditional strength stays day-conditional across a remove/re-add), not a bare { key }.
   const initialByKey = new Map(initialOrder.map((item) => [item.key, item]));
   const present = new Set(order.map((item) => item.key));
   const available = catalog.filter((c) => !present.has(c.key));
   // The exact config the action re-validates + persists (version single-sourced, marker preserved).
-  const routineJson = JSON.stringify({ version: ROUTINE_VERSION, order });
+  const initial: RoutineConfig = { version: ROUTINE_VERSION, order: [...initialOrder] };
+  const routineJson = JSON.stringify(savedOrder(initial, order));
 
   // Show "Routine saved." only while the CURRENT order still matches what was last persisted — snapshot the
   // saved payload during render when the action flips to ok (`useOnActionSuccess`, not an effect). Any later edit changes `routineJson`, so the stale "saved" message clears and can't mislead the
@@ -138,12 +142,7 @@ export function RoutineEditor({
       ) : null}
 
       <div>
-        <Button
-          type="submit"
-          size="lg"
-          disabled={pending || order.length === 0}
-          className="text-base"
-        >
+        <Button type="submit" size="lg" disabled={pending} className="text-base">
           {pending ? SAVING_LABEL : ROUTINE_COPY.save}
         </Button>
       </div>
