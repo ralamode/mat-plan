@@ -247,7 +247,7 @@ export async function verifySeedOnAFreshDatabase(): Promise<void> {
         () => seed(asDb(tx), { fixtures: false }),
         `OPS-2 A: seed({ fixtures: false }) on a fresh database resolves (${run} run)`,
       );
-      const digest = (await householdTableCounts(tx)).movements;
+      const digest = await globalDigest(tx);
       const all = `${await countOf(tx, schema.movements)}:${await countOf(tx, schema.movementEquipment)}:${await countOf(tx, schema.movementMuscles)}:${digest}`;
       if (afterFirst === undefined) afterFirst = all;
       else

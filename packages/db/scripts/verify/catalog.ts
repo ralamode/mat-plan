@@ -433,9 +433,9 @@ const LEGACY_SLUGS = new Set<string>(MOVEMENT_SEED_ROWS.map((r) => r.slug));
 
 /**
  * D5.2, **E1 on a database with no global movements.** Called right after
- * `verifyCatalogMigrationFacts`, before Proof A's first seed, and entirely inside `rolledBack`, so
- * the shared verify database never holds a catalog row (erasure P7 and patches 318/319 stay as they
- * are until A2-ii).
+ * `verifyCatalogMigrationFacts`, before Proof A, and entirely inside `rolledBack`. From the first
+ * fixtures seed on, the shared database holds the test library's rows (CAT-3 A2-ii); this proof runs
+ * before it, on a database with no global movement.
  */
 export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
   // CAT-3 A2-ii (mutation 515): no seed() path passes an empty library any more, so the writer's

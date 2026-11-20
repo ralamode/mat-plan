@@ -134,9 +134,9 @@ describe('scripts/seed.ts decides through resolveSeedOptions', () => {
 });
 
 /**
- * CAT-3 A2-i: production stays inert until A2-ii. `seed()` hands the catalog writer an EMPTY list (the
- * plan's D1); A2-ii changes this one argument. Pinned by source, as the fixtures call site is above,
- * and `db:verify`'s Proof A pins the effect (no `modality`, no join row).
+ * CAT-3 A2-ii (E4): `seed()` names the movement library once, from its flag, through `seedLibraryOf`,
+ * and with fixtures checks ownership before any write. Pinned by source, as the fixtures call site is
+ * above; `db:verify`'s Proof A, A2 and A3 pin the effect.
  */
 describe('seed() picks the movement library by its flag (CAT-3 A2-ii, E4)', () => {
   const source = readFileSync(new URL('./seed.ts', import.meta.url), 'utf8');
