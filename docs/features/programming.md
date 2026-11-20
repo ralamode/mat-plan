@@ -246,6 +246,8 @@ and complete; this is the one thing it cannot reach.
 
 ## Traps
 
+- **The A/B letter is derived from the calendar, not from completed sessions** (`programming.ts`'s
+  comment says why). The `resolveDayRole` that comment used to name went with FAM-1 12f.
 - **The routine page's athlete is `profile.id`, never the URL segment.** The segment is checked, not
   parsed, so `/p/AAAAAAAA-…` still reaches the page in upper case while every parsed id is lower case
   (`uuidSchema` folds it; [write-path](./write-path.md) invariant 5). Compare against the DTO.
