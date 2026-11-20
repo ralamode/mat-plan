@@ -1,8 +1,20 @@
-import { catalogOptionOf, pickerEntryOf, TRACKING_TYPE } from '@mat-plan/shared';
+import {
+  catalogOptionOf,
+  EQUIPMENT_CODE,
+  MODALITY,
+  pickerEntryOf,
+  TRACKING_TYPE,
+} from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { describe, expect, it } from 'vitest';
 
-import { catalogArmOption, joinAliases, type CatalogArmRow } from './catalog-arm-option';
+import {
+  catalogArmOption,
+  catalogTaxonomyOf,
+  joinAliases,
+  type CatalogArmRow,
+  type CatalogArmTaxonomy,
+} from './catalog-arm-option';
 
 /**
  * `catalogArmOption`'s four cases (CAT-3 P11-ii plan, Amendment 1, A1.2), over the real library, so a
@@ -132,5 +144,123 @@ describe('a library row', () => {
       hasInstructions: false,
     });
     expect('group' in option).toBe(false);
+  });
+});
+
+/** A catalog row's taxonomy as the tables give it, written out (not through `catalogTaxonomyOf`). */
+const TABLES: CatalogArmTaxonomy = {
+  modality: MODALITY.strength,
+  pattern: 'squat',
+  equipment: [EQUIPMENT_CODE.kettlebell],
+  primaryMuscle: 'quadriceps',
+  secondaryMuscles: ['glutes'],
+};
+
+describe('a library row: the taxonomy is the tables’ (P11-ii-b)', () => {
+  it('🔴 (b1) with an entry: the tables’ taxonomy wins over the entry’s, the rest is the entry’s', () => {
+    const library = entry('hang_power_clean');
+    const option = catalogArmOption(
+      row({ slug: library.slug, name: library.name, trackingType: library.trackingType }),
+      undefined,
+      library,
+      TABLES,
+    );
+    expect(option.taxonomy).toEqual(TABLES);
+    expect(option.taxonomy).not.toEqual(
+      catalogArmOption(row({ slug: library.slug }), undefined, library).taxonomy,
+    );
+    expect(option.aliases).toEqual(catalogOptionOf(library, 'x').aliases);
+    expect(option.hasInstructions).toBe(catalogOptionOf(library, 'x').hasInstructions);
+  });
+
+  it('(a9) with no entry: listed bare, with the tables’ taxonomy', () => {
+    const option = catalogArmOption(
+      row({ slug: 'cat3_not_in_this_library' }),
+      undefined,
+      undefined,
+      TABLES,
+    );
+    expect(option).toMatchObject({
+      aliases: [],
+      taxonomy: TABLES,
+      supervision: null,
+      hasInstructions: false,
+    });
+  });
+});
+
+describe('catalogTaxonomyOf: the tables’ rows become a catalog row’s taxonomy (P11-ii-b)', () => {
+  const listed = [
+    { id: 7, modality: 'strength', pattern: 'horizontal_push' },
+    { id: 9, modality: 'mobility', pattern: null },
+  ];
+  const none = { equipment: [], primaryMuscles: [], secondaryMuscles: [] };
+
+  it('🔴 (b3) equipment and secondary muscles come back in the vocabulary’s order, not the rows’', () => {
+    // Rows in the opposite order to the vocabulary's (`EQUIPMENT`: dumbbell before bench; `MUSCLES`:
+    // shoulders before triceps), as a table with no order can return them.
+    const taxonomy = catalogTaxonomyOf(listed, {
+      equipment: [
+        { movementId: 7, code: 'bench' },
+        { movementId: 7, code: 'dumbbell' },
+      ],
+      primaryMuscles: [{ movementId: 7, code: 'chest' }],
+      secondaryMuscles: [
+        { movementId: 7, code: 'triceps' },
+        { movementId: 7, code: 'shoulders' },
+      ],
+    }).get(7)!;
+    expect(taxonomy).toEqual({
+      modality: 'strength',
+      pattern: 'horizontal_push',
+      equipment: ['dumbbell', 'bench'],
+      primaryMuscle: 'chest',
+      secondaryMuscles: ['shoulders', 'triceps'],
+    });
+  });
+
+  it('a listed row with no join rows: no equipment, no muscles, and its own modality and pattern', () => {
+    expect(catalogTaxonomyOf(listed, none).get(9)).toEqual({
+      modality: 'mobility',
+      pattern: null,
+      equipment: [],
+      primaryMuscle: null,
+      secondaryMuscles: [],
+    });
+  });
+
+  it('🔴 (b2) a join row for an id the read did not list throws, never attached or dropped', () => {
+    for (const rows of [
+      { ...none, equipment: [{ movementId: 8, code: 'bench' }] },
+      { ...none, primaryMuscles: [{ movementId: 8, code: 'chest' }] },
+      { ...none, secondaryMuscles: [{ movementId: 8, code: 'chest' }] },
+    ])
+      expect(() => catalogTaxonomyOf(listed, rows), JSON.stringify(rows)).toThrow(/did not list/);
+  });
+
+  it('🔴 (b4) a code outside the vocabulary throws (parsed, never passed through)', () => {
+    expect(() =>
+      catalogTaxonomyOf(listed, { ...none, equipment: [{ movementId: 7, code: 'jetpack' }] }),
+    ).toThrow();
+    expect(() =>
+      catalogTaxonomyOf(listed, { ...none, secondaryMuscles: [{ movementId: 7, code: 'spleen' }] }),
+    ).toThrow();
+    expect(() => catalogTaxonomyOf([{ id: 7, modality: 'yoga', pattern: null }], none)).toThrow();
+    expect(() => catalogTaxonomyOf([{ id: 7, modality: null, pattern: null }], none)).toThrow();
+    expect(() =>
+      catalogTaxonomyOf([{ id: 7, modality: 'strength', pattern: 'twirl' }], none),
+    ).toThrow();
+  });
+
+  it('a second primary muscle throws (the one-primary index forbids it)', () => {
+    expect(() =>
+      catalogTaxonomyOf(listed, {
+        ...none,
+        primaryMuscles: [
+          { movementId: 7, code: 'chest' },
+          { movementId: 7, code: 'triceps' },
+        ],
+      }),
+    ).toThrow(/2 primary muscles/);
   });
 });

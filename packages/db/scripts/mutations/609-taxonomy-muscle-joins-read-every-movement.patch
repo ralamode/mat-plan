@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index 11f71643..da8b9e5f 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -181,10 +181,7 @@ export async function catalogTaxonomyRows(
+       })
+       .from(schema.movementMuscles)
+       .where(
+-        and(
+-          inArray(schema.movementMuscles.movementId, [...ids]),
+-          eq(schema.movementMuscles.role, role),
+-        ),
++        and(sql`true`, eq(schema.movementMuscles.role, role)),
+       );
+   // One after another, never `Promise.all`: `newItem` passes its transaction's client, and pg warns on
+   // concurrent queries on one client (removed in pg 9); on the pool it would take three connections.

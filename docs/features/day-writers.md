@@ -226,8 +226,8 @@ flowchart LR
     `AFTER INSERT` trigger in `verify/day.ts` (`verifyRowRace`), staged by the harness's
     `stageHideDuringInsert`, which the check-in and bodyweight race shares; mutation 372.
 27. **C32 and C37 in the reader** (contract invariants 32 and 33, `program-contract.md`):
-    - `resolveDayPlan` takes the movement library as an argument. The DAL passes `CATALOG_MOVEMENTS`;
-      the proofs pass the test library, re-slugged to the proof seeder's global rows.
+    - `resolveDayPlan` takes the movement library as an argument. The DAL passes the library in effect
+      (`CATALOG_LIBRARY`, `lib/dal/catalog-library.ts`; K29); the proofs pass the test library, re-slugged to the proof seeder's global rows.
     - A GLOBAL movement whose entry has a label gives its item `supervision`, live or removed (the
       label follows the movement). A household's own item never carries one, whatever its slug.
       Mutations 373 and 374.

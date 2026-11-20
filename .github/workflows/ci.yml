@@ -440,11 +440,21 @@ jobs:
           pnpm --filter @mat-plan/db db:verify
 
       - name: Build
+        id: build
         if: steps.scopes.outputs.run_build != 'false'
         run: pnpm build
         env:
           # lib/env.ts validates at build; values are non-secret CI placeholders.
           DATABASE_URL: postgres://user:pass@localhost:5432/db
+
+      # ── Bundle size (PERF-1 (b); what it measures: the script's header) ──────
+      # No `if:` on purpose: the script decides what a skipped Build means, so a skipped build can
+      # never look like a passing guard. Re-baseline by pasting the summary's <details> block.
+      - name: Bundle size (PERF-1; .github/scripts/check-bundle-size.mjs)
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: node .github/scripts/check-bundle-size.mjs
 
   e2e:
     name: e2e
