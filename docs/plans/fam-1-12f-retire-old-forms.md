@@ -240,7 +240,7 @@ deleted whole.
 
 ### 12f PR 4: the "This week" card and `householdHasProgram` (about 315 lines deleted, about 15 added; lane E builds it)
 
-Waits for PR 1 (`householdHasProgram`'s caller), for B2 on `page.tsx`, and for lane P's review of the
+Waits for PR 1 (`householdHasProgram`'s caller), for B2 on `page.tsx` (B2-ii, since B2 became three PRs in #727), and for lane P's review of the
 `packages/db` hunks. Two of those files are on lane A's list (`fam-1-family-program.md:545-546`); lane
 A's chain is merged, and the board named lane P. Its description records Q5's first read.
 
