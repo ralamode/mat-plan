@@ -353,7 +353,7 @@ gantt
 
 **As of 2026-11-19 every step left in this milestone has an approved plan.** No step left has only a row. The end of this chart is drawn over planned work only. It is still a shape, not a date: one unit is one PR-length. Of the 14 PRs left:
 
-- **Four have a plan of their own lane's**: B2's three (B2-prep, built by the Native Scaling thread, and lane S's B2-i and B2-ii; the plan `docs/plans/v1-9b-delete-and-restore.md` made B2 three PRs in #727, on the maintainer's answer, 2026-11-19: "Three PRs, can split amongst lanes if they have bandwidth") and step 15's last PR (15 PR 3; 15 PR 1 and 15 PR 2 merged as #664 and #679; lane B's plan `docs/plans/fam-1-15-put-on-wired.md`, #650, approved by the maintainer on 2026-11-19). 11c-ii was the third, and merged that evening as #685.
+- **Four have a plan of their own**: B2's three (B2-prep, B2-i and B2-ii. The plan `docs/plans/v1-9b-delete-and-restore.md` made B2 three PRs after its re-review, in #727; the maintainer, relayed by the board, 2026-11-19: "Three PRs, can split amongst lanes if they have bandwidth". The board assigned B2-prep to the Native Scaling thread and B2-i and B2-ii to lane S) and step 15's last PR (15 PR 3; 15 PR 1 and 15 PR 2 merged as #664 and #679; lane B's plan `docs/plans/fam-1-15-put-on-wired.md`, #650, approved by the maintainer on 2026-11-19). 11c-ii also had one, and merged that evening as #685.
 - **Ten are in the three plans the maintainer approved on 2026-11-19** ("Approve (Recommended)"). Each was drafted by the plan owner from lane C's notes, hardened by a panel and checked by lane C for feasibility. These were the three steps with only a row:
   - [15c, program order on the day page](../plans/fam-1-15c-program-order-wired.md): **three PRs** (15c PR 1 to 3). Lane C builds PR 1; lane B builds PR 2 and PR 3. 15c PR 1 waited for one contract PR, merged as #699 on 2026-11-19. Program names become links, and the order's list is capped at 50 (plan D49).
   - [12c-iii, the collapse](../plans/fam-1-12c-iii-collapse.md): **two PRs** (12c-iii PR 1 and PR 2). The six differences from its prototype are accepted (plan D50).
@@ -385,6 +385,7 @@ gantt
 - **14 is two PRs since 2026-11-17** (14a, the program rows in the strength log, which gates 12c; 14b, the check-ins file, which does not block 12c; lane E's plan `docs/plans/fam-1-14-export.md`), in 14's one slot.
 - **11c is two PRs since 2026-11-17** (11c-i, Change; 11c-ii, the D35 revive), in 11c's one slot.
   12d's Change action waits for 11c-i only.
+- **B2 is three PRs since #727, drawn in one slot**: B2-prep and B2-i can run side by side and B2-ii follows both, so the chain is two deep. The end of the chart does not move: 12f's chain ends later.
 - **6a is four PRs**: three since 2026-11-16 (6a-i, 6a-ii, 6a-iii), and 6a-iii split in two on 2026-11-17, the maintainer's decision (6a-iii-a, the picker's read and "+ New item"; 6a-iii-b, copying a workout). The row
   above counts them; the lanes picture keeps them in 6a's one slot. **7a is two PRs since 2026-11-16** (7a-i, 7a-ii), also in
   one slot: 7a-i needs only 6a-i and 6a-ii. All four of 6a's PRs are merged as of 2026-11-17, and so is 7a-ii, which needed 6b and 6a-iii-b (#586).
