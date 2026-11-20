@@ -165,7 +165,10 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     30 lb." with a ✕ (cancel); a failed save keeps the typed number, says "Couldn't save. Still
     30 lb." with Try again and the ✕, and counts as not saved (a failed Undo does not count: nothing typed
     is lost). A saved Change shows its numbers until the page's data shows them too (the `amended`
-    override in `use-row.ts`), and another phone's Change retires the line and its Undo.
+    override in `use-row.ts`), and another phone's Change retires the line and its Undo. **A draft
+    that equals what is stored is not an edit:** when another phone changes that entry, the draft
+    is dropped (`useChange`), never left to read "Not saved" over a number nobody meant, where a
+    blur or ✓ would send it over that phone's (12c-iii follow-up).
 
 17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an
@@ -221,13 +224,16 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     [`fam-1-12c-iii-collapse.md`](../plans/fam-1-12c-iii-collapse.md)). `useCollapse(finished)`
     reads `finished` once, at mount: a reload, another day or athlete and back, or opening the page.
     What is finished during a visit stays open, so nothing moves under a thumb; it opens by itself
-    when it stops being finished. **It is page state, stored nowhere.** Finished is every row logged,
+    when it stops being finished, or turns busy (a backstop: **nothing is ever busy behind a
+    line**, so a tap on the line always finds Collapse offered). **It is page state, stored nowhere.** Finished is every row logged,
     none failed, on a day that can be logged, so a closed day, a future day and an archived athlete
     never fold. **The body is hidden, never unmounted** (rows hold typed text and un-tick tokens).
     "Collapse" is **never offered while the part is busy**: a write in flight, a Change typed
     (`useChange`), or an added set not ticked (`set-table.tsx`), each reported through
     `setRowBusy`. Focus goes to "Collapse" after a tap on the line and to the line after "Collapse";
-    when either control goes by itself while focused, to the part's name. Nothing is announced: the
+    when either control goes by itself while focused, to the part's name. A focused Collapse that
+    turns held hands focus to the name too, whether the button keeps it (jsdom) or a browser drops
+    it to the page when it is disabled (`useCollapse` records that Collapse was focused last). Nothing is announced: the
     focused button says it. The region keeps the bare name in both states.
     **Bodyweight and Life** (PR 2) fold through `CollapsibleSection`, which keys itself on athlete
     and day (the page does not remount on a change of day): Bodyweight with exactly one weight,

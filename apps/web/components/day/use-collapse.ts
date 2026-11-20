@@ -9,7 +9,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
  * **Folded only when the person arrives to it finished.** `useState(finished)` is read once, when the
  * part mounts: a new visit (opening the page, a reload, another day or athlete and back). What is
  * finished during a visit stays open, so nothing moves under a thumb. After that, the part opens by
- * itself when it stops being finished (another phone's un-tick, a `closed_day`), opens on a tap on
+ * itself when it stops being finished or turns busy (a backstop) (another phone's un-tick, a `closed_day`), opens on a tap on
  * its line, and folds on "Collapse". Nothing is stored.
  *
  * **Focus** (§4): after a tap on the line it goes to "Collapse" (or the part's name, when "Collapse"
@@ -23,8 +23,9 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
  */
 export function useCollapse(finished: boolean, held = false) {
   const [folded, setFolded] = useState(finished);
-  // Unfinished now (an un-tick arrived, the day closed): open for the rest of the visit.
-  if (folded && !finished) setFolded(false);
+  // Unfinished now (an un-tick arrived, the day closed), or busy (a backstop: nothing is ever
+  // busy behind a line): open for the rest of the visit.
+  if (folded && (!finished || held)) setFolded(false);
   const bodyId = useId();
 
   const line = useRef<HTMLButtonElement | null>(null);
@@ -38,6 +39,8 @@ export function useCollapse(finished: boolean, held = false) {
   useEffect(() => {
     if (toCollapse === 0) return;
     tapping.current = false;
+    // Never held here: a folded part that turns busy opens at once, so a tap always finds Collapse
+    // offered. Busy arriving just after the tap is the held effect below's.
     (collapseButton.current ?? name.current)?.focus();
   }, [toCollapse]);
   useEffect(() => {
@@ -49,8 +52,26 @@ export function useCollapse(finished: boolean, held = false) {
 
   // "Collapse" held (busy, or not finished) while it has focus: the name takes focus, so it never
   // drops to the page from a button that stays in place but cannot be used.
+  /**
+   * Whether "Collapse" was the last thing focused: set by its own focus, cleared by focus anywhere
+   * else. A browser blurs a focused button that turns disabled without focusing anything, so this
+   * stays true exactly then.
+   */
+  const collapseHadFocus = useRef(false);
   useEffect(() => {
-    if (held && collapseButton.current && document.activeElement === collapseButton.current) {
+    const onFocusIn = (event: FocusEvent) => {
+      collapseHadFocus.current = event.target === collapseButton.current;
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, []);
+  // "Collapse" held (busy, or not finished) while it had focus: the name takes focus, whether the
+  // button still holds it (jsdom) or a browser dropped it to the page when it was disabled.
+  useEffect(() => {
+    if (!held || !collapseHadFocus.current) return;
+    const active = document.activeElement;
+    if (active === collapseButton.current || !active || active === document.body) {
+      collapseHadFocus.current = false;
       name.current?.focus();
     }
   }, [held]);

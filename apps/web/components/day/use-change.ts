@@ -147,6 +147,20 @@ export function useChange(
     setBaseline(null);
     setLine(null);
   }
+  // Another phone's Change to this entry (the same entry, new numbers): a draft that equalled what
+  // was stored was not an edit, so it is dropped, never turned into one that a blur would send over
+  // that phone's number ("Not saved. Was 35 lb" for a "30" nobody meant). A real edit stays dirty.
+  // (12c-iii follow-up; the phantom predates the fold, #462.)
+  const values = entry?.values ?? null;
+  const [seenValues, setSeenValues] = useState(values);
+  if (values !== seenValues) {
+    setSeenValues(values);
+    if (draft !== null && seenValues && values && !sameValues(values, seenValues)) {
+      const was = textOf(item, seenValues);
+      const typed = (Object.keys(draft) as RowField[]).some((f) => draft[f] !== was[f]);
+      if (!typed) setDraft(null);
+    }
+  }
   // A row that stops being changeable (the day closed), or whose typed field stops being one (its
   // item's unit changed under it, so the load is text now: 12d-iii), drops what was typed.
   if (draft !== null && (Object.keys(draft) as RowField[]).some((f) => !fields.includes(f))) {

@@ -1315,3 +1315,34 @@ describe('the other-unit note, once per exercise (#688 follow-up)', () => {
     noDangling();
   });
 });
+
+describe('another phone’s Change over a draft that was not an edit (12c-iii follow-up; #462)', () => {
+  /** The plan with set 1 of the bench amended to `value` lb, as another phone would. */
+  function amendedElsewhere(plan: DayPlan, value: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    const row = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!;
+    row.logged!.values.quantities[0]!.value = value;
+    return next;
+  }
+
+  it('a draft typed back to what was stored is dropped: no "Not saved", and a blur sends nothing', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    await act(async () => control.setPlan(amendedElsewhere(control.plan, 35)));
+    expect(load().value).toBe('35');
+    expect(within(bench()).queryByText(/^Not saved\./)).toBeNull();
+    await leave(load());
+    expect(control.actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('a real edit stays, and says what is stored now', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '40');
+    await act(async () => control.setPlan(amendedElsewhere(control.plan, 35)));
+    expect(load().value).toBe('40');
+    expect(within(bench()).getByText(DAY_COPY.change.notSaved('35 lb × 8'))).toBeTruthy();
+  });
+});
