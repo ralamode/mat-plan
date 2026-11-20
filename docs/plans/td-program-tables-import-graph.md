@@ -3,6 +3,8 @@
 > Debt row: [tech-debt.md](../tech-debt.md) → "The program-tables guard reads imports with regexes, so
 > an unusual spelling slips past" (added 2026-11-18, #552 closed). Branch:
 > `chore/td-program-imports-graph`. No `plan.md` row: a tech-debt payoff.
+>
+> **Approved as written, including the wide scope** _(maintainer, 2026-11-20)_.
 
 _Roadmap alignment (2026-11-20): checked against the private roadmap, `docs/plan.md` and
 `docs/roadmap.md` (`git grep -in "regex\|lint check\|program-tables\|import graph" -- docs/plan.md
