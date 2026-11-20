@@ -36,7 +36,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Earlier check-ins and wake-up times** — whether a habit was done or a count, and the day, and
   the clock time a wake-up was tapped. These are still stored from before November 2026; the day page
   no longer records new ones.
-- **How a session felt** — a free-text box.
+- **How a session felt** — a note typed in a free-text box. Notes typed before November 2026 are
+  still stored; the app no longer asks for one.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone

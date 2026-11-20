@@ -260,7 +260,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — a free-text box."
+              "text": " — a note typed in a free-text box. Notes typed before November 2026 are\nstill stored; the app no longer asks for one."
             }
           ]
         }
