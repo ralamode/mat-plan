@@ -334,8 +334,9 @@ movement picker.
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
   workflow changes), the one gate whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
-  **Not covered by it:** `next build` (CI-only), the Playwright smoke (next bullet), gitleaks, Squawk,
-  and the forward-only guard (Squawk and the guard are diff-against-base checks on new migrations).
+  **Not covered by it:** `next build` (CI-only), bundle size (CI-only; the guard's header), the
+  Playwright smoke (next bullet), gitleaks, Squawk, and the forward-only guard (Squawk and the guard
+  are diff-against-base checks on new migrations).
 - **`pnpm e2e:local` — the Playwright smoke on a throwaway DB.** Not inside `verify` (minutes; it
   builds the prod app); run it before a PR that touches a flow the smoke covers. It boots an ephemeral
   `embedded-postgres`, migrates + seeds exactly as CI does, runs `playwright test` against it, and
@@ -343,7 +344,7 @@ movement picker.
   through. Bare `pnpm --filter web e2e` provisions no database — use `e2e:local`.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
-  `next build` · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
+  `next build` · bundle size (CI-only; the guard's header) · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
   `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run
