@@ -815,6 +815,8 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   push-up bout, a sleep reading — into a bodyweight. It is a **constant, never an argument**, because
   a parameter can be passed wrong by a future caller. `updateStrengthSetById` also refuses a program
   row: that one is `amendRow`'s (`day-writers.md` invariant 23).
+  No client guard mirrors `updateStrengthSetById`'s WHERE any more: the old form's `isEditableSet`
+  went with FAM-1 12f, and the comments in `lib/dal/entries.ts` and the writer no longer say it does.
 
   Two more rules that WHERE encodes:
   - **The live-profile predicate is `writers/ownership.ts`, and since TEN-1 it carries the household.**

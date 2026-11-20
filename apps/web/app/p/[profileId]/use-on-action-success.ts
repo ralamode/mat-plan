@@ -11,10 +11,9 @@ import type { ActionState } from './action-state';
  *
  * This is React's documented "adjust state while rendering" pattern, not an effect: the collapse
  * happens in the SAME commit as the new state, so an editor never flashes open over its saved value.
- * It was copy-pasted four times before this — `editable-set.tsx`, `checkin-form.tsx`,
- * `strength-form.tsx`, and `routine-editor.tsx`, whose own comment called itself *"the strength-form
- * during-render idiom"*: a copy that knew it was a copy. All four, plus the bodyweight amend, use this
- * now. AGENTS.md: *"Reuse small logic too — a
+ * It was copy-pasted four times before this: in three log forms that FAM-1 12f deleted, and in
+ * `routine-editor.tsx`, whose own comment called itself *"the strength-form during-render idiom"*: a
+ * copy that knew it was a copy. The routine editor and the bodyweight amend use this. AGENTS.md: *"Reuse small logic too — a
  * validation/derivation used in two places becomes one exported helper."*
  *
  * ⚠️ `onSuccess` must only touch the CALLER'S OWN state. Reaching into a parent mid-render is the
