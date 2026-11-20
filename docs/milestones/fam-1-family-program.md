@@ -327,10 +327,10 @@ gantt
   15c PR 1 the dialog, links   :c7a, 13, 14
   15c PR 2 the action          :c7b, 13, 14
   15c PR 3 on the real page    :c7c, 14, 15
-  12f PR 1 unmounted forms     :c9a, 13, 14
+  12f PR 1 (lane E builds)     :c9a, 13, 14
   12f PR 2 what they left      :c9b, 14, 15
   12f PR 3 the three actions   :c9c, 14, 15
-  12f PR 4 This week card      :c9d, 15, 16
+  12f PR 4 (lane E builds)     :c9d, 15, 16
   12f PR 5 routine trim        :c9e, 15, 16
   12c-iii PR 1 workouts        :c8a, 14, 15
   12c-iii PR 2 Bodyweight, Life :c8b, 15, 16
@@ -357,7 +357,7 @@ gantt
 - **Ten are in the three plans the maintainer approved on 2026-11-19** ("Approve (Recommended)"). Each was drafted by the plan owner from lane C's notes, hardened by a panel and checked by lane C for feasibility. These were the three steps with only a row:
   - [15c, program order on the day page](../plans/fam-1-15c-program-order-wired.md): **three PRs** (15c PR 1 to 3). 15c PR 1 waited for one contract PR, merged as #699 on 2026-11-19. Program names become links, and the order's list is capped at 50 (plan D49).
   - [12c-iii, the collapse](../plans/fam-1-12c-iii-collapse.md): **two PRs** (12c-iii PR 1 and PR 2). The six differences from its prototype are accepted (plan D50).
-  - [12f, retire the old forms](../plans/fam-1-12f-retire-old-forms.md): **five PRs** (12f PR 1 to 5). The legacy strength write path is retired under its own row after FAM-1 (plan D51).
+  - [12f, retire the old forms](../plans/fam-1-12f-retire-old-forms.md): **five PRs** (12f PR 1 to 5). Lane E builds PR 1, the unmounted forms, and PR 4, the "This week" card; lane C builds the other three (lane C's hand-over, cleared by the board, 2026-11-19; plan L59). The chart keeps all five in lane C's section and count, where the plan put them. The legacy strength write path is retired under its own row after FAM-1 (plan D51).
 - **What is still open inside those plans.** The 12f plan's Q5 is answered: the maintainer ran its two read-only checks on production on 2026-11-19, and the gate for 12f PR 5 is met. One allowed split: the 12c-iii plan lets its builder land a small PR 0 before 12c-iii PR 1 if that PR grows, which would make the count 71.
 - **The two steps planned by their rows are merged**: 12d-iii (#688) and 12c-ii (#694).
 - **The count moved from 63 to 70** with the three plans: 15c is three PRs (+2), 12c-iii is two (+1) and 12f is five (+4). None of the ten is on the critical path.

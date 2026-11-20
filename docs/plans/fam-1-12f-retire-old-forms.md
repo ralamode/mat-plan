@@ -2,7 +2,9 @@
 
 > Backlog: [plan.md](../plan.md) row FAM-1, step 12f of [the FAM-1 plan](./fam-1-family-program.md)
 > (row 12f, `fam-1-family-program.md:633`). Branch for this plan: `docs/fam-1-12f-retire-old-forms-plan`.
-> Lane C builds it. Five code PRs, named **12f PR 1 to 5** here.
+> Five code PRs, named **12f PR 1 to 5** here. **Lane E builds PR 1 and PR 4; lane C builds PR 2, PR 3
+> and PR 5** _(lane C's hand-over, cleared by the board, 2026-11-19, after lane E's own steps had all
+> merged; until then lane C built all five)_.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at the
 > maintainer's request, from lane C's notes. Panelled the same day by four lenses; every finding is
@@ -177,11 +179,16 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 
 ## File-by-file changes
 
-Lane C builds every PR. Files outside lane C's area are marked. Each PR carries its changelog
+**Lane E builds PR 1 and PR 4; lane C builds PR 2, PR 3 and PR 5** (the hand-over above). The tables
+below were written with lane C as the builder of all five, and their marks stand with one change of
+reading: in PR 1 and PR 4 the files in lane C's and lane S's areas (`app/p/[profileId]/`,
+`components/`, `lib/`) are lane E's guest edits, which lane C reviews, and lane E takes over the
+clearance to edit the token preview (Q2). PR 4's `packages/db` hunks are still reviewed by lane P.
+Files outside the builder's area are marked. Each PR carries its changelog
 fragment, its `docs/status.md` and `docs/roadmap.md` move, and the milestone chart in its description.
 The 400-line target is for code a reviewer must read; each PR says below why its size is acceptable.
 
-### 12f PR 1: the unmounted components and the reads only they used (about 5,600 lines of code deleted)
+### 12f PR 1: the unmounted components and the reads only they used (about 5,600 lines of code deleted; lane E builds it)
 
 Waits for a turn in three guides. Starting before B2 merges is cleared by the board (2026-11-19), Q3, if no file
 overlaps B2's. 5,484 of its lines
@@ -222,7 +229,7 @@ deleted whole.
 | `app/p/[profileId]/actions.test.ts`                    | EDIT   | Three `bindings` and three `validBody` entries (`:216-241`); the helpers `strengthForm`, `checkinForm`, `editForm`; the describes at `:416`, `:751`, `:1020`, `:1114`, `:1185`, `:1412`, `:1448`, `:1492`; the DAL mocks only they used. **Kept and widened:** "declared-day ±1 bound (shared across writers)" (`:1229-1270`) keeps its bodyweight assertions and gains the life form in the same three cases. `logLifeActivitiesAction` bounds the day too (`actions.ts:467`) and has no future-day case today, so the describe would otherwise hold one writer. |
 | `docs/features/write-path.md` · `docs/architecture.md` | EDIT   | The action count and table (`write-path.md:94`, `:741`, `:910-915`); the note at `architecture.md:158-159`.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
-### 12f PR 4: the "This week" card and `householdHasProgram` (about 315 lines deleted, about 15 added)
+### 12f PR 4: the "This week" card and `householdHasProgram` (about 315 lines deleted, about 15 added; lane E builds it)
 
 Waits for PR 1 (`householdHasProgram`'s caller), for B2 on `page.tsx`, and for lane P's review of the
 `packages/db` hunks. Two of those files are on lane A's list (`fam-1-family-program.md:545-546`); lane
