@@ -92,8 +92,7 @@ export async function expectTapTargets(
 ): Promise<void> {
   const controls = await page.locator(INTERACTIVE).all();
   // A guard against the selector silently matching nothing (which would make this whole assertion
-  // vacuous). Opt out only for a page whose one control is a link, which is measured by its own test,
-  // since links are excluded here under the SC 2.5.8 inline exception.
+  // vacuous). Opt out only where having no controls is expected: a link-only 404, a stub preview.
   if (opts.expectControls !== false) {
     expect(
       controls.length,
@@ -105,7 +104,9 @@ export async function expectTapTargets(
     if (!(await control.isVisible())) continue;
     const target = await targetOf(page, control);
     if (!target) {
-      undersized.push(`${await describeControl(control)} → no bound <label> to act as its target`);
+      undersized.push(
+        `${await describeControl(control)} → no bound <label> to act as its tap target`,
+      );
       continue;
     }
     const box = await target.boundingBox();

@@ -15,6 +15,23 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
+
+- **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in
+  `<main>`, all undersized ones collected) and `a11y.spec.ts`'s `expectLinkTapTargets(root, context,
+expected?)` (any root, an optional exact count, fail-fast) measure the same 44px rule for links.
+  #720 merged the control checks but left these, because merging them edits
+  `program-preview-a11y.spec.ts`, which lanes do not edit (the contract's). Separately,
+  `athletes.spec.ts` (about :862-865) loops `main button, main a[href^="/p/"]` with no visibility
+  skip, no label measurement and no zero-match guard.
+- **Impact:** a change to the link rule made in one copy leaves the other on the old rule; the
+  `athletes.spec.ts` loop passes vacuously if its selector ever matches nothing.
+- **The fix:** one exported `expectLinkTargets(root: Locator, context, expected?)` that collects every
+  undersized link and names it with `describeControl`; its 7 call sites move to it (3 of them in the
+  contract's spec, so the roadmap thread makes those). `athletes.spec.ts` calls `expectTapTargets`
+  and the link check instead of its loop.
+- **Severity:** low. Tests only; both copies hold the same 44px bar today.
+
 ### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
 
 - **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
