@@ -323,6 +323,25 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   }, [open, isOurEntry, onOpenChange]);
 
   /**
+   * 🔴 **Where this sheet pushed its entry, so a close can still pop it after Next rewrites it.** A
+   * server action that revalidates while the sheet is open (the item picker's "+ New item", Program
+   * order's arrows) makes Next's router `replaceState` the current entry with
+   * `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`),
+   * which drops `sheet` and `doc`. `isOurEntry()` then reads false at close, the pop below was
+   * skipped, and one Back press did nothing (proved in a browser, 2026-11-19). The URL is what that
+   * rewrite keeps, so a close pops when the entry is still ours by key OR by URL. A Back press and a
+   * navigation clear this: the first has already left the entry, the second has another URL on top.
+   *
+   * It is set whenever the open sheet owns the top entry, not only when it pushes one: a sheet
+   * reopened onto its entry (the restore on mount, or Forward through the listener) owns it too.
+   *
+   * ⚠️ **The URL is not the entry.** Two cases would pop the wrong one, and no consumer makes either
+   * today: a sheet that stays open while another entry is pushed at the same URL, and nested sheets
+   * where the outer closes first. The key-only check could do neither; if a consumer ever does, key
+   * the match on `navigation.currentEntry.key` (it survives `replaceState` and changes on a push).
+   */
+  const pushedAt = useRef<string | null>(null);
+  /**
    * 🔴 **One ALWAYS-ON listener, syncing both directions** — and the first draft got this wrong in a
    * way only the e2e could show. It checked the history state on MOUNT, which never fires: Next
    * keeps the tree mounted across a same-route navigation, so returning from a link inside the sheet
@@ -332,17 +351,6 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
    * Back ONTO our entry reopens; back OFF it closes. The listener cannot be scoped to `open`, or the
    * reopening half can never run.
    */
-  /**
-   * 🔴 **Where this sheet pushed its entry, so a close can still pop it after Next rewrites it.** A
-   * server action that revalidates while the sheet is open (the item picker's "+ New item", Program
-   * order's arrows) makes Next's router `replaceState` the current entry with
-   * `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`),
-   * which drops `sheet` and `doc`. `isOurEntry()` then reads false at close, the pop below was
-   * skipped, and one Back press did nothing (proved in a browser, 2026-11-19). The URL is what that
-   * rewrite keeps, so a close pops when the entry is still ours by key OR by URL. A Back press and a
-   * navigation clear this: the first has already left the entry, the second has another URL on top.
-   */
-  const pushedAt = useRef<string | null>(null);
   useEffect(() => {
     const sync = () => {
       const isOurs = isOurEntry();
@@ -358,10 +366,8 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
 
   useEffect(() => {
     if (!open) return;
-    if (!isOurEntry()) {
-      window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
-      pushedAt.current = window.location.href;
-    }
+    if (!isOurEntry()) window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
+    pushedAt.current = window.location.href;
   }, [open, id, isOurEntry]);
 
   /**
@@ -373,8 +379,10 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
    * pushed on top of the stranded entry, so closing THAT one popped back onto the first and
    * **reopened a sheet the user had already dismissed.**
    *
-   * The `state.sheet === id` guard makes the two close paths that must NOT pop self-evident: a
-   * `popstate` close has already left our entry, and a navigation close has a route entry on top.
+   * It pops when the top entry is still ours, by its key or, after Next rewrote it, by the URL it
+   * was opened at (`pushedAt`). The two close paths that must NOT pop fail both: a `popstate` close
+   * has already left our entry (and cleared `pushedAt`), and a navigation close has a route entry on
+   * top at another URL.
    */
   const wasOpen = useRef(open);
   useEffect(() => {

@@ -694,7 +694,7 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`), so
   any custom `history.state` key (the Sheet's `sheet`/`doc`) is dropped at the same URL. Code that
   pops "its" entry by key then skips the pop. Found 2026-11-19 (the item picker's "+ New item", then
-  Close); Put on was fine only because it closes before the rewrite. **Fix:** remember the URL the
+  Close); Put on was not observed failing. **Fix:** remember the URL the
   entry was pushed at and pop when the entry is ours by key OR still at that URL
   (`components/ui/sheet.tsx`). **Diagnose:** log `history.state` before and after the action in a
   browser; jsdom has no router, so only an e2e step shows it.

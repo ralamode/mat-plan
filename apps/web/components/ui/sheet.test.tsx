@@ -596,11 +596,15 @@ describe('Sheet — the back gesture', () => {
     // Stand in for the router pushing a route entry over ours. A real one has another URL: Next
     // replaces, never pushes, for a navigation to the URL already shown (`app-router.js`).
     const here = window.location.pathname;
-    window.history.pushState({ some: 'route' }, '', '/elsewhere');
-    await closeVia(() => fireEvent.click(headerClose()));
-    expect(back).not.toHaveBeenCalled();
-    window.history.replaceState(null, '', here);
-    back.mockRestore();
+    try {
+      window.history.pushState({ some: 'route' }, '', '/elsewhere');
+      await closeVia(() => fireEvent.click(headerClose()));
+      expect(back).not.toHaveBeenCalled();
+    } finally {
+      // The URL-based pop is order-sensitive: never leave `/elsewhere` to the next test.
+      window.history.replaceState(null, '', here);
+      back.mockRestore();
+    }
   });
 
   /**
@@ -616,6 +620,26 @@ describe('Sheet — the back gesture', () => {
     await closeVia(() => fireEvent.click(screen.getByRole('button', { name: 'Use as typed' })));
     expect(back).toHaveBeenCalledTimes(1);
     back.mockRestore();
+  });
+
+  it('a sheet reopened onto its own entry (no push) still pops after the rewrite', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const push = vi.spyOn(window.history, 'pushState');
+    render(<Harness consumerClose />);
+    openAndCapture();
+    const token = (window.history.state as { doc: string }).doc;
+    cleanup();
+    push.mockClear();
+    // Landed back on our entry: the restore on mount reopens without pushing.
+    window.history.replaceState({ sheet: 'test-sheet', doc: token }, '');
+    render(<Harness consumerClose />);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+    window.history.replaceState({ __NA: true }, '');
+    await closeVia(() => fireEvent.click(screen.getByRole('button', { name: 'Use as typed' })));
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+    push.mockRestore();
   });
 
   it('a Back press after that rewrite closes it without popping a second entry', async () => {

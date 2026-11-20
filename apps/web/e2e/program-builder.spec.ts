@@ -295,6 +295,7 @@ test('one Back after making an item in the open picker and closing it leaves the
   const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
   await openPrograms(page);
   await createProgram(page, `E2E back ${stamp}`);
+  const programPage = page.url();
   await page
     .getByRole('region', { name: BUILDER_COPY.workouts })
     .getByRole('link', { name: BUILDER_COPY.newWorkout })
@@ -312,10 +313,15 @@ test('one Back after making an item in the open picker and closing it leaves the
   await expect(
     picker.getByRole('checkbox', { name: new RegExp(`^E2E item ${stamp}\\s*,`) }),
   ).toBeChecked();
+  // The footer's Close. The header has one too, and the footer always comes after it in the DOM
+  // (`sheet.tsx`), so the last match is the footer's.
   await picker.getByRole('button', { name: SHEET_COPY.close, exact: true }).last().click();
   await expect(picker).toBeHidden();
+  // Exactly one entry back: the program page, not the editor (a stranded entry) and not further
+  // (a second pop).
   await page.goBack();
-  await expect(page).not.toHaveURL(editor);
+  await expect(page).toHaveURL(programPage);
+  expect(editor).not.toBe(programPage);
 });
 
 test('a parent puts a new athlete on a program, the athlete logs it, then off and back on', async ({
