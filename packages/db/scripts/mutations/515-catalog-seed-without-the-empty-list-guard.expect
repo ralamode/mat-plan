@@ -1,0 +1,1 @@
+OPS-2 A: seed({ fixtures: false }) on a fresh database resolves

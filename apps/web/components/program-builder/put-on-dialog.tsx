@@ -13,6 +13,7 @@ import { useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { SheetFormFooter } from '@/components/ui/sheet-form-footer';
 import {
   APP_HOME_PATH,
   FOCUS_TARGET_CLASS,
@@ -41,7 +42,6 @@ import {
   switchHintText,
 } from './builder-text';
 import { BuilderLink } from './route-link';
-import { SheetFormFooter } from './sheet-form-footer';
 import { useAttempt } from './use-attempt';
 
 const SHEET_ID = 'put-on';
@@ -129,9 +129,13 @@ export function PutOn({
   // today, or ticked back on), or with each other.
   const staying = program.athletes.some((a) => a.lastDay === null) || back.length > 0;
   const sharesTargets = fresh.length > 0 && (staying || fresh.length > 1);
-  const keeps = [
-    ...new Set(ticked.flatMap((c) => c.keeps).filter((name) => name !== program.name)),
+  const keepsOf = (cs: typeof ticked) => [
+    ...new Set(cs.flatMap((c) => c.keeps).filter((name) => name !== program.name)),
   ];
+  const keeps = keepsOf(ticked);
+  // The order hint is only true for a NEW row, which takes its place by the Programs list (D41);
+  // someone ticked back on goes back where they were (program-writers invariant 19).
+  const freshKeeps = keepsOf(ticked.filter((c) => !c.on));
   const tomorrow = addDays(program.today, 1);
   const from = when === 'today' ? program.today : tomorrow;
   const effectWorkouts = workoutsOn(program, from);
@@ -379,7 +383,7 @@ export function PutOn({
           </fieldset>
           {keeps.length ? (
             <div className={`text-muted-foreground flex flex-col gap-2 text-sm ${NAME_WRAP_CLASS}`}>
-              <p>{orderHintText(program.name)}</p>
+              {freshKeeps.length ? <p>{orderHintText(program.name)}</p> : null}
               {takeOffWired ? <p>{switchHintText(keeps)}</p> : null}
             </div>
           ) : null}

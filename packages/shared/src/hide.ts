@@ -18,9 +18,9 @@ import { uuidSchema } from './id';
  * The most entries one hide may name.
  *
  * It caps **a row** — a folded calisthenics row can hold several bouts, and hiding the row hides all
- * of them as one event. ⚠️ It is deliberately NOT the cap for clearing a day: `CLEAR_DAY_MAX` is a
- * different number sized from a real day, and it arrives with **B2**, which is the PR that can size
- * it against the thing it caps. Naming both here now would be guessing one of them.
+ * of them as one event. ⚠️ It is NOT a cap on clearing a day, and nothing is: `clearDay` reads the
+ * day's ids itself under its lock, so no list crosses the wire for a cap to bound (B2-0; the
+ * `CLEAR_DAY_MAX` this once promised was cut there, maintainer 2026-11-17).
  */
 export const HIDE_ROW_MAX = 50;
 

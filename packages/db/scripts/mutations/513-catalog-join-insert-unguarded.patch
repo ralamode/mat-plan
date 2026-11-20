@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..34687573 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -473,9 +473,7 @@ export async function seedCatalog(
+     const equipmentRows = inserted.flatMap(({ id, slug }) =>
+       bySlug.get(slug)!.equipment.map((equipmentCode) => ({ movementId: id, equipmentCode })),
+     );
+-    if (equipmentRows.length > 0) {
+-      await tx.insert(schema.movementEquipment).values(equipmentRows);
+-    }
++    await tx.insert(schema.movementEquipment).values(equipmentRows);
+ 
+     const muscleRows = inserted.flatMap(({ id, slug }) => {
+       const entry = bySlug.get(slug)!;

@@ -1,17 +1,24 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addDays, localWeekday } from '@mat-plan/shared';
-import { todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
+import { addDays, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
+import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
 import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
 
-import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
 import {
+  addAthlete,
+  archiveAdded,
   bodyweightSection,
+  copyOntoEveryWeekday,
+  createProgram,
+  escapeRegExp,
   isoDaysAgo,
+  openPrograms,
   programRowTick,
+  putOnFromToday,
   SEED_PROFILE_2_ROUTE,
   SEED_PROFILE_ROUTE,
   settled,
@@ -52,8 +59,9 @@ const routeFor = (day: string) =>
 const tick = (page: Page, item: string) => programRowTick(page, morning.name, item);
 const ticks = (page: Page) => page.getByRole('button', { name: new RegExp(`^${LOG_PREFIX}`) });
 /** Stretching (the fixture's second program) runs every day, so its workout has a row on any day. */
+const stretching = todayTwoPrograms.currentPrograms[1]!;
 const daily = todayTwoPrograms.workouts.find(
-  (w) => w.programPublicId === todayTwoPrograms.currentPrograms[1]!.programPublicId,
+  (w) => w.programPublicId === stretching.programPublicId,
 )!;
 /**
  * A program row's ✓ on any day. Scoped to the workout: Bodyweight's and Life's ✓ are named
@@ -193,7 +201,6 @@ test('more than the look-ahead ahead renders today', async ({ page }) => {
 // fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
 // Saturday, so today or yesterday always has one.
 
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** The superset itself: its own list, named "Superset A" (`workout-card.tsx`), holding its two items. */
 const supersetWorkout = (page: Page) =>
   page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
@@ -221,7 +228,7 @@ const setOne = (item: string) => DAY_COPY.setLabel(item, 1);
 const setTick = (page: Page, item: string) =>
   page.getByRole('button', { name: DAY_COPY.logLabel(setOne(item)), exact: true });
 const loadField = (page: Page, item: string) =>
-  page.getByRole('textbox', { name: new RegExp(`^${escape(setOne(item))}, in (?!reps$)`) });
+  page.getByRole('textbox', { name: new RegExp(`^${escapeRegExp(setOne(item))}, in (?!reps$)`) });
 const repsField = (page: Page, item: string) =>
   page.getByRole('textbox', { name: `${setOne(item)}, in reps`, exact: true });
 
@@ -306,5 +313,120 @@ test.describe('Change on real data', () => {
     // What was stored, not only what the field shows: nothing was sent.
     await page.reload();
     await expect(repsField(page, partner), `${partner}: a blank changed nothing`).toHaveValue(reps);
+  });
+});
+
+// ── Program order (FAM-1 15c) ────────────────────────────────────────────────────────────────────
+//
+// 🔴 **On this run's own athlete and programs, never a seeded athlete or a fixture program**, so a
+// reorder never changes the order another spec reads (`fullyParallel`, one shared database). The
+// names carry the run's stamp, so a retry builds its own world rather than finding the last one's
+// (nothing can be deleted). Each program holds one fixture workout copied onto every day of the
+// week, so the run passes whatever day it is. Spends one of the household's athlete slots a run, as
+// the builder's own journey does (`program-builder.spec.ts`).
+
+/** The workout headings in the order the day page lists them. */
+const workoutHeadings = (page: Page) =>
+  page
+    .getByRole('region', { name: DAY_COPY.heading, exact: true })
+    .getByRole('heading', { level: 3 });
+/** The programs line ("Programs: A, B"), whose names are links to their program pages (D49). */
+const programsLine = (page: Page) =>
+  page.locator('p', { hasText: new RegExp(`^${escapeRegExp(PROGRAM_COPY.lineLabel(2))}`) });
+
+test.describe('Program order on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  /** This run's athlete, archived after the test so the picker does not fill with them. */
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('an athlete on two programs moves one down, and the day page follows, after a reload too', async ({
+    page,
+  }, info) => {
+    test.setTimeout(180_000);
+    const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
+    const athlete = `E2E order athlete ${stamp}`;
+    const programs = [
+      { name: `E2E order one ${stamp}`, from: familyProgram.name, workout: morning.name, path: '' },
+      { name: `E2E order two ${stamp}`, from: stretching.name, workout: daily.name, path: '' },
+    ];
+
+    // 1. Two programs, each with a fixture workout on all seven weekdays.
+    for (const program of programs) {
+      await openPrograms(page);
+      await createProgram(page, program.name);
+      program.path = new URL(page.url()).pathname;
+      await copyOntoEveryWeekday(page, {
+        from: program.from,
+        workout: program.workout,
+        to: program.name,
+      });
+    }
+
+    // 2. A new athlete, put on both from today.
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    for (const program of programs) {
+      await page.goto(program.path);
+      await putOnFromToday(page, program.name, athlete);
+    }
+
+    // 3. Program order, from their day page, holds the a11y bar at 360px.
+    await page.goto(dayPage);
+    await page.getByRole('button', { name: PROGRAM_COPY.order, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: PROGRAM_COPY.orderTitle(athlete) });
+    await expect(dialog).toBeVisible();
+    await expectNoAxeViolations(page, 'Program order, 360px');
+    await expectTapTargets(page, 'Program order, 360px');
+    await expectNoOverflowWithin(dialog, 'Program order dialog');
+
+    // The starting order is the dialog's, never assumed: Put on places a program where it sits in
+    // the Programs list, which this spec does not control.
+    const listed = await dialog.getByRole('listitem').allTextContents();
+    const [first, second] = listed.map((text) => programs.find((p) => text.includes(p.name)));
+    expect(first && second && first !== second, `two programs listed, got ${listed}`).toBe(true);
+    const moved = [second!, first!];
+
+    // 4. ↓ on the first. Focus stays on the arrow, and the move is announced once it has saved.
+    const down = dialog.getByRole('button', {
+      name: PROGRAM_COPY.moveDown(first!.name),
+      exact: true,
+    });
+    await down.click();
+    await expect(
+      dialog.getByRole('status').filter({ hasText: PROGRAM_COPY.moved(first!.name, 2, 2) }),
+    ).toHaveCount(1);
+    await expect(down).toBeFocused();
+    await expect(dialog.getByRole('listitem')).toHaveText(
+      moved.map((p) => new RegExp(escapeRegExp(p.name))),
+    );
+    await dialog.getByRole('button', { name: PROGRAM_COPY.done, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    // 5. The programs line and the workouts follow, before a reload and after one. Each name on the
+    //    line links to its program's page; the journey reads the links and does not follow them.
+    const expectOrder = async (when: string) => {
+      const links = programsLine(page).getByRole('link');
+      // By accessible name: each link's text ends in an aria-hidden " ›" (15c PR 1), which the
+      // name leaves out and `toHaveText` would not.
+      await expect(links, `${when}: the programs line`).toHaveCount(moved.length);
+      for (const [index, program] of moved.entries()) {
+        await expect(links.nth(index), `${when}: link ${index + 1}`).toHaveAccessibleName(
+          program.name,
+        );
+        await expect(links.nth(index)).toHaveAttribute('href', program.path);
+      }
+      await expect(workoutHeadings(page), `${when}: the workouts`).toHaveText(
+        moved.map((p) => p.workout),
+      );
+    };
+    await expectOrder('after the move');
+    await page.reload();
+    await expectOrder('after a reload');
   });
 });

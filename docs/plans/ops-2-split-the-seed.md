@@ -240,6 +240,10 @@ If Q6 picks (c), the lock comes back with it.
 
 ### D8 · What makes a seed-id deletion safe from old code (Q2, jointly with PRIV-3)
 
+**Applied by CAT-3 R0 (2026-11-19):** after the fresh start (R2) no production row carries a seed id,
+so Q2's re-key has nothing left to act on. This table stands: old code run after R2 can at worst
+re-create role-named fixture rows, which R4's second run finds and `erase-seeded-household-…` removes.
+
 **Old seed code is reachable after PR 1**: through "Re-run jobs" on a pre-PR-1 `migrate.yml` run (for 30
 days), or a hand-run `pnpm db:seed` from a stale checkout (`deploy.md` documents the command). Three
 generations can run:
@@ -284,6 +288,9 @@ argument above is kept, because it is why the fresh start is enough.
 **Refresh 2 (2026-11-17):** for the seeded household, `CAT-3`'s fresh start (K7) replaces the
 production re-key below: after it, no live production row carries a committed seed constant, which
 is SEC-6's acceptance. SEC-6's row is restated accordingly by the fresh-start chunk (R0), not by PR 1.
+**Applied by CAT-3 R0 (2026-11-19):** SEC-6's acceptance is narrowed to households, profiles and
+movements (`plan.md`); after R2 it holds by deletion, and R4 checks it. The `rate-limit.ts` docblock
+clause stays with SEC-6, as a docs-only follow-up.
 
 In production the seed ids are the `public_id`s of a real household and two real minors' profiles, so
 the "UUIDv7 public ids are non-enumerable" layer is void for exactly those rows; the session plus
@@ -304,6 +311,9 @@ the fresh start does not reach:
 
 **Refresh 2 (2026-11-17):** PR 2 is unnecessary once `CAT-3`'s fresh start has erased the seeded
 household (spec § Interactions, `OPS-2`). It stays planned until then, in case the fresh start slips.
+**Applied by CAT-3 R0 (2026-11-19):** PR 2 and D10 hide the fixture athlete by the seed household's id,
+which after R2 has no target in production. They are **retired**; the order drops them, and R4's report
+is what finds a fixture row that old code re-creates.
 
 PR 2 adds `fixture-athlete-in-production-2026-11-<dd>` to `corrections/registry.ts`. Its `run`, in one
 transaction with `set local lock_timeout` and `statement_timeout` (the `registry.ts` pattern):

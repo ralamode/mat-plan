@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { note, summarize } from './summary';
+import { note, summarize, summaryLine } from './summary';
 
 const last = (lines: string[]) => lines[lines.length - 1];
 
@@ -41,5 +41,17 @@ describe("the correction runner's summary counts changes, never notes", () => {
     expect(summarize([], { isReport: true, apply: true })).toEqual([
       'Nothing to report — this census found no rows in any of the shapes it counts.',
     ]);
+  });
+
+  it("a correction's own summary replaces the count, so tables are never called changes (#708)", () => {
+    const lines = [
+      'would erase 400 entries row(s)',
+      'would erase 12 profiles row(s)',
+      note('total: 412 row(s)'),
+      summaryLine('2 table(s), 412 row(s) would be erased.'),
+    ];
+    const out = summarize(lines, { isReport: false, apply: false });
+    expect(last(out)).toBe('2 table(s), 412 row(s) would be erased.');
+    expect(out.join('\n')).not.toMatch(/change\(s\)/);
   });
 });

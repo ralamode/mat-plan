@@ -3,6 +3,7 @@ import 'server-only';
 import {
   bodyweightRowForAmend,
   clearBodyweight,
+  clearDay,
   clearEventsForDay,
   clearPractice,
   type ClearSingleValueResult,
@@ -82,7 +83,7 @@ export type SetDTO = {
   isBand: boolean;
   quantities: SetQuantityDTO[];
   // GAP-1 P1-1b. Carried so the read seam can tell a `sub_failure` set from a `done` one — WITHOUT it
-  // per-set status is unrenderable and `isEditableSet` can't refuse to edit one. Typed as the full
+  // per-set status is unrenderable and the set-edit path can't refuse one. Typed as the full
   // `EntryStatus` (not the narrower SetStatus) because this is a READ of whatever the column holds,
   // including a value written before the boundary narrowed; the write path is where the subset applies.
   status: EntryStatus;
@@ -762,4 +763,32 @@ export async function restoreClearedDay(args: {
     else if (item.reason === RESTORE_REASON.slot_taken) keptHidden += 1;
   }
   return { restored, keptHidden };
+}
+
+/** What Clear this day did, as a count: the DTO the action maps, with no token or value in it. */
+export type ClearDayEntriesResult = { count: number };
+
+/**
+ * Clear this day (V1-9b B2): hide every live entry of one athlete's day as one event (`clearDay`,
+ * which reads the day's ids itself, so there is no cap).
+ *
+ * - `count`: the entries the clear holds hidden, on a first call and a replay alike.
+ * - **`count: 0` is "nothing was left to clear"**: the writer's `notFound` (nothing live and no clear
+ *   on the day), and a replay that read the newest clear's token just as another phone's Restore all
+ *   committed (`clearDay` reads the token and the count in two statements, so the count can be 0,
+ *   which `clearEventSchema` would refuse).
+ *
+ * 🔴 **Inside `quietDbErrors`**: a `23514` here carries the failing row, a weight included, in the
+ * driver's detail. A null scope THROWS, as `restoreClearedDay`'s does: the action resolved the profile
+ * in this scope first, so reaching here without one is a caller bug.
+ */
+export async function clearDayEntries(args: {
+  profilePublicId: string;
+  day: string;
+}): Promise<ClearDayEntriesResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) throw new Error('Profile not found');
+  const result = await quietDbErrors('clearDayEntries', () => clearDay(db, { ...args, scope }));
+  if ('notFound' in result) return { count: 0 };
+  return { count: result.count };
 }

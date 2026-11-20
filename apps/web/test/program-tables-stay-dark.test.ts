@@ -424,8 +424,10 @@ describe('the program tables stay dark (FAM-1 4a-i, 4b, 5)', () => {
  * reference count. `movements.modality` is a column on an existing table, which this scan cannot hold;
  * 0032's deploy-window header covers it.
  *
- * Relaxed by A2 (the seed's catalog writer and `movementIsCatalog`) and P11-ii (the option read in
- * `queries/program/`), each adding its own entry.
+ * A2-i's writer is `seedCatalog` in `seed.ts`, already allowed: the seed is the ONE writer, and S4's
+ * "no writer makes a household join row" is held by its proofs (`verify/catalog.ts`, mutation `503`),
+ * not by this scan. `movementIsCatalog` names the `modality` column, not a table, so it needs no entry.
+ * P11-ii-b retires this `describe` (S6 ends there).
  */
 describe('the movement library tables stay dark (CAT-3 A1)', () => {
   const CATALOG_TABLES =
