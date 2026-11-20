@@ -24,7 +24,10 @@ import {
   LOGGED_CARD_CLASS,
   RowInput,
   OtherUnitLine,
+  OtherUnitNote,
+  rowUnitLine,
   secondaryText,
+  useOtherUnitNote,
   Tick,
   TINT_CLASS,
   useFocusRefusedField,
@@ -102,6 +105,11 @@ function SingleItem({
     left = `${DAY_COPY.lastTime} ${quantityText(previous.value, previous.unit)}`;
   }
   const onTint = r.logged !== null && !r.error;
+  // The other-unit note under the heading, kept for the visit (#688 follow-up); the row's own line
+  // only when it differs (un-ticked) or there is no note (`rowUnitLine`).
+  const noteUnit = useOtherUnitNote(item);
+  const noteId = useId();
+  const unitNote = noteUnit ? { id: noteId, unit: noteUnit } : undefined;
 
   return (
     <li
@@ -109,6 +117,7 @@ function SingleItem({
       className={cn(CARD_CLASS, r.logged && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}
     >
       <ItemHeading item={item} label={label} onTint={onTint} />
+      {noteUnit ? <OtherUnitNote item={item} from={noteUnit} id={noteId} onTint={onTint} /> : null}
       <div className="mt-2 flex items-center gap-2">
         <span className={cn('min-w-0 flex-1 text-sm', secondaryText(onTint))}>{left}</span>
         {change.editable && item.unit ? (
@@ -120,6 +129,7 @@ function SingleItem({
               name={item.name}
               lineId={errorId}
               described={status}
+              unitLineId={rowUnitLine(r, errorId, unitNote).id}
               tickRef={tickRef}
               inputRef={(el) => {
                 fields.current.quantity = el;
@@ -150,6 +160,7 @@ function SingleItem({
               field="quantity"
               name={item.name}
               errorId={errorId}
+              unitNote={unitNote}
               tickRef={tickRef}
               inputRef={(el) => {
                 fields.current.quantity = el;
@@ -169,6 +180,7 @@ function SingleItem({
           described={status}
           label={item.name}
           errorId={errorId}
+          unitNote={unitNote}
           tickRef={tickRef}
         />
       </div>
@@ -177,9 +189,9 @@ function SingleItem({
       </div>
       {/* 12d-iii: a sibling after the status slot, as in the set table, so a message never
           replaces it and the status stays next to the row. */}
-      {r.otherUnit ? (
+      {rowUnitLine(r, errorId, unitNote).own ? (
         <div className="mt-2">
-          <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
+          <OtherUnitLine r={r} item={item} errorId={errorId} unitNote={unitNote} onTint={onTint} />
         </div>
       ) : null}
     </li>

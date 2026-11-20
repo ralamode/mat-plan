@@ -1,14 +1,15 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..555a1e5f 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -221,9 +221,8 @@ export async function seed(
+@@ -225,9 +225,8 @@ export async function seed(
      const household = await seedFixtures(db);
      await seedProgram(db, PROGRAM_SEED);
      await seedProgramFixtures(db, householdScopeForScript(household.id));
-+    reportShadowedMovements(shadowedSlugs);
++    reportSeed(counts);
    }
 -
--  reportShadowedMovements(shadowedSlugs);
+-  reportSeed(counts);
  }
  
- /**
+ /** `seedReference`'s required options: the library list the catalog writer is given (CAT-3 A2-i). */

@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index feddd632..366b45e9 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1126,7 +1126,7 @@ const eraseSeededHousehold: Correction = {
+             'the seeded household is not here: already erased; nothing to do',
+           );
+         }
+-        const report = await eraseHousehold(tx as unknown as Executor, asOwnerScope(scope), {
++        const report = await eraseHousehold(db as unknown as Executor, asOwnerScope(scope), {
+           apply: true,
+         });
+         if (report.total !== expected) {

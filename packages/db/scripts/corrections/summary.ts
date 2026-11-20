@@ -14,8 +14,24 @@
 /** A line the runner prints but does not count: it describes no write. */
 export type CorrectionNote = { readonly note: string };
 
-/** One line of a correction's result: a change (a string) or a note. */
-export type CorrectionLine = string | CorrectionNote;
+/**
+ * The correction's own last line, printed INSTEAD of the runner's count. For a correction whose unit
+ * is not "a change": the one-shot erasure counts tables and rows, and "12 change(s)" beside "412
+ * row(s)" is two numbers where the operator types one (board, 2026-11-19).
+ */
+export type CorrectionSummary = { readonly summary: string };
+
+/** One line of a correction's result: a change (a string), a note, or its own summary. */
+export type CorrectionLine = string | CorrectionNote | CorrectionSummary;
+
+/** The correction's own last line (see `CorrectionSummary`). */
+export function summaryLine(text: string): CorrectionSummary {
+  return { summary: text };
+}
+
+export function isSummary(line: CorrectionLine): line is CorrectionSummary {
+  return typeof line !== 'string' && 'summary' in line;
+}
 
 /** A line that describes no write ("nothing to do", "already claimed … no change"). */
 export function note(text: string): CorrectionNote {
@@ -23,12 +39,12 @@ export function note(text: string): CorrectionNote {
 }
 
 export function isNote(line: CorrectionLine): line is CorrectionNote {
-  return typeof line !== 'string';
+  return typeof line !== 'string' && 'note' in line;
 }
 
 /** The text of a line, change or note. */
 export function lineText(line: CorrectionLine): string {
-  return isNote(line) ? line.note : line;
+  return isNote(line) ? line.note : isSummary(line) ? line.summary : line;
 }
 
 /**
@@ -39,11 +55,17 @@ export function summarize(
   lines: readonly CorrectionLine[],
   { isReport, apply }: { isReport: boolean; apply: boolean },
 ): string[] {
-  const changes = lines.filter((l) => !isNote(l)).length;
-  const out = lines.map((l) =>
+  const own = lines.find(isSummary);
+  const shown = lines.filter((l) => !isSummary(l)) as (string | CorrectionNote)[];
+  const changes = shown.filter((l) => !isNote(l)).length;
+  const out = shown.map((l) =>
     isNote(l) ? `  – ${l.note}` : `  ${isReport ? '·' : apply ? '✓' : '·'} ${l}`,
   );
   if (lines.length > 0) out.push('');
+  if (own) {
+    out.push(own.summary);
+    return out;
+  }
   if (isReport) {
     out.push(
       lines.length === 0

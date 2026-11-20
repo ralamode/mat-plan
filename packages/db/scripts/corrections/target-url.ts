@@ -22,8 +22,25 @@ import {
  * `DATABASE_URL` in the environment. A guard reading `DATABASE_URL` would see `localhost`, pass, and
  * then watch the runner connect to Neon. Both must read this function.
  */
-export function correctionTargetUrl(): string | undefined {
+export function correctionTargetUrl({ kind }: { kind?: 'erasure' } = {}): string | undefined {
+  // An erasure reads the direct string ONLY: no fallback, so a run with nothing but a pooled or a
+  // leftover local `DATABASE_URL` resolves to "unset" and its gate refuses (PRIV-3 2b, panel 2S12;
+  // brought forward by CAT-3 R0).
+  if (kind === 'erasure') return process.env.DATABASE_URL_UNPOOLED;
   return process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+}
+
+/**
+ * Whether the target URL names NO database (`postgres://u:p@host`, no path). `pg` then connects to
+ * `$PGDATABASE` or the user's name, so the URL alone cannot say which database is written (the
+ * security lens confirmed it on `pg-connection-string@2.14.1`; CAT-3 R0, D1).
+ *
+ * ⚠️ **Each caller refuses on this in its OWN direction**, and it is not folded into a shared
+ * local-or-preview helper: a refusal that counts an unnamed target as "preview" would let a
+ * seed-household claim bind remotely. An unset URL is not "unnamed": it is unset.
+ */
+export function correctionTargetDatabaseIsUnnamed(url = correctionTargetUrl()): boolean {
+  return url !== undefined && databaseNameOf(url) === null;
 }
 
 /**

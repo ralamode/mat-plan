@@ -70,7 +70,6 @@ export function DayNav({
   today,
   floor,
   canGoForward = false,
-  dayRoleLabel,
 }: {
   profileId: string;
   /** The day being viewed. */
@@ -81,8 +80,6 @@ export function DayNav({
   floor: string;
   /** Look-ahead: the athlete is on a program the next day (`DayPlan.canGoForward`). */
   canGoForward?: boolean;
-  /** What the PROGRAM says this day is ("Strength B") — derived metadata, travels with the day. */
-  dayRoleLabel?: string;
 }) {
   const href = (d: string) =>
     d === today ? athletePath(profileId) : `${athletePath(profileId)}?d=${d}`;
@@ -107,10 +104,7 @@ export function DayNav({
         />
         {/* The date itself is not a link — it is the current state, and a link to where you already
             are is a control that does nothing. */}
-        <p className="text-muted-foreground flex-1 text-center text-sm">
-          {dayLine(day, today)}
-          {dayRoleLabel ? ` · ${dayRoleLabel}` : ''}
-        </p>
+        <p className="text-muted-foreground flex-1 text-center text-sm">{dayLine(day, today)}</p>
         <DayArrow
           to={bounds.canGoForward ? href(next) : null}
           label={`Next day, ${formatDayLong(next)}`}

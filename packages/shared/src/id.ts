@@ -23,7 +23,7 @@ export function newId(): string {
  * `lowerCaseUuidSchema` (`program/pieces.ts`) is the same schema now; the contract keeps the name.
  * `id.test.ts` pins the fold and scans for a second uuid validator anywhere in the source.
  *
- * ⚠️ A reader of the RAW input after the parse still sees the spelling it was sent
- * (`deriveSupersets` in the strength action is the one that does, and folds for itself).
+ * ⚠️ A reader of the RAW input after the parse still sees the spelling it was sent, so it must fold
+ * for itself.
  */
 export const uuidSchema = z.uuid().toLowerCase();

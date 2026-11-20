@@ -5,13 +5,27 @@ import {
   PRACTICE_UNIT,
   PROFILE_KIND,
   PROFILE_KIND_LABELS,
+  WEEKDAYS,
   type ProfileKind,
 } from '@mat-plan/shared';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { DAY_COPY } from '../components/day/day-copy';
 import {
+  BUILDER_COPY,
+  COPY_COPY,
+  copyTitle,
+  copyToLabel,
+  PUT_ON_COPY,
+  putOnTitle,
+  startingNamesText,
+  startLabel,
+  weekdayName,
+} from '../components/program-builder/builder-text';
+import { PROGRAMS_PATH } from '../components/program-builder/routes';
+import {
   ADD_ATHLETE_PATH,
+  APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   changeLabel,
@@ -241,10 +255,18 @@ export async function settled(button: Locator, pressed: boolean) {
   await expect(button).not.toHaveAttribute('aria-busy', 'true');
 }
 
+/** Text for a `RegExp`, with its special characters escaped (a name can hold `(`, `+`, `.`). */
+export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * Adds an athlete through `/p/new`, as a parent does (PROF-1 a-1u); they land on their day page.
  * `track` collects the name BEFORE the add, so `archiveAdded` cleans up even if the add's answer
  * is lost. Lifted from `athletes.spec.ts` at FAM-1 15, when the builder's spec became the second.
+ *
+ * ⚠️ **The athlete budget is shared.** Archiving does not free a slot, and a fresh e2e run spends
+ * about 20 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
+ * 4 seeded, about 10 in `athletes.spec.ts`, one each in six more), leaving about 5 for retries. A new
+ * spec that adds athletes counts itself here first.
  */
 export async function addAthlete(
   page: Page,
@@ -295,4 +317,64 @@ export async function archiveAdded(page: Page, names: readonly string[]): Promis
       // is exactly why the loop above must not depend on it: see the comment there.
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// The program builder, as a parent uses it. Lifted from `program-builder.spec.ts` at FAM-1 15c, when
+// `day-page.spec.ts` became the second spec to build its own programs and put an athlete on them.
+
+/** Home → Programs, by the Household nav's row. */
+export async function openPrograms(page: Page): Promise<void> {
+  await page.goto(APP_HOME_PATH);
+  await page
+    .getByRole('navigation', { name: 'Household' })
+    .getByRole('link', { name: BUILDER_COPY.programsNavLink })
+    .click();
+  await expect(page).toHaveURL(PROGRAMS_PATH);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(BUILDER_COPY.programs);
+}
+
+/** "+ Create a program", named `name`; lands on its page. */
+export async function createProgram(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: BUILDER_COPY.createProgram }).click();
+  await page.getByLabel(BUILDER_COPY.programName, { exact: true }).fill(name);
+  await page.getByRole('button', { name: BUILDER_COPY.create, exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+}
+
+/**
+ * Copies `workout` out of the program named `from` into the program named `to`, onto every day of
+ * the week, so a run passes whatever day it is. Starts from the Programs list; ends on `from`'s page.
+ */
+export async function copyOntoEveryWeekday(
+  page: Page,
+  { from, workout, to }: { from: string; workout: string; to: string },
+): Promise<void> {
+  await page.goto(PROGRAMS_PATH);
+  // The list row's name starts with the program's and goes on (its workouts and athletes), so it is
+  // anchored at the start rather than exact.
+  await page.getByRole('link', { name: new RegExp(`^${escapeRegExp(from)}\\b`) }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(from);
+  await page.getByRole('button', { name: copyToLabel(workout) }).click();
+  const copy = page.getByRole('dialog', { name: copyTitle(workout) });
+  await copy.getByLabel(COPY_COPY.to, { exact: true }).selectOption({ label: to });
+  for (const day of WEEKDAYS) {
+    await copy.getByRole('checkbox', { name: weekdayName(day), exact: true }).check();
+  }
+  await copy.getByRole('button', { name: COPY_COPY.copy, exact: true }).click();
+  await expect(copy).toBeHidden();
+}
+
+/**
+ * Puts `athlete` on `program` from today, from the program's page (Put on's default start). The
+ * dialog names who is starting. Answers the dialog's locator, for a caller that opens it again.
+ */
+export async function putOnFromToday(page: Page, program: string, athlete: string) {
+  await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
+  const putOn = page.getByRole('dialog', { name: putOnTitle(program) });
+  await putOn.getByRole('checkbox', { name: athlete, exact: true }).check();
+  await expect(putOn.getByText(startingNamesText([athlete]))).toBeVisible();
+  await putOn.getByRole('button', { name: startLabel(1, program) }).click();
+  await expect(putOn).toBeHidden();
+  return putOn;
 }

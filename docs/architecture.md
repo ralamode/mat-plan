@@ -125,7 +125,7 @@ bounded consequence the id path creates — is [write-path.md](./features/write-
 section is the shape; that one is the rule. (§2f above is its neighbour and the two compose: §2g
 resolves the `movement_id` that §2f freezes.)
 
-## 2c. Batch write path — logging a day's check-ins (V1-5)
+## 2c. Batch write path — logging a day's check-ins (V1-5; historical since FAM-1 12f)
 
 The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by
 V1-1c). Differs from §2 in three ways worth seeing at a glance: the action derives its fields from a
@@ -155,8 +155,11 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
-> ⚠️ **The Check-ins form is off the day page since V1-24 3b-page (2026-11-15, #418)**;
-> `logCheckinsAction` and this write path stay, tested, until FAM-1 12f.
+> ⚠️ **Historical.** The Check-ins form left the day page at V1-24 3b-page (2026-11-15, #418), and
+> FAM-1 12f PR 3 removed `logCheckinsAction`: the form, its field registry walk and its batch answer
+> above are gone. What stays is the writer (`logCheckinEntries` → `writers/checkin.ts`), which the
+> day page's practice (`logLifeActivitiesAction`) calls with one item, answering
+> `created`/`replay`/`day_taken`/`own_hidden`/`conflict`.
 
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
@@ -389,7 +392,7 @@ DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:
 takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
 answers the day's newest clear's count: a call that finds nothing live replays that clear, however
 old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
-Restore all; B2-ii's banner and dialog will call them.
+Restore all; the day page's dialog and banner call them (B2-ii).
 
 ```mermaid
 sequenceDiagram
@@ -857,7 +860,7 @@ erDiagram
 flowchart TB
   DEV["feature branch → PR"] --> CI
   subgraph CI["GitHub Actions — on every PR"]
-    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false"]
+    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false<br/>catalog data: not a mutation trigger"]
     Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drizzle-kit check + drift guard + PGlite db:verify"]
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
     M["<b>mutations</b> × 4 shards (scoped on a PR; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
@@ -985,22 +988,24 @@ restores _everyone_).
 `PRIV-3` turns the step-4 table above into code: `HOUSEHOLD_GRAPH` in
 `packages/db/src/erasure/graph.ts`, proved against the catalog by `db:verify` (P1, P2, P7, P8 in
 `packages/db/scripts/verify/erasure.ts`). The guide is [erasure.md](./features/erasure.md). Only the
-graph exists today; the core, the two corrections and the ledger replay are planned (PRIV-3 PR 2a, 2b
-and 3). The athlete grain is the graph's 11 tables reachable from `profiles`, which is `ATHLETE_GRAPH`.
+graph and the core (2a) exist, and so does the fresh start's one-shot erasure (CAT-3 R0, a third caller);
+the two corrections and the ledger replay are planned (PRIV-3 2b and 3). The athlete grain is the graph's 11 tables reachable from `profiles`, which is `ATHLETE_GRAPH`.
 
 ```mermaid
 flowchart TD
   G["HOUSEHOLD_GRAPH<br/>21 tables, child before parent<br/>11 of them athlete grain"]
   P["db:verify P1 P2 P7 P8<br/>the catalog and a household in every table"]
-  C["delete core (planned, PRIV-3 2a)<br/>lock the parent rows<br/>re-run pre-flights a to h<br/>delete in graph order"]
+  C["delete core (PRIV-3 2a)<br/>lock the parent rows<br/>re-run pre-flights a to h<br/>delete in graph order"]
   EH["erase-household (planned, PRIV-3 2b)<br/>household grain: all 21"]
   EA["erase-athlete (planned, PRIV-3 3)<br/>athlete grain: the 11"]
   L["deletion ledger<br/>grain and public id"]
+  OS["erase-seeded-household (CAT-3 R0)<br/>the fresh start, once, production only,<br/>tied to its dry run's total"]
   R["OPS-3 restore<br/>walks the graph in reverse,<br/>then replays the ledger through the core"]
   P -. proves .-> G
   G --> C
   C --> EH
   C --> EA
+  C --> OS
   EH --> L
   EA --> L
   L --> R
