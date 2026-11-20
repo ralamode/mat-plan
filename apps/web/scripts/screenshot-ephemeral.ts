@@ -20,6 +20,7 @@ import {
 import {
   ACTIVITY_TYPE_KEYS,
   addDays,
+  CLEAR_DAY_CONFIRM_WORD,
   DEFAULT_BODYWEIGHT_UNIT,
   DEFAULT_SESSION_TYPE,
   E2E_SESSION_BYPASS_USER,
@@ -43,6 +44,7 @@ import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
+  CLEAR_DAY_COPY,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
@@ -501,6 +503,10 @@ const STATES = {
   'workout-edit': null,
   // FAM-1 15 — the Put on dialog with one athlete ticked (see INTERACTIONS).
   'put-on': null,
+  // V1-9b B2-ii — Clear this day's dialog, armed, and the banner after a clear. Both exist only
+  // after taps on today's page, so the capture logs a practice and drives them (see INTERACTIONS).
+  'clear-day-dialog': null,
+  'clear-day-banner': null,
   // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
   // that the server answers with a match. Three states, because the callout is three different
   // screens and the copy differs in each.
@@ -721,6 +727,24 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     const dialog = page.getByRole('dialog');
     await dialog.waitFor();
     await dialog.getByRole('checkbox', { checked: false, disabled: false }).first().check();
+  },
+  /** V1-9b B2-ii — log a practice, open Clear this day, type the word: the armed dialog. */
+  'clear-day-dialog': async (page) => {
+    await logPractice(page);
+    await page.getByRole('button', { name: CLEAR_DAY_COPY.trigger, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.waitFor();
+    await dialog.getByRole('textbox').fill(CLEAR_DAY_CONFIRM_WORD);
+  },
+  /** V1-9b B2-ii — the same, cleared: the banner with Restore all, focused. */
+  'clear-day-banner': async (page) => {
+    await logPractice(page);
+    await page.getByRole('button', { name: CLEAR_DAY_COPY.trigger, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.waitFor();
+    await dialog.getByRole('textbox').fill(CLEAR_DAY_CONFIRM_WORD);
+    await dialog.getByRole('button', { name: CLEAR_DAY_COPY.action, exact: true }).click();
+    await page.getByRole('button', { name: CLEAR_DAY_COPY.restoreAll, exact: true }).waitFor();
   },
   /** FAM-1 7b-ii — the seeded program's "+ New workout", waiting for the editor's name field. */
   'workout-new': async (page) => {
