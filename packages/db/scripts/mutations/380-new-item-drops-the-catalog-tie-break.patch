@@ -1,13 +1,13 @@
-diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index ab9a69bc..9de13ce7 100644
---- a/packages/db/src/writers/program/new-item.ts
-+++ b/packages/db/src/writers/program/new-item.ts
-@@ -60,7 +60,7 @@ export async function newItem(
-   const hit = existingItem(
-     options.map((option) => ({
-       ...option,
--      isCatalog: option.owner === 'catalog',
-+      isCatalog: false,
-       aliases: option.owner === 'catalog' ? option.aliases : [],
-     })),
-     name,
+diff --git a/packages/shared/src/program/pieces.ts b/packages/shared/src/program/pieces.ts
+index c743e554..a8f2c2c9 100644
+--- a/packages/shared/src/program/pieces.ts
++++ b/packages/shared/src/program/pieces.ts
+@@ -403,7 +403,7 @@ export function matchableOption<
+ >(option: O): O & { readonly isCatalog: boolean; readonly aliases: readonly string[] } {
+   return {
+     ...option,
+-    isCatalog: option.owner === 'catalog',
++    isCatalog: false,
+     aliases: option.owner === 'catalog' ? (option.aliases ?? []) : [],
+   };
+ }

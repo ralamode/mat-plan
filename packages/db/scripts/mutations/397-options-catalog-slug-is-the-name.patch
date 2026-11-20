@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
-index ebd554ca..22c25cea 100644
+index 1d361c8d..f66975d3 100644
 --- a/packages/db/src/queries/program/movement-options.ts
 +++ b/packages/db/src/queries/program/movement-options.ts
-@@ -136,7 +136,7 @@ export async function movementOptions(
+@@ -128,7 +128,7 @@ export async function movementOptions(
        .sort(byName)
        .map((row) =>
          catalogArmOption(
 -          { ...declared(row), slug: row.slug },
 +          { ...declared(row), slug: row.name },
-           pickerEntries[row.slug],
+           pickerEntryOf(row.slug),
            bySlug.get(row.slug),
          ),
