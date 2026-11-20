@@ -1,13 +1,13 @@
 {
   "next": "16.4.5",
   "routes": {
-    "(all client chunks)": 1322185,
+    "(all client chunks)": 1322984,
     "/": 695701,
     "/_not-found": 695701,
-    "/design/program": 1132049,
+    "/design/program": 1132848,
     "/design/tokens": 934162,
     "/p": 901565,
-    "/p/[profileId]": 1026876,
+    "/p/[profileId]": 1027551,
     "/p/[profileId]/edit": 903796,
     "/p/[profileId]/routine": 903941,
     "/p/new": 922115,
