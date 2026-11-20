@@ -3574,43 +3574,6 @@ async function verifyNewItemLocksTheHousehold(): Promise<void> {
 }
 
 /** A new household of its own, so a count is exact: the caps are per household and per program. */
-/**
- * `newItem` reads the household row FOR KEY SHARE, so an erasure mid-call answers `not_found`, never a
- * 23503. Waiting is unprovable on PGlite's one connection; the lock MODE is not: a locking read takes
- * RowShareLock on the table and a plain SELECT does not. 🔴 A fresh transaction with nothing that
- * references the household, and a name that SELECTS an existing item: any insert of a row that
- * references `households` runs a foreign-key check that takes RowShareLock too, and would hide a
- * missing lock (mutation 590).
- */
-async function verifyNewItemLocksTheHousehold(): Promise<void> {
-  await rolledBack(async (tx) => {
-    const { scope } = await capsHousehold(tx);
-    const builtIn = MOVEMENT_SEED_ROWS[0]!;
-    const result = await newItem(
-      asTx(tx),
-      scope,
-      { name: builtIn.name, trackingType: TRACKING_TYPE.reps },
-      CATALOG_MOVEMENTS,
-    );
-    assert.ok(
-      result.ok && result.existed,
-      'FAM-1 newItem: the lock proof selects an existing item (no insert takes a foreign-key lock)',
-    );
-    const modes = (
-      await tx.execute(
-        sql`select mode from pg_locks where locktype = 'relation' and relation = 'households'::regclass and pid = pg_backend_pid()`,
-      )
-    ).rows as Array<{ mode: string }>;
-    assert.ok(
-      modes.some((l) => l.mode === 'RowShareLock'),
-      'FAM-1 newItem: the household row is read FOR KEY SHARE, so an erasure mid-call is not_found',
-    );
-  });
-  console.log(
-    '✓ FAM-1 newItem: the household row is read FOR KEY SHARE (an erasure mid-call is not_found)',
-  );
-}
-
 async function capsHousehold(tx: VerifyTx) {
   const [household] = await tx
     .insert(schema.households)

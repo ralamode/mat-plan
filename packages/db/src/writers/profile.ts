@@ -375,8 +375,7 @@ async function addProfile(
  * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, as `newItem` does for
  * its items (#605), through a household row read `FOR KEY SHARE` (#714 and this fix), so a second
  * add at the same moment waits, then counts the first add's committed row; a same-key twin finds its
- * twin's row at the replay step. That is why the replay lookup
- * runs AFTER the lock, not before it.
+ * twin's row at the replay step. That is why the replay lookup runs AFTER the lock, not before it.
  *
  * ⚠️ **No `isolationLevel` option.** The default READ COMMITTED gives each read after the lock a fresh
  * snapshot that includes the waited-on add. Under REPEATABLE READ the snapshot would predate the wait
