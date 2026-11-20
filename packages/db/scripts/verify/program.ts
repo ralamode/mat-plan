@@ -3549,10 +3549,12 @@ async function verifyNewItemLocksTheHousehold(): Promise<void> {
   await rolledBack(async (tx) => {
     const { scope } = await capsHousehold(tx);
     const builtIn = MOVEMENT_SEED_ROWS[0]!;
-    const result = await newItem(asTx(tx), scope, {
-      name: builtIn.name,
-      trackingType: TRACKING_TYPE.reps,
-    });
+    const result = await newItem(
+      asTx(tx),
+      scope,
+      { name: builtIn.name, trackingType: TRACKING_TYPE.reps },
+      CATALOG_MOVEMENTS,
+    );
     assert.ok(
       result.ok && result.existed,
       'FAM-1 newItem: the lock proof selects an existing item (no insert takes a foreign-key lock)',
