@@ -2794,9 +2794,10 @@ no filter"` → three, because a name became typeable), which is a real accuracy
      `apps/web/lib/programming/day-role-schedule.ts` — Ray's Mon/Wed/Fri split, in code. Changing a
      training day is **a deploy, not an edit**, and a second household silently inherits Ray's split
      ([tech-debt](./tech-debt.md)).
-     ⚠️ _2026-11-19:_ no longer true as written. `day-role-schedule.ts` and its const were deleted by
-     FAM-1 12f PR 1 (#725); a household now sets which workouts run on which weekday in its own
-     program's week ([program-builder](./features/program-builder.md)).
+     ⚠️ _2026-11-19:_ `DAY_ROLE_BY_WEEKDAY` left the code in #151 (2026-09-25), when this file became
+     the A/B date-parity `resolveDayRole`. FAM-1 12f PR 1 (#725) deleted the file. A household now
+     sets which workouts run on which weekday in its own program's week
+     ([program-builder](./features/program-builder.md)).
   2. **`routine_config` has no schedule at all** — it is implicitly every day, so "this kid does mobility
      only on practice days" is unrepresentable.
   3. **MOT-1's streak needs to know what is DUE today**, or it breaks on a correctly-taken rest day.
