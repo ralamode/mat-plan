@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/verify.ts b/packages/db/scripts/verify.ts
+index b78d31ba..e6f52f80 100644
+--- a/packages/db/scripts/verify.ts
++++ b/packages/db/scripts/verify.ts
+@@ -6818,7 +6818,7 @@ console.log(
+   // CAT-3 A2-ii (plan D4): curated is a legacy seed row OR a library row of the library in effect
+   // (here the test library), by an exact test: a modality and one of its slugs.
+   const appAuthored = allMovements.filter(
+-    (m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) && !isFixtureLibraryRow(m),
++    (m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+   );
+   assert.ok(
+     appAuthored.length > 0,

@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 457659db..7f243ff9 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -259,7 +259,7 @@ export interface SeedLibrary {
+ /** The library a seed writes, by name (K29): the real one alone, or the test one plus the legacy rows. */
+ export function seedLibraryOf(name: CatalogLibraryName): SeedLibrary {
+   return name === 'fixture'
+-    ? { entries: CATALOG_FIXTURE, legacyMovements: true }
++    ? { entries: CATALOG_MOVEMENTS, legacyMovements: true }
+     : { entries: CATALOG_MOVEMENTS, legacyMovements: false };
+ }
+ 

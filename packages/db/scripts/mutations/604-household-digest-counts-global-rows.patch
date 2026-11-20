@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/verify/seed.ts b/packages/db/scripts/verify/seed.ts
+index 7b86466c..7016dfd4 100644
+--- a/packages/db/scripts/verify/seed.ts
++++ b/packages/db/scripts/verify/seed.ts
+@@ -133,7 +133,7 @@ const OWNED_ONLY = new Map<PgTable, ReturnType<typeof sql>>([
+ async function householdTableCounts(exec: Exec): Promise<Record<string, string>> {
+   const out: Record<string, string> = {};
+   for (const g of HOUSEHOLD_GRAPH) {
+-    const owned = OWNED_ONLY.get(g.table);
++    const owned = OWNED_ONLY.get(g.table) && undefined;
+     const res = await exec.execute(
+       sql`SELECT count(*)::int AS n, md5(coalesce(string_agg(t::text, '|' ORDER BY t::text), '')) AS d FROM ${g.table} AS t ${owned ? sql`WHERE ${owned}` : sql``}`,
+     );
