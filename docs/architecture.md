@@ -392,7 +392,7 @@ DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:
 takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
 answers the day's newest clear's count: a call that finds nothing live replays that clear, however
 old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
-Restore all; B2-ii's banner and dialog will call them.
+Restore all; the day page's dialog and banner call them (B2-ii).
 
 ```mermaid
 sequenceDiagram
@@ -860,7 +860,7 @@ erDiagram
 flowchart TB
   DEV["feature branch → PR"] --> CI
   subgraph CI["GitHub Actions — on every PR"]
-    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false"]
+    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false<br/>catalog data: not a mutation trigger"]
     Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drizzle-kit check + drift guard + PGlite db:verify"]
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
     M["<b>mutations</b> × 4 shards (scoped on a PR; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
@@ -875,7 +875,7 @@ flowchart TB
   PREV --> REV["review + squash-merge to main"]
   REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>migrate.yml (prod) + migrate-preview.yml"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
-  REV --> MAIN["push to main: every mutation shard runs<br/>red → one issue, 'mutation gate red on main'"]
+  REV --> MAIN["push to main: every mutation shard runs; a burst of pushes coalesces to at most two runs<br/>red → one issue, 'mutation gate red on main'"]
   MIG --> NEON[("Neon: production")]
   MIG --> NEONP[("Neon: mat-plan-preview<br/>seed-only, separate project")]
   PROD --> NEON
