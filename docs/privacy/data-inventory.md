@@ -337,7 +337,8 @@ only way a notice about minors' health data is worth anything.
 >
 > **§1 re-read 2026-11-18 for FAM-1 step 6d-ii**: `reorderPrograms` rewrites `program_assignments.idx`
 > (an athlete's own order of their programs), inside the household only. No new column, processor, log
-> or export. Called by no action until step 15c.
+> or export. Called by `reorderProgramsAction` (`app/p/[profileId]/row-actions.ts`) since 15c PR 2,
+> which no page passes until 15c PR 3; the action changes no column, processor, log or export.
 >
 > **§1 / §7 re-read 2026-11-18 for FAM-1 step 6c-ii**: two reads of `program_assignments` (the
 > program page and the Programs list) show an athlete's name and programs to their own household, as

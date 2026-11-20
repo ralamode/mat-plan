@@ -28,7 +28,13 @@ import { programIn, programWorkoutIds, workoutInHousehold } from '@mat-plan/db';
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
 import { listHouseholdAthletes } from '../profiles';
-import { reportAssignMiss, reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import {
+  reportAssignMiss,
+  reportAthleteMiss,
+  reportCopyMiss,
+  reportProgramMiss,
+  reportWeekMiss,
+} from './report-miss';
 
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
@@ -238,6 +244,42 @@ describe('a Put on or a Take off (FAM-1 15): the program, then the first athlete
   it('a failed read reports nothing, and does not throw', async () => {
     vi.mocked(listHouseholdAthletes).mockRejectedValueOnce(new Error('connection reset'));
     await expect(reportAssignMiss(SCOPE, assign(FOREIGN_ID))).resolves.toBeUndefined();
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Program order (FAM-1 15c): the athlete alone', () => {
+  const profileMiss = (publicId: string) => ({
+    action: SCOPE_MISS_ACTION.resolveProfile,
+    resource: { kind: SCOPE_MISS_KIND.profile, publicId },
+  });
+
+  it('🔴 a foreign athlete id is reported once, and no program is probed', async () => {
+    await reportAthleteMiss(SCOPE, FOREIGN_ID);
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[profileMiss(FOREIGN_ID)]]);
+    expect(listHouseholdAthletes).toHaveBeenCalledTimes(1);
+    expect(programIn).not.toHaveBeenCalled();
+  });
+
+  it('an archived athlete of this household is found: nothing is reported', async () => {
+    await reportAthleteMiss(SCOPE, ARCHIVED_ID);
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+
+  it('a live athlete of this household is found: nothing is reported', async () => {
+    await reportAthleteMiss(SCOPE, ATHLETE_ID);
+    expect(reportScopeMiss).not.toHaveBeenCalled();
+  });
+
+  it('no scope: the athlete is reported (as no_scope, by reportScopeMiss) and nothing is read', async () => {
+    await reportAthleteMiss(null, ATHLETE_ID);
+    expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[profileMiss(ATHLETE_ID)]]);
+    expect(listHouseholdAthletes).not.toHaveBeenCalled();
+  });
+
+  it('a failed read reports nothing, and does not throw', async () => {
+    vi.mocked(listHouseholdAthletes).mockRejectedValueOnce(new Error('connection reset'));
+    await expect(reportAthleteMiss(SCOPE, FOREIGN_ID)).resolves.toBeUndefined();
     expect(reportScopeMiss).not.toHaveBeenCalled();
   });
 });

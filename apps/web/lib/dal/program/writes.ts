@@ -6,6 +6,7 @@ import {
   newItem,
   putOn,
   renameProgram,
+  reorderPrograms,
   saveWeek,
   saveWorkout,
   takeOff,
@@ -17,6 +18,7 @@ import {
   type CreateProgram,
   type NewItem,
   type ProgramActions,
+  type ProgramOrder,
   type ProgramResult,
   type RenameProgram,
   type TakeOff,
@@ -27,11 +29,18 @@ import {
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from '../quiet-db-errors';
-import { reportAssignMiss, reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import {
+  reportAssignMiss,
+  reportAthleteMiss,
+  reportCopyMiss,
+  reportProgramMiss,
+  reportWeekMiss,
+} from './report-miss';
 
 /**
- * The program builder's writes, each through the caller's household (FAM-1 steps 7a-i, 7a-ii and 15). The actions
- * in `app/programs/actions.ts` stay thin: entry, parse, one call here, revalidate.
+ * The program builder's writes, each through the caller's household (FAM-1 steps 7a-i, 7a-ii and 15),
+ * and an athlete's Program order (15c). The actions in `app/programs/actions.ts` and, for the order,
+ * `app/p/[profileId]/row-actions.ts` stay thin: entry, parse, one call here, revalidate.
  *
  * - **One exported function per operation**, named apart from lane P's writers they wrap: the
  *   `lib/dal` scope guard reads one declaration as one unit.
@@ -141,4 +150,24 @@ export async function takeOffHouseholdProgram(
   if (!scope) return missed(() => reportAssignMiss(scope, ids));
   const result = await quietDbErrors('takeOff', () => takeOff(db, scope, input, today));
   return isNotFound(result) ? missed(() => reportAssignMiss(scope, ids)) : result;
+}
+
+/**
+ * An athlete's Program order (FAM-1 step 15c), `DayActions.reorderPrograms`: shaped as Put on and
+ * Take off, with `today` from the action. Lane P's writer is the one check of the athlete
+ * (`lockAthletes`: this household's, live, not archived) and of the list (a permutation of the
+ * athlete's current programs, else `invalid`). A `not_found` reports the athlete id, the one id it
+ * answers `not_found` for.
+ */
+export async function reorderHouseholdPrograms(
+  input: ProgramOrder,
+  today: string,
+): Promise<ProgramResult> {
+  const scope = await getHouseholdScope();
+  const report = () => reportAthleteMiss(scope, input.profilePublicId);
+  if (!scope) return missed(report);
+  const result = await quietDbErrors('reorderPrograms', () =>
+    reorderPrograms(db, scope, input, today),
+  );
+  return isNotFound(result) ? missed(report) : result;
 }
