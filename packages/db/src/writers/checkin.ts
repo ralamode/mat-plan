@@ -105,6 +105,15 @@ type CheckinArgs = {
 };
 
 /**
+ * The throw for a `client_id` `lowerCaseUuidSchema` refuses: not hyphenated (braces, bare hex), or
+ * hyphenated with a version or variant digit outside RFC 9562 (zod 4's `z.uuid()`).
+ */
+export const CHECKIN_CLIENT_ID_NOT_UUID = 'check-in client_id is not a hyphenated RFC 9562 uuid';
+
+/** The throw for two items under one `client_id` in one call (they would write one row). */
+export const CHECKIN_CLIENT_IDS_REPEAT = 'check-in client_ids repeat within one submit';
+
+/**
  * Insert the items and say what happened to each, in submit order.
  *
  * 🔴 **One retry, for exactly the items nothing explains** (the tech-debt row "A day-taken insert can
@@ -133,11 +142,11 @@ export async function writeCheckinEntries(
 ): Promise<CheckinWriteResult[]> {
   const values = args.values.map((v) => {
     const clientId = lowerCaseUuidSchema.safeParse(v.clientId);
-    if (!clientId.success) throw new Error('check-in client_id is not a hyphenated uuid');
+    if (!clientId.success) throw new Error(CHECKIN_CLIENT_ID_NOT_UUID);
     return { ...v, clientId: clientId.data };
   });
   if (new Set(values.map((v) => v.clientId)).size !== values.length) {
-    throw new Error('check-in client_ids repeat within one submit');
+    throw new Error(CHECKIN_CLIENT_IDS_REPEAT);
   }
 
   const first = await attemptCheckinEntries(exec, { ...args, values });
