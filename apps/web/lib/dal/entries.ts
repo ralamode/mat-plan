@@ -27,6 +27,7 @@ import {
 import {
   type ClearEvent,
   ENTRY_KIND,
+  PROFILE_NOT_FOUND,
   ENTRY_STATUS,
   RESTORE_REASON,
   uuidSchema,
@@ -286,14 +287,14 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodywei
   // ownership through `getProfileByPublicId` first, so reaching here with no scope is already a
   // caller bug, and the throw says the one true thing without naming a household.
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
 
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(isLiveProfile(args.profilePublicId, scope))
     .limit(1);
-  if (!profile) throw new Error('Profile not found');
+  if (!profile) throw new Error(PROFILE_NOT_FOUND);
 
   // A weigh-in is a single_metric activity carrying the `bodyweight` metric (no movement), so the
   // writer sets metric_key and leaves movement_id NULL (the at-most-one CHECK). Asserted here so a
@@ -370,14 +371,14 @@ export async function logCheckinEntries(args: {
   // household. Pinned by the emitted-SQL proof in `entries.test.ts` (the app DAL cannot run under
   // `db:verify`), and the predicate itself is proved against a real database by the TEN-1 matrix.
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
 
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(isLiveProfile(args.profilePublicId, scope))
     .limit(1);
-  if (!profile) throw new Error('Profile not found');
+  if (!profile) throw new Error(PROFILE_NOT_FOUND);
 
   // Resolve the catalog rows OUTSIDE the insert — cached reads of immutable reference
   // data. This is also the DB-truth guard: a key that exists in the shared const but not
@@ -470,7 +471,7 @@ export async function logStrengthSession(
   // must carry the V1-22 chunk-2 snapshot read with it (see that row); `entries.test.ts` pins the
   // current order deliberately.
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
 
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
   // PICK-1 PR 2: ids before inserts, in `packages/db` so `db:verify` runs this exact function rather
@@ -702,7 +703,7 @@ export async function restoreClearedDay(args: {
   hiddenAt: string;
 }): Promise<RestoreClearedDayResult> {
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
   const result = await quietDbErrors('restoreClearedDay', () =>
     restoreClear(db, { ...args, scope }),
   );
@@ -741,7 +742,7 @@ export async function clearDayEntries(args: {
   day: string;
 }): Promise<ClearDayEntriesResult> {
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
   const result = await quietDbErrors('clearDayEntries', () => clearDay(db, { ...args, scope }));
   if ('closed' in result) return { closed: true };
   if ('notFound' in result) return { count: 0 };
