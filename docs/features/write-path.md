@@ -127,13 +127,13 @@ FAM-1's lanes each have their own guide, which owns the directory that lane's ne
 paths owes **its lane's guide, not this one**, though this guide's invariants still apply to it; each
 lane guide says which.
 
-| Path                                                                              | Guide                                        |
-| --------------------------------------------------------------------------------- | -------------------------------------------- |
-| `packages/db/src/writers/program/` (`seed-fixtures.ts` above), `queries/program/` | [program-writers.md](./program-writers.md)   |
-| `packages/db/src/writers/day/`, `queries/day/`                                    | [day-writers.md](./day-writers.md)           |
-| `apps/web/lib/dal/program/`, `apps/web/app/programs/` (its actions)               | [program-builder.md](./program-builder.md)   |
-| `apps/web/lib/dal/day/`                                                           | [day-page.md](./day-page.md)                 |
-| `seed.ts`'s `equipment` and `muscles` inserts, the library's tables (`CAT-3` A1)  | [movement-catalog.md](./movement-catalog.md) |
+| Path                                                                                                                                                                                 | Guide                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| `packages/db/src/writers/program/` (`seed-fixtures.ts` above), `queries/program/`                                                                                                    | [program-writers.md](./program-writers.md)   |
+| `packages/db/src/writers/day/`, `queries/day/`                                                                                                                                       | [day-writers.md](./day-writers.md)           |
+| `apps/web/lib/dal/program/`, `apps/web/app/programs/` (its actions)                                                                                                                  | [program-builder.md](./program-builder.md)   |
+| `apps/web/lib/dal/day/`                                                                                                                                                              | [day-page.md](./day-page.md)                 |
+| `seed.ts`'s `equipment` and `muscles` inserts, `seedCatalog` and `SeedCounts`/`reportSeed` (`CAT-3` A2-i), `ownership.ts`'s `movementIsCatalog()`, the library's tables (`CAT-3` A1) | [movement-catalog.md](./movement-catalog.md) |
 
 The shapes those lanes agree on, the fakes and the preview route are
 [program-contract.md](./program-contract.md).
@@ -802,6 +802,10 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   `seedReference` (`OPS-2` PR 1). Production's `db:seed` runs without the flag on every push to `main`,
   so anything outside the branch reaches a real family's database. `verify/seed.ts`'s Proof A counts
   every `HOUSEHOLD_GRAPH` table after a production seed, and it fails on the first such row.
+- **The seed's report is counts only** (`CAT-3` A2-i). `seedReference` returns `SeedCounts`, numbers
+  only, and `seed()` prints them through `reportSeed`. `migrate.yml`'s log is public, so never print a
+  slug a household also holds or a row's `name`; list them from your own console (`docs/runbooks.md` →
+  "the seed's shadow guard fired").
 - **A DB constraint reached by a crafted body is a 500 that discards the whole transaction.** For a
   gym-floor session that is the worst possible failure — the athlete loses everything they logged.
   Validate at the boundary so the constraint is a backstop, not the error message.

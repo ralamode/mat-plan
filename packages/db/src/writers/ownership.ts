@@ -222,6 +222,16 @@ export function movementIsGlobal() {
   return isNull(schema.movements.householdId);
 }
 
+/**
+ * `household_id IS NULL AND modality IS NOT NULL`: a **library** row (`CAT-3` spec rule 2), written
+ * only by the catalog seed (`seedCatalog`). Not a slug test: the 35 legacy global rows have no
+ * `modality`, and a slug cannot tell the two apart once they share one. The one predicate the seed,
+ * the option read (P11-ii) and the proofs use.
+ */
+export function movementIsCatalog() {
+  return and(movementIsGlobal(), isNotNull(schema.movements.modality));
+}
+
 /** `movements.household_id IS NOT NULL` — any household's own namespace. */
 export function movementIsOwned() {
   return isNotNull(schema.movements.householdId);
