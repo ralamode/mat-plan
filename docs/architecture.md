@@ -387,9 +387,9 @@ banner's read `clearEventsForDay` (every clear of a day, newest first, as a toke
 banner offers exactly what Restore all restores. Restore all's action answers counts, counted in the
 DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:** `clearDayAction`
 takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
-answers the clear's count: 0 when another phone took the last entries by a blank Change or an
-un-tick, while another phone's own clear is replayed and its count answered. The diagram's last two blocks
-are the clear and Restore all; the day page's banner and dialog call them.
+answers the day's newest clear's count: a call that finds nothing live replays that clear, however
+old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
+Restore all; B2-ii's banner and dialog will call them.
 
 ```mermaid
 sequenceDiagram

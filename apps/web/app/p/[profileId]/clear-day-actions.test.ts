@@ -43,7 +43,7 @@ vi.mock('next/navigation', () => ({
   }),
   RedirectType: { replace: 'replace', push: 'push' },
 }));
-// No `tz` cookie → DEFAULT_TIME_ZONE, so `today` below is the action's today.
+// `getActiveLocalDay` is mocked to `TODAY` above; this cookie mock only satisfies `next/headers`.
 vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefined })) }));
 vi.mock('@/lib/dal/session', () => ({
   sessionUserOrNull: vi.fn(async () => ({ userId: PRINCIPAL })),

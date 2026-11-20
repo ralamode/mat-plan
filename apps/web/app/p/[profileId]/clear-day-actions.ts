@@ -36,7 +36,7 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
 /**
  * **The two windows** (plan § B2 as amended; maintainer, 2026-11-19), both from `packages/shared`:
  * Restore all takes `dayOpenFor` (today or yesterday, not archived: the rule the day page's ✓ takes),
- * and the clear takes `clearDayOpenFor` (today only, not archived), which the page's trigger reads too.
+ * and the clear takes `clearDayOpenFor` (today only, not archived), which B2-ii's trigger will read too.
  * "Today" is the request's active-timezone day from the client's `tz` cookie: an accepted residual
  * (`.github/SECURITY.md` → Authorization).
  */
@@ -50,9 +50,8 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
  *
  * - **Today only**, and the athlete not archived (`closed_day` otherwise).
  * - **No program-assignment check** (C24): the entries are the athlete's own, assigned or not.
- * - **`count: 0` is a success**, "nothing was left to clear" (see `clearDayResultSchema`): another
- *   phone took the day's last entries by a blank Change or an un-tick. (Another phone's own clear is
- *   not 0: this call then replays it and answers that clear's count.)
+ * - **`count` is the day's newest clear's**, and `count: 0` a success, "nothing was left to clear"
+ *   (see `clearDayResultSchema` for when each holds).
  * - The confirm word is checked by the schema and never reaches the DAL.
  */
 export async function clearDayAction(input: ClearDayInput): Promise<ClearDayActionResult> {

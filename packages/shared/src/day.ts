@@ -74,8 +74,8 @@ export function dayOpenFor(athlete: { archived: boolean }, day: string, today: s
  * (V1-9b B2; the maintainer, 2026-11-19, revising "today and yesterday"). Narrower than `dayOpenFor`
  * on purpose: Restore all keeps today and yesterday, so every clear has at least a day to be put back.
  *
- * Built on `dayOpenFor` so the archived half is never written twice. The day page's trigger and
- * `clearDayAction` both call this, so the page never offers a clear the action refuses.
+ * Built on `dayOpenFor` so the archived half is never written twice. `clearDayAction` calls this,
+ * and B2-ii's trigger will, so the page never offers a clear the action refuses.
  */
 export function clearDayOpenFor(
   athlete: { archived: boolean },

@@ -109,13 +109,15 @@ export const clearDaySchema = restoreClearSchema.omit({ hiddenAt: true }).extend
 export type ClearDayInput = z.input<typeof clearDaySchema>;
 
 /**
- * What Clear this day resolves to. `count` is the entries the clear holds hidden.
+ * What Clear this day resolves to. `count` is the entries **the day's newest clear** holds hidden,
+ * not what this tap did: a call that finds nothing live replays the day's newest clear, even an older
+ * one (B2-0's writer), and answers its count. ⚠️ So copy must not present `count` as "this tap hid
+ * n"; the banner reads the day's clears itself.
  *
- * **`count: 0` is "nothing was left to clear"**, never a refusal: another phone emptied the day first
- * (a blank Change, an un-tick), or a replay raced a Restore all. (Another phone's own clear is not 0:
- * the call replays it and answers its count.) The person asked for an empty day and
- * has one, so a refusal would tell them a clear that did what they wanted had failed (the reasoning
- * of Restore all's 0 and 0). The banner reads the day's clears itself, so no token leaves here.
+ * **`count: 0` is "nothing was left to clear"**, never a refusal: nothing live and no clear on the
+ * day (another phone took the last entries by a blank Change or an un-tick), or a replay that raced a
+ * Restore all. The person asked for an empty day and has one, so a refusal would tell them a clear
+ * that did what they wanted had failed (the reasoning of Restore all's 0 and 0). No token leaves here.
  */
 export const clearDayResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), count: z.number().int().nonnegative() }),
