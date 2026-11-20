@@ -23,9 +23,10 @@ owns:
 **Read this before changing the set schema, the session schema, or the strength writer.**
 
 > ⚠️ **No screen logs through this path.** The day page logs and changes strength rows through the
-> FAM-1 row writer ([day-writers.md](./day-writers.md)). `logStrengthSessionAction`,
-> `editStrengthSetAction`, the schemas and the writer below stay, with their Vitest and `db:verify`
-> coverage. [tech-debt.md](../tech-debt.md) holds the expiry, FAM-1 12f.
+> FAM-1 row writer ([day-writers.md](./day-writers.md)). FAM-1 12f PR 3 removed the two actions
+> that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the schemas, the DAL
+> functions and the writer below stay with their Vitest and `db:verify` coverage, with no caller,
+> until [`LEGACY-1`](../plan.md#legacy-1) retires the path (the maintainer, 2026-11-19, Q4).
 
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
@@ -63,8 +64,6 @@ flowchart TD
   end
 
   subgraph server["server"]
-    ACTION["actions.ts<br/>logStrengthSessionAction"]
-    EDITACTION["actions.ts<br/>editStrengthSetAction"]
     DAL["lib/dal/entries.ts<br/>logStrengthSession · editStrengthSet"]
     WRITER["writers/strength-session.ts<br/>ONE transaction"]
     EDIT["writers/strength-session.ts<br/>updateStrengthSetById"]
@@ -74,9 +73,9 @@ flowchart TD
     SESS[(sessions)] --> ENT[(entries)] --> SETS[(entry_sets)] --> QTY[(entry_set_quantities)]
   end
 
-  ACTION --> SESSIONSCHEMA --> SETSCHEMA
-  ACTION --> DAL --> WRITER --> db
-  EDITACTION --> DAL --> EDIT --> db
+  DAL --> SESSIONSCHEMA --> SETSCHEMA
+  DAL --> WRITER --> db
+  DAL --> EDIT --> db
 ```
 
 ## Files

@@ -155,8 +155,9 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
-> ⚠️ **The Check-ins form is off the day page since V1-24 3b-page (2026-11-15, #418)**;
-> `logCheckinsAction` and this write path stay, tested, until FAM-1 12f.
+> ⚠️ **The Check-ins form left the day page at V1-24 3b-page (2026-11-15, #418), and FAM-1 12f PR 3
+> removed `logCheckinsAction`.** The write path it drew (`logCheckinEntries` → `writers/checkin.ts`)
+> stays: the day page's practice (`logLifeActivitiesAction`) writes through it.
 
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
