@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { amendRow, logRow, resolveDayPlan, retickRow, untickRow } from '@mat-plan/db';
-import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import {
   ACTIVITY_TYPE_KEYS,
   ROW_REFUSAL,
@@ -16,6 +15,7 @@ import {
 } from '@mat-plan/shared';
 
 import { getActivityTypeIdByKey } from '../catalog';
+import { CATALOG_LIBRARY } from '../catalog-library';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { listProfiles } from '../profiles';
@@ -56,8 +56,9 @@ export async function getDayPlan(args: {
     return null;
   const scope = await getHouseholdScope();
   if (!scope) return null;
-  // C32: the library a day item's coach label is read from, by slug, as the picker's DAL reads it.
-  const plan = await resolveDayPlan(db, { scope, ...args, catalog: CATALOG_MOVEMENTS });
+  // C32: the library a day item's coach label is read from, by slug: the library in effect, the one
+  // the picker and `newItem` read (`catalog-library.ts`), so the three cannot disagree after K29.
+  const plan = await resolveDayPlan(db, { scope, ...args, catalog: CATALOG_LIBRARY });
   if (!plan) return null;
   const athletes = (await listProfiles()).map((a) => ({ profilePublicId: a.id, name: a.name }));
   return { ...plan, athletes };
