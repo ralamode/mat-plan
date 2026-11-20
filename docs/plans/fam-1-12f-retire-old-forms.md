@@ -275,6 +275,14 @@ A's chain is merged, and the board named lane P. Its description records Q5's fi
 
 ### 12f PR 5: the routine trim, and `lib/checkins` (about 490 lines deleted, about 165 added; lane E builds it)
 
+**As built (lane E):** merged as #756 (2026-11-20). `ROUTINE_CATALOG` is `[strength,
+life:wrestling_practice]`: check-in keys and Wake drop at read, and leave storage only when that
+routine is next saved. `lib/checkins/` is deleted. The editor lists Life items only and saves through
+`savedOrder`, which carries strength with its `conditional` marker at its place, and saves strength
+alone when nothing is listed. `programming.md` invariant 5 now says membership narrows only by a
+recorded decision (D28 is that decision), and that "never written" means never written as the
+first-run default. No athlete's day page changed.
+
 Waits for PR 3 (`actions.ts` imports `lib/checkins`) and for Q5's second read. Its guest edits are
 cleared by the board (2026-11-19), Q1. 282 of its
 lines are one directory. Its review adds two lenses: security, on the witness test it changes, and

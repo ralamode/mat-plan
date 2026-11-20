@@ -5,7 +5,8 @@
 > `docs/fam-1-12c-iii-collapse-plan`. Two code PRs, named **12c-iii PR 1 and PR 2**. **Lane C builds PR 1;
 > lane B builds PR 2** _(lane C's hand-over, cleared by the board on 2026-11-20 under the maintainer's rule
 > on idle lanes; until then lane C built both)_. PR 2's files are in lane S's sections and lane C's
-> area, so they are lane B's guest edits: lane S and lane C each read their hunks.
+> area, so they are lane B's guest edits: lane S and lane C each read their hunks, and Q1's clearance for
+> PR 2's edits in lane S's files passes to lane B.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes. Panel round 1 is applied; its log is at the end.
@@ -349,7 +350,7 @@ chart in its description, and screenshots of both states at three widths.
 - **Q1, for lane S (through the board): who edits lane S's files?** In PR 1, `logged-value-row.tsx`
   (the tick moves out, no visual change). In PR 2, the two sections, `single-value-amend.tsx` and
   `single-value-live.tsx` (one line each), their two test files, the three helpers in `e2e/steps.ts`
-  and `bodyweight-receipt.spec.ts`. **Answered by the board (2026-11-19): lane C makes them as guest edits, and lane S reviews.**
+  and `bodyweight-receipt.spec.ts`. **Answered by the board (2026-11-19; the builder of PR 2 is lane B since L63): lane C makes them as guest edits, and lane S reviews.**
 - **Q2, answered by the maintainer (2026-11-19): "Accept all six (Recommended)".** The six
   differences from the accepted prototype are (a), (b), (c), (d), (f) and (g); FAM-1 plan decision D50.
   - (a) Opening or collapsing is not spoken as "Opened" or "Collapsed": a screen reader reads the
