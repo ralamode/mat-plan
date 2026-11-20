@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { useSectionBusy } from '@/components/day/collapsible-section';
 import { Announcer } from '@/components/ui/announcer';
 
 import { TickedCopy } from './log-tick';
@@ -117,6 +118,8 @@ export function SingleValueLive({ children }: { children: ReactNode }) {
     tickLabel?: string;
     keepOnOpen?: boolean;
   } | null>(null);
+  // A shown alert holds the section's "Collapse": a refusal never sits behind a line (12c-iii §5).
+  useSectionBusy(alert !== null);
   const statusId = useId();
   const alertId = useId();
   /** The island's own subtree (`display: contents`, so it adds no box to the section's layout). */

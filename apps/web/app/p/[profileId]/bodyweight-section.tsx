@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '@/components/day/collapsible-section';
 import { BODYWEIGHT_COPY } from '@/lib/constants';
 import type { LastBodyweightDTO } from '@/lib/dal/entries';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
@@ -6,7 +7,7 @@ import { lastTimeWhen } from '@/lib/entries/last-time';
 
 import { BodyweightAmend } from './bodyweight-amend';
 import { BodyweightForm } from './bodyweight-form';
-import { BodyweightReceipt } from './bodyweight-receipt';
+import { BodyweightReceipt, formatLoggedWeights } from './bodyweight-receipt';
 import { SingleValueLive } from './single-value-live';
 
 /**
@@ -22,6 +23,9 @@ import { SingleValueLive } from './single-value-live';
  * record is what invited the duplicate row. Since PR 1d the database forbids a second live weigh-in
  * per (profile, day, slot) too; a two-phone race gets the typed "already logged" envelope. The row
  * still lists every row: a pre-1d day and V1-32's slots both render as more than one.
+ *
+ * **One weight, logged when the person arrives, folds to one line** ("Bodyweight, 84.5 lb"; FAM-1
+ * 12c-iii, D38), on a day that can be logged. Two or more stay open: the receipt asks a parent.
  */
 export function BodyweightSection({
   profileId,
@@ -47,12 +51,18 @@ export function BodyweightSection({
   const lastTime = last
     ? BODYWEIGHT_COPY.lastTime(formatValueUnit(last.value, last.unit), lastTimeWhen(day, last.day))
     : null;
+  const foldable = writable && logged.length === 1;
 
   return (
-    <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
-      <h2 id="log-bw-heading" className="text-lg font-medium">
-        {BODYWEIGHT_COPY.heading}
-      </h2>
+    // Keyed on athlete and day: the page does not remount on a change of day, and a new day is a new
+    // visit (12c-iii §1).
+    <CollapsibleSection
+      key={`fold-${profileId}/${day}`}
+      headingId="log-bw-heading"
+      heading={BODYWEIGHT_COPY.heading}
+      summary={foldable ? formatLoggedWeights(logged)[0]! : null}
+      finished={foldable}
+    >
       {/* The live region and the focus hand-off, mounted in BOTH states, so it outlives the form or
           row that reports to it. Keyed on the day: a message or a focus claim never crosses to
           another day, and paging to a day that already has a weight announces nothing.
@@ -92,6 +102,6 @@ export function BodyweightSection({
           />
         )}
       </SingleValueLive>
-    </section>
+    </CollapsibleSection>
   );
 }

@@ -1,9 +1,19 @@
-import { expect, test, type Page } from '@playwright/test';
-import { addDays, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { addDays, DEFAULT_BODYWEIGHT_UNIT, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
 import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
-import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS, MIN_TAP_TARGET_PX } from '../lib/constants';
+import {
+  AMEND_COPY,
+  athleteRoutinePath,
+  BODYWEIGHT_COPY,
+  CLOSED_DAY_NOTICE,
+  LIFE_COPY,
+  LOOK_AHEAD_DAYS,
+  MIN_TAP_TARGET_PX,
+  ROUTINE_COPY,
+} from '../lib/constants';
+import { LIFE_ACTIVITIES } from '../lib/life/life-activities';
 
 import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
@@ -12,17 +22,24 @@ import {
   addAthlete,
   archiveAdded,
   bodyweightSection,
+  changeWeight,
   copyOntoEveryWeekday,
   createProgram,
   escapeRegExp,
   isoDaysAgo,
+  lifeSection,
+  logBodyweight,
+  loggedWeight,
+  logPractice,
   openCollapsed,
   openPrograms,
+  PRACTICE_SHOWN,
   programRowTick,
   putOnFromToday,
   SEED_PROFILE_2_ROUTE,
   SEED_PROFILE_ROUTE,
   settled,
+  shownWeight,
 } from './steps';
 
 /**
@@ -523,5 +540,91 @@ test.describe('A finished workout on real data', () => {
     await expectNoAxeViolations(page, 'a finished workout, folded, 360px');
     await expectTapTargets(page, 'a finished workout, folded, 360px');
     await expectNoHorizontalOverflow(page, 'a finished workout, folded, 360px');
+  });
+});
+
+// ── Bodyweight and Life fold to one line (FAM-1 12c-iii PR 2) ───────────────────────────────────
+//
+// On this run's own athlete: a logged weight and practice change every later visit to that day. A
+// new athlete's routine is strength only (`NEUTRAL_DEFAULT_KEYS`), so it adds Wrestling practice
+// first, or the page has no Life section.
+
+test.describe('Bodyweight and Life on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('logged during a visit they stay open; coming back each is one line; Bodyweight opens, holds Collapse while changing, and folds, at 360px', async ({
+    page,
+  }, info) => {
+    test.setTimeout(120_000);
+    const athlete = `E2E fold sections ${Date.now().toString(36)}${info.workerIndex}-${info.retry}`;
+    const practice = LIFE_ACTIVITIES[0].label;
+
+    // 1. A new athlete, with Wrestling practice in the routine.
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    const athleteId = new URL(dayPage).pathname.split('/')[2]!;
+    await page.goto(athleteRoutinePath(athleteId), { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: `+ ${practice}`, exact: true }).click();
+    await page.getByRole('button', { name: ROUTINE_COPY.save, exact: true }).click();
+    await expect(page.locator('form').getByRole('status')).toBeVisible();
+
+    // 2. Both logged during this visit: both stay open, each now offering Collapse.
+    await page.goto(dayPage, { waitUntil: 'networkidle' });
+    const bodyweight = bodyweightSection(page);
+    const life = lifeSection(page);
+    const WEIGHT = '64.5';
+    await logBodyweight(page, WEIGHT);
+    await logPractice(page);
+    const collapseOf = (region: Locator, name: string) =>
+      region.getByRole('button', { name: DAY_COPY.collapseLabel(name), exact: true });
+    const lineOf = (region: Locator) =>
+      region.getByRole('heading').getByRole('button', { expanded: false });
+    await expect(collapseOf(bodyweight, BODYWEIGHT_COPY.heading)).toBeVisible();
+    await expect(collapseOf(life, LIFE_COPY.heading)).toBeVisible();
+    await expect(lineOf(bodyweight)).toHaveCount(0);
+    await expect(lineOf(life)).toHaveCount(0);
+
+    // 3. Coming back (a reload): two lines, each region still named by its heading alone.
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(lineOf(bodyweight)).toHaveAccessibleName(
+      `${BODYWEIGHT_COPY.heading}, ${shownWeight(WEIGHT)}`,
+    );
+    await expect(lineOf(life)).toHaveAccessibleName(
+      `${LIFE_COPY.heading}, ${practice} ${PRACTICE_SHOWN}`,
+    );
+    await expectNoAxeViolations(page, 'Bodyweight and Life folded, 360px');
+    await expectTapTargets(page, 'Bodyweight and Life folded, 360px');
+    await expectNoHorizontalOverflow(page, 'Bodyweight and Life folded, 360px');
+
+    // 4. Open Bodyweight; while its Change is open, no Collapse; the change saves; it returns.
+    await openCollapsed(bodyweight, BODYWEIGHT_COPY.heading);
+    await expectNoAxeViolations(page, 'Bodyweight opened, 360px');
+    await expectTapTargets(page, 'Bodyweight opened, 360px');
+    await expectNoHorizontalOverflow(page, 'Bodyweight opened, 360px');
+    await changeWeight(page, WEIGHT).click();
+    const editor = bodyweight.getByLabel(AMEND_COPY.valueLabel(DEFAULT_BODYWEIGHT_UNIT), {
+      exact: true,
+    });
+    await expect(editor).toBeFocused();
+    await expect(collapseOf(bodyweight, BODYWEIGHT_COPY.heading)).toHaveCount(0);
+    const CORRECTED = '65';
+    await editor.fill(CORRECTED);
+    await bodyweight.getByRole('button', { name: BODYWEIGHT_COPY.saveLabel, exact: true }).click();
+    await expect(changeWeight(page, CORRECTED)).toBeFocused({ timeout: 15_000 });
+    await expect(loggedWeight(page, CORRECTED)).toBeVisible();
+
+    // 5. Collapse: one line again, showing the new weight, with focus on it.
+    await collapseOf(bodyweight, BODYWEIGHT_COPY.heading).click();
+    await expect(lineOf(bodyweight)).toBeFocused();
+    await expect(lineOf(bodyweight)).toHaveAccessibleName(
+      `${BODYWEIGHT_COPY.heading}, ${shownWeight(CORRECTED)}`,
+    );
   });
 });

@@ -143,6 +143,8 @@ export async function logBodyweight(
   opts?: { timeout?: number },
 ): Promise<void> {
   const section = bodyweightSection(page);
+  // A retry, or a day an earlier spec logged, arrives with the weight folded to one line (12c-iii).
+  await openIfCollapsed(section, BODYWEIGHT_COPY.heading);
   const saved = loggedWeight(page, value);
   const input = section.getByLabel('Weight', { exact: true });
 
@@ -186,6 +188,7 @@ export function practiceLogField(page: Page) {
  */
 export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
+  await openIfCollapsed(life, LIFE_COPY.heading);
   const button = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   const change = practiceChange(page);
   // A retry after a failed change left another value on the row: clear it, so the log below runs.
@@ -230,6 +233,8 @@ export async function clearPractice(page: Page, from: string): Promise<void> {
  */
 export async function clearAnyPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
+  // Folded, its Change is hidden, and this would return as if nothing were logged.
+  await openIfCollapsed(life, LIFE_COPY.heading);
   const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
   const anyChange = life.getByRole('button', { name: changePrefix(PRACTICE_COPY.changeSubject) });
   if ((await anyChange.count()) === 0) return;
@@ -390,4 +395,16 @@ export async function openCollapsed(region: Locator, name: string): Promise<void
   await expect(line, `${name} arrives as one line`).toBeVisible();
   await line.click();
   await expect(region.getByRole('button', { name: DAY_COPY.collapseLabel(name) })).toBeFocused();
+}
+
+/**
+ * FAM-1 12c-iii PR 2: open `region` if it arrived as one line, else nothing. Only where the state
+ * depends on earlier steps or a retry (the logging helpers, an order-dependent spec); a test that
+ * expects the line uses the strict `openCollapsed`. ⚠️ `count()` does not wait, so the region's
+ * heading, there in both states, is awaited first.
+ */
+export async function openIfCollapsed(region: Locator, name: string): Promise<void> {
+  await expect(region.getByRole('heading').first()).toBeVisible();
+  const line = region.getByRole('heading').getByRole('button', { expanded: false });
+  if ((await line.count()) > 0) await openCollapsed(region, name);
 }
