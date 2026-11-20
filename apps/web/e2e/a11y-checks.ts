@@ -2,7 +2,38 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 // Relative imports only, as `contexts.ts` keeps them.
-import { MIN_TAP_TARGET_PX } from '../lib/constants';
+import { MIN_TAP_TARGET_PX, THEME_STORAGE_KEY } from '../lib/constants';
+
+/**
+ * Seed the stored theme choice before any page script runs, the way a returning viewer's browser
+ * holds it; `null` clears it, so the device's `colorScheme` decides (Auto). Lifted once from
+ * `theme.spec.ts` and `a11y.spec.ts` (V1-9b B2-prep). A private window throws on storage; the app
+ * must still render, so the seed swallows that.
+ */
+export async function seedStoredTheme(page: Page, value: 'light' | 'dark' | null): Promise<void> {
+  await page.addInitScript(
+    ([key, v]) => {
+      try {
+        if (v) window.localStorage.setItem(key!, v);
+        else window.localStorage.removeItem(key!);
+      } catch {
+        /* a private window would throw; the app must still render */
+      }
+    },
+    [THEME_STORAGE_KEY, value] as const,
+  );
+}
+
+/**
+ * The guard a dark scan needs first: a stored `mp_theme` beats `colorScheme` emulation, so a scan can
+ * audit the LIGHT palette while reporting green on "dark" (a11y.spec.ts has shipped that failure).
+ */
+export async function expectActuallyDark(page: Page, context: string): Promise<void> {
+  await expect(
+    page.locator('html'),
+    `${context}: not actually rendering dark — this scan would have audited the LIGHT palette`,
+  ).toHaveClass(/\bdark\b/);
+}
 
 /**
  * The two checks of the a11y bar (V1-12), exported so every spec runs the same rules: the axe scan,

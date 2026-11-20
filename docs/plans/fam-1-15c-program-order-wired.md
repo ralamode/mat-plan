@@ -2,7 +2,9 @@
 
 > Backlog: [plan.md](../plan.md) row FAM-1, step 15c of [the FAM-1 plan](./fam-1-family-program.md)
 > (row 15c, `fam-1-family-program.md:632`). Branch for this plan: `docs/fam-1-15c-program-order-plan`.
-> Lane C builds it. Three code PRs, named **15c PR 1–3** here.
+> Three code PRs, named **15c PR 1–3** here. **Lane C builds PR 1; lane B builds PR 2 and PR 3** _(lane
+> C's offer, cleared by the board on 2026-11-19 under the maintainer's rule, relayed by the board:
+> "If we get to a point where lanes are sitting dormant, distribute some of the remaining work to them"; until then lane C built all three)_.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes, each checked against the code. Hardened by a
@@ -79,6 +81,15 @@ Done when:
 
 ## File-by-file changes
 
+**Lane C builds PR 1; lane B builds PR 2 and PR 3** (the hand-over above). The tables below were
+written with lane C as the builder of all three, and their marks stand with one change of reading:
+in PR 2 and PR 3 lane B's own files (`lib/dal/program/`, `app/programs/`,
+`e2e/program-builder*.spec.ts`) need no clearance, so Q1's answer below no longer has anything to
+clear; the files in lane C's area (`app/p/[profileId]/row-actions*`, `components/day/`, `page.tsx`,
+`e2e/day-page.spec.ts`, `day-page.md`) are lane B's guest edits, which lane C reviews; and
+`mutating-actions*` stays what its row says, a write-path file whose turn the board places. PR 3
+still waits for PR 1 and PR 2.
+
 ### 15c PR 1: the dialog as D47 shows it, and the names as links (≈ 300 lines with tests)
 
 Seen on the preview only: production still passes no action. **Gate: the contract owner's commit**
@@ -96,7 +107,7 @@ states (§8 of the FAM-1 plan, `fam-1-family-program.md:801-803`). Sheet is a gu
 | `program-parts.test.tsx` · `day-notices.test.ts`                          | EDIT   | See Test plan. The three-program state is built in the test from `todayTwoPrograms`, as `program-parts.test.tsx:424-425` already does.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `docs/features/day-page.md` · `docs/tech-debt.md`                         | EDIT   | The two files' rows (`day-page.md:57-58`); the "one copy is left" note closes (`tech-debt.md:688-691`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-### 15c PR 2: the action and its DAL function (≈ 210 lines with tests)
+### 15c PR 2: the action and its DAL function (≈ 210 lines with tests; lane B builds it)
 
 No page passes the action yet. Independent of PR 1. Q1 is answered: the DAL hunks are a guest edit.
 
@@ -112,7 +123,7 @@ No page passes the action yet. Independent of PR 1. Q1 is answered: the DAL hunk
 | `apps/web/components/day/owed.test.ts`                                        | EDIT       | Delete `:40` (a list that is not a permutation answers `invalid`): proved by lane P (`fam-1-6d-ii-program-order.md:99-101`), passed through by this action, and shown by the dialog as stale (`program-parts.test.tsx:398-412`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `day-page.md` · `program-builder.md` · `docs/privacy/data-inventory.md`       | EDIT       | The action's rows (`day-page.md:39`, `:67-69`); the DAL rows (`program-builder.md:99`, `:105`); "Called by no action until step 15c" (`data-inventory.md:315-317`) names the action. The privacy docs are a queue (`fam-1-family-program.md:732`): the board places the turn.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
-### 15c PR 3: the control and the links on the real page, and the e2e (≈ 250 lines)
+### 15c PR 3: the control and the links on the real page, and the e2e (≈ 250 lines; lane B builds it)
 
 Waits for PR 1 and PR 2, so production never shows the dialog D47 replaced.
 
