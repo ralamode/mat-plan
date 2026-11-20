@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   trackingTypeSchema,
   existingItem,
+  matchableOption,
   ACTIVITY_TYPE_KEYS,
   addDays,
   localWeekday,
@@ -1735,10 +1736,15 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
 
     // (a5) newItem selects a library row by its alias, at step 1, and makes nothing.
     const foam = options.find((o) => o.name === FOAM.name)!;
-    const byAlias = await newItem(asTx(tx), A_SCOPE, {
-      name: FOAM.aliases[0]!,
-      trackingType: TRACKING_TYPE.check,
-    });
+    const byAlias = await newItem(
+      asTx(tx),
+      A_SCOPE,
+      {
+        name: FOAM.aliases[0]!,
+        trackingType: TRACKING_TYPE.check,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.deepEqual(
       byAlias.ok && [byAlias.existed, byAlias.itemPublicId],
       [true, foam.publicId],
@@ -1747,18 +1753,16 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
 
     // (a6) K23: Enter and newItem pick the same row, because both match over this list.
     for (const typed of ['OHP', 'Strict press', 'Dips', 'Dip', 'Hex-bar deadlift']) {
-      const hit = existingItem(
-        options.map((o) => ({
-          ...o,
-          isCatalog: o.owner === 'catalog',
-          aliases: o.owner === 'catalog' ? o.aliases : [],
-        })),
-        typed,
+      const hit = existingItem(options.map(matchableOption), typed);
+      const answer = await newItem(
+        asTx(tx),
+        A_SCOPE,
+        {
+          name: typed,
+          trackingType: TRACKING_TYPE.check,
+        },
+        CATALOG_MOVEMENTS,
       );
-      const answer = await newItem(asTx(tx), A_SCOPE, {
-        name: typed,
-        trackingType: TRACKING_TYPE.check,
-      });
       assert.deepEqual(
         answer.ok && [answer.existed, answer.itemPublicId],
         [true, hit?.publicId],
@@ -1766,10 +1770,15 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
       );
     }
     const trapBar = options.find((o) => o.owner === 'catalog' && o.slug === 'trap-bar_deadlift');
-    const hexBar = await newItem(asTx(tx), A_SCOPE, {
-      name: 'Hex-bar deadlift',
-      trackingType: TRACKING_TYPE.check,
-    });
+    const hexBar = await newItem(
+      asTx(tx),
+      A_SCOPE,
+      {
+        name: 'Hex-bar deadlift',
+        trackingType: TRACKING_TYPE.check,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.deepEqual(
       hexBar.ok && hexBar.itemPublicId,
       trapBar?.publicId,
@@ -1809,6 +1818,23 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
     assert.ok(
       !(await listedOn(tx, A_SCOPE)).some((o) => o.publicId === shadowed),
       'CAT-3 P11-ii-a (a4): a household item a library row shadows is left out',
+    );
+  });
+
+  // newItem matches over the library it is GIVEN, as the picker's read does (K23): with a library
+  // that lacks the row's entry, its library alias selects nothing and a household item is made.
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), [FOAM]);
+    const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
+    const answer = await newItem(
+      asTx(tx),
+      A_SCOPE,
+      { name: FOAM.aliases[0]!, trackingType: TRACKING_TYPE.check },
+      without,
+    );
+    assert.ok(
+      answer.ok && !answer.existed,
+      'CAT-3 P11-ii-a: newItem matches over the library it is given, not a library of its own',
     );
   });
 
@@ -1891,7 +1917,7 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     const apple = await own(A_SCOPE, 'apple Reach Drill');
 
     // ── the read ──
-    const options = await movementOptions(exec, A_SCOPE);
+    const options = await movementOptions(exec, A_SCOPE, CATALOG_MOVEMENTS);
     const ids = options.map((o) => o.publicId);
     const catalog = options.filter((o) => o.owner === 'catalog');
     assert.equal(
@@ -1974,7 +2000,12 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     ];
     for (const [what, name, publicId, stored] of selects) {
       const before = await rows();
-      const answer = await newItem(exec, A_SCOPE, { name, trackingType: TRACKING_TYPE.check });
+      const answer = await newItem(
+        exec,
+        A_SCOPE,
+        { name, trackingType: TRACKING_TYPE.check },
+        CATALOG_MOVEMENTS,
+      );
       assert.ok(answer.ok, `FAM-1 6a-iii-a: newItem with ${what} succeeds`);
       assert.deepEqual(
         {
@@ -1993,10 +2024,15 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       );
       assert.equal(await rows(), before, `FAM-1 6a-iii-a: newItem with ${what} adds no row`);
     }
-    const typed = await newItem(exec, A_SCOPE, {
-      name: 'garden hop drill',
-      trackingType: TRACKING_TYPE.check,
-    });
+    const typed = await newItem(
+      exec,
+      A_SCOPE,
+      {
+        name: 'garden hop drill',
+        trackingType: TRACKING_TYPE.check,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.ok(
       typed.ok && typed.trackingType === TRACKING_TYPE.distance,
       'FAM-1 6a-iii-a: a selected item keeps its own type, whatever was asked',
@@ -2015,10 +2051,15 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       isBodyweight: false,
     });
     const before = await rows();
-    const viaSlug = await newItem(exec, A_SCOPE, {
-      name: 'unlisted   drill',
-      trackingType: TRACKING_TYPE.reps,
-    });
+    const viaSlug = await newItem(
+      exec,
+      A_SCOPE,
+      {
+        name: 'unlisted   drill',
+        trackingType: TRACKING_TYPE.reps,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.deepEqual(
       viaSlug.ok && {
         id: viaSlug.itemPublicId,
@@ -2032,10 +2073,15 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     assert.equal(await rows(), before, 'FAM-1 6a-iii-a: …and adds no row');
 
     // ── a new name makes one household item, typed as asked; asking again selects it ──
-    const fresh = await newItem(exec, A_SCOPE, {
-      name: 'Hallway Crab Drill',
-      trackingType: TRACKING_TYPE.distance,
-    });
+    const fresh = await newItem(
+      exec,
+      A_SCOPE,
+      {
+        name: 'Hallway Crab Drill',
+        trackingType: TRACKING_TYPE.distance,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.ok(fresh.ok && !fresh.existed, 'FAM-1 6a-iii-a: a new name makes a new item');
     assert.equal(fresh.trackingType, TRACKING_TYPE.distance, 'FAM-1 6a-iii-a: …typed as asked');
     // Ownership through the scope's own predicate: only `ownership.ts` unwraps a scope (scope.test.ts).
@@ -2049,20 +2095,30 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       "FAM-1 6a-iii-a: the new item is the household's own, under the typed name",
     );
     const count = await rows();
-    const again = await newItem(exec, A_SCOPE, {
-      name: 'hallway crab drills',
-      trackingType: TRACKING_TYPE.reps,
-    });
+    const again = await newItem(
+      exec,
+      A_SCOPE,
+      {
+        name: 'hallway crab drills',
+        trackingType: TRACKING_TYPE.reps,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.deepEqual(
       again.ok && { id: again.itemPublicId, existed: again.existed, name: again.name },
       { id: fresh.itemPublicId, existed: true, name: 'Hallway Crab Drill' },
       'FAM-1 6a-iii-a: an item made and not yet used is selected by a re-spelled name',
     );
     assert.equal(await rows(), count, 'FAM-1 6a-iii-a: …and no second item is made');
-    const inB = await newItem(exec, B_SCOPE, {
-      name: 'Hallway Crab Drill',
-      trackingType: TRACKING_TYPE.reps,
-    });
+    const inB = await newItem(
+      exec,
+      B_SCOPE,
+      {
+        name: 'Hallway Crab Drill',
+        trackingType: TRACKING_TYPE.reps,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.ok(
       inB.ok && !inB.existed && inB.itemPublicId !== fresh.itemPublicId,
       "FAM-1 6a-iii-a: another household's item is not this household's: B makes its own",
@@ -2078,7 +2134,7 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     ] as const) {
       const n = await rows();
       assert.deepEqual(
-        await newItem(exec, A_SCOPE, input),
+        await newItem(exec, A_SCOPE, input, CATALOG_MOVEMENTS),
         { ok: false, reason: PROGRAM_REFUSAL.invalid },
         `FAM-1 6a-iii-a: newItem with ${what} is invalid`,
       );
@@ -3178,7 +3234,12 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         const expectedItems = [];
         for (const [i, item] of workout.items.entries()) {
           const { name, type } = world.catalog[item.iid];
-          const found = await newItem(exec, A_SCOPE, { name, trackingType: type });
+          const found = await newItem(
+            exec,
+            A_SCOPE,
+            { name, trackingType: type },
+            CATALOG_MOVEMENTS,
+          );
           assert.ok(found.ok && found.existed, `FAM-1 6c-i: the seed made or found ${item.iid}`);
           const { prescriptionClientId: _c, ...rest } = fixture.items[i]!;
           expectedItems.push({ ...rest, itemPublicId: found.itemPublicId, itemName: found.name });
@@ -3313,10 +3374,15 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
     const exec = asTx(tx);
     // Household B already has an item under a fixture item's name, with another type.
     const grip = DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world.catalog.grip;
-    const planted = await newItem(exec, B_SCOPE, {
-      name: grip.name,
-      trackingType: TRACKING_TYPE.reps,
-    });
+    const planted = await newItem(
+      exec,
+      B_SCOPE,
+      {
+        name: grip.name,
+        trackingType: TRACKING_TYPE.reps,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.ok(planted.ok && !planted.existed, 'FAM-1 6c-i: B makes its own item named like grip');
     await orFail('FAM-1 6c-i: the seed succeeds when an item has another type', () =>
       seedProgramFixtures(exec, B_SCOPE),
@@ -3790,7 +3856,8 @@ async function verifyCaps(): Promise<void> {
           .from(schema.movements)
           .where(movementInHousehold(scope))
       ).length;
-    const add = (name: string) => newItem(exec, scope, { name, trackingType: TRACKING_TYPE.reps });
+    const add = (name: string) =>
+      newItem(exec, scope, { name, trackingType: TRACKING_TYPE.reps }, CATALOG_MOVEMENTS);
 
     const last = await add('Caps Last Drill');
     assert.ok(last.ok && !last.existed, 'FAM-1 caps: the item that reaches the cap is made');
@@ -3832,17 +3899,27 @@ async function verifyCaps(): Promise<void> {
     const { scope: goneScope, proofId: goneId } = await capsHousehold(tx);
     await tx.delete(schema.households).where(eq(schema.households.id, goneId));
     assert.deepEqual(
-      await newItem(exec, goneScope, {
-        name: 'Caps Orphan Drill',
-        trackingType: TRACKING_TYPE.reps,
-      }).catch((e: unknown) => ({ threw: String(e).slice(0, 80) })),
+      await newItem(
+        exec,
+        goneScope,
+        {
+          name: 'Caps Orphan Drill',
+          trackingType: TRACKING_TYPE.reps,
+        },
+        CATALOG_MOVEMENTS,
+      ).catch((e: unknown) => ({ threw: String(e).slice(0, 80) })),
       { ok: false, reason: PROGRAM_REFUSAL.not_found },
       'FAM-1 caps: newItem for a household that is gone is not_found, never counted unlocked',
     );
-    const library = await newItem(exec, scope, {
-      name: MOVEMENT_SEED_ROWS[0]!.name,
-      trackingType: TRACKING_TYPE.reps,
-    });
+    const library = await newItem(
+      exec,
+      scope,
+      {
+        name: MOVEMENT_SEED_ROWS[0]!.name,
+        trackingType: TRACKING_TYPE.reps,
+      },
+      CATALOG_MOVEMENTS,
+    );
     assert.ok(
       library.ok && library.existed,
       'FAM-1 caps: at the cap, a library item is still selected',
@@ -4136,10 +4213,15 @@ async function seedViewWorld(tx: VerifyTx, world: World) {
       const draft = workoutDraft(world, program.id, workout.wid);
       const items = [];
       for (const item of draft.items) {
-        const made = await newItem(exec, scope, {
-          name: item.itemName,
-          trackingType: item.trackingType,
-        });
+        const made = await newItem(
+          exec,
+          scope,
+          {
+            name: item.itemName,
+            trackingType: item.trackingType,
+          },
+          CATALOG_MOVEMENTS,
+        );
         assert.ok(made.ok, `FAM-1 6c-ii: the proof makes or finds ${item.itemName}`);
         items.push({
           ...item,

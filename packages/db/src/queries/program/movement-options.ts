@@ -4,19 +4,19 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   foldMovementQuery,
   MOVEMENT_PICKER_ENTRIES,
+  pickerEntryOf,
   trackingTypeSchema,
   unitSchema,
   type CatalogMovement,
   type TrackingType,
   type Unit,
 } from '@mat-plan/shared';
-import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
 import { movementInHousehold, movementIsCatalog, movementIsGlobal } from '../../writers/ownership';
-import { catalogArmOption, type CatalogArmOption } from './catalog-arm-option';
+import { catalogArmOption, type CatalogArmOption, type CatalogArmRow } from './catalog-arm-option';
 
 /**
  * One item the program builder's picker can offer. Structurally the web's `MovementOptionDTO`
@@ -24,15 +24,7 @@ import { catalogArmOption, type CatalogArmOption } from './catalog-arm-option';
  * import the app, so the DAL that hands these to the picker pins the two as assignable.
  */
 export type MovementOption =
-  | CatalogArmOption
-  | {
-      readonly publicId: string;
-      readonly name: string;
-      readonly unitDefault: Unit | null;
-      readonly isBodyweight: boolean;
-      readonly trackingType: TrackingType;
-      readonly owner: 'household';
-    };
+  CatalogArmOption | (Omit<CatalogArmRow, 'slug'> & { readonly owner: 'household' });
 
 const PICKER_SLUGS = Object.keys(MOVEMENT_PICKER_ENTRIES) as Array<
   keyof typeof MOVEMENT_PICKER_ENTRIES
@@ -63,10 +55,10 @@ export async function movementOptions(
   scope: HouseholdScope,
   /**
    * The library a catalog row's aliases, supervision label and "How to" come from (CAT-3 P11-ii-a).
-   * ⏳ Defaults to the real library until the K29 PR, which derives it from the database (a fixtures
-   * database is read with `CATALOG_FIXTURE`) and makes every caller pass it.
+   * Required: only the DAL chooses it (the K29 PR derives it from the database), so `newItem` and the
+   * picker always match over the same library (K23).
    */
-  library: readonly CatalogMovement[] = CATALOG_MOVEMENTS,
+  library: readonly CatalogMovement[],
 ): Promise<MovementOption[]> {
   const columns = {
     publicId: schema.movements.publicId,
@@ -137,7 +129,7 @@ export async function movementOptions(
       .map((row) =>
         catalogArmOption(
           { ...declared(row), slug: row.slug },
-          pickerEntries[row.slug],
+          pickerEntryOf(row.slug),
           bySlug.get(row.slug),
         ),
       ),

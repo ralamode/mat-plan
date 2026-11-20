@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+
 import {
   copyWorkout,
   createProgram,
@@ -114,7 +116,8 @@ export async function copyHouseholdWorkout(
 export async function newHouseholdItem(input: NewItem): Promise<ProgramAnswer<'newItem'>> {
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
-  return quietDbErrors('newItem', () => newItem(db, scope, input));
+  // The same library the picker's read gets (`picker.ts`), so they match the same aliases (K23).
+  return quietDbErrors('newItem', () => newItem(db, scope, input, CATALOG_MOVEMENTS));
 }
 
 /**

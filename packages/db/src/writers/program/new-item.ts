@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 
 import {
   existingItem,
+  matchableOption,
   MAX_HOUSEHOLD_ITEMS,
   movementSlug,
   newItemSchema,
@@ -11,7 +12,6 @@ import {
   type CatalogMovement,
   type TrackingType,
 } from '@mat-plan/shared';
-import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 
 import { schema } from '../../client';
 import { movementOptions } from '../../queries/program/movement-options';
@@ -61,8 +61,8 @@ export async function newItem(
   exec: Executor,
   scope: HouseholdScope,
   input: unknown,
-  /** The library step 1 matches catalog aliases from: the read's own argument (`movementOptions`). */
-  library: readonly CatalogMovement[] = CATALOG_MOVEMENTS,
+  /** The library step 1 matches catalog aliases from, as the picker's read gets it (K23). */
+  library: readonly CatalogMovement[],
 ): Promise<NewItemResult> {
   const parsed = newItemSchema.safeParse(input);
   if (!parsed.success) return refuse(PROGRAM_REFUSAL.invalid);
@@ -89,14 +89,7 @@ async function addOrSelect(
   if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
 
   const options = await movementOptions(exec, scope, library);
-  const hit = existingItem(
-    options.map((option) => ({
-      ...option,
-      isCatalog: option.owner === 'catalog',
-      aliases: option.owner === 'catalog' ? option.aliases : [],
-    })),
-    name,
-  );
+  const hit = existingItem(options.map(matchableOption), name);
   if (hit) {
     return {
       ok: true,

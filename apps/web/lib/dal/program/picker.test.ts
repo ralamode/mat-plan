@@ -108,7 +108,7 @@ describe('which rows the picker lists (maintainer, 2026-11-17: "Show all 35 unti
     vi.mocked(movementOptions).mockResolvedValueOnce([listed, hidden, own]);
     const data = await getItemPickerData();
     expect(data?.options.map((o) => o.name)).toEqual(['Pull-Up', 'Back Squat', 'Garage Circuit']);
-    expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE]]);
+    expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE, CATALOG_MOVEMENTS]]);
   });
 
   it('no household: null, and nothing is read', async () => {

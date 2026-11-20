@@ -3,8 +3,8 @@ import {
   movementNameKey,
   type CatalogMovement,
   type CatalogOptionTaxonomy,
+  type MovementPickerEntry,
   type MovementPickerGroup,
-  type Supervision,
   type TrackingType,
   type Unit,
 } from '@mat-plan/shared';
@@ -19,12 +19,6 @@ export type CatalogArmTaxonomy = Pick<
   CatalogOptionTaxonomy,
   'modality' | 'pattern' | 'equipment' | 'primaryMuscle' | 'secondaryMuscles'
 >;
-
-/** An entry of `MOVEMENT_PICKER_ENTRIES` (the old built-ins' browse group and aliases). */
-export type PickerEntry = {
-  readonly group: MovementPickerGroup;
-  readonly aliases?: readonly string[];
-};
 
 /** The database row's identity: what a save, a log and `newItem` use. */
 export type CatalogArmRow = {
@@ -44,9 +38,7 @@ export type CatalogArmOption = CatalogArmRow & {
   /** The const's aliases joined with the library entry's, by the picker's name key, the const's first. */
   readonly aliases: readonly string[];
   readonly taxonomy: CatalogArmTaxonomy | null;
-  readonly supervision: Supervision | null;
-  readonly hasInstructions: boolean;
-};
+} & Pick<CatalogOptionTaxonomy, 'supervision' | 'hasInstructions'>;
 
 /** Every alias once, by the picker's "same name" key, the first spelling kept. */
 export function joinAliases(...lists: readonly (readonly string[])[]): string[] {
@@ -78,7 +70,7 @@ export function joinAliases(...lists: readonly (readonly string[])[]): string[] 
  */
 export function catalogArmOption(
   row: CatalogArmRow,
-  pickerEntry: PickerEntry | undefined,
+  pickerEntry: MovementPickerEntry | undefined,
   libraryEntry: CatalogMovement | undefined,
 ): CatalogArmOption {
   const fromLibrary = libraryEntry && catalogOptionOf(libraryEntry, row.publicId);

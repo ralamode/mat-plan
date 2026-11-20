@@ -79,7 +79,9 @@ const householdMovementRows = cache(async function householdMovementRows() {
   const scope = await getHouseholdScope();
   if (!scope) return null;
   // Through `quietDbErrors`, as the writes are: a failed query's parameters stay out of the logs.
-  return quietDbErrors('movementOptions', () => movementOptions(db, scope));
+  // The library is chosen HERE, and only here (with `writes.ts`): ⏳ the K29 PR derives it from the
+  // database, so a fixtures database is read with the fixture library.
+  return quietDbErrors('movementOptions', () => movementOptions(db, scope, CATALOG_MOVEMENTS));
 });
 
 /** The picker's data for the caller's household, or `null` with no household. */
