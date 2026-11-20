@@ -15,6 +15,48 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
+
+- **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
+  reuses `readProgramList` to tell a foreign program id from the household's own. That read is 2 +
+  one query per live athlete (`athletesOnPrograms`), up to 27, and loads names and assignments only to
+  keep the ids. A one-query id lookup beside `programIn` in `packages/db/src/queries/program/exists.ts`
+  is lane P's file, so 15c PR 2 did not add one.
+- **Impact:** it runs on the writer's `invalid`, which is also its routine stale-list answer (a put on
+  or take off elsewhere, midnight), and is awaited before the refusal returns. Small at household scale.
+- **The fix:** lane P adds `programIdsIn(exec, scope, ids)` (one `select public_id … where
+liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `reportOrderProgramMiss`
+  changes.
+- **Severity:** low.
+
+### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
+
+- **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in
+  `<main>`, all undersized ones collected) and `a11y.spec.ts`'s `expectLinkTapTargets(root, context,
+expected?)` (any root, an optional exact count, fail-fast) measure the same 44px rule for links.
+  #720 merged the control checks but left these, because merging them edits
+  `program-preview-a11y.spec.ts`, which lanes do not edit (the contract's). Separately,
+  `athletes.spec.ts` (about :862-865) loops `main button, main a[href^="/p/"]` with no visibility
+  skip, no label measurement and no zero-match guard.
+- **Impact:** a change to the link rule made in one copy leaves the other on the old rule; the
+  `athletes.spec.ts` loop passes vacuously if its selector ever matches nothing.
+- **The fix:** one exported `expectLinkTargets(root: Locator, context, expected?)` that collects every
+  undersized link and names it with `describeControl`; its 7 call sites move to it (3 of them in the
+  contract's spec, so the roadmap thread makes those). `athletes.spec.ts` calls `expectTapTargets`
+  and the link check instead of its loop.
+- **Severity:** low. Tests only; both copies hold the same 44px bar today.
+
+### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
+
+- **What & why it's debt:** `getProgramsByAthlete` is one DAL call, but lane P's
+  `athletesOnPrograms` (`packages/db/src/queries/program/athletes.ts`) runs `dayAssignments` once per
+  athlete, so Home makes 1 + N queries, N at most `MAX_HOUSEHOLD_ATHLETES` (25).
+- **Impact:** none measured; a household has a handful of athletes. On the app's front door the
+  queries add up before the tiles render.
+- **The fix:** if Home's LCP suffers, batch `dayAssignments` with `profile_id IN (...)` and group in
+  memory, keeping `currentPrograms`' order rule unchanged (the Programs list shares the read).
+- **Severity:** low.
+
 ### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
 
 - **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
@@ -164,26 +206,21 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   branch is reset from main afterwards, or stop recommending the branch refresh.
 - **Severity:** low.
 
-### The old log forms are unmounted, not deleted, and older days have no in-app fix (added 2026-11-15)
+### Older days have no in-app fix, and the old forms left callerless code in the packages (added 2026-11-15, 12f half closed 2026-11-20)
 
-- **What & why it's debt:** V1-24 3b-page took the Check-ins form, the Strength section (form,
-  program card, receipts), the "Logged entries" list and the "Calisthenics today" card off the day
-  page, and left their components in the tree: `checkin-form.tsx`, `strength-section.tsx`,
-  `strength-form*.ts(x)`, `strength-session-receipt.tsx`, `program-reference.tsx`,
-  `movement-line.tsx`, `todayRows` / `calisthenicsTotals` in `lib/entries/activity-totals.ts`, and
-  the reads only those used: `getProgramDay` (`lib/dal/programming.ts`), `resolveDayRole`,
-  `checkinFieldsForKeys`, `readsHouseholdProgram`, and `DayNav`'s unused `dayRoleLabel` prop. About a
-  dozen `screenshot-ephemeral.ts` states (`strength-*`, `form-*`, `calisthenics`, `program-collapsed`,
-  `status-badges`) now target surfaces that are not on the page. Their Server Actions stay, tested;
-  `editStrengthSetAction` has no day bound, which is harmless while nothing posts to it. FAM-1 12f deletes them, once 12d and 13b have rebuilt what the
-  new page needs (the PICK-1 PR 3 precedent for an unmounted component).
-- **Impact:** dead code that still type-checks and still costs review attention; PICK-1 PR 4, which
-  mounts into the strength form, waits for FAM-1 13b's surface instead.
+- **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
+  capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
+  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet`;
+  `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
+  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
+  (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
+  `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
+  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user is `lib/checkins`.
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** FAM-1 12f deletes each file and the actions nothing calls. Revisit the older-day recovery path before FAM-1
-  slice 3 opens the new page to the household, or before a second household. **Expiry: FAM-1 12f.**
-- **Severity:** low.
+- **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
+  moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
+  the new page to the household, or before a second household.
 
 ### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
 
@@ -235,19 +272,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
   one (`queries/day/day-plan.ts`).
 - **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
-
-### The a11y checks have two copies (added 2026-11-15, FAM-1 step 0b)
-
-- **What & why it's debt:** `apps/web/e2e/a11y-checks.ts` exports `expectNoAxeViolations` and
-  `expectTapTargets` for `program-preview-a11y.spec.ts`, and `a11y.spec.ts` still holds its own
-  private copies of both, with `targetOf` and `describe`. They were lifted while another open PR
-  was rewriting `a11y.spec.ts`, so that file was left alone rather than edited under it.
-- **Impact:** a change to the tap-target rule (the selector, the 44px bar, the label rule) made in
-  one copy leaves the other scanning by the old rule, and both stay green.
-- **The fix:** the next PR that edits `a11y.spec.ts` deletes its four private functions and imports
-  the two from `./a11y-checks`. Its long comments, which hold the reasoning for each rule, move to
-  that module with them. Mechanical, no behaviour change.
-- **Severity:** low. Two copies of about 60 lines, in tests, with a named owner for the fix.
 
 ### The nav rail unmounts during a switch between athletes (added 2026-11-13)
 
@@ -670,6 +694,8 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
   prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
   at 15c, which wires that dialog.
+  ✅ **Closed (FAM-1 15c PR 1, 2026-11-20)**: `Sheet` takes `statusKey`, passed to its region as
+  `messageKey`, and the dialog's status is `{ text, n }`. No U+00A0 idiom is left.
 - **Severity:** low.
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)

@@ -19,6 +19,7 @@ import {
 
 import { and, isNull } from 'drizzle-orm';
 
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
@@ -188,7 +189,7 @@ async function seedWorld(
     const known = items.get(key);
     if (known) return known;
     const { name, type } = world.catalog[key];
-    const result = await newItem(tx, scope, { name, trackingType: type });
+    const result = await newItem(tx, scope, { name, trackingType: type }, CATALOG_MOVEMENTS);
     // The household's item cap is state a person can make: skipped, never thrown.
     if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
     const made = must(result, `item ${key}`);

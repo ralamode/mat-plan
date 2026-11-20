@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index ed01ac08..1dcb082f 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -11,6 +11,7 @@ import {
+   type CatalogMovement,
+   type TrackingType,
+ } from '@mat-plan/shared';
++import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+ 
+ import { schema } from '../../client';
+ import { matchableOption } from '../../queries/program/catalog-arm-option';
+@@ -99,7 +100,8 @@ async function addOrSelect(
+     .for('key share');
+   if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
+ 
+-  const options = await movementOptions(exec, scope, library);
++  void library;
++  const options = await movementOptions(exec, scope, CATALOG_MOVEMENTS);
+   const hit = existingItem(options.map(matchableOption), name);
+   if (hit) {
+     return {

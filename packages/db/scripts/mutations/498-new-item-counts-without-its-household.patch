@@ -1,12 +1,13 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index f1bd7685..9701cc0a 100644
+index e95cef62..1fea151e 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -94,7 +94,6 @@ async function addOrSelect(
+@@ -86,7 +86,6 @@ async function addOrSelect(
+     })
      .from(schema.households)
      .where(householdRowIs(scope))
      .for('key share');
 -  if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  
-   const options = await movementOptions(exec, scope);
-   const hit = existingItem(
+   const options = await movementOptions(exec, scope, library);
+   const hit = existingItem(options.map(matchableOption), name);

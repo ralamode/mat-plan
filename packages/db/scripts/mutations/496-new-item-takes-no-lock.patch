@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index f1bd7685..593d7425 100644
+index ed01ac08..3a773b9e 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -87,14 +87,6 @@ async function addOrSelect(
+@@ -90,14 +90,6 @@ async function addOrSelect(
    // COMMITTED it re-checks the row, finds it gone, and returns nothing. No deadlock: the core never takes
    // the advisory lock below, and this holds nothing the core waits on. The wait is bounded by the
    // `lock_timeout` above, so an erasure slower than that answers `55P03` instead.
@@ -15,5 +15,5 @@ index f1bd7685..593d7425 100644
 -    .for('key share');
 -  if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  
-   const options = await movementOptions(exec, scope);
-   const hit = existingItem(
+   const options = await movementOptions(exec, scope, library);
+   const hit = existingItem(options.map(matchableOption), name);

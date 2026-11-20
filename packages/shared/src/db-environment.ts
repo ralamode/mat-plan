@@ -104,7 +104,7 @@ export function databaseNameOf(connectionString: string): string | null {
  * directories, Cloud SQL), not an exotic one. 🔴 **Hardened when AUTH-1 1c-3a promoted this function
  * from "which database" to "is authentication on".**
  */
-function hasHostOverride(connectionString: string): boolean {
+export function hasHostOverride(connectionString: string): boolean {
   // 🔴 **DECODE first.** The first version of this matched raw text — `/[?&](host|hostaddr)=/i` —
   // and `pg-connection-string` **decodes** the parameter key, so `?%68ost=ep-prod.aws.neon.tech`
   // read as local while `pg` connected to Neon. Verified against the pinned parser, which returns

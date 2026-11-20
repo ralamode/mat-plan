@@ -117,7 +117,7 @@ stays on screen turns a second submit into a second **row**, because
 a resubmit an `ON CONFLICT DO NOTHING` no-op, which is the behaviour you want. What removes the
 affordance is not rendering the create form over an existing record at all (`bodyweight-section.tsx`).
 Rotate only where a genuinely NEW record is expected next — an append-style surface that stays mounted
-across writes, like `checkin-form.tsx` — and say why in a comment.
+across writes — and say why in a comment.
 
 A display-only field must drop its `name` (`readOnly`/`aria-disabled` fields still submit, which caused
 duplicate rows; see lessons.md). The UI must never be stricter than the endpoint. UI work owes a UX

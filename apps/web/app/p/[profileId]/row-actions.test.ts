@@ -1,8 +1,14 @@
-import { E2E_SESSION_BYPASS_USER, ROW_REFUSAL, type DayActions } from '@mat-plan/shared';
+import {
+  E2E_SESSION_BYPASS_USER,
+  MAX_ORDER_PROGRAMS,
+  PROGRAM_REFUSAL,
+  ROW_REFUSAL,
+  type DayActions,
+} from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The day page's row writes (FAM-1 steps 12b and 12d, Change): the shared boundary matrices, then what they cannot
+ * The day page's writes (FAM-1 steps 12b, 12d's Change and 15c's Program order): the shared boundary matrices, then what they cannot
  * express: what the contract's schema refuses before anything is read, where `today` comes from,
  * what a success answers and revalidates, and that a refusal passes through with nothing
  * revalidated.
@@ -40,6 +46,11 @@ vi.mock('@/lib/dal/day/day', () => ({
   retickDayRow: vi.fn(async () => LOGGED),
   amendDayRow: vi.fn(async () => LOGGED),
 }));
+// Program order (15c): the program DAL, and the one rule that revalidates after an assignment change.
+vi.mock('@/lib/dal/program/writes', () => ({
+  reorderHouseholdPrograms: vi.fn(async () => ({ ok: true })),
+}));
+vi.mock('@/lib/dal/program/revalidate', () => ({ refreshAssignment: vi.fn() }));
 
 import { revalidatePath } from 'next/cache';
 
@@ -47,10 +58,19 @@ import { getActiveLocalDay } from '@/lib/active-timezone';
 import { athletePath } from '@/lib/constants';
 import { amendDayRow, logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { refreshAssignment } from '@/lib/dal/program/revalidate';
+import { reorderHouseholdPrograms } from '@/lib/dal/program/writes';
+import { sessionUserOrNull } from '@/lib/dal/session';
 import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 import { describeActionMatrices } from '@/test/action-matrix';
 
-import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
+import {
+  amendRowAction,
+  logRowAction,
+  reorderProgramsAction,
+  retickRowAction,
+  untickRowAction,
+} from './row-actions';
 import { ACTION_REGISTRY } from './row-actions.registry';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
@@ -85,15 +105,27 @@ const amendInput = () => ({
   values: { reps: 6, quantities: [] },
 });
 
+const PROGRAM_A = '019826b4-0000-7000-8000-0000000000a1';
+const PROGRAM_B = '019826b4-0000-7000-8000-0000000000a2';
+const orderInput = () => ({
+  profilePublicId: PROFILE_ID,
+  programPublicIds: [PROGRAM_B, PROGRAM_A],
+});
+const ORDER_NOT_FOUND = { ok: false, reason: PROGRAM_REFUSAL.not_found } as const;
+
 beforeEach(() => vi.clearAllMocks());
 
-/** The four actions are the contract's members: each accepts the member's input and answers it. */
+/** The five actions are the contract's members: each accepts the member's input and answers it. */
 ({
   logRow: logRowAction,
   untickRow: untickRowAction,
   retickRow: retickRowAction,
   amendRow: amendRowAction,
-}) satisfies Pick<DayActions, 'logRow' | 'untickRow' | 'retickRow' | 'amendRow'>;
+  reorderPrograms: reorderProgramsAction,
+}) satisfies Pick<
+  DayActions,
+  'logRow' | 'untickRow' | 'retickRow' | 'amendRow' | 'reorderPrograms'
+>;
 
 /**
  * 🔴 **The boundary matrices** (AGENTS.md → Backend / API PR rules): unauthenticated, rate-limited
@@ -110,12 +142,19 @@ describeActionMatrices({
     untickRowAction: { fn: untickRowAction, writers: [untickDayRow], limit: ROW_WRITE_RATE_LIMIT },
     retickRowAction: { fn: retickRowAction, writers: [retickDayRow], limit: ROW_WRITE_RATE_LIMIT },
     amendRowAction: { fn: amendRowAction, writers: [amendDayRow], limit: ROW_WRITE_RATE_LIMIT },
+    // Household-addressed, under the DEFAULT limiter (no `limit`): a reorder is not a row write.
+    reorderProgramsAction: {
+      fn: reorderProgramsAction,
+      writers: [reorderHouseholdPrograms],
+      scopeMiss: () => vi.mocked(reorderHouseholdPrograms).mockResolvedValueOnce(ORDER_NOT_FOUND),
+    },
   },
   validBody: {
     logRowAction: writeInput,
     untickRowAction: untickInput,
     retickRowAction: retickInput,
     amendRowAction: amendInput,
+    reorderProgramsAction: orderInput,
   },
 });
 
@@ -210,5 +249,97 @@ describe('the row actions (FAM-1 12b)', () => {
       reason: ROW_REFUSAL.bad_value,
     });
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('Program order (FAM-1 15c)', () => {
+  /** Distinct lower-case uuids, as many as asked. */
+  const distinctIds = (n: number) =>
+    Array.from({ length: n }, (_, i) => `019826b4-0000-7000-8000-${String(i).padStart(12, '0')}`);
+
+  it.each([
+    ['no programs', () => reorderProgramsAction({ ...orderInput(), programPublicIds: [] })],
+    [
+      'a program twice',
+      () => reorderProgramsAction({ ...orderInput(), programPublicIds: [PROGRAM_A, PROGRAM_A] }),
+    ],
+    [
+      'an athlete id that is not a uuid',
+      () => reorderProgramsAction({ ...orderInput(), profilePublicId: 'x' }),
+    ],
+    [
+      `${MAX_ORDER_PROGRAMS + 1} distinct ids, one past the cap`,
+      () =>
+        reorderProgramsAction({
+          ...orderInput(),
+          programPublicIds: distinctIds(MAX_ORDER_PROGRAMS + 1),
+        }),
+    ],
+    ['not an object at all', () => reorderProgramsAction('a string')],
+  ])('%s is invalid, and the DAL is not called', async (_label, call) => {
+    expect(await call()).toEqual({ ok: false, reason: PROGRAM_REFUSAL.invalid });
+    expect(reorderHouseholdPrograms).not.toHaveBeenCalled();
+    expect(getActiveLocalDay).not.toHaveBeenCalled();
+    expect(refreshAssignment).not.toHaveBeenCalled();
+  });
+
+  it(`${MAX_ORDER_PROGRAMS} distinct ids reach the DAL: the cap is the schema's, not lower`, async () => {
+    const order = { ...orderInput(), programPublicIds: distinctIds(MAX_ORDER_PROGRAMS) };
+    expect(await reorderProgramsAction(order)).toEqual({ ok: true });
+    expect(vi.mocked(reorderHouseholdPrograms).mock.calls).toEqual([[order, TODAY]]);
+  });
+
+  it('hands the DAL the parsed input and the zone’s today, read in the action, and resolves no athlete', async () => {
+    await reorderProgramsAction(orderInput());
+    expect(getActiveLocalDay).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reorderHouseholdPrograms).mock.calls).toEqual([[orderInput(), TODAY]]);
+    // Household-addressed: the writer is the one check of the athlete (`lockAthletes`).
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+  });
+
+  it('a success answers { ok: true } alone and refreshes the assignment for the parsed, lower-cased athlete id', async () => {
+    vi.mocked(reorderHouseholdPrograms).mockResolvedValueOnce({ ok: true, extra: 1 } as never);
+    const shouted = {
+      profilePublicId: PROFILE_ID.toUpperCase(),
+      programPublicIds: [PROGRAM_B.toUpperCase(), PROGRAM_A],
+    };
+    expect(await reorderProgramsAction(shouted)).toEqual({ ok: true });
+    expect(vi.mocked(reorderHouseholdPrograms).mock.calls).toEqual([[orderInput(), TODAY]]);
+    expect(vi.mocked(refreshAssignment).mock.calls).toEqual([[[PROFILE_ID]]]);
+  });
+
+  it.each([PROGRAM_REFUSAL.invalid, PROGRAM_REFUSAL.not_found, PROGRAM_REFUSAL.retry])(
+    'the writer’s %s reaches the screen as it is, with nothing revalidated',
+    async (reason) => {
+      vi.mocked(reorderHouseholdPrograms).mockResolvedValueOnce({ ok: false, reason });
+      expect(await reorderProgramsAction(orderInput())).toEqual({ ok: false, reason });
+      expect(refreshAssignment).not.toHaveBeenCalled();
+    },
+  );
+
+  /**
+   * 🔴 **Another household's athlete id** (`write-path.md` invariant 13; `mutating-actions.ts`). What
+   * this layer proves is the pass-through: the id reaches the DAL unchanged, and the writer's
+   * `not_found` leaves with the no-session refusal's bytes, nothing revalidated. The DAL is mocked,
+   * so the refusal itself is not proved here: that is `verifyReorderPrograms`'s "another household’s
+   * athlete" row (`packages/db/scripts/verify/program.ts`), where lane P's `lockAthletes` finds no
+   * such athlete in A's scope.
+   */
+  it('🔴 the writer’s not_found for a foreign athlete id passes through with no-session bytes; the id reaches the DAL unchanged', async () => {
+    const FOREIGN_ATHLETE = '019826b4-0000-7000-8000-0000000000f1';
+    vi.mocked(reorderHouseholdPrograms).mockResolvedValueOnce(ORDER_NOT_FOUND);
+    const foreign = await reorderProgramsAction({
+      ...orderInput(),
+      profilePublicId: FOREIGN_ATHLETE,
+    });
+    expect(vi.mocked(reorderHouseholdPrograms).mock.calls[0]![0]).toEqual({
+      ...orderInput(),
+      profilePublicId: FOREIGN_ATHLETE,
+    });
+    vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+    const noSession = await reorderProgramsAction(orderInput());
+    expect(foreign).toEqual(noSession);
+    expect(JSON.stringify(foreign)).toBe(JSON.stringify(noSession));
+    expect(refreshAssignment).not.toHaveBeenCalled();
   });
 });
