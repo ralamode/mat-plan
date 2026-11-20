@@ -8,7 +8,7 @@ anything.
 
 **In CI, on every pull request that can affect a patch, and on every push to `main`** (DX-18 PR 2,
 [plan](../../../../docs/plans/dx-18-heavy-runs-to-ci.md) D6): `ci.yml`'s `mutations-plan` job decides
-whether to run and how many shards (4, on every event; `ci.yml`'s "Shard count" step is the one place it is written), the `mutations`
+whether to run and how many shards (8 on a push to `main`, 4 on a pull request), the `mutations`
 matrix runs `--shard i/n`, each shard writes a `--report`, and `mutations-total` checks with `--verify-reports`
 that together they ran every patch exactly once. `changed-scopes.mjs` skips the shards on a PR that
 touches nothing a patch reaches (its `--list-paths`, the packages, the lockfile, `pnpm-workspace.yaml`, a manifest, a tsconfig or
