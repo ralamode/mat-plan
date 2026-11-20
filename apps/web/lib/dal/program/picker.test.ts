@@ -6,10 +6,23 @@ import {
   type Unit,
 } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('../db', () => ({ db: { the: 'db' } }));
+// CAT-3 K29: the library in effect, set per test (under vitest the real `lib/env.ts` would pick the
+// test library, since DATABASE_URL is local). The name-to-list map has its own test.
+const library = vi.hoisted(() => ({ entries: undefined as unknown }));
+vi.mock('../catalog-library', async () => {
+  const { CATALOG_MOVEMENTS: real } = await import('@mat-plan/shared/catalog/data');
+  library.entries = real;
+  return {
+    get CATALOG_LIBRARY() {
+      return library.entries;
+    },
+  };
+});
 vi.mock('../household', () => ({ getHouseholdScope: vi.fn() }));
 vi.mock('@mat-plan/db', () => ({ movementOptions: vi.fn(async () => []) }));
 
@@ -100,6 +113,7 @@ const CATALOG_KEYS = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getHouseholdScope).mockResolvedValue(SCOPE);
+  library.entries = CATALOG_MOVEMENTS;
 });
 
 describe('which rows the picker lists (maintainer, 2026-11-17: "Show all 35 until reset")', () => {
@@ -110,6 +124,12 @@ describe('which rows the picker lists (maintainer, 2026-11-17: "Show all 35 unti
     const data = await getItemPickerData();
     expect(data?.options.map((o) => o.name)).toEqual(['Pull-Up', 'Back Squat', 'Garage Circuit']);
     expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE, CATALOG_MOVEMENTS]]);
+  });
+
+  it('CAT-3 K29: on a fixtures database the read is given the test library', async () => {
+    library.entries = CATALOG_FIXTURE;
+    await getItemPickerData();
+    expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE, CATALOG_FIXTURE]]);
   });
 
   it('no household: null, and nothing is read', async () => {
@@ -235,6 +255,14 @@ describe('getHowTo: one option’s steps, resolved among the caller’s own opti
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getHouseholdScope).mockResolvedValue(SCOPE);
+    library.entries = CATALOG_MOVEMENTS;
+  });
+
+  it('CAT-3 K29: on a fixtures database the steps come from the test library', async () => {
+    const fixtureWithSteps = CATALOG_FIXTURE.find((e) => e.instructions !== undefined)!;
+    library.entries = CATALOG_FIXTURE;
+    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: fixtureWithSteps.slug })]);
+    expect(await getHowTo(ID)).toEqual(catalogHowToOf(CATALOG_FIXTURE, fixtureWithSteps.slug));
   });
 
   it('a library row with steps: its name, steps and label, nothing else (the strict schema)', async () => {
