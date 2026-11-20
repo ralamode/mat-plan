@@ -3536,7 +3536,6 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
 
 // ── FAM-1 caps (C35, invariant 30): items, workouts and a weekday's slots ──────────────────────────
 
-/** A new household of its own, so a count is exact: the caps are per household and per program. */
 /**
  * `newItem` reads the household row FOR KEY SHARE, so an erasure mid-call answers `not_found`, never a
  * 23503. Waiting is unprovable on PGlite's one connection; the lock MODE is not: a locking read takes
@@ -3574,6 +3573,7 @@ async function verifyNewItemLocksTheHousehold(): Promise<void> {
   );
 }
 
+/** A new household of its own, so a count is exact: the caps are per household and per program. */
 async function capsHousehold(tx: VerifyTx) {
   const [household] = await tx
     .insert(schema.households)

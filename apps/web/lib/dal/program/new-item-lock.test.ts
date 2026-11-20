@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * The order `newItem` takes its household lock in: `lock_timeout` first, in the same transaction.
  * `db:verify` proves the setting is set (mutation 448); only the emitted SQL shows it comes BEFORE
  * the lock, and a timeout set after the wait bounds nothing. The athlete add is pinned the same way
- * in `../profiles.test.ts`.
+ * in `../profiles.test.ts`. The second test pins `FOR KEY SHARE` in the lock statement itself;
+ * `db:verify` proves the lock mode (mutation 590).
  */
 const { recording } = await vi.hoisted(async () => {
   const { createRecordingDb } = await import('../recording-db');
