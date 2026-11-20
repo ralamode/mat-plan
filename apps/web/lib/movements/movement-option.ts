@@ -59,8 +59,8 @@ export type MovementOptionDTO = { readonly publicId: string; readonly name: stri
     | (CatalogOption & {
         /**
          * The legacy browse group, from `MOVEMENT_PICKER_ENTRIES`: only the old built-ins have one.
-         * **Optional** (CAT-3 C0b-2): a library entry has none, is found by search, and is left out
-         * of the legacy groups (invariant 11) until B3's browse tree replaces them.
+         * **Optional** (CAT-3 C0b-2): a library entry has none. Nothing reads it since B3's tree,
+         * which files a row by its kind and family. TODO(CAT-3 chunk R): goes in the post-R2 cleanup.
          */
         readonly group?: MovementPickerGroup;
       })
@@ -79,11 +79,30 @@ export type BuiltInWithoutLibrary = {
   readonly group?: MovementPickerGroup;
 } & { readonly [K in keyof CatalogOptionTaxonomy]?: undefined };
 
+/** A library option: the contract's `CatalogOption`, what `hasLibraryData` narrows to. */
+export type LibraryOption = Extract<MovementOptionDTO, CatalogOption>;
+
 /** Whether an option carries the library's taxonomy: a library entry, never a custom item. */
-export function hasLibraryData(
-  option: MovementOptionDTO,
-): option is Extract<MovementOptionDTO, CatalogOption> {
+export function hasLibraryData(option: MovementOptionDTO): option is LibraryOption {
   return option.owner === 'catalog' && option.equipment !== undefined;
+}
+
+/**
+ * ONE place that turns a `MovementOptionDTO` into what the matcher and the filters read
+ * (catalog-first, aliases from the catalog only). The picker's search, `listedAs`, its filter
+ * counts and the browse tree (`browse-view.ts`) all read through it, so "Show N movements" and
+ * "All movements · N" cannot count two different mappings.
+ */
+export function matchable(options: readonly MovementOptionDTO[]) {
+  return options.map((option) => ({
+    name: option.name,
+    isCatalog: option.owner === 'catalog',
+    aliases: option.owner === 'catalog' ? option.aliases : [],
+    // What a filter reads (P7). A household item has neither, so a filter cannot judge it (P9).
+    equipment: hasLibraryData(option) ? option.equipment : undefined,
+    primaryMuscle: hasLibraryData(option) ? option.primaryMuscle : null,
+    option,
+  }));
 }
 
 /**

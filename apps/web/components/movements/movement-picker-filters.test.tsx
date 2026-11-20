@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import {
+  BROWSE_OPEN_AT_MOST,
+  browseTree,
   EQUIPMENT,
   EQUIPMENT_CODE,
   EQUIPMENT_FILTER_SHOWN_FIRST,
   EQUIPMENT_LABELS,
-  MOVEMENT_PICKER_GROUP_LABELS,
+  MODALITY_LABELS,
   MUSCLE,
   MUSCLE_LABELS,
   TRACKING_TYPE,
@@ -15,14 +17,21 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MovementOptionDTO } from '@/lib/movements/movement-option';
+import {
+  hasLibraryData,
+  type LibraryOption,
+  type MovementOptionDTO,
+} from '@/lib/movements/movement-option';
+import { CUSTOM_OPEN_AT_MOST } from '@/lib/movements/browse-view';
 import { MOVEMENT_PICKER_COPY as COPY } from '@/lib/movements/movement-picker-copy';
 import {
   catalogOption,
   householdOption,
+  LIBRARY_OPTIONS,
   pickerTrigger,
   stubSheetHistory,
   TEST_TAXONOMY,
+  withoutLibraryData,
 } from '@/test/movement-picker-fixtures';
 
 import { MovementPicker } from './movement-picker';
@@ -36,8 +45,8 @@ import { MovementPicker } from './movement-picker';
 afterEach(cleanup);
 beforeEach(stubSheetHistory);
 
-// Seeded movements, with the taxonomy each test needs. Listed pull before push on purpose: the
-// filtered browse sorts by the legacy groups' order, not the input's.
+// Seeded movements, with the taxonomy each test needs. Listed out of name order on purpose: the
+// filtered browse sorts by name, not the input's order.
 const PULL_UP = catalogOption('Pull-Up', {
   equipment: [EQUIPMENT_CODE.pull_up_bar],
   primaryMuscle: MUSCLE.lats,
@@ -129,6 +138,12 @@ const tick = (box: HTMLElement) => act(() => void fireEvent.click(box));
 const press = (key: string) =>
   act(() => void fireEvent.keyDown(screen.getByRole('dialog'), { key }));
 const h3s = () => screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+/** A browse group's disclosure, by its accessible name: its label, then its count (CAT-3 B3). */
+const groupButton = (label: string, n: number) =>
+  screen.getByRole('button', { name: COPY.choiceName(label, n) });
+/** "Movements that fit your filters", whatever its count: its name ends with the count. */
+const fitRegion = () =>
+  screen.queryByRole('region', { name: (name) => name.startsWith(COPY.fitHeading) });
 const inert = (el: HTMLElement) => el.getAttribute('aria-disabled') === 'true';
 /** Turns the given muscles on, then goes back to the list. */
 const withMuscles = (...labels: string[]) => {
@@ -157,9 +172,7 @@ describe('the Filters control (P15)', () => {
 
   it('⏳ is not shown over built-ins with no library data either: a filter can judge none of them', () => {
     // Until CAT-3 chunk R every old built-in is listed, most with no taxonomy (7a-ii).
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     render(<Harness options={[bare, CIRCUIT]} />);
     open();
     expect(screen.queryByRole('button', { name: /^Filters, / })).toBeNull();
@@ -284,7 +297,7 @@ describe('the panel (P7; panel rows 11 to 13, 17)', () => {
     expect(none).toHaveProperty('disabled', true);
     back();
     expect(screen.getByText(COPY.noneFit)).toBeTruthy();
-    expect(screen.queryByRole('region', { name: COPY.fitHeading })).toBeNull();
+    expect(fitRegion()).toBeNull();
   });
 
   it('the radio hints are described, not crammed into the name', () => {
@@ -417,33 +430,114 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(h3s()).toContain(COPY.recent);
     withLats();
     expect(screen.getByText(COPY.filtersOnLine(1))).toBeTruthy();
-    expect(h3s()).toEqual([COPY.foldedCount(COPY.householdNotFiltered, 2), COPY.fitHeading]);
-    const folded = screen.getByRole('heading', { name: /^Your custom items \(not filtered\)/ });
-    expect(folded.closest('details')!.open).toBe(false);
+    // Both are `Group`s: their names say their counts. Two custom items, and still folded (K25).
+    expect(screen.getAllByRole('heading', { level: 3 })).toEqual([
+      groupButton(COPY.householdNotFiltered, 2).parentElement,
+      groupButton(COPY.fitHeading, 2).parentElement,
+    ]);
+    expect(groupButton(COPY.householdNotFiltered, 2).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('checkbox', { name: /^Garage Circuit/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Garage Circuit/ })).toBeNull();
   });
 
-  it("what fits is in the legacy groups' order, whatever the input order, each row tagged", () => {
+  it("what fits is by name (the tree's comparator), whatever the input order, with no group tag", () => {
     render(<Harness />);
     open();
     withMuscles(MUSCLE_LABELS.lats, MUSCLE_LABELS.chest);
-    const fit = screen.getByRole('region', { name: COPY.fitHeading });
-    const rows = within(fit).getAllByRole('button');
-    expect(rows.map((b) => b.textContent!.split(/[\s,]/)[0])).toEqual([
-      'Push-Ups',
+    const fit = fitRegion()!;
+    const rows = within(fit)
+      .getAllByRole('button')
+      .filter((b) => !b.hasAttribute('aria-expanded'));
+    // OPTIONS gives Pull-Up, Inverted Rows, Push-Ups: neither the input's order nor the old groups'.
+    expect(rows.map((b) => b.textContent!.split(',')[0])).toEqual([
+      'Inverted Rows',
       'Pull-Up',
-      'Inverted',
+      'Push-Ups',
     ]);
-    expect(rows[0]!.textContent).toContain(MOVEMENT_PICKER_GROUP_LABELS.push);
+    for (const row of rows) expect(row.querySelector('[data-row-tag]')).toBeNull();
   });
 
-  it('🔴 the folded section opens itself while it holds a ticked row (so focus can reach it)', () => {
+  // The test library's tree, so the filter drops whole kinds and families (P12).
+  const QUADS = (o: MovementOptionDTO): o is LibraryOption =>
+    hasLibraryData(o) && o.primaryMuscle === MUSCLE.quadriceps;
+
+  it("is the tree of what fits: browseTree's kinds and families over those rows, with their counts", () => {
+    // ⏳ With a row that has no library data, so "Not sorted yet" is there before the filter.
+    render(<Harness options={[withoutLibraryData(FRONT), ...LIBRARY_OPTIONS]} />);
+    open();
+    const notSorted = () =>
+      screen.queryByRole('heading', { level: 4, name: (n) => n.startsWith(COPY.notSorted) });
+    expect(notSorted()).toBeTruthy();
+    withMuscles(MUSCLE_LABELS.quadriceps);
+    const fitting = LIBRARY_OPTIONS.filter(QUADS);
+    const tree = browseTree(fitting);
+    expect(groupButton(COPY.fitHeading, fitting.length)).toBeTruthy();
+    const buttons = (level: number) =>
+      screen.getAllByRole('heading', { level }).map((h) => h.querySelector('button'));
+    expect(buttons(4)).toEqual(
+      tree.map(({ kind, count }) => groupButton(MODALITY_LABELS[kind], count)),
+    );
+    expect(buttons(5)).toEqual(
+      tree.flatMap(({ families }) =>
+        families.flatMap(({ label, options }) =>
+          label === null ? [] : [groupButton(label, options.length)],
+        ),
+      ),
+    );
+    // Non-vacuity: the filter dropped kinds the whole library has, and left more than one family.
+    expect(tree.length).toBeLessThan(browseTree(LIBRARY_OPTIONS.filter(hasLibraryData)).length);
+    expect(screen.queryAllByRole('heading', { level: 5 }).length).toBeGreaterThan(1);
+    // No "Not sorted yet": no row without library data passes a filter.
+    expect(notSorted()).toBeNull();
+  });
+
+  it(`opens itself on the FILTERED tree's rows: at most ${BROWSE_OPEN_AT_MOST} that fit (K26)`, () => {
+    expect(LIBRARY_OPTIONS.length).toBeGreaterThan(BROWSE_OPEN_AT_MOST);
+    expect(LIBRARY_OPTIONS.filter(QUADS).length).toBeLessThanOrEqual(BROWSE_OPEN_AT_MOST);
+    render(<Harness options={LIBRARY_OPTIONS} />);
+    open();
+    const groups = () => [...document.querySelectorAll(':is(h4, h5) > button')];
+    expect(groups().every((g) => g.getAttribute('aria-expanded') === 'false')).toBe(true);
+    withMuscles(MUSCLE_LABELS.quadriceps);
+    expect(groups().length).toBeGreaterThan(1);
+    for (const g of groups()) expect(g.getAttribute('aria-expanded'), g.textContent!).toBe('true');
+    expect(screen.getByRole('button', { name: /^Goblet squat\b/ })).toBeTruthy();
+  });
+
+  it('keeps what the person closed across the panel and a no-match search', () => {
+    render(<Harness options={LIBRARY_OPTIONS} />);
+    open();
+    withMuscles(MUSCLE_LABELS.quadriceps);
+    const n = LIBRARY_OPTIONS.filter(QUADS).length;
+    const strength = () => groupButton(MODALITY_LABELS.strength, n);
+    act(() => void fireEvent.click(strength()));
+    expect(strength().getAttribute('aria-expanded')).toBe('false');
+    openPanel();
+    back();
+    expect(strength().getAttribute('aria-expanded')).toBe('false');
+    type('zzzzqx');
+    expect(strength().getAttribute('aria-expanded')).toBe('false');
+    type('');
+    expect(strength().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  /** Ticks a custom item from the search, where it is listed apart (P9), then clears the search. */
+  const tickFromSearch = (name: string) => {
+    type(name);
+    tick(screen.getByRole('checkbox', { name: new RegExp(`^${name}`) }));
+    type('');
+  };
+  const custom = () => groupButton(COPY.householdNotFiltered, 2);
+  const circuit = () => screen.queryByRole('checkbox', { name: new RegExp(`^${CIRCUIT.name}`) });
+
+  it('🔴 the folded custom items open themselves for a ticked row (so focus can reach it)', () => {
     render(<Harness multi />);
     open();
     withLats();
-    const folded = screen.getByRole('heading', { name: /^Your custom items \(not filtered\)/ });
-    expect(folded.closest('details')!.open).toBe(false);
-    tick(screen.getByRole('checkbox', { name: /^Garage Circuit/ }));
-    expect(folded.closest('details')!.open).toBe(true);
+    expect(custom().getAttribute('aria-expanded')).toBe('false');
+    tickFromSearch(CIRCUIT.name);
+    expect(custom().getAttribute('aria-expanded')).toBe('true');
+    expect(circuit()?.getAttribute('aria-checked')).toBe('true');
   });
 
   it("the list's Clear filters drops them and moves focus to Filters (row 13)", () => {
@@ -504,9 +598,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
   });
 
   it('⏳ an exact hit with no library data says its equipment is not known, never "not in your filters"', () => {
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
     open();
     withLats();
@@ -518,45 +610,63 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     expect(status()).not.toContain(COPY.statusAlreadyListedOutside(FRONT.name));
   });
 
-  it('🔴 a folded section held open by a tick stays open when the tick is undone', async () => {
-    render(<Harness multi />);
+  it('🔴 custom items opened with no filter start folded once a filter is on (P9, K25)', () => {
+    const mine = Array.from({ length: CUSTOM_OPEN_AT_MOST + 1 }, (_, i) =>
+      householdOption(`Garage ${i + 1}`, `g-${i + 1}`),
+    );
+    render(<Harness options={[...OPTIONS.filter((o) => o.owner !== 'household'), ...mine]} />);
     open();
+    const unfiltered = groupButton(COPY.household, mine.length);
+    expect(unfiltered.getAttribute('aria-expanded')).toBe('false');
+    act(() => void fireEvent.click(unfiltered));
+    expect(groupButton(COPY.household, mine.length).getAttribute('aria-expanded')).toBe('true');
     withLats();
-    const details = screen
-      .getByRole('heading', { name: COPY.foldedCount(COPY.householdNotFiltered, 2) })
-      .closest('details')!;
-    act(() => {
-      details.open = true;
-    });
-    const row = () => screen.getByRole('checkbox', { name: new RegExp(`^${CIRCUIT.name}`) });
-    tick(row());
-    tick(row());
-    await act(async () => {});
-    // Only `open` is checkable here: jsdom lets focus sit inside a closed <details>, so the focus
-    // half of the bug shows in a browser only.
-    expect(details.open).toBe(true);
+    expect(groupButton(COPY.householdNotFiltered, mine.length).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    expect(screen.queryByRole('button', { name: /^Garage 1\b/ })).toBeNull();
   });
 
-  it('after the latch, a tap on the summary still closes it, and a re-render does not reopen it', () => {
+  it('🔴 a custom item ticked with no filter leaves "not filtered" folded once a filter is on', () => {
+    const mine = Array.from({ length: CUSTOM_OPEN_AT_MOST + 1 }, (_, i) =>
+      householdOption(`Garage ${i + 1}`, `g-${i + 1}`),
+    );
+    render(
+      <Harness multi options={[...OPTIONS.filter((o) => o.owner !== 'household'), ...mine]} />,
+    );
+    open();
+    tickFromSearch('Garage 1');
+    // The tick opened the unfiltered group (it starts folded above five).
+    expect(groupButton(COPY.household, mine.length).getAttribute('aria-expanded')).toBe('true');
+    withLats();
+    expect(groupButton(COPY.householdNotFiltered, mine.length).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+  });
+
+  it('🔴 the custom items opened by a tick stay open when the tick is undone', () => {
     render(<Harness multi />);
     open();
     withLats();
-    const details = screen
-      .getByRole('heading', { name: COPY.foldedCount(COPY.householdNotFiltered, 2) })
-      .closest('details')!;
-    tick(screen.getByRole('checkbox', { name: new RegExp(`^${CIRCUIT.name}`) }));
-    act(() => {
-      details.open = false;
-    });
-    const fit = screen.getByRole('region', { name: COPY.fitHeading });
-    tick(within(fit).getAllByRole('checkbox')[0]!);
-    expect(details.open).toBe(false);
+    tickFromSearch(CIRCUIT.name);
+    tick(circuit()!);
+    expect(circuit()?.getAttribute('aria-checked')).toBe('false');
+    expect(custom().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('after a tick opened them, a tap still closes them, and a tick elsewhere does not reopen them', () => {
+    render(<Harness multi />);
+    open();
+    withLats();
+    tickFromSearch(CIRCUIT.name);
+    act(() => void fireEvent.click(custom()));
+    expect(custom().getAttribute('aria-expanded')).toBe('false');
+    tick(within(fitRegion()!).getAllByRole('checkbox')[0]!);
+    expect(custom().getAttribute('aria-expanded')).toBe('false');
   });
 
   it('⏳ a search that only finds rows with no library data says why the filters hide them', () => {
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     render(<Harness options={OPTIONS.map((o) => (o === FRONT ? bare : o))} />);
     open();
     withLats();
@@ -566,9 +676,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
   });
 
   it('⏳ both kinds hidden: the judged count first, then the bare one, never swapped', () => {
-    const bare = Object.fromEntries(
-      Object.entries(FRONT).filter(([key]) => !(key in TEST_TAXONOMY)),
-    ) as MovementOptionDTO;
+    const bare = withoutLibraryData(FRONT);
     const BACK = catalogOption('Back Squat', { primaryMuscle: MUSCLE.quadriceps });
     render(<Harness options={[...OPTIONS.map((o) => (o === FRONT ? bare : o)), BACK]} />);
     open();
@@ -618,7 +726,7 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
       within(line.parentElement!).getByRole('button', { name: COPY.clearFilters }),
     ).toBeTruthy();
     expect(status()).toContain(COPY.statusOutsideOnly(1));
-    expect(screen.queryByRole('region', { name: COPY.fitHeading })).toBeNull();
+    expect(fitRegion()).toBeNull();
   });
 
   it('no match at all: the list beneath is the filtered one, never the whole (P10)', () => {
@@ -626,9 +734,39 @@ describe('the list with a filter on (P8 to P10; panel rows 9, 10, 15, 16)', () =
     open();
     withLats();
     type('xylophone');
-    const fit = screen.getByRole('region', { name: COPY.fitHeading });
+    const fit = fitRegion()!;
     expect(within(fit).queryByRole('button', { name: /^Push-Ups/ })).toBeNull();
     expect(within(fit).getByRole('button', { name: /^Pull-Up/ })).toBeTruthy();
+    // The custom items, folded and marked, above it, as when browsing (P9).
+    expect(groupButton(COPY.householdNotFiltered, 2).getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it("no match at all, under a filter: the filtered TREE, sharing the browse list's open state", () => {
+    render(<Harness options={LIBRARY_OPTIONS} />);
+    open();
+    withMuscles(MUSCLE_LABELS.quadriceps);
+    type('xylophone');
+    const fitting = LIBRARY_OPTIONS.filter(QUADS);
+    const fit = within(fitRegion()!);
+    expect(groupButton(COPY.fitHeading, fitting.length)).toBeTruthy();
+    expect(fit.getAllByRole('heading', { level: 4 }).map((h) => h.querySelector('button'))).toEqual(
+      browseTree(fitting).map(({ kind, count }) => groupButton(MODALITY_LABELS[kind], count)),
+    );
+    expect(fit.getByRole('button', { name: /^Goblet squat\b/ })).toBeTruthy();
+  });
+
+  it('no match at all with nothing in the filters: says none fit, with Clear filters (P10)', () => {
+    render(<Harness />);
+    open();
+    openPanel();
+    tick(muscle(MUSCLE_LABELS.lats));
+    tick(muscle(MUSCLE_LABELS.chest));
+    tick(radio(COPY.emptyEquipment));
+    tick(muscle(MUSCLE_LABELS.chest));
+    back();
+    type('xylophone');
+    expect(screen.getByText(COPY.noneFit)).toBeTruthy();
+    expect(fitRegion()).toBeNull();
   });
 
   it('🔴 the create button reads the UNFILTERED result: quiet, naming the hidden near miss (row 9)', () => {

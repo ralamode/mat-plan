@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index e4ab3b9c..304b8770 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -435,11 +435,6 @@ export async function logRow(
+         });
+         return revived ? { entry: revived } : null;
+       } catch (error) {
+-        if (isUniqueViolationOn(error, [ENTRY_CLIENT_ID_UNIQUE_INDEX])) {
+-          const holder = await classifyRowHolder(tx, profileId, write);
+-          if (holder.held) return { answer: await answerHolder(tx, holder) };
+-          throw error;
+-        }
+         if (isUniqueViolationOn(error, [ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX])) return null;
+         throw error;
+       }

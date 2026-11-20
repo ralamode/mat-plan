@@ -92,6 +92,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   the items no outcome explains, before they throw. `db:verify` stages the race on PGlite with a
   statement-level `AFTER INSERT` trigger that hides the holder inside the skipped insert
   (`verify/single-values.ts` → `verifyDayTakenRace`); mutations 420 and 421 remove each retry.
+  Since 2026-11-19 `verifyRetryLandsOnTakenDay` also stages a third phone holding the day again
+  before the retry (a `BEFORE INSERT` statement trigger), so a retry must answer `day_taken`;
+  mutations 422 and 423.
   A second miss still throws: for a check-in, a reused `public_id`; for a weigh-in, a replay of a
   hidden one, a `client_id` already used by another metric or profile, or an evening-only day.
 
@@ -135,7 +138,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
   (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
-### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review)
+### `drizzle-kit check` is not run anywhere, though AGENTS.md listed it as a CI gate (found 2026-11-16, #428 review) — ✅ CLOSED 2026-11-19
+
+> ✅ **Closed (2026-11-19):** `pnpm --filter @mat-plan/db db:check` runs first in `ci.yml`'s DB step
+> and in `pnpm verify` (`db:check`). Checked on drizzle-kit as pinned: a snapshot given its
+> neighbour's `prevId` makes it exit 1 ("… are pointing to a parent snapshot … which is a
+> collision"), and a clean tree exits 0. ⚠️ It passes a snapshot whose `prevId` is its own `id` (#139);
+> only the forward-only guard's inline chain check catches that, on PRs only, so both stay. The entry
+> is kept for its history (its Fix line's `check` script is named `db:check`).
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit
 check`), and AGENTS.md → "Database / migration PR rules" named it first among the CI gates since
@@ -1079,7 +1089,8 @@ success.` Harmless there — nothing referenced the files yet.
   last-writer-wins on the **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so
   offline clock-skew resolves correctly. **The day page's Change does the same** (FAM-1 11c-i,
   `amendRow` → `updateEntrySetRows` in `writers/session-rows.ts`: the set, its quantities and the
-  entry), and so will 11c-ii's revive; v1.5 sync must find all of them.
+  entry), and so does 11c-ii's revive (`logRow` in `writers/day/log-row.ts`: the entry it brings
+  back and the set it soft-deletes); v1.5 sync must find all of them.
 - **Impact:** none today — there is a single ONLINE writer (no offline outbox until v1.5), so `now()` is
   always `> created_at` and no two devices race an edit. Correct for the current deployment.
 - **Proposed fix:** at **v1.5** (offline + TanStack Query + the sync outbox), take the client `updated_at`

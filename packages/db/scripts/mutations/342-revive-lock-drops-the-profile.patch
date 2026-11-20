@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 23f0a3d8..f574cd88 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -398,10 +398,7 @@ export async function logRow(
+         .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
+         .from(schema.entries)
+         .where(
+-          and(
+-            programRowOf(profileId, write.day),
+-            programRowSlot(sessionId, prescription.id, write.set),
+-          ),
++          and(programRowSlot(sessionId, prescription.id, write.set)),
+         )
+         .orderBy(asc(schema.entries.id))
+         .for('update', { of: schema.entries });

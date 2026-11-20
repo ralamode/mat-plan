@@ -109,7 +109,15 @@ import {
   SEED_E2E_START_DAY,
 } from '../../src/writers/program/seed-e2e';
 import { resolveDayPlan } from '../../src/queries/day/day-plan';
-import { asDb, asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import {
+  asDb,
+  asTx,
+  lockTimeoutSetBy,
+  orFail,
+  rolledBack,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
 /**
@@ -3608,7 +3616,9 @@ async function verifyCaps(): Promise<void> {
       ).length;
     const add = (name: string) => newItem(exec, scope, { name, trackingType: TRACKING_TYPE.reps });
 
-    const last = await add('Caps Last Drill');
+    const { set: timeoutSet, result: last } = await lockTimeoutSetBy(tx, () =>
+      add('Caps Last Drill'),
+    );
     assert.ok(last.ok && !last.existed, 'FAM-1 caps: the item that reaches the cap is made');
     assert.equal(
       await own(),
@@ -3632,6 +3642,10 @@ async function verifyCaps(): Promise<void> {
           Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
       ),
       'FAM-1 caps: newItem holds the household-items advisory lock, keyed by its household',
+    );
+    assert.ok(
+      timeoutSet,
+      'TD lock timeout: newItem sets lock_timeout before it waits on the household-items lock',
     );
     assert.deepEqual(
       await add('Caps One Too Many'),

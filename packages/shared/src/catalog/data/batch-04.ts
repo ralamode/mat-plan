@@ -325,7 +325,7 @@ export const CATALOG_BATCH_04: readonly CatalogMovement[] = [
   {
     slug: 'bench_press',
     name: 'Bench press',
-    aliases: [],
+    aliases: ['Barbell bench press'],
     modality: 'strength',
     pattern: 'horizontal_push',
     trackingType: 'weight_reps',

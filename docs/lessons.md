@@ -7,6 +7,13 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## Database / migrations
 
+- **On `db:verify`'s PGlite, every transaction already starts at `lock_timeout = 5s` and
+  `statement_timeout = 60s`, so a proof that a writer SETS a timeout passes with the writer's call
+  deleted.** → Each migration ends with a session-level `SET lock_timeout`/`statement_timeout`,
+  `migrate()` commits them all in one transaction, and PGlite has one session, so the values stay for
+  the rest of the run. Found by a review lens before mutations 447 and 448 could report it as
+  "STAYED GREEN". → A proof that reads a timeout clears it first, transaction-locally, and asserts
+  the clear held (`lockTimeoutSetBy` in `scripts/verify/harness.ts`).
 - **A migration that merged after another one, but was generated before it, never runs on prod, and
   nothing says so.** → drizzle's migrator applies a migration only when its journal `when` is later
   than the newest one applied (`created_at < folderMillis`, drizzle-orm `pg-core/dialect.js`), and a

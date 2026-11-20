@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 23f0a3d8..45685f73 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -446,8 +446,6 @@ export async function logRow(
+     const place = async (): Promise<
+       { entry: { id: number; publicId: string } | undefined } | { answer: RowResult }
+     > => {
+-      const revived = await revive();
+-      if (revived) return revived;
+       const [inserted] = await insertEntry();
+       return { entry: inserted };
+     };
