@@ -503,3 +503,6 @@ maintainer on 2026-11-17; Q2 and Q3 were answered by the contract owner (#504).
   pass their savepoint's own executor; "each card has its own rows" compares entry ids;
   12a-i's compare and round trip are shared (`proveFixture`, and `roundTrip` covers an all-logged
   day); `FIXED_WORLD_FIXTURES` is derived, and the three groups are asserted to cover every source.
+- **Built, later (#721, 2026-11-19):** Q6's exit closed. The reorder fixture now replays through lane
+  P's `reorderPrograms`, on the fixture's own today; the stand-in above (a direct `idx` update through
+  `shiftIntoBand`) is history, and the owed line is deleted.
