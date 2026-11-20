@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/exists.ts b/packages/db/src/queries/program/exists.ts
+index bd846f50..a9823234 100644
+--- a/packages/db/src/queries/program/exists.ts
++++ b/packages/db/src/queries/program/exists.ts
+@@ -58,7 +58,7 @@ export async function programIdsIn(
+   const rows = await exec
+     .select({ publicId: schema.programBlocks.publicId })
+     .from(schema.programBlocks)
+-    .where(and(inArray(schema.programBlocks.publicId, ids), liveTemplateBlockIn(scope)));
++    .where(and(inArray(schema.programBlocks.publicId, ids), isNull(schema.programBlocks.deletedAt)));
+   return new Set(rows.map((row) => row.publicId));
+ }
+ 
