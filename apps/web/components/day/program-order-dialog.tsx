@@ -159,7 +159,12 @@ export function ProgramOrderDialog({
   // program ends today now). Only then: a re-read of the page that happens to re-render the list
   // must not pull focus from wherever it is now, unless it removed the arrow that had it.
   useEffect(() => {
-    if (!open) return;
+    // A refocus asked for while the dialog is closed (a save that failed after Done) is dropped:
+    // the next open's focus is the sheet's, not an old arrow's.
+    if (!open) {
+      refocus.current = false;
+      return;
+    }
     if (refocus.current) {
       refocus.current = false;
       const key = lastTapped.current;
@@ -168,7 +173,10 @@ export function ProgramOrderDialog({
     }
     const had = focusedArrow.current;
     const dialog = done.current?.closest('[role="dialog"]');
-    if (had && !arrows.current.has(had) && !dialog?.contains(document.activeElement)) {
+    const active = document.activeElement;
+    // Lost: outside the dialog, or on the dialog itself, where the sheet's focus trap puts focus when
+    // the focused node is removed (Radix FocusScope), before this effect runs in a browser.
+    if (had && !arrows.current.has(had) && (!dialog?.contains(active) || active === dialog)) {
       focusedArrow.current = null;
       done.current?.focus();
     }
@@ -223,9 +231,16 @@ export function ProgramOrderDialog({
       return;
     }
     setPending(false);
+    // The order is this save's; which programs end today is the page's latest word (a re-read during
+    // the save may have marked one), so the list shows it under the note at once.
+    const shown = next.map(
+      (p) => latest.current.find((q) => q.programPublicId === p.programPublicId) ?? p,
+    );
+    setOrder(shown);
     // "N of M" counts the programs that stay: the ending ones cannot move, and are a list of their own.
-    const { staying: settled } = programsByStay(next);
-    announce(PROGRAM_COPY.moved(moved.name, settled.indexOf(moved) + 1, settled.length));
+    const { staying: settled } = programsByStay(shown);
+    const place = settled.findIndex((p) => p.programPublicId === moved.programPublicId);
+    if (place >= 0) announce(PROGRAM_COPY.moved(moved.name, place + 1, settled.length));
   }
 
   function move(program: Program, by: Move) {
@@ -291,7 +306,13 @@ export function ProgramOrderDialog({
           ref={done}
           type="button"
           className="w-full"
-          aria-describedby={error ? errorId : undefined}
+          // The error, and the note on what cannot move: focus lands here when a re-read takes away
+          // the arrow it was on, and the note says why.
+          aria-describedby={
+            [error ? errorId : null, ending.length > 0 ? endingNoteId : null]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
           onClick={() => onOpenChange(false)}
         >
           {PROGRAM_COPY.done}
@@ -329,9 +350,11 @@ export function ProgramOrderDialog({
                 className="flex min-h-11 items-center rounded-lg border py-1 pr-3 pl-3"
               >
                 <span className={cn('min-w-0', NAME_WRAP_CLASS)}>
-                  {program.name}
+                  {/* The break before "·" stays outside the one-line suffix, so a long last word
+                      moves down whole rather than splitting mid-word. */}
+                  {program.name}{' '}
                   <span className="text-muted-foreground whitespace-nowrap">
-                    <span aria-hidden="true"> · </span>
+                    <span aria-hidden="true">· </span>
                     <span className="sr-only">, </span>
                     {lastDayText(plan.today, plan.today)}
                   </span>
