@@ -1878,6 +1878,11 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   of them, and
   `.github/scripts/changed-scopes.mjs` decides which heavy steps a pull request needs. `pnpm verify`
   becomes optional before a PR.
+  **Follow-up, planned 2026-11-19** ([plan](./plans/dx-18-mutation-savings.md), draft): a catalog
+  batch stops running the mutation proof on its PR (PR 1), and a PR whose only trigger is a patch's
+  target file outside the packages runs just that patch (PR 2, built only if PR 1 is not enough).
+  `main` still runs every patch. Skipping main's run after a PR proof is deferred, pending the
+  maintainer.
 
 - **DX-18b — per-pillar test projects.** _(Deferred by DX-18, D9.)_ `pnpm test:pillar <name>`, and CI
   running only the affected pillars' vitest files. **Trigger:** CI's Test step passes 3 minutes (53s
