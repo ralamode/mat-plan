@@ -23,9 +23,10 @@ owns:
 **Read this before changing the set schema, the session schema, or the strength writer.**
 
 > ⚠️ **No screen logs through this path.** The day page logs and changes strength rows through the
-> FAM-1 row writer ([day-writers.md](./day-writers.md)). `logStrengthSessionAction`,
-> `editStrengthSetAction`, the schemas and the writer below stay, with their Vitest and `db:verify`
-> coverage. [tech-debt.md](../tech-debt.md) holds the expiry, FAM-1 12f.
+> FAM-1 row writer ([day-writers.md](./day-writers.md)). FAM-1 12f PR 3 removed the two actions
+> that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the schemas, the DAL
+> functions and the writer below stay with their Vitest and `db:verify` coverage, with no caller,
+> until [`LEGACY-1`](../plan.md#legacy-1) retires the path (the maintainer, 2026-11-19, Q4).
 
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
@@ -63,8 +64,6 @@ flowchart TD
   end
 
   subgraph server["server"]
-    ACTION["actions.ts<br/>logStrengthSessionAction"]
-    EDITACTION["actions.ts<br/>editStrengthSetAction"]
     DAL["lib/dal/entries.ts<br/>logStrengthSession · editStrengthSet"]
     WRITER["writers/strength-session.ts<br/>ONE transaction"]
     EDIT["writers/strength-session.ts<br/>updateStrengthSetById"]
@@ -74,9 +73,9 @@ flowchart TD
     SESS[(sessions)] --> ENT[(entries)] --> SETS[(entry_sets)] --> QTY[(entry_set_quantities)]
   end
 
-  ACTION --> SESSIONSCHEMA --> SETSCHEMA
-  ACTION --> DAL --> WRITER --> db
-  EDITACTION --> DAL --> EDIT --> db
+  DAL --> SESSIONSCHEMA --> SETSCHEMA
+  DAL --> WRITER --> db
+  DAL --> EDIT --> db
 ```
 
 ## Files
@@ -205,15 +204,13 @@ Two rules follow the unit:
      the household cannot fix it until `MOV-1`. Refusing it would make a row unusable by its owner.
      Since FAM-1 14a the comma rule is an input rule only: the export quotes a comma in the
      `movement` column (RFC 4180, `csv/row.ts`) instead of failing, as it once did.
-   - **The path is `['movements', i, 'movementName']`.** The action's `Movement N: <message>` mapping
-     keys on a numeric `path[1]`, so a check that reported at `['movements', i]` would silently turn
-     every one of these messages into something unlocatable.
-   - **The field is OPTIONAL on the wire and `actions.ts` is not edited.** It rides inside
-     `parsed.data.movements`, which the action forwards wholesale. ⚠️ **zod strips unknown keys**, so
-     a field missing from the schema vanishes silently and every picked movement falls back to the
-     typed path with every gate green — which is why `actions.test.ts` asserts the DAL received the
-     **value**, with `toMatchObject` on the whole argument rather than `objectContaining` (a key that
-     is simply absent satisfies the latter).
+   - **The path is `['movements', i, 'movementName']`.** The removed action's `Movement N: <message>`
+     mapping keyed on a numeric `path[1]`; any future caller that maps issues to rows must too.
+   - **The field is OPTIONAL on the wire.** It rides inside `parsed.data.movements`, forwarded
+     wholesale. ⚠️ **zod strips unknown keys**, so a field missing from the schema vanishes silently
+     and every picked movement falls back to the typed path with every gate green — which is why
+     `strength-session-schema.test.ts` pins the strip-mode trap (the action test that asserted the DAL
+     received the value went with the action in FAM-1 12f PR 3).
    - ⚠️ **Two deliberate copy/behaviour changes.** An emoji- or digit-only typed name is now refused,
      and `MOVEMENT_NAME_MESSAGES.missing` reads **"Choose a movement."** — the field it names is a
      picker, so "enter" names an interaction no screen offers.
@@ -247,8 +244,8 @@ Real ones, each with the file to look at.
 
   **Since TEN-1 1b the set-edit also takes a `scope`** (`updateStrengthSetById(exec, { …, scope })`),
   which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
-  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()`, so nothing
-  in the action changed. `db:verify`'s TEN-1 write matrix proves the refusal in **both**
+  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()` (no caller
+  since FAM-1 12f PR 3 removed its action). `db:verify`'s TEN-1 write matrix proves the refusal in **both**
   directions with no side effect.
 
 - **`writeStrengthSession`'s in-transaction profile resolve is household-scoped too (TEN-1 1c).** It
@@ -257,8 +254,8 @@ Real ones, each with the file to look at.
   an unknown or soft-deleted profile already got, with the **whole multi-table graph rolled back**.
   `db:verify` asserts both directions and that no `sessions` row survived a refusal: a refusal that
   wrote half a session would be worse than a leak, because the athlete's next replay would attach to
-  it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the action and
-  `ResolvedSessionMovement` are unchanged.
+  it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so
+  `ResolvedSessionMovement` is unchanged (no app caller since FAM-1 12f PR 3).
 
   ✅ **Movement resolution still runs BEFORE this, and it is SCOPED as of `TEN-2b`** — the DAL's
   `findOrCreateMovementId` wrapper is gone (`PICK-1` PR 2 deleted it); `resolveSessionMovements`
@@ -306,9 +303,10 @@ Real ones, each with the file to look at.
   reference in `writers/` or `verify.ts` used to surface only as a runtime crash in `db:verify`; it is
   now a compile error. Run `pnpm verify`.
 
-- **Server Actions are public POSTs.** Page auth does not protect one. Re-validate every field at the
-  boundary; a DB constraint reached by a crafted body is a 500 that discards the athlete's whole
-  session, because the action has no `try/catch` around the writer.
+- **A Server Action is a public POST.** Page auth does not protect one. Any future caller of this
+  path re-validates every field at the boundary: a DB constraint reached by a crafted body is a 500
+  that discards the athlete's whole session unless the action catches the writer's error (the
+  removed `logStrengthSessionAction` did not).
 
 - **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
   `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never

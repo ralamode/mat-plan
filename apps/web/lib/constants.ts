@@ -1,12 +1,14 @@
 import {
   ACTIVITY_TYPE_KEYS,
+  type DayClearRefusal,
   MAX_HOUSEHOLD_ATHLETES,
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
   type PracticeMinutesProblem,
 } from '@mat-plan/shared';
 
-import { plural } from './i18n/plural';
+import type { RestoreDeadline } from './entries/restore-deadline';
+import { formatList, plural } from './i18n/plural';
 import { LIFE_ACTIVITIES } from './life/life-activities';
 
 /**
@@ -1438,6 +1440,134 @@ export const HIDE_COPY = {
   /** The batch form's header when one of several items landed on a deleted row; the row says which. */
   loggedThenDeletedSome: "One of these was deleted earlier, so it wasn't logged — see below.",
 } as const;
+
+const entriesText = (n: number) => plural(n, { one: '1 entry', other: `${n} entries` });
+
+/**
+ * Clear this day and its banner (V1-9b B2-ii; plan `v1-9b-delete-and-restore.md` § "B2 as amended",
+ * the Amendment of 2026-11-15 as corrected there). Words for "hidden", never "deleted": nothing is
+ * erased, and Restore all brings it back.
+ *
+ * - **The deadline is relative words**, from `restoreDeadline` (`lib/entries/restore-deadline.ts`):
+ *   "the end of tomorrow" cannot be misread as the start of a day.
+ * - **The summary counts, never names a value.** `other` is "entries this page doesn't show" (an
+ *   older strength session, a check-in), not "earlier", which reads as earlier days.
+ * - ⚠️ **`count` from the action is the day's newest clear's**, not what one tap hid, so no line
+ *   here says "you hid n": the banner reads the day's clears itself.
+ */
+export const CLEAR_DAY_COPY = {
+  trigger: 'Clear this day…',
+  /** The dialog's title, with the day's short date ("Clear Wed, Nov 19?"). */
+  title: (dateLabel: string) => `Clear ${dateLabel}?`,
+  deadline: { today: 'the end of today', tomorrow: 'the end of tomorrow' } satisfies Record<
+    RestoreDeadline,
+    string
+  >,
+  /**
+   * The consequence, said BEFORE the step: the deadline, and that a re-log in an entry's place keeps
+   * it from coming back. "Logged for", not "logged by": a clear is most often of a day logged on the
+   * wrong athlete. `parts` are the summary's pieces, already phrased.
+   */
+  body: (name: string, parts: readonly string[], deadline: string) =>
+    `This hides the entries logged for ${name} today, for everyone in your household: ${formatList(
+      parts,
+    )}. You can put them back with Restore all until ${deadline}, unless something new is logged ` +
+    `in their place first.`,
+  /** When the day holds a workout or an older session: its record outlives a clear (PRIV-3 req. 2). */
+  sessionStays:
+    'A workout’s name and its “How did it feel?” note stay with the day; only the entries are hidden.',
+  summaryWorkout: (name: string, count: number) => `${name} (${entriesText(count)})`,
+  summaryWeighIns: (n: number) => plural(n, { one: 'bodyweight', other: `${n} weigh-ins` }),
+  summaryPractices: (n: number) =>
+    plural(n, { one: 'wrestling practice', other: `${n} wrestling practices` }),
+  summaryOther: (n: number) =>
+    plural(n, {
+      one: '1 entry this page doesn’t show',
+      other: `${n} entries this page doesn’t show`,
+    }),
+  /** The input's label; the word is `CLEAR_DAY_CONFIRM_WORD`, rendered bold by the dialog. */
+  confirmLabel: { before: 'Type ', after: ' to confirm' },
+  confirmFirst: (word: string) => `Type ${word} first.`,
+  action: 'Clear day',
+  pending: 'Clearing…',
+  nothingLeft: 'Nothing was left to clear.',
+  /** Restore all's banner, for the newest clear of an open day. */
+  banner: (n: number, deadline: string) =>
+    plural(n, {
+      one: `Day cleared. 1 entry is hidden. You can put it back until ${deadline}.`,
+      other: `Day cleared. ${n} entries are hidden. You can put them back until ${deadline}.`,
+    }),
+  /** The same, once the day has been logged again since the clear. */
+  bannerRelogged: (n: number, deadline: string) =>
+    plural(n, {
+      one: `1 entry from a clear is hidden. You can put it back until ${deadline}.`,
+      other: `${n} entries from a clear are hidden. You can put them back until ${deadline}.`,
+    }) + ' Anything logged in its place since stays, and what it replaced won’t come back.',
+  earlier: (m: number) =>
+    `${plural(m, { one: '1 more', other: `${m} more` })} from an earlier clear ${
+      m === 1 ? 'is' : 'are'
+    } hidden too; you can restore ${m === 1 ? 'it' : 'them'} after these.`,
+  restoreAll: 'Restore all',
+  /** When "all" would be untrue: an earlier clear, or a day logged again since. */
+  restoreN: (n: number) => `Restore ${entriesText(n)}`,
+  restoring: 'Restoring…',
+  restored: 'Day restored.',
+  restoredSome: (r: number, k: number) =>
+    `Restored ${r}. ${plural(k, {
+      one: '1 wasn’t, because the day already has one in its place.',
+      other: `${k} weren’t, because the day already has one in each place.`,
+    })}`,
+  restoredNone: 'None came back: the day already has an entry in each place.',
+  /** A restore of the newest clear, with an older one left (it is the banner now). */
+  /** A partial restore of the newest clear, with an older one left (it is the banner now). */
+  restoredSomeOlderLeft: (r: number, k: number, m: number) =>
+    `Restored ${r}. ${plural(k, {
+      one: '1 wasn’t, because the day already has one in its place.',
+      other: `${k} weren’t, because the day already has one in each place.`,
+    })} ${entriesText(m)} from an earlier clear ${m === 1 ? 'is' : 'are'} still hidden.`,
+  restoredOlderLeft: (r: number, m: number) =>
+    `Restored ${r}. ${entriesText(m)} from an earlier clear ${m === 1 ? 'is' : 'are'} still hidden.`,
+  nothingToRestore: 'Nothing left to restore.',
+  /** The closed day's cleared sentence, inside the page's one notice box. */
+  closedCleared: (n: number) =>
+    plural(n, {
+      one: 'This day was also cleared: 1 entry is hidden. It is kept, not erased.',
+      other: `This day was also cleared: ${n} entries are hidden. They are kept, not erased.`,
+    }),
+  /**
+   * An archived athlete on a day still open for Restore all: the control is "Restore {name}" in
+   * Household settings (`SETTINGS_COPY.restoreFor`), then Restore all here.
+   */
+  archivedCleared: (name: string, n: number, deadline: string) =>
+    `This day was also cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
+      name,
+    )} in ${SETTINGS_COPY.heading}, then tap Restore all here before ${deadline} to bring ${
+      n === 1 ? 'it' : 'them'
+    } back.`,
+  /**
+   * One line per refusal word (`DAY_CLEAR_REFUSALS`), for both actions. Not `components/day`'s
+   * `refusalCopy`: that is keyed by a row's write kind (a ✓, an un-tick, a Change), and a clear is none.
+   * Each is true for every cause of its word (`not_found` is also a lapsed session).
+   */
+  refused: {
+    bad_value: 'That didn’t go through. Try again.',
+    not_found: 'Not saved. Reload the page.',
+    closed_day: 'This day can no longer be changed.',
+    retry: 'Too many changes at once. Wait a moment and try again.',
+  } satisfies Record<DayClearRefusal, string>,
+  /**
+   * Clear this day's own `closed_day` line. Not `refused.closed_day`: a clear refused just after
+   * midnight is of a day that is now yesterday, still open to every other write and to Restore all, so
+   * "can no longer be changed" would be false. True for the midnight case and the archived one alike.
+   */
+  clearClosed: 'Only today can be cleared.',
+  /** The action threw (a dropped connection, a server error): no cause is claimed. */
+  failed: 'Couldn’t reach the app. Try again.',
+} as const;
+
+/** The ids the clear's two islands share: the hand-off's target and the banner's outcome line. */
+export const RESTORE_ALL_ID = 'clear-day-restore-all';
+export const CLEAR_DAY_OUTCOME_ID = 'clear-day-outcome';
 
 export const AMEND_ERROR_COPY = {
   /**

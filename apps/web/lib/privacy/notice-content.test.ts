@@ -350,3 +350,28 @@ describe('the renderer undoes the preflight rules the notice depends on', () => 
     }
   });
 });
+
+/**
+ * 🔴 **The sections the notice must keep** (V1-9b B2-ii). Every other test here derives its
+ * expectations from the source, so a source that LOSES a section moves both sides and stays green:
+ * a scripted edit on this PR's branch dropped "Getting your data out" and "Deleting your data" whole,
+ * and only a review lens caught it. These are the promises other documents point at (`runbooks.md`,
+ * ADR 0009, `architecture.md`), hand-pinned on purpose: removing one must be a deliberate edit here.
+ */
+describe('the notice keeps its required sections', () => {
+  const REQUIRED_SECTIONS = [
+    'What we store',
+    'Who can see it',
+    'How long we keep it',
+    'Getting your data out',
+    'Deleting your data',
+    'Asking for anything',
+  ];
+  const headings = SOURCE.split('\n')
+    .filter((line) => line.startsWith('## '))
+    .map((line) => line.slice(3).trim());
+
+  it.each(REQUIRED_SECTIONS)('has a "%s" section', (title) => {
+    expect(headings).toContain(title);
+  });
+});
