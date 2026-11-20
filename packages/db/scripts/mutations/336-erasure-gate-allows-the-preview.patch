@@ -1,0 +1,14 @@
+diff --git a/packages/db/scripts/corrections/erasure-gates.ts b/packages/db/scripts/corrections/erasure-gates.ts
+index 446b713b..8a84b44d 100644
+--- a/packages/db/scripts/corrections/erasure-gates.ts
++++ b/packages/db/scripts/corrections/erasure-gates.ts
+@@ -47,9 +47,6 @@ export function seededHouseholdErasureIssue(
+   if (named === null) {
+     return 'the target URL names no database, so which one would be written is unknown; nothing erased';
+   }
+-  if (namesPreviewDatabase(named)) {
+-    return 'the target is the preview database: this erasure runs against production only; nothing erased';
+-  }
+   if (observed !== null) {
+     if (namesPreviewDatabase(observed)) {
+       return 'the connected database is the preview: this erasure runs against production only; nothing erased';

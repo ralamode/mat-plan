@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..3301ba8b 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -460,7 +460,6 @@ export async function seedCatalog(
+           publicId: newId(),
+           slug: entry.slug,
+           name: entry.name,
+-          modality: entry.modality,
+           pattern: entry.pattern,
+           trackingType: entry.trackingType,
+           unitDefault: entry.unitDefault,

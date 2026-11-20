@@ -945,7 +945,8 @@ export const movements = pgTable(
 
 /**
  * `CAT-3` A1: a library movement's required equipment set (spec rule 8) and its muscles (rule 9).
- * Both are empty until A2's seed writes them, and nothing in `apps/` reads them until P11-ii.
+ * Both are empty until A2's seed writes them. Since CAT-3 P11-ii-b the picker's read reads them, for the
+ * library rows it lists only (`catalogTaxonomyRows`, `queries/program/movement-options.ts`).
  *
  * 🔴 **No `household_id`.** A row belongs to whoever owns its movement, so ownership is derived
  * through `movement_id` (`erasure/graph.ts` → `movementsOf`). That is what lets a household's own

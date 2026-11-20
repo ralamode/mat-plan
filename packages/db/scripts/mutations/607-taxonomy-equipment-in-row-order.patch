@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/catalog-arm-option.ts b/packages/db/src/queries/program/catalog-arm-option.ts
+index 723d3238..8340e249 100644
+--- a/packages/db/src/queries/program/catalog-arm-option.ts
++++ b/packages/db/src/queries/program/catalog-arm-option.ts
+@@ -127,7 +127,7 @@ export function catalogTaxonomyOf(
+         {
+           modality: modalitySchema.parse(row.modality),
+           pattern: row.pattern === null ? null : movementPatternSchema.parse(row.pattern),
+-          equipment: equipmentInOrder(equipment.get(row.id) ?? []),
++          equipment: equipment.get(row.id) ?? [],
+           primaryMuscle: primaries[0] ?? null,
+           secondaryMuscles: musclesInOrder(secondary.get(row.id) ?? []),
+         },

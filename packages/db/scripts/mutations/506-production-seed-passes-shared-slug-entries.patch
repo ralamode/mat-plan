@@ -1,0 +1,23 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..0e6877f2 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -25,6 +25,7 @@ import {
+   SEED_PROFILE_PUBLIC_ID,
+   UNITS,
+ } from '@mat-plan/shared';
++import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+ 
+@@ -215,7 +216,9 @@ export async function seed(
+   // CAT-3 A2-i: the catalog writer is in place but production's seed gives it NOTHING to write. A2-ii
+   // switches this one argument (spec E4), with the fixture library (K29). `db:verify`'s Proof A fails
+   // if it is anything else here.
+-  const counts = await seedReference(db, { catalog: [] });
++  const counts = await seedReference(db, {
++    catalog: CATALOG_MOVEMENTS.filter((e) => MOVEMENT_SEED_ROWS.some((m) => m.slug === e.slug)),
++  });
+ 
+   // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
+   // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks

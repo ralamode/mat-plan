@@ -174,6 +174,9 @@ describe("createAthlete — the lock and all three of the create's queries carry
     const lock = at(/pg_advisory_xact_lock/);
     expect(lock, 'no lock was taken').toBeGreaterThanOrEqual(0);
     expect(recording.queries[lock]!.values).toContain(ONE_HOUSEHOLD_ID);
+    // The lock's statement reads the household row FOR KEY SHARE, so an erasure mid-call is `refused`
+    // (db:verify proves the mode; this pins it is in the lock statement itself).
+    expect(recording.queries[lock]!.text).toMatch(/for key share/i);
     for (const later of [
       /select "public_id" from "profiles"/i,
       /select "id" from "profiles"/i,

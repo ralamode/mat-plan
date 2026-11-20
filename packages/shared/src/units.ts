@@ -285,7 +285,7 @@ export const UNIT_SINGULAR_LABELS: Record<Unit, string | null> = {
  * are close to real use (2000 ≈ 2× the largest plausible lift) and `kg` is pinned there for log/edit
  * consistency — the edit path's ceiling is mass-only until V1-33. But `sec: 86400` is 24 hours against
  * a largest real use of ~2400, and `min`, `in` and `cm` are similarly loose. So a mis-typed `3000` for
- * a 30-second hold SAVES, and `isEditableSet` refuses a non-mass set, so the only recovery is a
+ * a 30-second hold SAVES, and the edit path refuses a non-mass set, so the only recovery is a
  * `db:correct` run. Tightening them is a product decision, not a code one — the table is the
  * maintainer's (v1-30b plan, decision 2). Do not quietly narrow it here; raise it there.
  *

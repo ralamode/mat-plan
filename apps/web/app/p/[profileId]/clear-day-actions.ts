@@ -36,7 +36,7 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
 /**
  * **The two windows** (plan § B2 as amended; maintainer, 2026-11-19), both from `packages/shared`:
  * Restore all takes `dayOpenFor` (today or yesterday, not archived: the rule the day page's ✓ takes),
- * and the clear takes `clearDayOpenFor` (today only, not archived), which B2-ii's trigger will read too.
+ * and the clear takes `clearDayOpenFor` (today only, not archived), which the page's trigger reads too.
  * "Today" is the request's active-timezone day from the client's `tz` cookie: an accepted residual
  * (`.github/SECURITY.md` → Authorization).
  */
@@ -73,9 +73,11 @@ export async function clearDayAction(input: ClearDayInput): Promise<ClearDayActi
         return { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day };
       }
 
-      const { count } = await clearDayEntries({ profilePublicId: profile.id, day });
+      const cleared = await clearDayEntries({ profilePublicId: profile.id, day });
       revalidatePath(athletePath(profile.id));
-      return { ok: true, count };
+      // Archived between the check above and the clear's own lock: the writer refused it.
+      if ('closed' in cleared) return { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day };
+      return { ok: true, count: cleared.count };
     },
   );
 }

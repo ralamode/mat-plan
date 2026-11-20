@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..8d5afb1c 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -481,7 +481,7 @@ export async function seedCatalog(
+       const entry = bySlug.get(slug)!;
+       return [
+         ...(entry.primaryMuscle
+-          ? [{ movementId: id, muscleCode: entry.primaryMuscle, role: MUSCLE_ROLE.primary }]
++          ? [{ movementId: id, muscleCode: entry.primaryMuscle, role: MUSCLE_ROLE.secondary }]
+           : []),
+         ...entry.secondaryMuscles.map((muscleCode) => ({
+           movementId: id,

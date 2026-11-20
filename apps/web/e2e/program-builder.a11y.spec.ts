@@ -14,7 +14,6 @@ import {
   startingNamesText,
 } from '../components/program-builder/builder-text';
 import { PROGRAMS_PATH } from '../components/program-builder/routes';
-import { APP_HOME_PATH } from '../lib/constants';
 import {
   expectLinkTargets,
   expectNoAxeViolations,
@@ -22,6 +21,7 @@ import {
   expectTapTargets,
 } from './a11y-checks';
 import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
+import { openPrograms } from './steps';
 
 /**
  * FAM-1 7b-i and 7b-ii — the builder's four real pages (the Programs list, a program's page, a
@@ -48,12 +48,7 @@ async function expectTheBar(page: Page, context: string): Promise<void> {
 
 /** Home → Programs → the fixture program, by taps; answers the program page's URL. */
 async function reachProgram(page: Page): Promise<string> {
-  await page.goto(APP_HOME_PATH);
-  await page
-    .getByRole('navigation', { name: 'Household' })
-    .getByRole('link', { name: BUILDER_COPY.programsNavLink })
-    .click();
-  await expect(page).toHaveURL(PROGRAMS_PATH);
+  await openPrograms(page);
   await page.getByRole('link', { name: familyProgram.name }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
   return page.url();
