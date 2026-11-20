@@ -13,7 +13,7 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
-import { card, describedTexts, held, makeMount, press, status } from './day-test-utils';
+import { card, describedTexts, held, makeMount, press, status, openFolded } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
 import { unitSpoken } from './row-values';
 
@@ -250,6 +250,7 @@ describe('Change: saving', () => {
 
   it('a single row (a Duration) changes the same way', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     const minutes = within(splits).getByRole<HTMLInputElement>('textbox');
     expect(minutes.value).toBe('5');
@@ -261,6 +262,7 @@ describe('Change: saving', () => {
 
   it('a single row’s ✕ is named for it and puts the number back, focus on its ✓', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     const minutes = within(splits).getByRole<HTMLInputElement>('textbox');
     type(minutes, '6');
@@ -479,6 +481,7 @@ describe('a ✓ after an un-tick that answers with the same entry (a writer that
         logRow: async (input) => ({ ok: true, entryPublicId: id, values: input.values }),
       }),
     });
+    openFolded();
     const el = () => card('Morning habits', 'Splits stretch');
     const tickButton = () =>
       within(el()).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') });
@@ -512,6 +515,7 @@ describe('an un-tick that the page’s data has caught up with (the same id may 
 
   it('another phone’s ✓ after this one’s un-tick shows the set logged', async () => {
     const control = mount(yesterdayHalfDone);
+    openFolded();
     await press(tickButton());
     expect(tickButton().getAttribute('aria-pressed')).toBe('false');
     expect(splitsOf(control.plan).rows[0]!.logged).toBeNull(); // the data has caught up
@@ -533,6 +537,7 @@ describe('an un-tick that the page’s data has caught up with (the same id may 
         untickRow: a.untickRow,
       }),
     });
+    openFolded();
     await press(tickButton());
     const minutes = within(el()).getByRole<HTMLInputElement>('textbox');
     fireEvent.change(minutes, { target: { value: '6' } });
@@ -843,6 +848,7 @@ describe('Change: second-pass fixes', () => {
         }),
       }),
     });
+    openFolded();
     const el = () => card('Morning habits', 'Splits stretch');
     const tickButton = () =>
       within(el()).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') });
