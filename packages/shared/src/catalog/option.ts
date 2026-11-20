@@ -92,7 +92,9 @@ export type CatalogOption = {
  * ⏳ **Until the catalog's fresh start the real picker's option is not always this** (spec K22).
  * The option read builds every catalog-arm row through `catalogArmOption`
  * (`packages/db/src/queries/program/catalog-arm-option.ts`, which owns the four-case table), with
- * this mapping's fields on the database row's identity: the row's name, tracking type, unit and
+ * the entry's aliases, supervision label and `hasInstructions` on the database row's identity, and,
+ * since P11-ii-b, a catalog row's taxonomy from the tables (`catalogTaxonomyOf`, in the same
+ * vocabulary order): the row's name, tracking type, unit and
  * bodyweight flag always win, since the row is what a save and a log use. The web DAL only copies
  * what the read built. After the fresh start every global row is a catalog row seeded from the
  * const, and the option is this mapping again.
