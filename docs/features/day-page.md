@@ -232,7 +232,11 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     **Bodyweight and Life** (PR 2) fold through `CollapsibleSection`, keyed on athlete and day
     (the page does not remount on a change of day): Bodyweight with exactly one weight, Life with
     every shown item logged, on a writable day. Their busy is `useSectionBusy`: the amend editor
-    open or saving, or the island's alert shown.
+    open or saving, or the island's alert shown. **A section that cannot fold on this visit has no
+    Collapse slot**, unlike a workout's: logging turns its form into a receipt, which changes its
+    height anyway, so a reserved slot would buy nothing and would cost every unlogged section a 44px
+    heading on every visit (lane C, 2026-11-20). A workout keeps its slot because nothing else in
+    its card moves.
 
 ## Recorded differences from the prototype (v12)
 
