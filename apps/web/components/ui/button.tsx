@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 
+import { ON_TINT_BUTTON_FOCUS_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,8 +29,12 @@ const buttonVariants = cva(
           'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
           'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
-        destructive:
-          'bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive focus-visible:ring-destructive dark:bg-destructive/20 dark:hover:bg-destructive/30',
+        // Solid (V1-9b B2-prep): the one button that commits a removal, e.g. Clear this day. The label
+        // is `destructive-foreground` (4.76:1 light, 6.19:1 dark, pinned in destructive-tokens.test.ts).
+        // Hover mixes toward `foreground`, which RAISES the label's contrast in both themes (a `/90`
+        // fill would lower it to 4.52:1). Focus is the ✓'s offset outline: inside the dark fill
+        // `foreground` is under 3:1.
+        destructive: `bg-destructive text-destructive-foreground hover:bg-[color-mix(in_oklch,var(--destructive),var(--foreground)_10%)] aria-disabled:hover:bg-destructive ${ON_TINT_BUTTON_FOCUS_CLASS}`,
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

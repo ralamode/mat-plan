@@ -35,14 +35,16 @@ import type { TokenSet } from './token-sets';
  *
  * ## What is deliberately NOT rendered, and why that is a report rather than a dodge
  *
- * `buttonVariants.destructive` (`bg-destructive/10 text-destructive`) measures **4.39:1** in light
- * mode and 3.04:1 in dark on a card, and `text-muted-foreground` on `bg-muted` measures **4.34:1** in
- * light — all under AA, all in the palette shipping TODAY, and all invisible to CI because no route
- * renders them (`variant="destructive"`'s one call site, the bodyweight Clear, overrides the fill). Rendering them here would redden the
- * a11y gate over a pre-existing defect this PR cannot fix without changing the live app's appearance,
- * which UI-4 promised not to do. So they are pinned with their measured ratios in
- * `token-sets.test.ts` and handed to UI-3 as inputs. The destructive *state* is still shown, the way
- * the app actually ships it: `text-destructive` error copy and an `aria-invalid` field.
+ * `text-muted-foreground` on `bg-muted` measures under AA in light, in the palette shipping TODAY,
+ * and is invisible to CI because no route renders it. Rendering it here would redden the a11y gate
+ * over a pre-existing defect this PR cannot fix without changing the live app's appearance, which
+ * UI-4 promised not to do. So it is pinned in `token-sets.test.ts` and handed to UI-3 as an input.
+ * The destructive *state* is shown the way the app ships it: `text-destructive` error copy and an
+ * `aria-invalid` field.
+ *
+ * The `destructive` button IS rendered since V1-9b B2-prep, when it became solid
+ * (`bg-destructive text-destructive-foreground`, pinned in `app/destructive-tokens.test.ts`), so
+ * the a11y scan of this page covers it in both themes.
  */
 
 /** The wrapper that applies a set's palette to its subtree. */
@@ -74,16 +76,22 @@ export function SetCell({
   );
 }
 
-const BUTTON_VARIANTS = ['default', 'secondary', 'outline', 'ghost', 'link'] as const;
+const BUTTON_VARIANTS = [
+  'default',
+  'secondary',
+  'outline',
+  'ghost',
+  'destructive',
+  'link',
+] as const;
 
 /**
- * Buttons: the five variants a reviewer can tell apart, at ONE size.
+ * Buttons: the six variants, at ONE size.
  *
  * The size axis is left out on purpose. `min-h-11` lives in `buttonVariants`' BASE, so all eight
  * sizes render at 44px tall and differ only in horizontal padding and text size — 6 variants × 8
  * sizes would have been 48 near-identical buttons per set, 192 across the page, and the single
- * largest contributor to a scroll nobody reads. `destructive` is omitted for the contrast reason in
- * the file header.
+ * largest contributor to a scroll nobody reads.
  */
 export function ButtonsCell({ setId }: { setId: string }) {
   return (
