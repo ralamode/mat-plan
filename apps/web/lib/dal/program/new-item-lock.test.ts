@@ -43,4 +43,12 @@ describe('newItem — the lock wait is bounded before it starts', () => {
     expect(timeout, 'lock_timeout was set after the lock').toBeLessThan(lock);
     expect(recording.queries[timeout]!.values).toEqual([LOCK_TIMEOUT]);
   });
+
+  it('reads the household row FOR KEY SHARE, in the lock statement (an erasure mid-call is not_found)', async () => {
+    await newHouseholdItem({ name: 'Order Probe Drill', trackingType: TRACKING_TYPE.reps }).catch(
+      () => undefined,
+    );
+    const lock = recording.queries.find((q) => /pg_advisory_xact_lock/.test(q.text));
+    expect(lock?.text, 'no household-items lock was taken').toMatch(/for key share/i);
+  });
 });

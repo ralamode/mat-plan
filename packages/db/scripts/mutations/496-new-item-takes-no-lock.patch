@@ -1,17 +1,18 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index a33f1574..70472585 100644
+index f1bd7685..593d7425 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -77,13 +77,6 @@ async function addOrSelect(
-   // Held until the transaction ends. Reached through the household row, so the tenant id is never
-   // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
-   // count below never runs without the lock.
+@@ -87,14 +87,6 @@ async function addOrSelect(
+   // COMMITTED it re-checks the row, finds it gone, and returns nothing. No deadlock: the core never takes
+   // the advisory lock below, and this holds nothing the core waits on. The wait is bounded by the
+   // `lock_timeout` above, so an erasure slower than that answers `55P03` instead.
 -  const locked = await exec
 -    .select({
 -      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
 -    })
 -    .from(schema.households)
--    .where(householdRowIs(scope));
+-    .where(householdRowIs(scope))
+-    .for('key share');
 -  if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  
    const options = await movementOptions(exec, scope);

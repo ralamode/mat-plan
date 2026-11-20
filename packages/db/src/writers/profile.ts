@@ -373,7 +373,8 @@ async function addProfile(
  * `addProfile` reads the count and then inserts. Unlocked, N adds at once from one household all read
  * `count < MAX_HOUSEHOLD_ATHLETES` and all insert (the limiter fails open, so it never bounded that).
  * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, as `newItem` does for
- * its items (#605), through a household row read `FOR KEY SHARE` (#714 and this fix), so a second add at the same moment waits, then counts the first add's
+ * its items (#605), through a household row read `FOR KEY SHARE` (#714 and this fix), so a second
+ * add at the same moment waits, then counts the first add's
  * committed row; a same-key twin finds its twin's row at the replay step. That is why the replay lookup
  * runs AFTER the lock, not before it.
  *

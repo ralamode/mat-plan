@@ -65,7 +65,9 @@ export async function setLocalTimeouts(tx: Reads, statementTimeout: '30s' | '60s
  * wait ends after `LOCK_TIMEOUT` as a thrown 55P03, which reaches `error.tsx` like any other throw.
  * ⚠️ It bounds every LATER lock wait in the same transaction too, not only the advisory lock: the
  * insert's foreign-key `KEY SHARE` on `households` now waits at most `LOCK_TIMEOUT` behind an
- * erasure's `FOR UPDATE`, so an add during an erasure throws 55P03 where it used to throw 23503.
+ * erasure's `FOR UPDATE`. Both callers read the household row `FOR KEY SHARE` first, so an add during an
+ * erasure waits at that read and answers `not_found` (`newItem`) or `refused` (`createProfile`), or
+ * 55P03 past `LOCK_TIMEOUT`.
  * Inside a caller's own transaction it lasts to that transaction's end (no real caller passes one).
  *
  * No read-back, unlike `setLocalTimeouts`: both callers run it as the first statement of their own
