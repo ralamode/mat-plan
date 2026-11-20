@@ -674,7 +674,7 @@ async function verifyRules(): Promise<void> {
         [20, 21],
         [20, 22, 21],
       ],
-      'FAM-1 12a R7: the order holds when the ids run against it (a reopen)',
+      'FAM-1 12a R7: the order holds when the ids run against it (after a reorder)',
     );
     // The PLACING row's days ride with each program (lane P's program view reads them): one program
     // with a row ending today at 0 and an upcoming row at 2 is placed by the upcoming one.
@@ -1990,7 +1990,7 @@ async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: stri
       asTx(tx),
       seeded.scope,
       { profilePublicId: profile.publicId, programPublicIds },
-      FIXTURE_TODAY,
+      world.today,
     ),
     `FAM-1 12a-ii ${name}: reorderPrograms replays ${athlete}'s order`,
   );
