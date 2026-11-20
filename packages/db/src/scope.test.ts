@@ -293,7 +293,7 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([]);
   });
 
-  // ⚠️ There was a second, named allowance until 2026-11-19: `screenshot-ephemeral.ts`'s
+  // ⚠️ There was a second, named allowance until 2026-11-20: `screenshot-ephemeral.ts`'s
   // `fixtureScope`, for fixture writers that FAM-1 12f retired. It was removed with its last caller,
   // so the rule is absolute again: a fixture that needs a scope now has to argue for one here.
   it('exactly one module derives a scope from a request', () => {

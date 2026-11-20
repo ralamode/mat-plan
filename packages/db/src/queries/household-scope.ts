@@ -22,7 +22,7 @@ import { schema } from '../client';
  * ⚠️ **This module predicted its own retirement and it did NOT happen.** `AUTH-1` 1c-4 replaced
  * `getHouseholdScope()`'s body with session → `household_members`, so this query stopped being the
  * resolution — but it did not go with it. `db:verify`'s own soft-delete proofs keep it (the screenshot
- * script's fixture scope used it too, until FAM-1 12f retired that, 2026-11-19).
+ * script's fixture scope used it too, until FAM-1 12f retired that, 2026-11-20).
  * ⚠️ **It is no longer a request-path query**, so do not cite it as what the app resolves through.
  */
 export function liveHouseholdIds(db: NodePgDatabase<typeof schema>) {

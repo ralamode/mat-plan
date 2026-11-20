@@ -45,7 +45,7 @@ import { getCurrentUser } from './session';
  * households … LIMIT 2`, with *"ZERO rows → a genuinely empty database"* and *"TWO rows → THROW"*.
  * None of that is true now: zero means **this account has no membership**, which is the common case,
  * and nothing throws on a second live household (two of them is the intended Beta 0 end state once a
- * family is invited). `liveHouseholdIds` survives for `db:verify` and one fixture script only.
+ * family is invited). `liveHouseholdIds` survives for `db:verify` only.
  *
  * ⚠️ **The `LIMIT 2` exists to DETECT ambiguity. `rows[0]` must NEVER be read as a pick.** *"Just use
  * the first one"* is exactly the edit a later author makes to "fix" a dark app, and it is a silent
