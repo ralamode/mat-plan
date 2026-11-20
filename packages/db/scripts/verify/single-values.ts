@@ -42,6 +42,7 @@ import {
   asTx,
   columnCatalogShape,
   expectRejectedBy,
+  lockTimeoutSetBy,
   orFail,
   rolledBack,
   rowsOf,
@@ -1449,6 +1450,54 @@ async function verifyClearDay(): Promise<void> {
       "B1-2 proof 12: the other day's clear is untouched by a restore on the wrong day",
     );
 
+    // 14 · An archived athlete's clear is refused under the clear's own lock (the archive race,
+    //      maintainer 2026-11-19): `closed`, nothing hidden, no reason written; restored, it clears.
+    //      PGlite has one connection, so no proof here can show the lock's wait: this proves the
+    //      check runs inside the writer, and the source pin below holds the lock's mode and order.
+    const D12 = '2026-11-12';
+    const w12 = await weighIn(athlete.id, D12, 82);
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: sql`now()` })
+      .where(eq(schema.profiles.id, athlete.id));
+    assert.deepEqual(
+      await clear(D12),
+      { closed: true },
+      "B2 race proof 14: an archived athlete's clear answers closed",
+    );
+    assert.deepEqual(
+      await stateOf(w12),
+      { hiddenAt: null, reason: null },
+      'B2 race proof 14: and hides nothing, with no reason written',
+    );
+    await tx
+      .update(schema.profiles)
+      .set({ archivedAt: null })
+      .where(eq(schema.profiles.id, athlete.id));
+    const { set: clearBounded, result: restoredClear } = await lockTimeoutSetBy(tx, () =>
+      clear(D12),
+    );
+    assert.ok(clearBounded, 'B2 race proof 14: clearDay bounds its lock waits (lock_timeout)');
+    assert.ok('hiddenAt' in restoredClear, 'B2 race proof 14: restored, the same clear runs');
+    // The lock's mode and order, from the source (the erasure's pattern, `verify/erasure.ts`):
+    // `FOR SHARE` on the profile conflicts with an archive's `FOR NO KEY UPDATE`; `KEY SHARE` would
+    // not, and the race would be back with every proof above still green.
+    const hideSrc = readFileSync(new URL('../../src/writers/hide.ts', import.meta.url), 'utf8');
+    const clearDayBody = hideSrc.slice(
+      hideSrc.indexOf('export async function clearDay('),
+      hideSrc.indexOf('export type RestoreClearResult'),
+    );
+    const profileLock = clearDayBody.search(
+      /\.from\(schema\.profiles\)[\s\S]{0,120}?\.for\('share'\)/,
+    );
+    const entriesLock = clearDayBody.indexOf(".for('update', { of: schema.entries })");
+    // Inside the transaction: a profile lock lifted above it would release at once.
+    const txStart = clearDayBody.indexOf('exec.transaction(');
+    assert.ok(
+      txStart !== -1 && profileLock > txStart && entriesLock !== -1 && profileLock < entriesLock,
+      "B2 race proof 14: clearDay locks the profile FOR SHARE inside its transaction, before the day's entries",
+    );
+
     // 13 · Scope, both directions, on a day both owners have cleared (D8): another household reads
     //      no events; the owner reads its own.
     assert.deepEqual(
@@ -1475,6 +1524,9 @@ async function verifyClearDay(): Promise<void> {
 
   console.log(
     "✓ V1-9b B2-0: entries.hide_reason holds only clear_day and never on a live row; a clear hides the day's live entries as one event with the reason (no cap) and replays its own token; every other hide writes none; Restore all brings back exactly the clear, clears the reason, drops it from items left hidden, and answers notFound once done; both are household-scoped",
+  );
+  console.log(
+    "✓ V1-9b B2 race: an archived athlete's clear is refused inside the writer, under its lock, and hides nothing",
   );
   console.log(
     "✓ V1-9b B1-2: a day's clear events are one per clear, newest first, counted without other hides, each token restoring exactly its own entries on its own day only; household-scoped both ways",
