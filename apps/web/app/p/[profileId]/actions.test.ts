@@ -518,7 +518,7 @@ describe('logLifeActivitiesAction — the minutes and the outcomes (3b-life-b B5
 // strength-form idiom). `validateRoutineForWrite` is the trust boundary — it REJECTS an empty /
 // non-catalog / duplicate order against the REAL ROUTINE_CATALOG (no drop-and-store). Two real catalog
 // keys keep these tests bound to the live catalog, not re-typed strings.
-const [ROUTINE_K1, ROUTINE_K2] = ROUTINE_CATALOG; // 'strength', then the first check-in key
+const [ROUTINE_K1, ROUTINE_K2] = ROUTINE_CATALOG; // 'strength', then Wrestling practice (FAM-1 12f PR 5)
 function routineForm(opts: { profileId?: string; routineRaw?: string; order?: unknown }): FormData {
   const fd = new FormData();
   if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);

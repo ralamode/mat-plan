@@ -73,9 +73,11 @@ export async function clearDayAction(input: ClearDayInput): Promise<ClearDayActi
         return { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day };
       }
 
-      const { count } = await clearDayEntries({ profilePublicId: profile.id, day });
+      const cleared = await clearDayEntries({ profilePublicId: profile.id, day });
       revalidatePath(athletePath(profile.id));
-      return { ok: true, count };
+      // Archived between the check above and the clear's own lock: the writer refused it.
+      if ('closed' in cleared) return { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day };
+      return { ok: true, count: cleared.count };
     },
   );
 }

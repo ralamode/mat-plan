@@ -366,6 +366,23 @@ export const NAV_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3';
 
 /**
+ * A program's name on the day page's programs line, as a link to its page ("Family program ›";
+ * FAM-1 15c, D49). Matched to the prototype's line buttons (`.txt` with `padding:0`,
+ * `program-order-ends-today.html`): no padding of its own; the line's gaps space the names.
+ *
+ * 🔴 **No underline until hover, because the "›" after each name marks it as a link** (WCAG 1.4.1:
+ * not by colour alone). The name is also the foreground colour on a muted label, so a link never
+ * relies on its colour. Drop the "›" and the underline must come back.
+ *
+ * 🔴 **`min-h-11` and `min-w-11` are load-bearing**: the 44px tap target, on a short name too
+ * ("Am" is narrower than a thumb). `wrap-anywhere` lets a long unbroken name wrap inside the link
+ * instead of overflowing at 360px; it is here rather than `NAME_WRAP_CLASS` because that one's
+ * `min-w-0` would win over `min-w-11` under `cn`.
+ */
+export const PROGRAM_NAME_LINK_CLASS =
+  'text-foreground focus-visible:ring-ring inline-flex min-h-11 min-w-11 items-center rounded-sm text-sm font-medium wrap-anywhere underline-offset-4 outline-none hover:underline focus-visible:ring-3';
+
+/**
  * A nav ROW — a full-width, bordered, tappable row. `NAV_LINK_CLASS` above is `w-fit` for inline
  * arrow links ("← All athletes"); this is its block-level sibling.
  *
@@ -1527,9 +1544,10 @@ export const CLEAR_DAY_COPY = {
   /**
    * Clear this day's own `closed_day` line. Not `refused.closed_day`: a clear refused just after
    * midnight is of a day that is now yesterday, still open to every other write and to Restore all, so
-   * "can no longer be changed" would be false. True for the midnight case and the archived one alike.
+   * "can no longer be changed" would be false. Names both causes, since the answer cannot tell them
+   * apart: past midnight, or the athlete archived (the writer's own check, since the archive-race fix).
    */
-  clearClosed: 'Only today can be cleared.',
+  clearClosed: 'This day can’t be cleared now: only today can, and not for an archived athlete.',
   /** The action threw (a dropped connection, a server error): no cause is claimed. */
   failed: 'Couldn’t reach the app. Try again.',
 } as const;
