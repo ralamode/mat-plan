@@ -65,6 +65,8 @@ const SECOND_VALIDATOR = [
  * A uuid's SHAPE, however the regex is named or written (a literal, a `RegExp` string, inside
  * `.regex()` or `.refine()`): a hex class quantified `{8}`, the first group of 8-4-4-4-12. A name test
  * alone let `const UUID = /^[0-9a-f]{8}-…$/i` through (lane E's #667 review, P2-1).
+ * ⚠️ Still NOT caught: a hex class written without `a-f` (`[[:xdigit:]]`), a `{8,8}` quantifier, and
+ * a third-party validator such as `validator`'s `isUUID` (no package here depends on it today).
  */
 const UUID_SHAPE = /\[[^\]\n]*a-f[^\]\n]*\]\{8\}/i;
 /**

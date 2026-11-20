@@ -17,9 +17,10 @@ export function newId(): string {
  *
  * 🔴 **It hands the id back in lower case.** Postgres compares a `uuid` without regard to case, so
  * `X` and `X` in upper case are one id to every `ON CONFLICT`, `IN` and `=`; a JS `Set` or `===` over
- * the caller's spelling saw two. That mismatch shipped twice (a check-in submit, a strength session
- * that dropped a movement's sets), and the hide and restore schemas held it with no caller yet
- * (a hide would have answered not-found), each in a different schema, so the fold sits here, where every id is parsed, rather than in each schema that compares.
+ * the caller's spelling saw two. That mismatch shipped twice (a check-in submit; a strength session
+ * that dropped a movement's sets), and the hide and restore schemas held it with no caller yet (a hide
+ * would have answered not-found). Each was a different schema, so the fold sits here, where every id
+ * is parsed, rather than in each schema that compares.
  * `lowerCaseUuidSchema` (`program/pieces.ts`) is the same schema now; the contract keeps the name.
  * `id.test.ts` pins the fold and scans the source for a second uuid validator: zod's builders, the
  * `uuid` package's `validate` (named, namespace or `require`), and a uuid-shaped regex however it is
