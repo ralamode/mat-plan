@@ -80,15 +80,16 @@ nothing never ends with "1 change(s) would be made" (`summary.test.ts`).
 applied flag and `--apply` leaves no artifact, so this column is the only record. A correction merges
 before it is run, so a row lands here as `pending` and is dated in a follow-up commit.
 
-| Name                                | What                                                                                   | Cause fixed by    | Applied        |
-| ----------------------------------- | -------------------------------------------------------------------------------------- | ----------------- | -------------- |
-| `kb-swings-2026-09-28`              | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`                          | V1-24             | **2026-09-30** |
-| `bodyweight-duplicates-2026-09-30`  | 3 weigh-ins on one day; the 12:17 morning row is the keeper                            | V1-24             | **2026-10-01** |
-| `null-routine-to-full-2026-10-07`   | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed | ONB-0             | `pending`      |
-| `movements-ownership-2026-10-11`    | Census of the `movements` rows `TEN-2c` does not fix — aggregate counts only           | TEN-2c-1          | `pending`      |
-| `household-claim-2026-10-25`        | No Clerk account was bound to the household, so 1c's resolver had nothing to resolve   | AUTH-1 1b         | `pending`      |
-| `create-household-2026-11-17`       | The fresh start erases the seeded household, and the app cannot create one             | PRIV-3            | `pending`      |
-| `erase-seeded-household-2026-11-19` | The fresh start deletes the seeded household and everything in it (K7)                 | PRIV-3 · CAT-3 R0 | `pending`      |
+| Name                                 | What                                                                                               | Cause fixed by    | Applied        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------------- | -------------- |
+| `kb-swings-2026-09-28`               | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`                                      | V1-24             | **2026-09-30** |
+| `bodyweight-duplicates-2026-09-30`   | 3 weigh-ins on one day; the 12:17 morning row is the keeper                                        | V1-24             | **2026-10-01** |
+| `null-routine-to-full-2026-10-07`    | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed             | ONB-0             | `pending`      |
+| `movements-ownership-2026-10-11`     | Census of the `movements` rows `TEN-2c` does not fix — aggregate counts only                       | TEN-2c-1          | `pending`      |
+| `household-claim-2026-10-25`         | No Clerk account was bound to the household, so 1c's resolver had nothing to resolve               | AUTH-1 1b         | `pending`      |
+| `create-household-2026-11-17`        | The fresh start erases the seeded household, and the app cannot create one                         | PRIV-3            | `pending`      |
+| `erase-seeded-household-2026-11-19`  | The fresh start deletes the seeded household and everything in it (K7)                             | PRIV-3 · CAT-3 R0 | `pending`      |
+| `delete-legacy-movements-2026-11-20` | The fresh start replaces the old global movements with the catalog, and the app cannot delete them | PRIV-3 · CAT-3 R1 | `pending`      |
 
 ⚠️ **`household-claim-2026-10-25` carries NEITHER target in this table, deliberately.** It takes a
 household `public_id` and a Clerk user id from the **environment**, and both are personal data in a

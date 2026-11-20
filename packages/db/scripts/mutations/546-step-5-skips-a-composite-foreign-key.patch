@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/movement-gates.ts b/packages/db/scripts/corrections/movement-gates.ts
+index 668f4661..2f2cabae 100644
+--- a/packages/db/scripts/corrections/movement-gates.ts
++++ b/packages/db/scripts/corrections/movement-gates.ts
+@@ -66,7 +66,7 @@ export function legacyMovementDeletionIssue({
+   readonly expected: ExpectedLegacyCounts;
+   readonly found: LegacyMovementCounts;
+ }): string | null {
+-  const uncountable = foreignKeys.filter((fk) => !isCountableMovementFk(fk));
++  const uncountable = foreignKeys.filter((fk) => !isCountableMovementFk(fk) && false);
+   if (uncountable.length > 0) {
+     return (
+       `the foreign key from ${uncountable.map(movementFkTable).join(', ')} into movements is not ` +

@@ -34,6 +34,9 @@ only way a notice about minors' health data is worth anything.
 > opens (it was the draft's). §7: a workout page's miss is reported as the workout read's was, and a
 > workout of another of the household's own programs is no longer sent as a scope miss. The notice
 > drops "aren't in the app yet" and its two "once … is in the app" sentences.
+> 🔴 **§5 re-read 2026-11-20 for `CAT-3` R1** ([plan](../plans/priv-3-fresh-start-prep.md) D2, D3): step
+> 5's deletion of the old global movements is built, not run; §5 gains its paragraph. It removes
+> reference data only. Nothing new is stored, received or kept; the report's new counts are numbers.
 > 🔴 **§5 re-read 2026-11-19 for `CAT-3` R0** ([plan](../plans/priv-3-fresh-start-prep.md) D1): the
 > fresh start's one-shot erasure is built, not run; §5 gains its paragraph. Nothing new is stored,
 > received or kept, and the notice changes at the fresh start's close-out.
@@ -740,6 +743,14 @@ full copy, hidden rows included, or the go records that it declined. It deletes 
 account**: the accounts step 7 binds are kept (K15); its dry run counts live and hidden memberships,
 and an account whose only membership was hidden is decided at the go and recorded in the ledger. It prints counts
 only. The notice's sentences change at the fresh start's close-out, not here.
+
+**The fresh start's step 5** (`delete-legacy-movements-2026-11-20`, `CAT-3` R1, built 2026-11-20, not
+yet run) hard-deletes the **old global movements**: reference data owned by no household, not a
+household's own typed movements, which it never selects. It removes the global rows that are not
+catalog rows, or carry a legacy seed `public_id`, with their equipment and muscle rows, and refuses
+while any row anywhere still references one, hidden rows included. No household's row is deleted or
+changed by it, and it prints counts only. Not limited to production: on a local or preview database
+the seed puts the rows back.
 
 ⚠️ **Updated 2026-11-13 (`V1-9b` B1-1b).** This paragraph said soft delete was "written in exactly
 one place in the app tree (a committed data correction)". There are now **three** writers of

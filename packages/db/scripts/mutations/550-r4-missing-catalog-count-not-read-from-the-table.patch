@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 33284875..83efe018 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -688,7 +688,7 @@ async function freshStartCounts(db: Database) {
+     profiles: profiles?.n ?? 0,
+     seedMovements: seedMovements?.n ?? 0,
+     notCatalog: notCatalog?.n ?? 0,
+-    missingCatalog: [...CATALOG_SLUGS].filter((slug) => !present.has(slug)).length,
++    missingCatalog: present.size >= 0 ? 0 : CATALOG_SLUGS.size,
+   };
+ }
+ 

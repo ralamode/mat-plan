@@ -1143,15 +1143,21 @@ Re-run step 3's **dry run**. It must print `the seeded household is not here` **
 ### Step 5 — delete the old global movements (R1)
 
 ```bash
-DATABASE_URL_UNPOOLED="$PROD_DB" pnpm --filter @mat-plan/db db:correct delete-legacy-movements-<date>
+DATABASE_URL_UNPOOLED="$PROD_DB" pnpm --filter @mat-plan/db db:correct delete-legacy-movements-2026-11-20
 EXPECT_LEGACY_MOVEMENTS=M EXPECT_LEGACY_EQUIPMENT=E EXPECT_LEGACY_MUSCLES=U DATABASE_URL_UNPOOLED="$PROD_DB" \
-  pnpm --filter @mat-plan/db db:correct delete-legacy-movements-<date> --apply
+  pnpm --filter @mat-plan/db db:correct delete-legacy-movements-2026-11-20 --apply
 ```
 
-It removes only global movements that are **not** catalog rows (`movementIsCatalog()`), never by slug,
-and refuses if anything still references one. Catalog rows A2 has already seeded stay.
+It removes only global movements that are **not** catalog rows (`movementIsCatalog()`), or that carry
+a legacy seed `public_id`, never by slug, with their equipment and muscle rows. Catalog rows A2 has
+already seeded stay. The dry run always exits 0 and prints every count: the three to delete, the
+references from each table that points at `movements` (read from the catalog, hidden rows included),
+and a `would refuse --apply: …` line when `--apply` would refuse. `--apply` refuses while any reference
+is non-zero, on a foreign key into `movements` it cannot count or that does not abort a delete, and
+when `M`, `E` or `U` differs from what it finds under its lock: each rolls back and deletes nothing.
+Copy the three numbers from this sitting's dry run.
 
-_Second run:_ `nothing to do`.
+_Second run:_ `No legacy movements here; nothing to do.`
 
 ### Step 6 — seed the catalog
 
@@ -1167,7 +1173,7 @@ before the dry run), then `create-household-2026-11-17`'s dry run and `--apply`.
 
 ### Step 8 — the report, then unfreeze
 
-`movements-ownership-…` (R4): every `R4 (n)` line reads 0. Then `unset PROD_DB`, unfreeze merges, and
+`movements-ownership-2026-10-11` (R4): every `R4 (1)` to `R4 (4)` line reads 0. Then `unset PROD_DB`, unfreeze merges, and
 merge the close-out notice PR. **If the run stopped after step 3**, the close-out's athlete and
 household sentences still merge: they became true at step 3.
 

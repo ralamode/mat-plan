@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 33284875..7f2e6edf 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1400,7 +1400,6 @@ const deleteLegacyMovements: Correction = {
+             .from(schema.movements)
+             .where(legacyMovement())
+             .orderBy(schema.movements.id)
+-            .for('update')
+         ).map((r) => r.id);
+         if (locked.length === 0) {
+           return [summaryLine('No legacy movements here; nothing to do.')];

@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 33284875..4d66bfb2 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1428,7 +1428,7 @@ const deleteLegacyMovements: Correction = {
+           movements: (
+             await tx
+               .delete(schema.movements)
+-              .where(inArray(schema.movements.id, locked))
++              .where(legacyMovement())
+               .returning({ id: schema.movements.id })
+           ).length,
+         };

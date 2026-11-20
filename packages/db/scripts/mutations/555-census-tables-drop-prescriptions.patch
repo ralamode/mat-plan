@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/movement-ownership.ts b/packages/db/src/queries/movement-ownership.ts
+index bb71f30d..777ecc7f 100644
+--- a/packages/db/src/queries/movement-ownership.ts
++++ b/packages/db/src/queries/movement-ownership.ts
+@@ -62,7 +62,6 @@ import { rowsOf, type Executor, type Reads } from '../writers/executor';
+  */
+ export const CENSUS_REFERENCE_TABLES: readonly string[] = [
+   getTableName(schema.entries),
+-  getTableName(schema.prescriptions),
+ ];
+ 
+ /**

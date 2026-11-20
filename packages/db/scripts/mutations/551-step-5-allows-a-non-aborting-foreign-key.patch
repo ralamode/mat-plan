@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/movement-gates.ts b/packages/db/scripts/corrections/movement-gates.ts
+index 668f4661..261d398e 100644
+--- a/packages/db/scripts/corrections/movement-gates.ts
++++ b/packages/db/scripts/corrections/movement-gates.ts
+@@ -73,7 +73,7 @@ export function legacyMovementDeletionIssue({
+       'one column onto movements.id, so its references cannot be counted; nothing deleted'
+     );
+   }
+-  const nonAborting = foreignKeys.filter((fk) => !NO_ACTION_OR_RESTRICT.includes(fk.deleteRule));
++  const nonAborting = foreignKeys.filter((fk) => !NO_ACTION_OR_RESTRICT.includes(fk.deleteRule) && false);
+   if (nonAborting.length > 0) {
+     return (
+       `the foreign key from ${nonAborting.map(movementFkTable).join(', ')} into movements does not ` +
