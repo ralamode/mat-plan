@@ -328,7 +328,7 @@ gantt
   15c PR 2 action (lane B)     :done, c7b, 13, 14
   15c PR 3 real page (lane B)  :c7c, 14, 15
   12f PR 1 forms (lane E)      :c9a, 13, 14
-  12f PR 2 what they left      :c9b, 14, 15
+  12f PR 2 leftovers (lane B)  :c9b, 14, 15
   12f PR 3 actions (lane S)    :c9c, 14, 15
   12f PR 4 This week (lane E)  :c9d, 15, 16
   12f PR 5 routine trim        :c9e, 15, 16
@@ -357,8 +357,8 @@ gantt
 - **Nine are in the three plans the maintainer approved on 2026-11-19** ("Approve (Recommended)"; they held ten, and 15c PR 2 has merged). Each was drafted by the plan owner from lane C's notes, hardened by a panel and checked by lane C for feasibility. These were the three steps with only a row:
   - [15c, program order on the day page](../plans/fam-1-15c-program-order-wired.md): **three PRs** (15c PR 1 to 3). Lane C builds PR 1; lane B builds PR 2 and PR 3, and PR 2 is merged (#726). 15c PR 1 waited for one contract PR, merged as #699 on 2026-11-19. Program names become links, and the order's list is capped at 50 (plan D49).
   - [12c-iii, the collapse](../plans/fam-1-12c-iii-collapse.md): **two PRs** (12c-iii PR 1 and PR 2). The six differences from its prototype are accepted (plan D50).
-  - [12f, retire the old forms](../plans/fam-1-12f-retire-old-forms.md): **five PRs** (12f PR 1 to 5). Lane E builds PR 1, the unmounted forms, and PR 4, the "This week" card; lane S builds PR 3, the three actions, after its B2; lane C builds PR 2 and PR 5. The legacy strength write path is retired under its own row after FAM-1 (plan D51).
-- **Who builds changed on 2026-11-19, and nothing else did** (lane C's offer, cleared by the board under the maintainer's rule that work is spread when lanes sit idle; plan L59). Five of lane C's ten PRs left went to lanes E, S and B, as the 15c and 12f bullets above say. The chart keeps all ten in lane C's section and in "Lane C's 20 PRs", where the plan's wave table draws them; a bar's name says when another lane builds it.
+  - [12f, retire the old forms](../plans/fam-1-12f-retire-old-forms.md): **five PRs** (12f PR 1 to 5). Lane E builds PR 1, the unmounted forms, and PR 4, the "This week" card; lane B builds PR 2, what the forms left behind (a second hand-over that night, plan L61); lane S builds PR 3, the three actions, after its B2; lane C builds PR 5. The legacy strength write path is retired under its own row after FAM-1 (plan D51).
+- **Who builds changed on 2026-11-19, and nothing else did** (lane C's offer, cleared by the board under the maintainer's rule that work is spread when lanes sit idle; plan L59). Six of lane C's ten PRs left went to lanes E, S and B (five at first, then 12f PR 2, plan L61), as the 15c and 12f bullets above say. The chart keeps all ten in lane C's section and in "Lane C's 20 PRs", where the plan's wave table draws them; a bar's name says when another lane builds it.
 - **What is still open inside those plans.** The 12f plan's Q5 is answered: the maintainer ran its two read-only checks on production on 2026-11-19, and the gate for 12f PR 5 is met. One allowed split: the 12c-iii plan lets its builder land a small PR 0 before 12c-iii PR 1 if that PR grows, which would make the count 71.
 - **The two steps planned by their rows are merged**: 12d-iii (#688) and 12c-ii (#694).
 - **The count moved from 63 to 70** with the three plans: 15c is three PRs (+2), 12c-iii is two (+1) and 12f is five (+4). None of the ten is on the critical path.
@@ -367,7 +367,7 @@ gantt
 
 **What it shows**
 
-- **In a row, 72 PR-lengths; in lanes, about 16.** The lanes' end moved from 15 to 16 on 2026-11-19: 12f is a chain three PRs deep (12f PR 1, then PR 3, then PR 5), and 12c-iii's two PRs come one after the other. The ten PRs left in lane C's section (five of them built by lanes B, E and S since 2026-11-19) are drawn one bar each, where their gates allow, three or four side by side. That is still more than the lanes may carry at once, so 16 is the earliest end, not a forecast. The lanes do the same work. They finish sooner
+- **In a row, 72 PR-lengths; in lanes, about 16.** The lanes' end moved from 15 to 16 on 2026-11-19: 12f is a chain three PRs deep (12f PR 1, then PR 3, then PR 5), and 12c-iii's two PRs come one after the other. The PRs left in lane C's section (nine since 15c PR 2 merged; six of the original ten are built by lanes B, E and S since 2026-11-19) are drawn one bar each, where their gates allow, three or four side by side. That is still more than the lanes may carry at once, so 16 is the earliest end, not a forecast. The lanes do the same work. They finish sooner
   because the screens (lanes B and C) are built against fixtures on the preview page while the
   database is still being migrated, which is what the contract is for.
 - **Red is the critical path**: lane A's migrations, then the row writer, the day's read, the first
