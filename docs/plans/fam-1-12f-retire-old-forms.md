@@ -190,10 +190,10 @@ with one change of reading:
   by lane P.
 - **PR 2 (lane B).** Its files (`lib/entries/activity-totals*`, `app/p/[profileId]/day-nav.tsx`,
   `lib/constants*`, `scripts/screenshot-ephemeral.ts`, the comment in `use-on-action-success.ts`) are
-  lane B's guest edits, which lane C reviews. The comment in `components/ui/sheet.tsx` is lane B's own
-  file now and needs no clearance; Q1's clearance for the other comment-only sweeps passes to lane B
-  with the PR. The plan's note on PR 2 meeting lane C's #688 follow-up (Risks) still holds: lane B
-  and lane C order the two on the capture script.
+  lane B's guest edits, which lane C reviews. Q1's clearance for the comment-only sweeps (the
+  comment in `components/ui/sheet.tsx` among them) passes to lane B with the PR, each owner still
+  reading its hunk. The plan's note on PR 2 meeting lane C's #688 follow-up (Risks) still holds:
+  different lines in the capture script, a plain merge.
 - **PR 3 (lane S).** Its files (`actions.ts`, `actions.registry.ts`, `actions.test.ts`) are lane S's
   guest edits, which lane C reviews. The table asks lane S to read the `actions.ts` diff, because
   lane S's four actions share the file: lane S building it meets that. Lane S builds it after its
