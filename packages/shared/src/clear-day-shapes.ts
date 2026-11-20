@@ -41,9 +41,9 @@ export type RestoreClearInput = z.input<typeof restoreClearSchema>;
  *
  * - `bad_value`: the input failed its schema (for a clear, a missing or wrong confirm word too).
  * - `not_found`: no such athlete in this household; also the transport's "no session".
- * - `closed_day`: the day is outside the action's window, or the athlete is archived. One word for
- *   both, as `rowDayOpen` has it: either way the day is read-only for that action. Restore all's
- *   window is today and yesterday; a clear's is today only (maintainer, 2026-11-19).
+ * - `closed_day`: the day is outside the action's window (`dayOpenFor` for Restore all,
+ *   `clearDayOpenFor` for a clear, both in `./day`), or the athlete is archived. One word for both, as
+ *   `rowDayOpen` has it: either way the day is read-only for that action.
  * - `retry`: the transport's rate limit.
  */
 export const DAY_CLEAR_REFUSALS = [
@@ -55,6 +55,8 @@ export const DAY_CLEAR_REFUSALS = [
 export type DayClearRefusal = (typeof DAY_CLEAR_REFUSALS)[number];
 export const DAY_CLEAR_REFUSAL = keyBySelf(DAY_CLEAR_REFUSALS);
 export const dayClearRefusalSchema = z.enum(DAY_CLEAR_REFUSALS);
+/** The refused arm of both day-level results: one vocabulary, so one schema. */
+const dayClearRefusedSchema = z.object({ ok: z.literal(false), reason: dayClearRefusalSchema });
 
 /**
  * What Restore all resolves to. One success shape: the copy branches on the counts.
@@ -75,7 +77,7 @@ export const restoreClearResultSchema = z.discriminatedUnion('ok', [
     restored: z.number().int().nonnegative(),
     keptHidden: z.number().int().nonnegative(),
   }),
-  z.object({ ok: z.literal(false), reason: dayClearRefusalSchema }),
+  dayClearRefusedSchema,
 ]);
 export type RestoreClearActionResult = z.infer<typeof restoreClearResultSchema>;
 
@@ -110,13 +112,14 @@ export type ClearDayInput = z.input<typeof clearDaySchema>;
  * What Clear this day resolves to. `count` is the entries the clear holds hidden.
  *
  * **`count: 0` is "nothing was left to clear"**, never a refusal: another phone emptied the day first
- * (a blank Change, an un-tick), or a replay raced a Restore all. The person asked for an empty day and
+ * (a blank Change, an un-tick), or a replay raced a Restore all. (Another phone's own clear is not 0:
+ * the call replays it and answers its count.) The person asked for an empty day and
  * has one, so a refusal would tell them a clear that did what they wanted had failed (the reasoning
  * of Restore all's 0 and 0). The banner reads the day's clears itself, so no token leaves here.
  */
 export const clearDayResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), count: z.number().int().nonnegative() }),
-  z.object({ ok: z.literal(false), reason: dayClearRefusalSchema }),
+  dayClearRefusedSchema,
 ]);
 export type ClearDayActionResult = z.infer<typeof clearDayResultSchema>;
 

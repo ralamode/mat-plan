@@ -48,7 +48,8 @@ export { WRITABLE_DAY_RADIUS };
 /**
  * Whether `day` can be written to: **today and yesterday, never a later day** (FAM-1 D32, since step
  * 12c). It is the shared `inWritableWindow`, the rule every program row is held to, so the older
- * forms (bodyweight, practice, clear day), their actions and the day's rows share one window.
+ * forms (bodyweight, practice), their actions, Restore all and the day's rows share one window.
+ * Clear this day is narrower, today only (`clearDayOpenFor`, maintainer 2026-11-19).
  * `resolveDeclaredDay` is this, so the UI and the server cannot differ.
  */
 export function isWritableDay(day: string, today: string): boolean {

@@ -69,6 +69,22 @@ export function dayOpenFor(athlete: { archived: boolean }, day: string, today: s
   return !athlete.archived && inWritableWindow(day, today);
 }
 
+/**
+ * **Is this athlete's day open for Clear this day?** Today only, and the athlete not archived
+ * (V1-9b B2; the maintainer, 2026-11-19, revising "today and yesterday"). Narrower than `dayOpenFor`
+ * on purpose: Restore all keeps today and yesterday, so every clear has at least a day to be put back.
+ *
+ * Built on `dayOpenFor` so the archived half is never written twice. The day page's trigger and
+ * `clearDayAction` both call this, so the page never offers a clear the action refuses.
+ */
+export function clearDayOpenFor(
+  athlete: { archived: boolean },
+  day: string,
+  today: string,
+): boolean {
+  return dayOpenFor(athlete, day, today) && day === today;
+}
+
 /** The calendar date `n` whole days after `day` (`YYYY-MM-DD`; a negative `n` goes back). */
 export function addDays(day: string, n: number): string {
   // The `…T00:00:00Z` anchor is the V1-6c idiom, not a stylistic choice: `new Date("2026-07-30")`

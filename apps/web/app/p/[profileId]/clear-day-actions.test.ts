@@ -18,6 +18,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * done (`lib/dal/entries-restore-clear.test.ts`). Here: the order of the checks, the bound, what reaches the DAL,
  * and the answers.
  */
+// One profile DTO for every test, and one fixed "today": the clear is today-only, so a run that
+// crossed midnight between building the input and the action reading its day would go red.
+const { PROFILE, TODAY } = vi.hoisted(() => ({
+  // `kind` is set from `PROFILE_KIND` in the mock below: a hoisted block runs before imports.
+  PROFILE: {
+    id: '019826b4-0000-7000-8000-000000000001',
+    name: 'Athlete One',
+    kind: undefined as unknown as 'kid',
+    avatar: null,
+    archived: false,
+  },
+  TODAY: '2026-11-19',
+}));
+vi.mock('@/lib/active-timezone', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/active-timezone')>()),
+  getActiveLocalDay: vi.fn(async () => TODAY),
+}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 // Throws like Next's, so a redirect misplaced inside a try cannot pass silently.
 vi.mock('next/navigation', () => ({
@@ -36,21 +53,17 @@ vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   checkMutationLimit: vi.fn(async () => ({ allowed: true, reason: 'ok' })),
 }));
-vi.mock('@/lib/dal/profiles', () => ({
-  getProfileByPublicId: vi.fn(async () => ({
-    id: PROFILE_ID,
-    name: 'Athlete One',
-    kind: 'kid',
-    avatar: null,
-    archived: false,
-  })),
-}));
+vi.mock('@/lib/dal/profiles', async () => {
+  PROFILE.kind = (await import('@mat-plan/shared')).PROFILE_KIND.kid;
+  return { getProfileByPublicId: vi.fn(async () => PROFILE) };
+});
 vi.mock('@/lib/dal/entries', () => ({
   restoreClearedDay: vi.fn(async () => ({ restored: 2, keptHidden: 0 })),
   clearDayEntries: vi.fn(async () => ({ count: 3 })),
 }));
-// A tripwire: any member may clear, so neither action reads the household's roles. An owner gate
-// added later fails here first, and has to be a decision, not a drift.
+// Any member may clear and restore, so the action module reads no household role. This pins the
+// module; `lib/dal/entries-restore-clear.test.ts` pins the two DAL wrappers, where an owner gate
+// (`ownerScope`) would actually go.
 vi.mock('@/lib/dal/household', () => ({
   householdState: vi.fn(async () => {
     throw new Error('a day-level action read the household role');
@@ -59,22 +72,28 @@ vi.mock('@/lib/dal/household', () => ({
 
 import { revalidatePath } from 'next/cache';
 
-import { athletePath, DEFAULT_TIME_ZONE } from '@/lib/constants';
+import { athletePath } from '@/lib/constants';
 import { clearDayEntries, restoreClearedDay } from '@/lib/dal/entries';
 import { householdState } from '@/lib/dal/household';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { localDayIso } from '@/lib/date';
 import { describeActionMatrices } from '@/test/action-matrix';
 
 import { clearDayAction, restoreClearAction } from './clear-day-actions';
 import { ACTION_REGISTRY } from './clear-day-actions.registry';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
-const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
+const PROFILE_ID = PROFILE.id;
 // A clear's token as `hiddenAtText` prints it: microseconds, six digits.
 const TOKEN = '2026-11-17T18:04:05.123456Z';
 
-const today = () => localDayIso(DEFAULT_TIME_ZONE);
+const today = () => TODAY;
+// An archived athlete, once, for either action.
+const archivedOnce = () =>
+  vi
+    .mocked(getProfileByPublicId)
+    .mockResolvedValueOnce({ ...PROFILE, archived: true } as Awaited<
+      ReturnType<typeof getProfileByPublicId>
+    >);
 const input = (over: Partial<RestoreClearInput> = {}): RestoreClearInput => ({
   profilePublicId: PROFILE_ID,
   day: today(),
@@ -151,13 +170,7 @@ describe('restoreClearAction (V1-9b B1-2)', () => {
   });
 
   it('an archived athlete’s day is closed_day too, even today (dayOpenFor’s rule)', async () => {
-    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({
-      id: PROFILE_ID,
-      name: 'Athlete One',
-      kind: 'kid',
-      avatar: null,
-      archived: true,
-    } as Awaited<ReturnType<typeof getProfileByPublicId>>);
+    archivedOnce();
     expect(await restoreClearAction(input())).toEqual({
       ok: false,
       reason: DAY_CLEAR_REFUSAL.closed_day,
@@ -200,15 +213,6 @@ describe('restoreClearAction (V1-9b B1-2)', () => {
 });
 
 describe('clearDayAction (V1-9b B2)', () => {
-  const archived = () =>
-    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({
-      id: PROFILE_ID,
-      name: 'Athlete One',
-      kind: 'kid',
-      avatar: null,
-      archived: true,
-    } as Awaited<ReturnType<typeof getProfileByPublicId>>);
-
   it.each([
     ['no confirm word', { profilePublicId: PROFILE_ID, day: today() } as unknown as ClearDayInput],
     ['the wrong word', clearInput({ confirm: 'del' })],
@@ -251,7 +255,7 @@ describe('clearDayAction (V1-9b B2)', () => {
   });
 
   it('an archived athlete’s today is closed_day', async () => {
-    archived();
+    archivedOnce();
     expect(await clearDayAction(clearInput())).toEqual({
       ok: false,
       reason: DAY_CLEAR_REFUSAL.closed_day,
@@ -260,13 +264,23 @@ describe('clearDayAction (V1-9b B2)', () => {
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
-  it('hands the DAL the resolved athlete and the day, never the confirm word', async () => {
+  it('hands the DAL the RESOLVED athlete and the day, never the confirm word', async () => {
+    // The DAL's id differs from the one sent, so forwarding the input's id would fail here.
+    const RESOLVED = '019826b4-0000-7000-8000-000000000002';
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({ ...PROFILE, id: RESOLVED } as Awaited<
+      ReturnType<typeof getProfileByPublicId>
+    >);
     expect(await clearDayAction(clearInput())).toEqual({ ok: true, count: 3 });
     expect(clearDayEntries).toHaveBeenCalledTimes(1);
     expect(vi.mocked(clearDayEntries).mock.calls[0]![0]).toEqual({
-      profilePublicId: PROFILE_ID,
+      profilePublicId: RESOLVED,
       day: today(),
     });
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(RESOLVED));
+  });
+
+  it('answers the DAL’s count', async () => {
+    expect(await clearDayAction(clearInput())).toEqual({ ok: true, count: 3 });
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
@@ -278,7 +292,7 @@ describe('clearDayAction (V1-9b B2)', () => {
     expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
-  it('reads no household role: any member may clear (and restore)', async () => {
+  it('the action module reads no household role: any member may clear (and restore)', async () => {
     await clearDayAction(clearInput());
     await restoreClearAction(input());
     expect(householdState).not.toHaveBeenCalled();

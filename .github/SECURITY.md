@@ -129,8 +129,9 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
   maintainer, 2026-11-19; found by `V1-9b` B2's security lens)_. Every write bounded by the writable
   window (today and yesterday; today only for Clear this day) reads today through
   `getActiveLocalDay()`, and the zone is whatever valid IANA name the request's cookie names. So a
-  crafted POST can reach three consecutive dates (briefly four), not two, and always only inside the
-  caller's **own** household: the household boundary above is unaffected. It has held since V1-6c
+  crafted POST widens its window by one date (briefly two): three consecutive dates (briefly four)
+  instead of two for a today-and-yesterday write, and two (briefly three) instead of one for Clear
+  this day. Always only inside the caller's **own** household: the household boundary above is unaffected. It has held since V1-6c
   (#50). Accepted, not mitigated: the window is a product rule about which days are editable, not an
   authorization boundary.
 - Public/URL/API IDs are **UUIDv7** (non-enumerable → anti-IDOR).

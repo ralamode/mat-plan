@@ -1,4 +1,6 @@
 import { RESTORE_REASON } from '@mat-plan/shared';
+import { readFileSync } from 'node:fs';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Restore all's DAL half (V1-9b B1-2): `restoreClear` (which `db:verify` proves against a real
@@ -136,5 +138,36 @@ describe('clearDayEntries (V1-9b B2)', () => {
     state.scope = null;
     await expect(clearDayEntries(CLEAR)).rejects.toThrow('Profile not found');
     expect(clearDay).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 🔴 **Any member may clear a day and restore it** (V1-9b B2, the spec's table). An owner-only gate in
+ * this repo is `ownerScope(scope)` inside the DAL write (`profiles.ts`, `export.ts`), so this is where
+ * it would land, and where the decision is pinned: a member's scope reaches both writers, and neither
+ * wrapper names `ownerScope`. Making either owner-only is a decision, and it fails here first.
+ */
+describe('the day-level writes are any-member (V1-9b B2)', () => {
+  const MEMBER = { householdId: 1, role: 'member' };
+
+  it('a member’s scope reaches clearDay and restoreClear unchanged', async () => {
+    state.scope = MEMBER;
+    clearDay.mockResolvedValueOnce({ hiddenAt: ARGS.hiddenAt, count: 1 });
+    restoreClear.mockResolvedValueOnce({ items: [] });
+    await clearDayEntries({ profilePublicId: ARGS.profilePublicId, day: ARGS.day });
+    await restoreClearedDay(ARGS);
+    expect(clearDay.mock.calls[0]![1]).toMatchObject({ scope: MEMBER });
+    expect(restoreClear.mock.calls[0]![1]).toMatchObject({ scope: MEMBER });
+  });
+
+  it('neither wrapper names ownerScope', () => {
+    const source = readFileSync(new URL('./entries.ts', import.meta.url), 'utf8');
+    for (const name of ['clearDayEntries', 'restoreClearedDay']) {
+      const start = source.indexOf(`export async function ${name}(`);
+      expect(start, name).toBeGreaterThan(-1);
+      const next = source.indexOf('\nexport ', start + 1);
+      const body = source.slice(start, next === -1 ? undefined : next);
+      expect(body, name).not.toMatch(/ownerScope/);
+    }
   });
 });

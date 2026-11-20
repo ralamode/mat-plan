@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CLEAR_DAY_CONFIRM_MAX,
   CLEAR_DAY_CONFIRM_WORD,
+  DAY_CLEAR_REFUSAL,
   DAY_CLEAR_REFUSALS,
   clearDayResultSchema,
   clearDaySchema,
@@ -11,7 +12,7 @@ import {
   restoreClearSchema,
 } from './clear-day-shapes';
 import { TRANSPORT_REFUSALS } from './program/actions';
-import { ROW_REFUSALS } from './program/day-shapes';
+import { ROW_REFUSAL, ROW_REFUSALS } from './program/day-shapes';
 
 // A clear's token, as `hiddenAtText` prints `deleted_at`: microseconds, always six digits.
 const TOKEN = '2026-11-17T18:04:05.123456Z';
@@ -75,7 +76,7 @@ describe('restoreClearResultSchema', () => {
     { ok: true, restored: 1, keptHidden: 1 },
     { ok: true, restored: 0, keptHidden: 2 },
     { ok: true, restored: 0, keptHidden: 0 },
-    { ok: false, reason: 'closed_day' },
+    { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day },
   ])('parses %o', (result) => {
     expect(restoreClearResultSchema.safeParse(result).success).toBe(true);
   });
@@ -83,7 +84,7 @@ describe('restoreClearResultSchema', () => {
   it.each([
     { ok: true },
     { ok: true, restored: -1, keptHidden: 0 },
-    { ok: false, reason: 'slot_taken' },
+    { ok: false, reason: ROW_REFUSAL.slot_taken },
   ])('refuses %o', (result) => {
     expect(restoreClearResultSchema.safeParse(result).success).toBe(false);
   });
@@ -106,7 +107,10 @@ describe('clearDaySchema', () => {
   it.each(['delete', 'Delete ', '  DELETE'])(
     'takes %j: case and surrounding spaces ignored',
     (confirm) => {
-      expect(clearDaySchema.parse({ ...clear, confirm })).toEqual({ ...clear, confirm: 'delete' });
+      expect(clearDaySchema.parse({ ...clear, confirm })).toEqual({
+        ...clear,
+        confirm: CLEAR_DAY_CONFIRM_WORD,
+      });
     },
   );
 
@@ -118,9 +122,13 @@ describe('clearDaySchema', () => {
     expect(clearDaySchema.safeParse(clear).success).toBe(false);
   });
 
-  it('refuses a confirm longer than the bound, before it is trimmed', () => {
-    const padded = `${' '.repeat(CLEAR_DAY_CONFIRM_MAX)}delete`;
-    expect(clearDaySchema.safeParse({ ...clear, confirm: padded }).success).toBe(false);
+  it('takes a padded word of exactly the bound, and refuses one character more (before the trim)', () => {
+    const pad = (n: number) => `${' '.repeat(n)}${CLEAR_DAY_CONFIRM_WORD}`;
+    const fits = pad(CLEAR_DAY_CONFIRM_MAX - CLEAR_DAY_CONFIRM_WORD.length);
+    expect(fits).toHaveLength(CLEAR_DAY_CONFIRM_MAX);
+    expect(clearDaySchema.safeParse({ ...clear, confirm: fits }).success).toBe(true);
+    const over = pad(CLEAR_DAY_CONFIRM_MAX - CLEAR_DAY_CONFIRM_WORD.length + 1);
+    expect(clearDaySchema.safeParse({ ...clear, confirm: over }).success).toBe(false);
   });
 
   it('carries no token and no entry id: the server finds the day’s entries itself', () => {
@@ -132,12 +140,12 @@ describe('clearDayResultSchema', () => {
   it.each([
     { ok: true, count: 3 },
     { ok: true, count: 0 },
-    { ok: false, reason: 'closed_day' },
+    { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day },
   ])('parses %o', (result) => {
     expect(clearDayResultSchema.safeParse(result).success).toBe(true);
   });
 
-  it.each([{ ok: true }, { ok: true, count: -1 }, { ok: false, reason: 'slot_taken' }])(
+  it.each([{ ok: true }, { ok: true, count: -1 }, { ok: false, reason: ROW_REFUSAL.slot_taken }])(
     'refuses %o',
     (result) => {
       expect(clearDayResultSchema.safeParse(result).success).toBe(false);

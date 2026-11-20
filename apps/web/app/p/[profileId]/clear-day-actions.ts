@@ -2,6 +2,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 import {
+  clearDayOpenFor,
   clearDaySchema,
   dayOpenFor,
   DAY_CLEAR_REFUSAL,
@@ -28,29 +29,17 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
  * `restoreClearSchema`), a typed result, refusals returned, never thrown.
  *
  * **Who may:** any member signed in to the household, as for every entry write (spec
- * `crud-1-fix-it-yourself.md`'s table). No role is read here, and placement on the page is not a
- * control.
+ * `crud-1-fix-it-yourself.md`'s table). Neither this module nor its two DAL wrappers reads a role
+ * (both tests pin it), and placement on the page is not a control.
  */
 
 /**
- * **The two windows, named once for this module** (plan § B2 as amended; maintainer, 2026-11-19).
- *
- * - **Restore all:** today or yesterday, and the athlete not archived: `dayOpenFor`, the rule the day
- *   page's ✓ takes, so a clear stays restorable for at least a day.
- * - **Clear this day:** today only, and the athlete not archived. Yesterday is read-only for a clear
- *   but still open for its Restore all.
- *
- * "Today" is the request's active-timezone day, which comes from the client's `tz` cookie: an accepted
- * residual (`.github/SECURITY.md` → Authorization). ⚠️ Not exported: a `'use server'` module's exports
- * are endpoints.
+ * **The two windows** (plan § B2 as amended; maintainer, 2026-11-19), both from `packages/shared`:
+ * Restore all takes `dayOpenFor` (today or yesterday, not archived: the rule the day page's ✓ takes),
+ * and the clear takes `clearDayOpenFor` (today only, not archived), which the page's trigger reads too.
+ * "Today" is the request's active-timezone day from the client's `tz` cookie: an accepted residual
+ * (`.github/SECURITY.md` → Authorization).
  */
-async function restoreWindowOpen(profile: { archived: boolean }, day: string): Promise<boolean> {
-  return dayOpenFor(profile, day, await getActiveLocalDay());
-}
-
-async function clearWindowOpen(profile: { archived: boolean }, day: string): Promise<boolean> {
-  return !profile.archived && day === (await getActiveLocalDay());
-}
 
 /**
  * Server Action: Clear this day. Hides every live entry of one athlete's day as one event; the server
@@ -61,7 +50,9 @@ async function clearWindowOpen(profile: { archived: boolean }, day: string): Pro
  *
  * - **Today only**, and the athlete not archived (`closed_day` otherwise).
  * - **No program-assignment check** (C24): the entries are the athlete's own, assigned or not.
- * - **`count: 0` is a success**, "nothing was left to clear" (see `clearDayResultSchema`).
+ * - **`count: 0` is a success**, "nothing was left to clear" (see `clearDayResultSchema`): another
+ *   phone took the day's last entries by a blank Change or an un-tick. (Another phone's own clear is
+ *   not 0: this call then replays it and answers that clear's count.)
  * - The confirm word is checked by the schema and never reaches the DAL.
  */
 export async function clearDayAction(input: ClearDayInput): Promise<ClearDayActionResult> {
@@ -78,7 +69,7 @@ export async function clearDayAction(input: ClearDayInput): Promise<ClearDayActi
       const profile = await getProfileByPublicId(profilePublicId);
       if (!profile) return { ok: false, reason: DAY_CLEAR_REFUSAL.not_found };
 
-      if (!(await clearWindowOpen(profile, day))) {
+      if (!clearDayOpenFor(profile, day, await getActiveLocalDay())) {
         revalidatePath(athletePath(profile.id));
         return { ok: false, reason: DAY_CLEAR_REFUSAL.closed_day };
       }
@@ -128,7 +119,9 @@ export async function restoreClearAction(
         return { ok: false, reason };
       };
 
-      if (!(await restoreWindowOpen(profile, day))) return refuse(DAY_CLEAR_REFUSAL.closed_day);
+      if (!dayOpenFor(profile, day, await getActiveLocalDay())) {
+        return refuse(DAY_CLEAR_REFUSAL.closed_day);
+      }
 
       const { restored, keptHidden } = await restoreClearedDay({
         profilePublicId: profile.id,
