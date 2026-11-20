@@ -103,6 +103,7 @@ import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
 import {
   movementOptions,
+  programIdsIn,
   programIn,
   programWorkoutIds,
   readProgramList,
@@ -1121,6 +1122,28 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       await workoutIn(exec, A_SCOPE, aOther, workoutPublicId),
       false,
       'FAM-1 6a-ii: workoutIn: a workout under another program of the household is false',
+    );
+
+    // ── programIdsIn: programIn for several ids, in one query (tech-debt, 15c's order report) ──
+    const asked = [programPublicId, aOther, 'not-a-uuid', newId()];
+    assert.deepEqual(
+      [...(await programIdsIn(exec, A_SCOPE, asked))].sort(),
+      [programPublicId, aOther].sort(),
+      'FAM-1 15c: programIdsIn answers exactly the ids that are this household’s live programs',
+    );
+    assert.deepEqual(
+      [...(await programIdsIn(exec, B_SCOPE, asked))],
+      [],
+      "FAM-1 15c: programIdsIn: B finds none of A's programs",
+    );
+    await tx
+      .update(schema.programBlocks)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.programBlocks.publicId, aOther));
+    assert.deepEqual(
+      [...(await programIdsIn(exec, A_SCOPE, asked))],
+      [programPublicId],
+      'FAM-1 15c: programIdsIn: a removed program is not one of the household’s live programs',
     );
   });
   console.log(
