@@ -4,13 +4,6 @@ import {
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
   type PracticeMinutesProblem,
-  isMassUnit,
-  LOGGABLE_DIMENSION_NOUNS,
-  type Unit,
-  UNIT_DIMENSION,
-  UNIT_DIMENSION_BY_CODE,
-  type UnitDimension,
-  UNIT_LABELS,
 } from '@mat-plan/shared';
 
 import { plural } from './i18n/plural';
@@ -242,7 +235,7 @@ export const LANDING_COPY = {
  * (see `lib/clerk.ts`).
  *
  * `notYet` is the rest of the dark state. It leads with the state rather than an imperative (the
- * `BODYWEIGHT_COPY.duplicates` / `AMEND_COPY.locked` family — this comment used to cite
+ * `BODYWEIGHT_COPY.duplicates` family — this comment used to cite
  * `PICKER_EMPTY_COPY.notYet`, which PROF-1 a-1u deleted once adding an athlete became possible) and
  * says "isn't switched on yet" — a configuration fact, so the
  * maintainer verifying a deploy can tell dark from broken — and asks the reader for nothing.
@@ -684,22 +677,6 @@ export const SHELL_CELL_CLASS = 'lg:mx-0 lg:max-w-none';
 export const INPUT_CLASS =
   'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 aria-invalid:border-destructive';
 
-/**
- * The saved-state copy (V1-24 PR 1a) — one definition shared by the components and the specs.
- *
- * ⚠️ **This exists because the pattern already drifted.** `life-form.tsx` rendered
- * `"{label} · logged today"` and `e2e/steps.ts` asserted a **re-typed copy** of that same string —
- * the exact thing AGENTS.md's "tests use the same constant as the app" rule forbids. V1-24 adds more
- * saved surfaces, so the strings get a home before they multiply rather than after.
- *
- * `lib/constants.ts` and not `packages/shared`: this is app-only copy with no DB or engine consumer,
- * and this module is deliberately dependency-free so a `'use client'` component can import it.
- */
-export const SAVED_STATE_COPY = {
-  /** A log-once check-in field once it is logged (`checkin-form.tsx`). */
-  checkinLogged: 'Already logged today',
-} as const;
-
 /** A read-only day with nothing logged, in every single-value section (v12): one string, so they agree. */
 export const NOTHING_LOGGED = 'Nothing logged.';
 
@@ -982,99 +959,10 @@ export const AMEND_COPY = {
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */
   valueLabel: (unit: string) => `Weight (${unit})`,
-  /** A strength set's save, announced by its own island — the subject names WHICH set (3a-i). */
-  setChanged: (subject: string, value: string) => `${subject} changed: ${value}.`,
-  /**
-   * Why a set can't be changed (V1-24 3a-i, the parent plan's Locked state), keyed by `lockedReason`.
-   * Each is TRUE for the sets it labels; "yet" appears only where a backlog row will change it
-   * (V1-33: time and distance). `status` has no sentence of its own: the badge already says it.
-   */
-  locked: {
-    mode: 'Bodyweight and band sets can’t be changed in the app.',
-    notMass: 'Timed and distance sets can’t be changed in the app yet.',
-    status: '',
-    shape: 'Some sets here can’t be changed in the app.',
-  },
-  /** A Locked sentence that names its movements first ("Pull-Up: Bodyweight and band sets …"), so
-   *  the names attach to the sets, not to "the app". */
-  lockedFor: (names: string, sentence: string) => `${names}: ${sentence}`,
-  /** Ends every Locked line. With no delete action, re-logging is the move that makes it permanent. */
-  lockedRecovery: 'Wrong? Don’t log it again — tell a parent so they can fix it.',
 } as const;
 
 /**
- * The word a dimension's primary number goes by IN THE FIELD — the placeholder and the accessible
- * name. A third per-dimension map beside `LOGGABLE_DIMENSION_LABELS` (the Measuring option) and
- * `LOGGABLE_DIMENSION_NOUNS` (running copy), because each serves a different surface and respelling
- * one must not garble the others.
- *
- * `length`, not `distance` or `height`: the dimension covers a box-jump HEIGHT and a broad-jump
- * DISTANCE, so either alone mislabels the main length movement, and it must not contradict the blank
- * copy "Enter the height or distance." It also has to fit the `w-24` field (~52px) — the row is
- * ≈ 275 of ≈ 294px at 360px.
- *
- * `constants.test.ts` requires a word for every loggable dimension, so adding one without a word
- * fails rather than silently falling back.
- */
-export const QUANTITY_FIELD_WORD: Partial<Record<UnitDimension, string>> = {
-  mass: 'weight',
-  length: 'length',
-  time: 'time',
-};
-
-/**
- * A set's number-input accessible name — one source for the field and every spec that finds it.
- *
- * MASS IS BYTE-IDENTICAL to the old `weightInputLabel` ("… weight in lb"), so every existing mass
- * locator holds; a missed one fails loudly rather than drifting. Non-mass spells the unit out
- * ("time in seconds", "length in inches") because `sec` and `in` read as nothing aloud.
- */
-export function quantityInputLabel(subject: string, unit?: Unit): string {
-  if (!unit) return `${subject} weight`;
-  const word = QUANTITY_FIELD_WORD[UNIT_DIMENSION_BY_CODE[unit]] ?? 'weight';
-  if (UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass) return `${subject} weight in ${unit}`;
-  return `${subject} ${word} in ${UNIT_LABELS[unit].toLowerCase()}`;
-}
-
-/**
- * The advisory sentence when the catalog's declared dimension differs from the chosen Measuring, and
- * (V1-26 PR-A) when a declared-loaded movement is logged BW. ONE function, so the two surfaces cannot
- * word the same warning two ways — V1-26's sentence is the `mass` branch, verbatim.
- *
- * A WARNING, never a lockout: the catalog's declaration is a normal case, not a rule, and an athlete
- * doing bodyweight KB swings is allowed to be right.
- */
-export function usuallyLoggedAs(movementName: string, dimension: UnitDimension): string {
-  const noun = LOGGABLE_DIMENSION_NOUNS[dimension];
-  if (dimension === UNIT_DIMENSION.mass) return `${movementName} is usually logged with a weight.`;
-  return `${movementName} is usually logged as a ${noun ?? 'number'}.`;
-}
-
-/**
- * The strength section's copy (V1-24 3a-ii). The h2 stays "Log strength" until 3b renames it to the
- * noun "Strength" (agreed; deferred for size), so `heading` is the CURRENT text the specs assert.
- */
-export const STRENGTH_COPY = {
-  heading: 'Log strength',
-  submit: 'Log strength',
-  submitting: 'Logging…',
-  logMore: 'Log more strength',
-  /** The open toggle. "Close", not "Cancel": closing KEEPS the typed draft (it is hidden, not reset). */
-  close: 'Close',
-  /** The opened form's group name — distinct from the h2 and the submit, which share "Log strength". */
-  group: 'New strength session',
-  /** The trust guard while "Log more" is open. "For this day", not "today": yesterday is writable too. */
-  alreadySaved: (names: string) => `Already saved for this day: ${names}.`,
-  newSession: 'Adds a new session.',
-  saved: 'Saved',
-  /** The island's announcement on its OWN save. Leads with the receipt's heading, so a second session
-   *  with the same movements is still a text change, and so it names the receipt focus lands on. */
-  announced: (heading: string, names: string) => `${heading} saved: ${names}.`,
-  skippedSuffix: '(skipped)',
-} as const;
-
-/**
- * "1 movement" / "3 movements": the one spelling, shared by the receipt and `strengthSummary`.
+ * "1 movement" / "3 movements": the one spelling, shared by the movement picker's counts.
  *
  * ⚠️ **Through `plural()`, not a `n === 1` ternary.** The ternary was correct English and still the
  * wrong shape: it is the pattern a new string copies, and a locale with three forms cannot be
@@ -1097,16 +985,6 @@ export const movementCount = (n: number) =>
  * number itself: the contract's `WorkoutSummary.itemCount`, and the builder's own parameter.
  */
 export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other: `${n} items` });
-export const skippedCount = (n: number) => `${n} skipped`;
-
-/** A session receipt's id in the strength section — the focus target after its save. The prefix is
- *  exported so a locator can find "any receipt" without re-typing it. */
-export const STRENGTH_RECEIPT_ID_PREFIX = 'strength-receipt-';
-export const strengthReceiptId = (sessionPublicId: string) =>
-  `${STRENGTH_RECEIPT_ID_PREFIX}${sessionPublicId}`;
-
-/** A strength set amend's error id, unique per island (20 sets must not share one id). */
-export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
 
 /**
  * How far past today the day page looks ahead (FAM-1 12c; maintainer, 2026-11-17: "6 days ahead",
@@ -1248,7 +1126,7 @@ export const HOUSEHOLD_FULL = `A household can hold ${MAX_HOUSEHOLD_ATHLETES} at
  * UX panel asked for that legend on **a-1's** add form, where the fieldset really does group a name
  * and a kind.
  *
- * `saved` is a **statement of fact**, not praise — the `SAVED_STATE_COPY` / `PICKER_EMPTY_COPY`
+ * `saved` is a **statement of fact**, not praise — the `NOTHING_LOGGED` / `PICKER_EMPTY_COPY`
  * family ("the app's voice is a receipt, not a coach", ONB-1 R20).
  */
 export const ATHLETE_FORM_COPY = {
@@ -1582,71 +1460,3 @@ export const AMEND_ERROR_COPY = {
    */
   dayReadOnly: (subject: string) => `That day is read-only now, so the ${subject} wasn't changed.`,
 } as const;
-
-/**
- * V1-27 — the strength form's partial-set copy. The plan (`docs/plans/v1-27-partial-sets.md`) explains
- * each: the summary line is the real mitigation for dropping trailing empty sets, the hint is the local
- * cue on a mixed card, and the missing-field message names the way out of a block.
- */
-export const PARTIAL_SETS_COPY = {
-  /** After **Add set** on a card with touched sets and a trailing empty run. "At the end" because a gap
-   *  card has a trailing run too, and its gap row still blocks. */
-  trailingHint: "Empty sets at the end won't be logged.",
-  /** Custom validity of a required, blank REPS input (log form only) when the card has a per-set
-   *  Remove button — it renders only when the movement has more than one set. */
-  missingReps: "Fill in the reps, or tap Remove if you didn't do this set.",
-  /** …and on a one-set card, which has no per-set Remove to point at. */
-  missingRepsOnly: 'Fill in the reps for this set.',
-  /** Custom validity of a required, blank WEIGHT input on a MASS unit. Points at BW / band, the real way
-   *  out for a set done with no weight — "if you didn't do it" would be false, and typing `0` records a
-   *  fake load. Use `missingQuantityMessage(unit)`, which also covers time and distance. */
-  missingWeight: "Enter the weight, or tap BW or band if there wasn't one.",
-  /** The summary line when nothing would be logged (including a payload of only skipped movements). */
-  empty: 'Nothing to log yet.',
-} as const;
-
-/**
- * The blank-quantity bubble for a set's number field, by unit. BW / band are modes of a WEIGHT (V1-30
- * refuses them on time and distance), so only a mass unit points at them; a time or distance asks for
- * the number, with the same noun the server's refusal uses (`LOGGABLE_DIMENSION_NOUNS`).
- */
-export function missingQuantityMessage(unit: Unit): string {
-  if (isMassUnit(unit)) return PARTIAL_SETS_COPY.missingWeight;
-  return `Enter the ${LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]] ?? 'measurement'}.`;
-}
-
-/** Longest movement name the blocked summary quotes before truncating — keeps the line on one row at
- *  360px (~44 chars × ~7px ≈ 308px of the ~328px usable). */
-export const SUMMARY_NAME_MAX = 20;
-
-/**
- * The summary line when the browser would refuse the tap, naming the FIRST blocker so a kid knows
- * where to look — on a phone it can be several cards up the page. `index` is the on-screen card
- * number (0-based), `setIndex` the on-screen set number (0-based).
- */
-export function blockedSummary(
-  blocker:
-    | { kind: 'name'; index: number }
-    | { kind: 'set'; index: number; setIndex: number; movementName: string },
-): string {
-  if (blocker.kind === 'name') return `Movement ${blocker.index + 1} needs a name.`;
-  const name = blocker.movementName.trim();
-  const label =
-    name === ''
-      ? `Movement ${blocker.index + 1}`
-      : name.length > SUMMARY_NAME_MAX
-        ? `${name.slice(0, SUMMARY_NAME_MAX - 1).trimEnd()}…`
-        : name;
-  return `${label} set ${blocker.setIndex + 1} needs finishing.`;
-}
-
-/**
- * The line above **Log strength**: what the tap will log, from the exact post-drop payload. A skipped
- * movement is sent with `sets: []` and is not "logged", so it is counted separately.
- */
-export function strengthSummary(movements: number, sets: number, skipped: number): string {
-  if (movements === 0) return PARTIAL_SETS_COPY.empty;
-  const m = movementCount(movements);
-  const s = `${sets} ${sets === 1 ? 'set' : 'sets'}`;
-  return `Logs ${m}, ${s}${skipped > 0 ? `, ${skippedCount(skipped)}` : ''}.`;
-}
