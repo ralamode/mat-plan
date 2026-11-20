@@ -59,10 +59,12 @@ test('the lit card renders, keeps its styles, and meets the a11y bar under the p
   // 1 · The CSP refuses nothing but the one known probe. No host filter: a refused injected
   //     <style> records as "style-src-elem inline", with no host in it.
   const violations = (await cspViolations(page)).filter((v) => !isZodEvalProbe(v));
-  expect(
-    violations.map((v) => JSON.stringify(v)),
-    'CSP violations on /sign-in',
-  ).toEqual([]);
+  expect
+    .soft(
+      violations.map((v) => JSON.stringify(v)),
+      'CSP violations on /sign-in',
+    )
+    .toEqual([]);
 
   // 2 · Clerk's own styling arrived: its card has a shadow or rounding only Clerk's CSS supplies
   //     (Tailwind's preflight leaves a bare element at none / 0).
@@ -73,18 +75,23 @@ test('the lit card renders, keeps its styles, and meets the a11y bar under the p
       const s = getComputedStyle(el);
       return { boxShadow: s.boxShadow, borderRadius: s.borderRadius };
     });
-  expect(
-    card.boxShadow !== 'none' || parseFloat(card.borderRadius) > 0,
-    `Clerk's card is unstyled: ${JSON.stringify(card)}`,
-  ).toBe(true);
+  expect
+    .soft(
+      card.boxShadow !== 'none' || parseFloat(card.borderRadius) > 0,
+      `Clerk's card is unstyled: ${JSON.stringify(card)}`,
+    )
+    .toBe(true);
 
   // 3 · Our appearance key still reaches the Google button and wins (`SIGN_IN_APPEARANCE`'s
   //     min-h-11). NOT a styling check: that rule ships in our own stylesheet.
   const height = (await googleButton(page).boundingBox())?.height ?? 0;
-  expect(height, 'the Google button meets the tap bar').toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+  expect
+    .soft(height, 'the Google button meets the tap bar')
+    .toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
 
-  // 4 · The page's own a11y bar, measured on the page people get.
-  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  // 4 · The page's own a11y bar, measured on the page people get. Sections 1-4 are SOFT (and the
+  //     helpers below run after them), so one red run lists every kind of drift, not only the first.
+  await expect.soft(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expectNoHorizontalOverflow(page, 'sign-in drift');
   await expectTapTargets(page, 'sign-in drift');
   await expectLinkTargets(page.getByRole('main'), 'sign-in drift', EXPECTED_LINKS);
