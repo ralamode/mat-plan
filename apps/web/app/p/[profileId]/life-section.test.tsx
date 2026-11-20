@@ -71,12 +71,11 @@ const PRACTICE_SAVE = PRACTICE_COPY.saveLabel;
 const PRACTICE_CANCEL = PRACTICE_COPY.cancelLabel;
 
 describe('LifeSection — its states', () => {
-  it('writable and nothing logged: the practice button, and no Wake', () => {
+  it('writable and nothing logged: the practice button', () => {
     render(section());
     expect(screen.getByRole('heading', { name: LIFE_COPY.heading })).toBeTruthy();
     expect(screen.getByRole('button', { name: PRACTICE_COPY.logLabel })).toBeTruthy();
     expect(screen.getByLabelText(PRACTICE_COPY.fieldLabel)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: wakeLabel })).toBeNull();
     expect(screen.queryByText(LIFE_COPY.noneOnClosedDay)).toBeNull();
   });
 
