@@ -1,16 +1,16 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index e95cef62..a9d4ccfb 100644
+index 99c4bc20..b99a4601 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -12,6 +12,7 @@ import {
+@@ -11,6 +11,7 @@ import {
    type CatalogMovement,
    type TrackingType,
  } from '@mat-plan/shared';
 +import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
  
  import { schema } from '../../client';
- import { movementOptions } from '../../queries/program/movement-options';
-@@ -88,7 +89,8 @@ async function addOrSelect(
+ import { matchableOption } from '../../queries/program/catalog-arm-option';
+@@ -90,7 +91,8 @@ async function addOrSelect(
      .where(householdRowIs(scope));
    if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  

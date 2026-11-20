@@ -1,8 +1,8 @@
-diff --git a/packages/shared/src/program/pieces.ts b/packages/shared/src/program/pieces.ts
-index c743e554..a8f2c2c9 100644
---- a/packages/shared/src/program/pieces.ts
-+++ b/packages/shared/src/program/pieces.ts
-@@ -403,7 +403,7 @@ export function matchableOption<
+diff --git a/packages/db/src/queries/program/catalog-arm-option.ts b/packages/db/src/queries/program/catalog-arm-option.ts
+index a254a8aa..fd3e4174 100644
+--- a/packages/db/src/queries/program/catalog-arm-option.ts
++++ b/packages/db/src/queries/program/catalog-arm-option.ts
+@@ -109,7 +109,7 @@ export function matchableOption<
  >(option: O): O & { readonly isCatalog: boolean; readonly aliases: readonly string[] } {
    return {
      ...option,
