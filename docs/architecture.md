@@ -125,7 +125,7 @@ bounded consequence the id path creates — is [write-path.md](./features/write-
 section is the shape; that one is the rule. (§2f above is its neighbour and the two compose: §2g
 resolves the `movement_id` that §2f freezes.)
 
-## 2c. Batch write path — logging a day's check-ins (V1-5)
+## 2c. Batch write path — logging a day's check-ins (V1-5; historical since FAM-1 12f)
 
 The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by
 V1-1c). Differs from §2 in three ways worth seeing at a glance: the action derives its fields from a
@@ -155,9 +155,11 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
-> ⚠️ **The Check-ins form left the day page at V1-24 3b-page (2026-11-15, #418), and FAM-1 12f PR 3
-> removed `logCheckinsAction`.** The write path it drew (`logCheckinEntries` → `writers/checkin.ts`)
-> stays: the day page's practice (`logLifeActivitiesAction`) writes through it.
+> ⚠️ **Historical.** The Check-ins form left the day page at V1-24 3b-page (2026-11-15, #418), and
+> FAM-1 12f PR 3 removed `logCheckinsAction`: the form, its field registry walk and its batch answer
+> above are gone. What stays is the writer (`logCheckinEntries` → `writers/checkin.ts`), which the
+> day page's practice (`logLifeActivitiesAction`) calls with one item, answering
+> `created`/`replay`/`day_taken`/`own_hidden`/`conflict`.
 
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 

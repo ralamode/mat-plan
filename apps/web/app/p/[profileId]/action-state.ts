@@ -12,8 +12,9 @@ export type ActionState = {
   error: string | null;
   fieldErrors?: Record<string, string[] | undefined>;
   /**
-   * V1-24 3a-ii — the PUBLIC id of the record a successful create wrote (a strength session), so the
-   * island can announce THIS save and focus its receipt. Set only on success; never an internal id.
+   * V1-24 3a-ii — the PUBLIC id of the record a successful action wrote (since FAM-1 12f PR 3, an
+   * athlete's, from `profile-actions.ts`), so the island can announce THIS save and focus its result.
+   * Set only on success; never an internal id.
    */
   savedId?: string;
   /**

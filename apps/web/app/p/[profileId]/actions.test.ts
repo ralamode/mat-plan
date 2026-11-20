@@ -73,7 +73,7 @@ vi.mock('@/lib/dal/session', () => ({
 }));
 // 🔴 The limiter is mocked so a REFUSAL is reachable. In the real module it fails open, and with no
 // Upstash configured under vitest it answers `unconfigured` to everything — so without this mock the
-// refusal branch in all seven actions would be dead code that no test could enter.
+// refusal branch in all five actions would be dead code that no test could enter.
 // ⚠️ A PARTIAL mock since FAM-1 step 0b: `enterMutation` reads `MUTATION_RATE_LIMIT` for its default
 // policy and the matrix compares the limiter call against that const, so the real module supplies
 // the policies and only the check is replaced.
