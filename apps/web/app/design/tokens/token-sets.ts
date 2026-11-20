@@ -184,7 +184,7 @@ export const TOKEN_SETS: readonly TokenSet[] = [
     id: 'clinch',
     name: 'Clinch',
     rationale:
-      'A single-hue green system with deliberately stronger hairlines — the only set whose borders clear SC 1.4.11’s 3:1 non-text bar in both themes (today’s are 1.26:1 and 2.69:1), which is what a sunlit gym floor actually costs you.',
+      'A single-hue green system with deliberately stronger hairlines — the only set whose borders clear SC 1.4.11’s 3:1 non-text bar in both themes (today’s are 1.26:1 and 1.32:1), which is what a sunlit gym floor actually costs you.',
     signature: { accent: 'deep green', radius: '0.5rem', density: '1.04×' },
     tokens: {
       shape: { radius: '0.5rem', spacing: '0.26rem' },

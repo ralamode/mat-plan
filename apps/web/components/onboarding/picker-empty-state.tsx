@@ -11,7 +11,7 @@ import { PICKER_EMPTY_COPY } from '@/lib/constants';
  * Decisions that look like style and are not:
  *
  *  - **No box.** The only token that draws a container edge is `border`, which measures **1.26:1** on the
- *    light page (2.69:1 dark) and is pinned as failing SC 1.4.11 in `app/design/tokens/token-sets.test.ts`.
+ *    light page (1.32:1 dark) and is pinned as failing SC 1.4.11 in `app/design/tokens/token-sets.test.ts`.
  *    A container nobody can see is not a container, so grouping comes from the `<h2>` + `gap-3`, the way
  *    the landing does it.
  *  - **No `id`, so no `aria-labelledby`.** The section is a plain grouping, which lets this component be
