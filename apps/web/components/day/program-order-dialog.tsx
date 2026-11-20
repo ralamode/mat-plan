@@ -89,6 +89,10 @@ export function ProgramOrderButton({
  * **A program ending today** (D47, contract C37's `endsToday`) is listed below the movable ones,
  * under a note, with no number and no arrows, and is not counted in "N of M". The order sent is
  * still the whole list, the ending ones last (`programsByStay`, the contract's one split).
+ *
+ * **When nothing stays** (a re-read while it is open: off every program, or every program ends today)
+ * one sentence is the whole body: `orderEmpty` or `orderAllEnding`, in place of the explainer and
+ * both lists, and over any error line. It describes Done and is announced once, on the change.
  */
 export function ProgramOrderDialog({
   plan,
@@ -261,6 +265,27 @@ export function ProgramOrderDialog({
 
   const { staying, ending } = programsByStay(order);
   const endingNoteId = `${errorId}-ending`;
+  const emptyId = `${errorId}-empty`;
+  /**
+   * Nothing stays to order (15c follow-up): a re-read while the dialog is open took the athlete off
+   * every program, or left only programs ending today. One sentence replaces the explainer and both
+   * lists, and it wins over any error line, so one message shows.
+   */
+  const athlete = athleteNameOf(plan);
+  const emptyText =
+    staying.length > 0
+      ? null
+      : ending.length > 0
+        ? PROGRAM_COPY.orderAllEnding(athlete)
+        : PROGRAM_COPY.orderEmpty(athlete);
+
+  // Said once, on the change from a list to none: never on a re-render that is still empty.
+  const wasEmpty = useRef(emptyText !== null);
+  useEffect(() => {
+    const isEmpty = emptyText !== null;
+    if (isEmpty && !wasEmpty.current && open) announce(emptyText);
+    wasEmpty.current = isEmpty;
+  }, [emptyText, open]);
 
   const arrow = (program: Program, by: Move, index: number) => {
     const end = by === -1 ? index === 0 : index === staying.length - 1;
@@ -315,7 +340,10 @@ export function ProgramOrderDialog({
           // The error, and the note on what cannot move: focus lands here when a re-read takes away
           // the arrow it was on, and the note says why.
           aria-describedby={
-            [error ? errorId : null, ending.length > 0 ? endingNoteId : null]
+            (emptyText !== null
+              ? [emptyId]
+              : [error ? errorId : null, ending.length > 0 ? endingNoteId : null]
+            )
               .filter(Boolean)
               .join(' ') || undefined
           }
@@ -325,53 +353,66 @@ export function ProgramOrderDialog({
         </Button>
       }
     >
-      <p className="text-muted-foreground text-sm">{PROGRAM_COPY.orderExplainer}</p>
-      {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
-      <ol role="list" className="mt-3 flex flex-col gap-2">
-        {staying.map((program, index) => (
-          <li
-            key={program.programPublicId}
-            className="flex items-center gap-1 rounded-lg border py-1 pr-1 pl-3"
-          >
-            {/* The list says the position to a screen reader; the typed number is for sight. */}
-            <span className={cn('min-w-0 flex-1', NAME_WRAP_CLASS)}>
-              <span aria-hidden="true">{index + 1}. </span>
-              {program.name}
-            </span>
-            {arrow(program, -1, index)}
-            {arrow(program, 1, index)}
-          </li>
-        ))}
-      </ol>
-      {ending.length > 0 ? (
+      {emptyText !== null ? (
+        <p id={emptyId} className="text-sm">
+          {emptyText}
+        </p>
+      ) : (
         <>
-          <p id={endingNoteId} className="text-muted-foreground mt-4 text-sm">
-            {PROGRAM_COPY.endingNote(ending.length)}
-          </p>
-          {/* A list of its own, named by the note: no number, no arrows, never counted in N of M. */}
-          <ul role="list" aria-labelledby={endingNoteId} className="mt-2 flex flex-col gap-2">
-            {ending.map((program) => (
+          <p className="text-muted-foreground text-sm">{PROGRAM_COPY.orderExplainer}</p>
+          {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
+          <ol role="list" className="mt-3 flex flex-col gap-2">
+            {staying.map((program, index) => (
               <li
                 key={program.programPublicId}
-                className="flex min-h-11 items-center rounded-lg border py-1 pr-3 pl-3"
+                className="flex items-center gap-1 rounded-lg border py-1 pr-1 pl-3"
               >
-                <span className={cn('min-w-0', NAME_WRAP_CLASS)}>
-                  {/* The break before "·" stays outside the one-line suffix, so a long last word
-                      moves down whole rather than splitting mid-word. */}
-                  {program.name}{' '}
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    <span aria-hidden="true">· </span>
-                    <span className="sr-only">, </span>
-                    {lastDayText(plan.today, plan.today)}
-                  </span>
+                {/* The list says the position to a screen reader; the typed number is for sight. */}
+                <span className={cn('min-w-0 flex-1', NAME_WRAP_CLASS)}>
+                  <span aria-hidden="true">{index + 1}. </span>
+                  {program.name}
                 </span>
+                {arrow(program, -1, index)}
+                {arrow(program, 1, index)}
               </li>
             ))}
-          </ul>
+          </ol>
+          {ending.length > 0 ? (
+            <>
+              <p id={endingNoteId} className="text-muted-foreground mt-4 text-sm">
+                {PROGRAM_COPY.endingNote(ending.length)}
+              </p>
+              {/* A list of its own, named by the note: no number, no arrows, never counted in N of M. */}
+              <ul role="list" aria-labelledby={endingNoteId} className="mt-2 flex flex-col gap-2">
+                {ending.map((program) => (
+                  <li
+                    key={program.programPublicId}
+                    className="flex min-h-11 items-center rounded-lg border py-1 pr-3 pl-3"
+                  >
+                    <span className={cn('min-w-0', NAME_WRAP_CLASS)}>
+                      {/* The break before "·" stays outside the one-line suffix, so a long last word
+                          moves down whole rather than splitting mid-word. */}
+                      {program.name}{' '}
+                      <span className="text-muted-foreground whitespace-nowrap">
+                        <span aria-hidden="true">· </span>
+                        <span className="sr-only">, </span>
+                        {lastDayText(plan.today, plan.today)}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </>
-      ) : null}
-      {/* Mounted before it has text, so a failure is announced (announcer.tsx rule 1). */}
-      <Announcer id={errorId} message={error} className="text-destructive mt-2 min-h-5 text-sm" />
+      )}
+      {/* Mounted before it has text, so a failure is announced (announcer.tsx rule 1). Silent while
+          nothing stays: the empty sentence is the one message. */}
+      <Announcer
+        id={errorId}
+        message={emptyText !== null ? '' : error}
+        className="text-destructive mt-2 min-h-5 text-sm"
+      />
     </Sheet>
   );
 }

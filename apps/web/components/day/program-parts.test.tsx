@@ -749,6 +749,69 @@ describe('ProgramLine and the Program order dialog', () => {
     }
   });
 
+  describe('nothing left to order (15c follow-up)', () => {
+    const plan = todayThreeProgramsOneEnding;
+    const { staying } = programsByStay(plan.currentPrograms);
+    const doneButton = () => screen.getByRole('button', { name: PROGRAM_COPY.done });
+    const statusNode = () => document.getElementById(sheetStatusId(PROGRAM_ORDER_SHEET_ID));
+    const offEverything: DayPlan = { ...plan, currentPrograms: [] };
+    /** The visible sentence: the sheet's status region says the same words, once. */
+    const shown = (text: string) => {
+      const found = within(screen.getByRole('dialog'))
+        .getAllByText(text)
+        .filter((el) => el.closest('[role="status"]') === null);
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+    const allEnding: DayPlan = {
+      ...plan,
+      currentPrograms: plan.currentPrograms.map((p) => ({ ...p, endsToday: true as const })),
+    };
+
+    it.each([
+      ['off every program', offEverything, PROGRAM_COPY.orderEmpty(nameOf(plan))],
+      ['every program ending today', allEnding, PROGRAM_COPY.orderAllEnding(nameOf(plan))],
+    ])('%s: one sentence is the body, describes Done and is said once', (_case, next, text) => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      act(() => arrow('up', staying[1]!.name).focus());
+      view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+      const dialog = screen.getByRole('dialog');
+      const message = shown(text);
+      expect(message.tagName).toBe('P');
+      expect(within(dialog).queryByText(PROGRAM_COPY.orderExplainer)).toBeNull();
+      expect(within(dialog).queryAllByRole('list')).toHaveLength(0);
+      expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(1), { exact: false })).toBeNull();
+      expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(3), { exact: false })).toBeNull();
+      // The arrow that had focus is gone: Done takes it, described by the sentence alone.
+      expect(document.activeElement).toBe(doneButton());
+      expect(doneButton().getAttribute('aria-describedby')).toBe(message.id);
+      // Said once, on the change: a further re-read that is still empty is not a new announcement.
+      expect(statusNode()?.textContent).toBe(text);
+      const said = statusNode()?.firstElementChild;
+      const again = { ...next, currentPrograms: [...next.currentPrograms] };
+      view.rerender(<ProgramLine plan={again} actions={withReorder(again, vi.fn())} />);
+      expect(statusNode()?.firstElementChild).toBe(said);
+    });
+
+    it('wins over the stale refusal’s line: one message shows', async () => {
+      const view = mountLine(
+        plan,
+        withReorder(plan, async () => ({ ok: false, reason: PROGRAM_REFUSAL.invalid })),
+      );
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, vi.fn())} />,
+      );
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(screen.queryByText(PROGRAM_COPY.orderStale)).toBeNull();
+    });
+  });
+
   describe('the names as links (15c, D49)', () => {
     it('given programHrefFor, each name links to its program; without it, text', () => {
       render(
