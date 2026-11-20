@@ -499,8 +499,8 @@ quietly, and this is the mechanism that stopped it.
 
 Every household-reachable table carries `created_at`, `updated_at` and `deleted_at` (`schema.ts` →
 `timestamps`), and `deleted_at` is a **soft** delete — see §5. **Except** `movement_equipment` and
-`movement_muscles` (`CAT-3` A1), which carry `created_at` only. Nothing writes them yet: A3's catalog
-seed will write global rows by difference and delete them hard, and a household's own row (none
+`movement_muscles` (`CAT-3` A1), which carry `created_at` only. The catalog seed writes them for library
+movements only (`seedCatalog`, since A2-i); A3's seed will write global rows by difference and delete them hard, and a household's own row (none
 exist) is deleted hard with its movement (`runbooks.md` steps 10a, 10b).
 
 ✅ **The table set is proved, not only listed** (re-read 2026-11-17, `PRIV-3` PR 1). §1a's twenty-one

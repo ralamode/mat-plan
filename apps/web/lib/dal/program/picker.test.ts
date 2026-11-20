@@ -2,6 +2,7 @@ import {
   catalogHowToOf,
   catalogOptionOf,
   MOVEMENT_SEED_ROWS,
+  movementNameKey,
   pickerEntryOf,
   TRACKING_TYPE,
   type CatalogOptionTaxonomy,
@@ -286,7 +287,8 @@ describe('getHowTo: one option’s steps, resolved among the caller’s own opti
 
 /**
  * CAT-3 P11-ii-b (b5): the size of what the picker is handed, measured over the real library plus the
- * 35 old built-ins (the read's shape, built here from `catalogOptionOf`), and at 500 options. JSON
+ * 35 old built-ins (the read's shape, built here from `catalogOptionOf`), and at 1,000 options, above
+ * today's list. JSON
  * length stands in for the RSC payload; household item names are free text, so this is never measured
  * on production. The figures go in the PR body; the ceilings are what a regression would cross.
  */
@@ -329,7 +331,11 @@ describe('(b5) the picker payload, measured', () => {
       unitDefault: r.unitDefault,
       isBodyweight: r.isBodyweight,
       group: pickerEntryOf(r.slug)!.group,
-      aliases: [...(pickerEntryOf(r.slug)?.aliases ?? []), ...(lib?.aliases ?? [])],
+      // Each alias once by the picker's name key, the const's first: `joinAliases`' rule.
+      aliases: [...(pickerEntryOf(r.slug)?.aliases ?? []), ...(lib?.aliases ?? [])].filter(
+        (alias, i, all) =>
+          all.findIndex((x) => movementNameKey(x) === movementNameKey(alias)) === i,
+      ),
       taxonomy: lib?.taxonomy ?? null,
       supervision: lib?.supervision ?? null,
       hasInstructions: lib?.hasInstructions ?? false,
@@ -340,18 +346,18 @@ describe('(b5) the picker payload, measured', () => {
     return Buffer.byteLength(JSON.stringify(await getItemPickerData()), 'utf8');
   };
 
-  it('the real library plus the 35 old built-ins, and 500 options', async () => {
+  it('the real library plus the 35 old built-ins, and 1,000 options', async () => {
     const library = CATALOG_MOVEMENTS.filter((e) => !oldSlugs.has(e.slug));
     const real = [...library.map((e, i) => asRead(i, e)), ...oldRows];
-    const five = Array.from({ length: 500 }, (_, i) =>
+    const thousand = Array.from({ length: 1000 }, (_, i) =>
       asRead(i, CATALOG_MOVEMENTS[i % CATALOG_MOVEMENTS.length]!),
     );
-    // Measured 2026-11-20: 610 options, 208,104 bytes; 500 options, 173,463 (about 347 each). The
+    // Measured 2026-11-20: 610 options, 208,098 bytes; 1,000 options, 347,404 (about 347 each). The
     // ceilings leave about 15%: carrying each option's steps (rule 11, P16) would cross them many times.
     // The 12 library slugs that are also old built-in slugs (back_squat … walking_lunge) list once.
     expect(CATALOG_MOVEMENTS.length - library.length).toBe(12);
     expect(real.length).toBe(library.length + MOVEMENT_SEED_ROWS.length);
     expect(await bytesOf(real), 'the real library and the old built-ins').toBeLessThan(240_000);
-    expect(await bytesOf(five), '500 library options').toBeLessThan(200_000);
+    expect(await bytesOf(thousand), '1,000 library options').toBeLessThan(400_000);
   });
 });

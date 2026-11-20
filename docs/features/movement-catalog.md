@@ -28,7 +28,7 @@ lane N's ([catalog-data.md](./catalog-data.md)).
 All four tables are empty of catalog rows in production until A2-ii switches the seed on. Since
 CAT-3 P11-ii-b the picker's read reads the two join tables (`catalogTaxonomyRows` in
 `queries/program/movement-options.ts`); the stays-dark scan that held them unread until then is retired,
-and that read's proofs (`verify/program.ts`, (b1)–(b4), mutations `605`–`608`) replace it.
+and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutations `605`–`609`, and (b4)'s parse throws in `catalog-arm-option.test.ts`.
 
 ## Invariants
 

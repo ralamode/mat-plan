@@ -10,7 +10,6 @@
     parsed, and a join row for any other movement stops the read.
   - **Nothing a person sees changes today:** the seed writes the join rows from the same entries, and
     production holds no library rows until the seed switch (A2-ii).
-  - **Measured:** the picker's data is 208 KB over the real library and the 35 old built-ins (610 options; 12 library slugs are old built-ins), and 173 KB
-    at 500 options. A test now fails if either grows by about 15%.
+  - **Measured:** the picker's data is 208 KB over the real library and the 35 old built-ins (610 options; 12 library slugs are old built-ins), and 347 KB at 1,000 options. A test now fails if either grows by about 15%.
   - **The stays-dark scan for the library tables is retired;** this read's `db:verify` proofs and
-    mutations `605`–`608` replace it.
+    mutations `605`–`609` replace it.
