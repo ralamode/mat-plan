@@ -204,7 +204,7 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
       expect(token, 'add-athlete-tile.tsx names no border token beside border-dashed').toBeTruthy();
       expect(
         token,
-        `a translucent border cannot be measured honestly — see this test's docblock`,
+        `the tile's border must be an opaque token, so its contrast does not depend on its surface — see this test's docblock`,
       ).not.toContain('/');
       const value = t[token as never];
       expect(value, `${token} is not a palette token`).toBeTruthy();
