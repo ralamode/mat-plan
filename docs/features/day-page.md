@@ -171,7 +171,15 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     over a number nobody meant, where a blur or ✓ would send it over that phone's (12c-iii
     follow-up). A tap elsewhere ends Collapse's claim on focus, even one that moves none (Safari). A failed
     save's "Couldn't save. Still 27.5 lb" gives way, on such a change, to the draft's own "Not
-    saved. Was 35 lb", which names what is stored now; the typed number stays.
+    saved. Was 35 lb", which names what is stored now; the typed number stays. **Such a change is
+    said to a screen reader** by the page's announcer (never by the line, which is not a live
+    region), only for a row that showed "Not saved" or "Couldn't save": "… was changed elsewhere to
+    35 pounds, 8 reps. Yours isn't saved." while a field still differs, else "… is saved as 35
+    pounds, 8 reps." (true too when this phone's own write landed with its answer lost). A row
+    nobody here is changing, a number typed back, and this phone's own save (`saving`) stay
+    silent. ⚠️ The announcer holds one sentence: a later one replaces it, so in the rare case of
+    this phone's ✓ and another phone's change in the same refresh only the later is read (one node
+    per sentence would fix it; joining them in one node re-reads the earlier ones, #786).
 
 17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an
