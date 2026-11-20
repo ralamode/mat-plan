@@ -343,7 +343,7 @@ movement picker.
   through. Bare `pnpm --filter web e2e` provisions no database — use `e2e:local`.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
-  `next build` · gitleaks · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
+  `next build` · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
   `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run

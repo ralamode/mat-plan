@@ -860,7 +860,7 @@ flowchart TB
   PREV --> REV["review + squash-merge to main"]
   REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>migrate.yml (prod) + migrate-preview.yml"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
-  REV --> MAIN["push to main: every mutation shard runs; a burst of pushes coalesces to two runs<br/>red → one issue, 'mutation gate red on main'"]
+  REV --> MAIN["push to main: every mutation shard runs; a burst of pushes coalesces to at most two runs<br/>red → one issue, 'mutation gate red on main'"]
   MIG --> NEON[("Neon: production")]
   MIG --> NEONP[("Neon: mat-plan-preview<br/>seed-only, separate project")]
   PROD --> NEON

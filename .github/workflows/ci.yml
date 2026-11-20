@@ -5,15 +5,19 @@ on:
   push:
     branches: [main]
 
-# A pull request cancels its own older run. Pushes to main share ONE group and never cancel a run
-# in progress: GitHub keeps only one PENDING run per group (AGENTS.md records it for migrate.yml), so
-# a burst of merges costs at most two runs, the one going and the newest, and the pending runs
-# between them are dropped. The newest run checks every commit before it, so a red run covers the
-# commits since the last green one; `db:mutations --only <n>` narrows it to the patch, then the
-# commit. That is the maintainer's revision of DX-18 D6 (2026-11-19), which gave each commit its own
-# group: eleven queued main runs had held every pull request behind them.
+# A pull request cancels its own older run. Pushes to main share ONE group (`refs/heads/main`) and
+# never cancel a run in progress: GitHub keeps only one PENDING run per group (AGENTS.md records it
+# for migrate.yml), so a burst of merges costs at most two runs, the one going and the last to queue
+# (normally the newest), and the pending runs between them are dropped. The survivor checks the whole
+# tree, so a red run covers the commits since the last green one: `db:mutations --only <n>` names the
+# patch, and `git bisect` with it the commit. The maintainer's revision of DX-18 D6 (2026-11-19),
+# which gave each commit its own group: eleven queued main runs had held every PR behind them.
+# - The exception is the secret scan: gitleaks scans only its push's own commits, so main's scan
+#   is its own per-commit workflow (secret-scan-main.yml), and the job below runs on PRs only.
+# - Retry a flaky main run by pushing, not by re-running an old run: a re-run joins this group and
+#   can displace the tip's pending run. If the tip's run reads "cancelled", the next push checks it.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default; the gitleaks job widens to read PRs.
@@ -771,7 +775,7 @@ jobs:
         run: |
           title='mutation gate red on main'
           # Main's runs coalesce (DX-18 D6 as revised), so a red run may cover several merges.
-          body="The mutation proof failed on $SHA, which may include every commit since the last green main run: $RUN_URL. Narrow it with \`pnpm --filter @mat-plan/db db:mutations --only <n>\` on the failing patch."
+          body="The mutation proof failed on $SHA: $RUN_URL. Main's runs coalesce, so the cause may be any commit since the last green main run. The shard log names the failing patch; find the commit with \`git bisect run pnpm --filter @mat-plan/db db:mutations --only <n>\` (a commit where the patch does not apply counts as bad)."
           # The plain listing, not --search: search indexing lags, so two quick red pushes would
           # each miss the other's issue and open two.
           number="$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title \
@@ -782,8 +786,11 @@ jobs:
             gh issue create --repo "$REPO" --title "$title" --body "$body"
           fi
 
+  # PRs only: main's pushes coalesce (top of this file), and gitleaks scans only its push's own
+  # commits, so main's secret scan is secret-scan-main.yml, one run per commit.
   gitleaks:
     name: gitleaks
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read

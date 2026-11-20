@@ -214,8 +214,8 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
 - **As built after #700 (2026-11-19, CI runs queued for most of an hour):** a `mutations-plan` job runs
   the scopes once and outputs `run_mutations` and the shard list, written once in its "Shard count"
   step: **4 on every event** (8 on a push to main until 2026-11-19, maintainer, after eleven queued
-  main runs of 8 shards each held every PR behind them). Every push to main still runs every patch,
-  and a red run still sits on its own commit. `mutations` and `mutations-total` skip at job level when
+  main runs of 8 shards each held every PR behind them). Every main run still runs every patch
+  (and, until the 2026-11-19 revision under Concurrency, a red run sat on its own commit). `mutations` and `mutations-total` skip at job level when
   `run_mutations` is `false`, so a PR that cannot affect a patch takes one runner for the proof, not
   nine. A failed plan leaves the output empty, which still runs `mutations-total`, and it goes red.
 - **No cron.** A scheduled run tells nobody, and public-repo schedules lapse after 60 days.
@@ -224,9 +224,10 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
   records this for `migrate.yml`), so a shared group would drop a middle commit's shards on quick
   merges.
   - **Revised (maintainer, 2026-11-19):** pushes to main now share one group on purpose, so a burst
-    of merges costs at most two runs and the middle commits' runs are dropped. The newest run checks
-    everything before it, and a red run covers the commits since the last green one, narrowed with
-    `db:mutations --only <n>`. Eleven queued main runs had held every PR behind them; the trade and
+    of merges costs at most two runs and the middle commits' runs are dropped. The last run to queue
+    (normally the newest) checks the whole tree, and a red run covers the commits since the last green
+    one, narrowed with `db:mutations --only <n>` and `git bisect`. The secret scan stays per commit
+    (`secret-scan-main.yml`), since gitleaks scans only its push's own commits. Eleven queued main runs had held every PR behind them; the trade and
     its numbers are in [dx-18-mutation-savings.md](./dx-18-mutation-savings.md).
 - **The runner flags,** added to `mutations.mjs` on top of #554's journal:
   - `--shard i/n` and `--only <range|substring>`;
