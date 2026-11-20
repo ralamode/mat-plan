@@ -218,8 +218,9 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
   // rows have it NULL by the at-most-one CHECK), so this catches new session members AND legacy strength.
   const strengthIds = rows.filter((r) => r.movementId !== null).map((r) => r.id);
   // The live sets and their live quantities, through the one read the program row's `readRowValues`
-  // shares (`@mat-plan/db`'s `readLiveSets`): the load-bearing parent filter lives there, and
-  // mutation 172 guards it for both readers. The ids are the owned entries' own (the read above).
+  // shares (`@mat-plan/db`'s `readLiveSets`): the load-bearing parent filter lives there, mutation 172
+  // guards it, and `entries.test.ts` pins that this read calls it. The ids are the owned entries' own
+  // (the read above).
   const setsByEntry = new Map<number, SetDTO[]>();
   for (const s of await readLiveSets(db, strengthIds)) {
     const list = setsByEntry.get(s.entryId) ?? [];

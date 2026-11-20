@@ -26,16 +26,18 @@ export type LiveSet = {
 };
 
 /**
- * **The one read of the entries' live `entry_sets` and their live quantities**, in `(idx, id)` order,
- * quantities in `id` order. Both of the app's readers go through it: the day page's DAL read
+ * **The one two-query read of the entries' live `entry_sets` and their live quantities**, in `(idx, id)`
+ * order, quantities in `id` order (the month export joins the same tables in its own single query,
+ * `export-month.ts`). Both two-query readers go through it: the day page's DAL read
  * (`listEntriesForDay`) and the program row's `readRowValues` (the writer's replay and re-tick, 12a's
  * day plan, the previous-values read).
  *
  * Two queries: the LIVE sets, then the live quantities **of those set ids**. ⚠️ **The parent filter is
  * load-bearing**: `ON DELETE CASCADE` on `entry_set_quantities` is hard-delete only, and this app only
  * soft-deletes, so a soft-deleted set's quantities are still `deleted_at IS NULL`. Selecting by the
- * live set ids is what keeps them out (mutation 172 drops the set filter here, and so for every
- * reader).
+ * live set ids is what keeps them out. Mutation 172 drops the set filter here; `db:verify` reaches it
+ * through `readRowValues`, and the DAL's emitted-SQL test pins that `listEntriesForDay` calls this
+ * read (`lib/dal/entries.test.ts`, which also pins its one app importer).
  *
  * Takes internal ids the caller has already proved owned; it adds no ownership of its own.
  */
