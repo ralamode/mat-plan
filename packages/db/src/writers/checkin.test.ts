@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHECKIN_CLIENT_ID_NOT_UUID,
+  CHECKIN_CLIENT_IDS_REPEAT,
   type CheckinInsertValue,
   writeCheckinEntries,
 } from './checkin';
@@ -43,7 +44,7 @@ describe('writeCheckinEntries — a repeated client_id', () => {
   ])('refuses two items sharing an id %s, before any statement', async (_label, twin) => {
     await expect(
       writeCheckinEntries(untouched, { profileId: 1, values: [item(ID), item(twin)] }),
-    ).rejects.toThrow('check-in client_ids repeat within one submit');
+    ).rejects.toThrow(CHECKIN_CLIENT_IDS_REPEAT);
   });
 });
 

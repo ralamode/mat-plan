@@ -178,8 +178,8 @@ board's slot) confirms every existing patch still applies over the shifted write
 
 > Models: correctness (opus). No P0 or P1.
 
-| #   | Lens | Critique (short)                                                                    | Verdict      | Resolution                                                                                    |
-| --- | ---- | ----------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
-| R1  | Corr | The upper-case action test's name says the answer maps to its field; nothing checks | **accepted** | A separate test: an `own_hidden` answer for the folded id marks the field sent in upper case  |
-| R2  | Corr | "Not a hyphenated uuid" undersells the parse: zod 4 also refuses non-RFC digits     | **fixed**    | Own follow-up PR: `CHECKIN_CLIENT_ID_NOT_UUID` names the RFC; 424 re-cut; a non-RFC test case |
-| R3  | Corr | One docblock line in `checkin.ts` runs past 100 columns                             | **accepted** | Wrapped                                                                                       |
+| #   | Lens | Critique (short)                                                                    | Verdict      | Resolution                                                                                   |
+| --- | ---- | ----------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------- |
+| R1  | Corr | The upper-case action test's name says the answer maps to its field; nothing checks | **accepted** | A separate test: an `own_hidden` answer for the folded id marks the field sent in upper case |
+| R2  | Corr | "Not a hyphenated uuid" undersells the parse: zod 4 also refuses non-RFC digits     | **fixed**    | #762: `CHECKIN_CLIENT_ID_NOT_UUID` names the RFC; 424 re-cut; a non-RFC test case            |
+| R3  | Corr | One docblock line in `checkin.ts` runs past 100 columns                             | **accepted** | Wrapped                                                                                      |

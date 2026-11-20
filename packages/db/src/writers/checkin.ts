@@ -105,6 +105,15 @@ type CheckinArgs = {
 };
 
 /**
+ * The throw for a `client_id` `lowerCaseUuidSchema` refuses: not hyphenated (braces, bare hex), or
+ * hyphenated with a version or variant digit outside RFC 9562 (zod 4's `z.uuid()`).
+ */
+export const CHECKIN_CLIENT_ID_NOT_UUID = 'check-in client_id is not a hyphenated RFC 9562 uuid';
+
+/** The throw for two items under one `client_id` in one call (they would write one row). */
+export const CHECKIN_CLIENT_IDS_REPEAT = 'check-in client_ids repeat within one submit';
+
+/**
  * Insert the items and say what happened to each, in submit order.
  *
  * 🔴 **One retry, for exactly the items nothing explains** (the tech-debt row "A day-taken insert can
@@ -127,12 +136,6 @@ type CheckinArgs = {
  * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages
  * are for tests; `quietDbErrors` logs only the class. Answers carry the parsed id.
  */
-/**
- * The throw for a `client_id` `lowerCaseUuidSchema` refuses: not hyphenated (braces, bare hex), or
- * hyphenated with a version or variant digit outside RFC 9562 (zod 4's `z.uuid()`).
- */
-export const CHECKIN_CLIENT_ID_NOT_UUID = 'check-in client_id is not a hyphenated RFC 9562 uuid';
-
 export async function writeCheckinEntries(
   exec: Executor,
   args: CheckinArgs,
@@ -143,7 +146,7 @@ export async function writeCheckinEntries(
     return { ...v, clientId: clientId.data };
   });
   if (new Set(values.map((v) => v.clientId)).size !== values.length) {
-    throw new Error('check-in client_ids repeat within one submit');
+    throw new Error(CHECKIN_CLIENT_IDS_REPEAT);
   }
 
   const first = await attemptCheckinEntries(exec, { ...args, values });
