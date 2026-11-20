@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 01786f5c..125e919a 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -497,9 +497,7 @@ export async function seedCatalog(
+         })),
+       ];
+     });
+-    if (muscleRows.length > 0) {
+-      await tx.insert(schema.movementMuscles).values(muscleRows);
+-    }
++    await tx.insert(schema.movementMuscles).values(muscleRows);
+ 
+     // What already held the other slugs: a catalog row (E2) or a legacy global row. Counts only.
+     const held = unique.length - inserted.length;

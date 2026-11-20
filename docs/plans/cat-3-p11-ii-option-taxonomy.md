@@ -147,7 +147,7 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
   the fixture library is read with it, and production refuses anything else. **When and how it is built
   is Amendment 1, A1.1 and Q5**: its own PR, with A2-ii, not P11-ii-a. Declined by the spec owner:
   disjoint fixture slugs.
-- **Q2, with the maintainer.** The spec owner recommends (A): the vocabulary's order (`EQUIPMENT`,
+- **Q2, decided: (A)** _(maintainer, roadmap thread's chat, 2026-11-19: "2. Yes to both"; spec K31; #716)_. The spec owner recommended (A): the vocabulary's order (`EQUIPMENT`,
   `MUSCLES`), in the read and in `catalogOptionOf`. Measured on main when asked (326 entries then; the library has grown since): 14 entries list
   equipment out of vocabulary order (so 14 rows would word "what it needs" differently), and 54
   list secondary muscles out of order (no screen shows those today). The spec gives the authored
@@ -312,7 +312,7 @@ its own vitest file. Its cases:
   - (B) The same timing, with the variable as A1.1 specifies.
   - Either way, K29's "Lane P builds it in P11-ii-a" becomes "in its own PR, with A2-ii".
 
-  **Spec owner's answer (2026-11-19): (A)**, now with the maintainer, since K29 records their "ok" on a
+  **Decided: (A)** _(the spec owner, then the maintainer, roadmap thread's chat, 2026-11-19: "2. Yes to both"; spec K29 reworded in #716)_, first put to the maintainer since K29 records their "ok" on a
   mechanism first described as a setting. Plan on (A). Nothing P11-ii-a builds depends on it. Its two
   conditions bind the K29 PR:
   1. The rule's proof names every database it admits (`embedded-pg`, CI's smoke, the preview) and

@@ -12,8 +12,9 @@ export type ActionState = {
   error: string | null;
   fieldErrors?: Record<string, string[] | undefined>;
   /**
-   * V1-24 3a-ii — the PUBLIC id of the record a successful create wrote (a strength session), so the
-   * island can announce THIS save and focus its receipt. Set only on success; never an internal id.
+   * V1-24 3a-ii — the PUBLIC id of the record a successful action wrote (since FAM-1 12f PR 3, an
+   * athlete's, from `profile-actions.ts`), so the island can announce THIS save and focus its result.
+   * Set only on success; never an internal id.
    */
   savedId?: string;
   /**
@@ -35,8 +36,7 @@ export type ActionState = {
    */
   duplicate?: {
     // The writer's own type, imported — not a fourth hand-typed copy. A type-only import is erased,
-    // so nothing from `@mat-plan/db` reaches the client bundle this module is part of (precedent:
-    // `lib/entries/adherence.ts`, `lib/programming/program-day.ts`).
+    // so nothing from `@mat-plan/db` reaches the client bundle this module is part of.
     match: NameMatch;
     /**
      * The household is at `MAX_HOUSEHOLD_ATHLETES`, so "Add another" would be refused — hide it.

@@ -136,11 +136,21 @@ export function athleteNameOf(plan: DayPlan): string {
  */
 export const PROGRAM_COPY = {
   line: (names: readonly string[]) =>
-    `${names.length === 1 ? 'Program' : 'Programs'}: ${names.join(VALUE_JOINER)}`,
+    `${PROGRAM_COPY.lineLabel(names.length)} ${names.join(VALUE_JOINER)}`,
+  /** The line's label alone, for the line whose names are links (15c, D49). */
+  lineLabel: (count: number) => `${count === 1 ? 'Program' : 'Programs'}:`,
   order: 'Program order',
   orderTitle: (athlete: string) => `${athlete}’s programs`,
   orderExplainer:
-    'The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week.',
+    'The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week. A program added later goes where it sits in the Programs list.',
+  /**
+   * The note above the programs that end today (15c, D47; the prototype's words): listed last, no
+   * arrows, not counted in "N of M".
+   */
+  endingNote: (count: number) =>
+    count > 1
+      ? 'These come off after today, so they are listed last and can’t be moved.'
+      : 'This one comes off after today, so it is listed last and can’t be moved.',
   moveUp: (program: string) => `Move ${program} up`,
   moveDown: (program: string) => `Move ${program} down`,
   moved: (program: string, place: number, of: number) => `${program} moved to ${place} of ${of}`,

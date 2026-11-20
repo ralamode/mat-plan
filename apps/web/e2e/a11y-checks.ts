@@ -2,21 +2,48 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 // Relative imports only, as `contexts.ts` keeps them.
-import { MIN_TAP_TARGET_PX } from '../lib/constants';
+import { MIN_TAP_TARGET_PX, THEME_STORAGE_KEY } from '../lib/constants';
 
 /**
- * The two checks of the a11y bar (V1-12), exported so more than one spec can run them: the axe scan,
+ * Seed the stored theme choice before any page script runs, the way a returning viewer's browser
+ * holds it; `null` clears it, so the device's `colorScheme` decides (Auto). Lifted once from
+ * `theme.spec.ts` and `a11y.spec.ts` (V1-9b B2-prep). A private window throws on storage; the app
+ * must still render, so the seed swallows that.
+ */
+export async function seedStoredTheme(page: Page, value: 'light' | 'dark' | null): Promise<void> {
+  await page.addInitScript(
+    ([key, v]) => {
+      try {
+        if (v) window.localStorage.setItem(key!, v);
+        else window.localStorage.removeItem(key!);
+      } catch {
+        /* a private window would throw; the app must still render */
+      }
+    },
+    [THEME_STORAGE_KEY, value] as const,
+  );
+}
+
+/**
+ * The guard a dark scan needs first: a stored `mp_theme` beats `colorScheme` emulation, so a scan can
+ * audit the LIGHT palette while reporting green on "dark" (a11y.spec.ts has shipped that failure).
+ */
+export async function expectActuallyDark(page: Page, context: string): Promise<void> {
+  await expect(
+    page.locator('html'),
+    `${context}: not actually rendering dark — this scan would have audited the LIGHT palette`,
+  ).toHaveClass(/\bdark\b/);
+}
+
+/**
+ * The two checks of the a11y bar (V1-12), exported so every spec runs the same rules: the axe scan,
  * and the tap-target measurement axe cannot do (its `target-size` rule is 24px and tagged
- * `wcag22aa`; this project's bar is 44).
- *
- * ⚠️ **`a11y.spec.ts` still holds its own private copies of both** (`expectNoAxeViolations`,
- * `expectTapTargets`), where the reasoning for each rule is written out in full. They were lifted
- * here for `program-preview-a11y.spec.ts` (FAM-1 step 0b) while another open PR was rewriting that
- * file, so it was left alone. The next PR that edits `a11y.spec.ts` deletes its copies and imports
- * these ([tech-debt](../../../docs/tech-debt.md) → "The a11y checks have two copies").
+ * `wcag22aa`; this project's bar is 44). `a11y.spec.ts` imports these, so there is one copy of each
+ * rule and its reasoning (2026-11-19).
  */
 
-/** WCAG 2.0/2.1 A + AA, zero tolerance. */
+/** Scan with the WCAG 2.0/2.1 A + AA rule sets. Zero tolerance — no allowlist (nothing to grandfather
+ *  on a first scan), and the dependency is EXACTLY pinned so a rule-set bump can't redden an unrelated PR. */
 export async function expectNoAxeViolations(page: Page, context: string): Promise<void> {
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(
@@ -26,27 +53,57 @@ export async function expectNoAxeViolations(page: Page, context: string): Promis
 }
 
 /**
- * Controls that must meet the tap-target bar. A hidden input has no box. A link is left out (WCAG
- * 2.2 SC 2.5.8's inline exception); a link that acts as a button is measured by its own test.
+ * Interactive controls that must meet the tap-target bar.
+ *
+ * `input:not([type="hidden"])` — a hidden input has NO bounding box (`boundingBox()` → null), so an
+ * unfiltered selector would throw rather than assert; the app has several (the routine editor's JSON
+ * field, the check-in client-ids, the gate's `from`).
+ *
+ * `<a>` is EXCLUDED: WCAG 2.2 SC 2.5.8 has an explicit exception for links inline in a block of text,
+ * and the app's links ("← All athletes", "→ Edit {name}") are exactly that — growing them to 44px
+ * would be a visual regression, not a fix. Link CARDS that behave like buttons are opted in
+ * separately (`a11y.spec.ts`'s `expectLinkTapTargets`; `expectLinkTargets` below for the program
+ * screens).
+ * ⚠️ **The consequence, now that those links carry `min-h-11` anyway:** `expectTapTargets` does not
+ * assert it. `athletes.spec.ts` measures the edit page's back link, because a link that is the recovery
+ * path from a writing screen is not "inline in a block of text" in any useful sense.
  */
 const INTERACTIVE = 'button, [role="button"], select, textarea, input:not([type="hidden"])';
 
-/** A checkbox's or radio's target is the `<label>` that activates it, not its own small box. */
+/**
+ * A checkbox/radio's own box is intentionally small (20px here) — its ACTIVATABLE AREA is the bound
+ * `<label>`, which is what a thumb aims at and what the browser actually toggles. WCAG target size
+ * measures the activatable region, so measuring the 20px box would be measuring the wrong thing and
+ * would push us toward a 44px checkbox glyph, which is not the fix. For these, we measure the label.
+ */
 const LABEL_MEASURED = ['checkbox', 'radio'];
 
+/**
+ * The element whose height represents this control's real tap target: normally itself, but for a
+ * checkbox/radio the `<label for=…>` that activates it. Returns `null` when a checkbox has no bound
+ * label — which is itself a defect, reported by the caller rather than silently skipped.
+ */
 async function targetOf(page: Page, control: Locator): Promise<Locator | null> {
   const type = await control.getAttribute('type');
   if (!type || !LABEL_MEASURED.includes(type)) return control;
+
+  // EXPLICIT association: <label for="id">. NOT `CSS.escape` — that is a BROWSER global and this runs
+  // in Node. The id sits inside a quoted attribute selector, so only a quote or backslash needs
+  // escaping (the app's ids contain ':' from `activityKey:metricKey`, which is fine inside quotes).
   const id = await control.getAttribute('id');
   if (id) {
     const explicit = page.locator(`label[for="${id.replace(/["\\]/g, '\\$&')}"]`);
     if ((await explicit.count()) === 1) return explicit;
   }
+
+  // IMPLICIT association: the control is WRAPPED in its <label> (equally valid HTML, and what the
+  // superset toggle uses). Checking only `label[for]` would report a false defect here.
   const implicit = control.locator('xpath=ancestor::label[1]');
   return (await implicit.count()) === 1 ? implicit : null;
 }
 
-async function describeControl(control: Locator): Promise<string> {
+/** A human-readable identifier for a failing control, so the assertion names the culprit. */
+export async function describeControl(control: Locator): Promise<string> {
   const [tag, label, text] = await Promise.all([
     control.evaluate((el) => el.tagName.toLowerCase()),
     control.getAttribute('aria-label'),
@@ -65,6 +122,8 @@ export async function expectTapTargets(
   opts: { expectControls?: boolean } = {},
 ): Promise<void> {
   const controls = await page.locator(INTERACTIVE).all();
+  // A guard against the selector silently matching nothing (which would make this whole assertion
+  // vacuous). Opt out only where having no controls is expected: a link-only 404, a stub preview.
   if (opts.expectControls !== false) {
     expect(
       controls.length,
@@ -76,7 +135,9 @@ export async function expectTapTargets(
     if (!(await control.isVisible())) continue;
     const target = await targetOf(page, control);
     if (!target) {
-      undersized.push(`${await describeControl(control)} → no bound <label> to act as its target`);
+      undersized.push(
+        `${await describeControl(control)} → no bound <label> to act as its tap target`,
+      );
       continue;
     }
     const box = await target.boundingBox();

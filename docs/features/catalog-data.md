@@ -42,6 +42,7 @@ it is approved, one batch PR at a time.
 | 11    | Upper-body isolation: curls, triceps, raises and flys, shrugs, forearms and grip     | 35      |
 | 12    | Olympic lifts and kettlebell work: cleans, snatches, jerks, thrusters, get-ups       | 31      |
 | 13    | Bodyweight skills: handstands, levers, planche, L-sit, muscle-ups, rolls             | 24      |
+| 14    | Gap-fill: movements the family batches left out                                      | 22      |
 
 ## How a batch arrives
 

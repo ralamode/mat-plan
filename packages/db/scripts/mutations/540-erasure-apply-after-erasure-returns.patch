@@ -1,0 +1,15 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 3b5db3f6..5dc842d1 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1086,9 +1086,7 @@ const eraseSeededHousehold: Correction = {
+         if (during) throw new CorrectionRefusal(during);
+         const scope = await householdScopeByPublicId(txDb, SEED_HOUSEHOLD_PUBLIC_ID);
+         if (!scope) {
+-          throw new CorrectionRefusal(
+-            'the seeded household is not here: already erased; nothing to do',
+-          );
++          return [note('the seeded household is not here: already erased; nothing to do')];
+         }
+         const report = await eraseHousehold(tx as unknown as Executor, asOwnerScope(scope), {
+           apply: true,

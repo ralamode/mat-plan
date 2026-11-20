@@ -18,6 +18,10 @@ const programDayRows = vi.hoisted(() => vi.fn());
 const loggedMonths = vi.hoisted(() => vi.fn());
 const bodyweightMonthRows = vi.hoisted(() => vi.fn());
 const checkinMonthRows = vi.hoisted(() => vi.fn());
+const reportAuthorityRefusal = vi.hoisted(() => vi.fn());
+/** The caller's scope, per test. `null` is "no household"; the role decides the export (PR B). */
+const scope = vi.hoisted(() => ({ current: null as { householdId: number; role: string } | null }));
+const profile = vi.hoisted(() => ({ current: { publicId: 'p-1', name: 'A' } as object | null }));
 
 vi.mock('@mat-plan/db', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -28,18 +32,23 @@ vi.mock('@mat-plan/db', async (orig) => ({
   checkinMonthRows,
 }));
 vi.mock('./db', () => ({ db: {} }));
-vi.mock('./household', () => ({
-  getHouseholdScope: async () => ({ householdId: 1, role: 'owner' }),
+vi.mock('./household', async () => ({
+  // The real const, so the assertion below cannot pass on a re-typed string.
+  AUTHORITY_ACTION: (await vi.importActual<typeof import('./household')>('./household'))
+    .AUTHORITY_ACTION,
+  getHouseholdScope: async () => scope.current,
+  reportAuthorityRefusal,
 }));
 vi.mock('./profiles', () => ({
-  getProfileByPublicId: async () => ({ publicId: 'p-1', name: 'A' }),
+  getProfileByPublicId: async () => profile.current,
 }));
 
 import type { CheckinMonthRow, StrengthMonthRow } from '@mat-plan/db';
-import { ACTIVITY_TYPE_KEYS, METRIC_KEYS, PRACTICE_UNIT } from '@mat-plan/shared';
-import { readCsvLine } from '@mat-plan/shared/csv';
+import { ACTIVITY_TYPE_KEYS, HOUSEHOLD_ROLE, METRIC_KEYS, PRACTICE_UNIT } from '@mat-plan/shared';
+import { bodyweightPath, checkinsPath, readCsvLine, strengthLogPath } from '@mat-plan/shared/csv';
 
 const { buildExportEntries } = await import('./export');
+const { AUTHORITY_ACTION } = await import('./household');
 
 /**
  * One flat join row. ⚠️ **Typed as `StrengthMonthRow`**, so `pnpm typecheck` guards the shape: the
@@ -81,7 +90,7 @@ const prescribedCellOf = (csv: string) => {
 };
 
 const strengthCsv = async () => {
-  const entries = await buildExportEntries('p-1');
+  const entries = (await buildExportEntries('p-1'))!;
   const file = entries.find((e) => e.path.includes('strength-log'));
   expect(file, 'the export produced a strength-log file').toBeTruthy();
   return file!.content;
@@ -96,6 +105,9 @@ beforeEach(() => {
     checkinMonthRows,
   ])
     m.mockReset();
+  reportAuthorityRefusal.mockReset();
+  scope.current = { householdId: 1, role: HOUSEHOLD_ROLE.owner };
+  profile.current = { publicId: 'p-1', name: 'A' };
   loggedMonths.mockResolvedValue([{ month: '2026-03' }]);
   bodyweightMonthRows.mockResolvedValue([]);
   checkinMonthRows.mockResolvedValue([]);
@@ -154,7 +166,7 @@ describe('buildExportEntries — the check-ins file (FAM-1 14b)', () => {
       notes: null,
     };
     checkinMonthRows.mockResolvedValue([row]);
-    const entries = await buildExportEntries('p-1');
+    const entries = (await buildExportEntries('p-1'))!;
     const file = entries.find((e) => e.path.includes('checkins'))!.content;
     expect(file).toBe(
       'date,activity,metric,value,unit,notes\n2026-03-02,wrestling-practice,practice-minutes,90,min,\n',
@@ -164,5 +176,46 @@ describe('buildExportEntries — the check-ins file (FAM-1 14b)', () => {
       profilePublicId: 'p-1',
       month: '2026-03',
     });
+  });
+});
+
+/**
+ * FAM-1 export follow-up, PR B (the maintainer's Q1, 2026-11-19): only the household's owner gets
+ * an export. The real `ownerScope` narrows the mocked scope, so a role check written any other way
+ * shows up here.
+ */
+describe('buildExportEntries — the export is the owner’s', () => {
+  it('🔴 the owner: three files a month, in order, as before', async () => {
+    strengthMonthRows.mockResolvedValue([]);
+    loggedMonths.mockResolvedValue([{ month: '2026-03' }, { month: '2026-02' }]);
+    const entries = (await buildExportEntries('p-1'))!;
+    expect(entries.map((e) => e.path)).toEqual(
+      ['2026-03', '2026-02'].flatMap((m) => [
+        strengthLogPath('p-1', m),
+        bodyweightPath('p-1', m),
+        checkinsPath('p-1', m),
+      ]),
+    );
+    expect(reportAuthorityRefusal).not.toHaveBeenCalled();
+  });
+
+  it('🔴 a member: refused (null), no month or file read, one authority refusal', async () => {
+    scope.current = { householdId: 1, role: HOUSEHOLD_ROLE.member };
+    expect(await buildExportEntries('p-1')).toBeNull();
+    for (const read of [loggedMonths, strengthMonthRows, bodyweightMonthRows, checkinMonthRows]) {
+      expect(read).not.toHaveBeenCalled();
+    }
+    expect(reportAuthorityRefusal).toHaveBeenCalledTimes(1);
+    expect(reportAuthorityRefusal).toHaveBeenCalledWith(AUTHORITY_ACTION.exportProfile);
+  });
+
+  it('an unknown profile and a missing household are refusals too, never an empty zip', async () => {
+    profile.current = null;
+    expect(await buildExportEntries('p-1')).toBeNull();
+    profile.current = { publicId: 'p-1', name: 'A' };
+    scope.current = null;
+    expect(await buildExportEntries('p-1')).toBeNull();
+    expect(loggedMonths).not.toHaveBeenCalled();
+    expect(reportAuthorityRefusal).not.toHaveBeenCalled();
   });
 });

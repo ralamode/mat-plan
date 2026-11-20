@@ -334,12 +334,20 @@ export const ENTRY_HIDE_REASON_HIDDEN_CHECK = 'entries_hide_reason_hidden_check'
  * FAM-1 4a-ii's three arbiters (ADR 0007 A2 §6, A3), named once so code that must name one matches it
  * by const, as it matches `BODYWEIGHT_DAY_UNIQUE_INDEX`. Renaming one means a new migration too.
  * ⚠️ Step 11b's row writer infers the session and superset arbiters with a bare `ON CONFLICT`, so today
- * only `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX` has a code consumer (`hide.ts`'s restore list); the other
- * two are kept for a restore check or an explicit target, not because anything reads them yet.
+ * only `ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX` has code consumers (`hide.ts`'s restore list, and since
+ * 11c-ii the revive's `23505` arm in `writers/day/log-row.ts`); the other two are kept for a restore
+ * check or an explicit target, not because anything reads them yet.
  */
 export const SESSION_WORKOUT_DAY_UNIQUE_INDEX = 'uq_sessions_profile_day_workout';
 export const SUPERSET_PRESCRIPTION_GROUP_UNIQUE_INDEX = 'uq_supersets_session_prescription_group';
 export const ENTRY_PRESCRIPTION_SET_UNIQUE_INDEX = 'uq_entries_session_prescription_set';
+
+/**
+ * `entries.client_id`'s unique index, named once (FAM-1 11c-ii, a board guest edit in lane A's file,
+ * 2026-11-19): the revive matches a `23505` on it, so a rename must fail a build, not silently stop
+ * matching. Renaming it means a new migration too.
+ */
+export const ENTRY_CLIENT_ID_UNIQUE_INDEX = 'uq_entries_client_id';
 
 /**
  * A household's block slug key, named once so lane P's program writers (`writers/program/program-name.ts`,
@@ -507,7 +515,7 @@ export const entries = pgTable(
     // should free. The reasoning in full, including the consequence that an id can never be reused,
     // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
     // applied to the five older arbiters. `write-path.md` invariant 6.
-    uniqueIndex('uq_entries_client_id').on(t.clientId),
+    uniqueIndex(ENTRY_CLIENT_ID_UNIQUE_INDEX).on(t.clientId),
     // V1-24 PR 1d: ONE live weigh-in per (profile, day, slot). Scoped to bodyweight — a check-in or a
     // calisthenics bout may repeat on a day. Slot-ready for V1-32 (plan amendment, 2026-09-30).
     // - `coalesce(context, 'morning')`, not `context`: no writer sets `context` until 1e, and NULLs

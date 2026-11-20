@@ -1,8 +1,8 @@
 diff --git a/packages/db/migrations/0021_v1_9b_client_id_arbiters.sql b/packages/db/migrations/0021_v1_9b_client_id_arbiters.sql
-index 1e5fed5..c85cb62 100644
+index 2087a902..db1ce751 100644
 --- a/packages/db/migrations/0021_v1_9b_client_id_arbiters.sql
 +++ b/packages/db/migrations/0021_v1_9b_client_id_arbiters.sql
-@@ -69,7 +69,7 @@ DROP INDEX "uq_entry_sets_client_id";--> statement-breakpoint
+@@ -83,7 +83,7 @@ DROP INDEX "uq_entry_sets_client_id";--> statement-breakpoint
  DROP INDEX "uq_sessions_client_id";--> statement-breakpoint
  -- squawk-ignore require-concurrent-index-deletion
  DROP INDEX "uq_supersets_client_id";--> statement-breakpoint
@@ -12,15 +12,15 @@ index 1e5fed5..c85cb62 100644
  CREATE UNIQUE INDEX "uq_entry_sets_client_id" ON "entry_sets" USING btree ("client_id");--> statement-breakpoint
  CREATE UNIQUE INDEX "uq_sessions_client_id" ON "sessions" USING btree ("client_id");--> statement-breakpoint
 diff --git a/packages/db/src/schema.ts b/packages/db/src/schema.ts
-index 2d25a22..aa02aca 100644
+index a309067e..f3b7b506 100644
 --- a/packages/db/src/schema.ts
 +++ b/packages/db/src/schema.ts
-@@ -362,7 +362,9 @@ export const entries = pgTable(
+@@ -515,7 +515,9 @@ export const entries = pgTable(
      // should free. The reasoning in full, including the consequence that an id can never be reused,
      // is at `uq_profiles_client_id`, which `PROF-1` a-0 got right at birth; B0 is that precedent
      // applied to the five older arbiters. `write-path.md` invariant 6.
--    uniqueIndex('uq_entries_client_id').on(t.clientId),
-+    uniqueIndex('uq_entries_client_id')
+-    uniqueIndex(ENTRY_CLIENT_ID_UNIQUE_INDEX).on(t.clientId),
++    uniqueIndex(ENTRY_CLIENT_ID_UNIQUE_INDEX)
 +      .on(t.clientId)
 +      .where(sql`${t.deletedAt} is null`),
      // V1-24 PR 1d: ONE live weigh-in per (profile, day, slot). Scoped to bodyweight — a check-in or a

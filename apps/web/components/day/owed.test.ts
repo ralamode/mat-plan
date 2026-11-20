@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 
 /**
  * The tests lane C (the day page) still owes the program contract, tagged by step:
- * 13 to 13d, 12b to 12d and 15c (FAM-1 plan §4: "`it.todo` lists of the tests each consumer
+ * 13 to 13d and 12b to 12d (FAM-1 plan §4: "`it.todo` lists of the tests each consumer
  * still owes").
  *
  * Each line comes from its step's Tests column in plan §5 or from §8's behaviour table. **The lane
@@ -15,10 +15,6 @@ import { describe, it } from 'vitest';
  *
  * These are a to-do list, not skipped tests: nothing here was ever a passing test.
  */
-
-describe('AssignDraft, TakeOff and ProgramOrder: owed by their consumers', () => {
-  it.todo('15c: two programs on one day, reordered (e2e)');
-});
 
 describe('DayPlan: owed by its consumers', () => {
   it.todo(
@@ -36,8 +32,6 @@ describe('RowAmend: owed by its consumers', () => {
 });
 
 describe('ProgramActions and DayActions: owed by their consumers', () => {
-  it.todo('15c: reorderPrograms joins DayActions, and the Program order control appears');
-  it.todo('15c: a reorder that is not a permutation of currentPrograms answers invalid');
   it.todo('every screen step: focus stays on the control after an action');
   it.todo('every screen step: a dialog holds focus and returns it; targets are 44px at 360px');
 });

@@ -1,5 +1,6 @@
 import {
   catalogHowToOf,
+  equipmentInOrder,
   TRACKING_TYPE,
   type CatalogOptionTaxonomy,
   type Unit,
@@ -36,7 +37,23 @@ const entry = (slug: string) => {
   return found;
 };
 
-/** An old built-in as lane P's read gives it: the database row, the picker map's group and aliases. */
+/** The library's taxonomy of one entry, as the read attaches it (`catalogArmOption`, P11-ii-a). */
+const taxonomyOf = (slug: string) => {
+  const e = entry(slug);
+  return {
+    modality: e.modality,
+    pattern: e.pattern,
+    equipment: [...e.equipment],
+    primaryMuscle: e.primaryMuscle,
+    secondaryMuscles: [...e.secondaryMuscles],
+  };
+};
+
+/**
+ * An old built-in as lane P's read gives it since P11-ii-a: the database row's identity, the picker
+ * map's group and the joined aliases, and the library's taxonomy by slug (`catalogArmOption` builds
+ * it; its own test covers the mapping). This file tests only that the DAL copies it.
+ */
 const builtIn = (over: Partial<Extract<MovementOption, { owner: 'catalog' }>>) =>
   ({
     publicId: '019826b4-0000-7000-8000-00000000e001',
@@ -48,6 +65,9 @@ const builtIn = (over: Partial<Extract<MovementOption, { owner: 'catalog' }>>) =
     isBodyweight: false,
     group: 'legs',
     aliases: [],
+    taxonomy: taxonomyOf('sled_push'),
+    supervision: entry('sled_push').supervision ?? null,
+    hasInstructions: entry('sled_push').instructions !== undefined,
     ...over,
   }) satisfies MovementOption;
 const own = {
@@ -89,7 +109,7 @@ describe('which rows the picker lists (maintainer, 2026-11-17: "Show all 35 unti
     vi.mocked(movementOptions).mockResolvedValueOnce([listed, hidden, own]);
     const data = await getItemPickerData();
     expect(data?.options.map((o) => o.name)).toEqual(['Pull-Up', 'Back Squat', 'Garage Circuit']);
-    expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE]]);
+    expect(vi.mocked(movementOptions).mock.calls).toEqual([[db, SCOPE, CATALOG_MOVEMENTS]]);
   });
 
   it('no household: null, and nothing is read', async () => {
@@ -115,52 +135,40 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
     expect(card.item.itemName).toBe('Sled Push');
   });
 
-  it('the taxonomy, supervision and instructions are the library’s', () => {
-    const library = entry('sled_push');
-    const option = pickerOptionOf(builtIn({}))!;
+  it('the taxonomy, supervision and instructions are copied from the read, field by field', () => {
+    // A supervised row, so a DAL that dropped the label fails here.
+    const row = builtIn({ supervision: 'coach', hasInstructions: true });
+    const option = pickerOptionOf(row)!;
     expect(option.owner).toBe('catalog');
-    if (option.owner !== 'catalog') return;
+    if (row.taxonomy === null) throw new Error('fixture: the row has no taxonomy');
     expect(option).toMatchObject({
-      modality: library.modality,
-      pattern: library.pattern,
-      equipment: library.equipment,
-      primaryMuscle: library.primaryMuscle,
-      supervision: library.supervision ?? null,
-      hasInstructions: library.instructions !== undefined,
+      ...row.taxonomy,
+      supervision: row.supervision,
+      hasInstructions: row.hasInstructions,
       group: 'legs',
     });
   });
 
-  it('🔴 its aliases hold every alias the server matches, joined with the library’s, each once', () => {
-    const library = entry('pallof_press');
-    expect(library.aliases.length).toBeGreaterThan(0);
+  it('the aliases are the read’s (the join is `catalogArmOption`’s, so `newItem` sees the same ones)', () => {
     const option = pickerOptionOf(
-      builtIn({
-        slug: 'pallof_press',
-        name: 'Pallof Press',
-        aliases: ['Anti-rotation press', 'Pallof'],
-      }),
-    )!;
-    if (option.owner !== 'catalog') throw new Error('expected a catalog option');
-    // The row's first, in its order; then the library's it does not already have.
-    expect(library.aliases).toEqual(['Cable Pallof press', 'Anti-rotation press']);
-    expect(option.aliases).toEqual(['Anti-rotation press', 'Pallof', 'Cable Pallof press']);
-  });
-
-  it('🔴 two spellings of one alias are one (the "same name" key), and the ROW’s spelling is kept', () => {
-    const option = pickerOptionOf(
-      builtIn({ slug: 'pallof_press', name: 'Pallof Press', aliases: ['anti rotation press'] }),
+      builtIn({ aliases: ['Anti-rotation press', 'Cable Pallof press'] }),
     )!;
     expect(option.owner === 'catalog' && option.aliases).toEqual([
-      'anti rotation press',
+      'Anti-rotation press',
       'Cable Pallof press',
     ]);
   });
 
-  it('⏳ a built-in the library has no entry for: the row with NO taxonomy, never a placeholder one', () => {
-    // An old built-in whose slug no batch reuses (`calf_raises`; the library's is `calf_raise`).
+  it('⏳ a row with no library entry (taxonomy null): NO taxonomy, never a placeholder one', () => {
     const option = pickerOptionOf(
-      builtIn({ slug: 'calf_raises', name: 'Calf Raises', aliases: ['Heel raise'] }),
+      builtIn({
+        slug: 'calf_raises',
+        name: 'Calf Raises',
+        aliases: ['Heel raise'],
+        taxonomy: null,
+        supervision: null,
+        hasInstructions: false,
+      }),
     );
     expect(option).toEqual({
       publicId: '019826b4-0000-7000-8000-00000000e001',
@@ -172,6 +180,12 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
       group: 'legs',
       aliases: ['Heel raise'],
     });
+  });
+
+  it('a library row with no legacy group carries no `group` key', () => {
+    const { group: _drop, ...row } = builtIn({ slug: 'hang_power_clean' });
+    void _drop;
+    expect('group' in pickerOptionOf(row)!).toBe(false);
   });
 
   it('🔴 the slug stops at the DAL: a listed option carries exactly these keys', () => {
@@ -193,18 +207,18 @@ describe('a listed built-in: the library’s taxonomy on the database row’s id
  * or, until the fresh start, with none of it; never with part of it.
  */
 /** Equipment without the rest of the taxonomy: neither a library option nor a bare built-in. */
-type HalfFilled = Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & {
+type CatalogDTOBase = Omit<
+  Extract<MovementOption, { owner: 'catalog' }>,
+  'slug' | 'taxonomy' | 'supervision' | 'hasInstructions'
+>;
+type HalfFilled = CatalogDTOBase & {
   equipment: CatalogOptionTaxonomy['equipment'];
 };
 it('the option types: a whole taxonomy or none, never half (compile-time pins)', () => {
   const own = (x: Extract<MovementOption, { owner: 'household' }>): MovementOptionDTO => x;
-  const withTaxonomy = (
-    x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'> & CatalogOptionTaxonomy,
-  ): MovementOptionDTO => x;
+  const withTaxonomy = (x: CatalogDTOBase & CatalogOptionTaxonomy): MovementOptionDTO => x;
   // ⏳ Until the fresh start, a built-in with no library entry is an option with NO taxonomy.
-  const withoutTaxonomy = (
-    x: Omit<Extract<MovementOption, { owner: 'catalog' }>, 'slug'>,
-  ): MovementOptionDTO => x;
+  const withoutTaxonomy = (x: CatalogDTOBase): MovementOptionDTO => x;
   const halfFilled = (x: HalfFilled): MovementOptionDTO =>
     // Justified: a NEGATIVE type pin. The test IS that this does not compile; if it ever does, tsc fails here.
     // @ts-expect-error never a HALF-filled taxonomy
@@ -243,7 +257,9 @@ describe('getHowTo: one option’s steps, resolved among the caller’s own opti
   });
 
   it('a built-in with no library entry (K22) is null', async () => {
-    vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: 'no_such_entry' })]);
+    vi.mocked(movementOptions).mockResolvedValueOnce([
+      builtIn({ slug: 'no_such_entry', taxonomy: null, supervision: null, hasInstructions: false }),
+    ]);
     expect(await getHowTo(ID)).toBeNull();
   });
 

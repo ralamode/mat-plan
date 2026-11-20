@@ -120,9 +120,9 @@ type CheckinArgs = {
  * braces, no hyphens) used to be written and then missed: a habit threw, and a practice was answered
  * `day_taken` against the row it had just written. `lowerCaseUuidSchema` accepts only the hyphenated
  * form and folds the case, so what the classifier holds is what Postgres prints. And two items under
- * one id write one row, which the per-id maps would report as two `created`. The app's forms mint one
- * lower-case id per item and `logCheckinsAction` parses with the same schema and refuses a repeat as
- * a field error first, so both throws are preconditions, not answers. ⚠️ **A batch caller (the
+ * one id write one row, which the per-id maps would report as two `created`. The app's one caller
+ * (the day page's practice, `logLifeActivitiesAction`) sends one item with a fresh lower-case id, so
+ * both throws are preconditions, not answers. ⚠️ **A batch caller (the
  * unwired `/api/sync`) must collapse identical replays, and refuse different items sharing an id as
  * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages
  * are for tests; `quietDbErrors` logs only the class. Answers carry the parsed id.

@@ -26,7 +26,7 @@ import {
   asPg,
   assertRefTableMatches,
   asTx,
-  captureWarnings,
+  captureOutput,
   db,
   rolledBack,
   rowsOf,
@@ -135,6 +135,27 @@ export async function verifySeedOnAFreshDatabase(): Promise<void> {
     await assert.doesNotReject(
       () => seed(asPg, { fixtures: false }),
       `OPS-2 A: seed({ fixtures: false }) on a fresh database resolves (${run} run)`,
+    );
+  }
+
+  // CAT-3 A2-i: production's seed gives the catalog writer NOTHING until A2-ii (plan D1). Checked
+  // FIRST, before the slug comparison below, so a seed that passes library entries on legacy slugs
+  // (mutation 506) fails here. The join tables are classed with `movements` (A1's owed item): they
+  // must hold no row of a global movement, as the list production's seed was given is empty.
+  assert.equal(
+    await countOf(db, schema.movements, sql`${schema.movements.modality} IS NOT NULL`),
+    0,
+    'CAT-3 A2-i: production’s seed writes no catalog row (no movement has a modality)',
+  );
+  for (const table of [schema.movementEquipment, schema.movementMuscles]) {
+    assert.equal(
+      await countOf(
+        db,
+        table,
+        sql`movement_id IN (SELECT id FROM ${schema.movements} WHERE ${schema.movements.householdId} IS NULL)`,
+      ),
+      0,
+      `CAT-3 A2-i: production’s seed writes no ${graphTableName(table)} row`,
     );
   }
 
@@ -291,7 +312,7 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
     );
   });
 
-  // B4: the TEN-2c report still fires without fixtures (`329`).
+  // B4: the TEN-2c report still fires without fixtures (`329`), as a count (CAT-3 A2-i).
   await rolledBack(async (tx) => {
     const slug = MOVEMENT_SEED_ROWS[0].slug;
     await insertMovementOwnedBy(asTx(tx), ctx.B_SCOPE, {
@@ -300,10 +321,14 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
       name: 'OPS-2 B4 item',
       isBodyweight: false,
     });
-    const warned = await captureWarnings(() => seed(asDb(tx), { fixtures: false }));
+    const warned = await captureOutput(() => seed(asDb(tx), { fixtures: false }));
     assert.ok(
-      warned.includes(slug),
-      'OPS-2 B4: seed({ fixtures: false }) still reports a seeded slug a household also owns (TEN-2c)',
+      /share a legacy seed slug/.test(warned),
+      'OPS-2 B4: seed({ fixtures: false }) still reports a household row on a seeded slug (TEN-2c)',
+    );
+    assert.ok(
+      !warned.includes(slug),
+      'OPS-2 B4 / CAT-3 A2-i: …as a COUNT: the report names no slug a household holds (spec rule 7)',
     );
   });
 

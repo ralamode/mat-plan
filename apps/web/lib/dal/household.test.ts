@@ -615,6 +615,7 @@ describe('householdState — "does this request resolve a household", without ha
     await expect(householdState()).resolves.toStrictEqual({
       state: HOUSEHOLD_STATE.resolved,
       canArchiveAthletes: true,
+      canExportAthletes: true,
     });
   });
 
@@ -626,11 +627,13 @@ describe('householdState — "does this request resolve a household", without ha
    * behind it. Owner-true alone cannot distinguish "reads the role" from "returns true"; this is the
    * row that can.
    */
-  it('a MEMBER resolves a household but may NOT archive', async () => {
+  it('a MEMBER resolves a household but may NOT archive, and may NOT export', async () => {
     state.memberships = [[11, HOUSEHOLD_ROLE.member]];
     await expect(householdState()).resolves.toStrictEqual({
       state: HOUSEHOLD_STATE.resolved,
       canArchiveAthletes: false,
+      // FAM-1 export follow-up (the maintainer's Q1, 2026-11-19): only the owner downloads an export.
+      canExportAthletes: false,
     });
   });
 
@@ -638,6 +641,7 @@ describe('householdState — "does this request resolve a household", without ha
     await expect(householdState()).resolves.toStrictEqual({
       state: HOUSEHOLD_STATE.none,
       canArchiveAthletes: false,
+      canExportAthletes: false,
     });
   });
 

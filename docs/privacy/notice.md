@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-19. This is a beta.**
+**Last updated: 2026-11-20. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -41,8 +41,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
   signed in to your household can create and rename a program, write and change its workouts, add
-  a movement of your own, set its week and copy a workout, and put an athlete on a program or take
-  them off it. What is
+  a movement of your own, set its week and copy a workout, put an athlete on a program or take
+  them off it, and, from an athlete's page, change the order their programs show in. What is
   stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
@@ -62,8 +62,6 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
-  _(Nothing in the live app logs a workout yet: the day page that does is being built. This line is
-  here because the schema is public and you would otherwise find these tables.)_
 
 **The text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
 an **athlete's name**; and, in the program builder, a program's name, a workout's name and
@@ -107,7 +105,8 @@ how you switch between athletes.
 **But a child tapping a tile is a child using this app**, and in practice the child is usually the one
 doing the logging — that is what it was built for. So:
 
-- The adult owns the account, and is the one who can export the data or have it deleted.
+- A household owner can export the data or have it deleted. Today every adult given a sign-in to
+  the household is an owner, so a household can have more than one.
 - The child types into the free-text boxes. Nothing filters what they write.
 - **Please tell your athlete what is being recorded.** Their weight and their training are being kept,
   and they should know that.
@@ -120,7 +119,8 @@ still works.
 
 ## Who can see it
 
-- **Your household**, through the shared login.
+- **Your household**: anyone signed in to it, each with their own sign-in, sees every athlete's
+  history in the app, weigh-ins included. Only a household owner can download an athlete's export.
 - **The maintainer.** The person who runs the app has direct access to the database and can see
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
 - **Everyone signed in to your household sees every program**: who is on each one, from which day
@@ -149,8 +149,10 @@ still works.
    names is common to every household (see "Movement names" below), and it has to be separated before
    a second family is invited. **The beta still starts with a single invited family**, because that
    last part is not finished.
-3. **Anyone signed in to your household can download any athlete's full history** — including a
-   child tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this
+3. **Anyone signed in to your household can see any athlete's full history in the app** — including
+   a child tapping a sibling's tile — **and only a household owner can download it.** Today every
+   adult given a sign-in to a household is its owner, so anyone signed in can still download; the
+   limit applies once people can be invited as members. The tiles are a convenience, not a lock. What is new in this
    version is that getting in takes **your own sign-in and a membership in your household**, and
    nothing else opens the app.
    ⚠️ **Why that is still a limitation:** a membership is held by a PERSON, not by an athlete, so one
@@ -222,7 +224,7 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
 ⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
-weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap Clear): that
+weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap its Clear button): that
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
 does not record who did. A cleared one is not removed from the database, and it is **not in the
@@ -230,21 +232,27 @@ export** (ask for a full copy, below, and it is included). The only ways anythin
 or household, and asking for one program, workout or typed item to be removed. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
-**What is being built, so you know what to expect.** A **Clear this day** control, which hides
-everything logged on one day at once. Unlike a cleared weigh-in or practice, a cleared day can be **put back**:
-a banner offers **Restore all** while that day is today or yesterday (after that, the day stays
-hidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been
-logged in that day's place — when that happens the app will say so rather than fail quietly. There
-will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
-field, as above. Two things are worth saying plainly about every clear:
+**Clear this day.** On **today's** page, **Clear this day** hides every entry logged for that
+athlete on that day, at once, after you type a word to confirm. Nothing is erased. Unlike a cleared
+weigh-in or practice, a cleared day can be **put back**: a banner offers **Restore all** while that
+day is today or yesterday, so a day cleared today can be put back until the end of tomorrow. After
+that the entries stay hidden and out of the export; a full copy on request includes them, and
+nothing short of deleting the athlete or the household removes them (though a cleared workout row
+ticked again is written over, below). The offer survives a reload,
+because nothing about it is held on your phone. Things worth saying plainly:
 
-- **It hides from everyone in your household, not just from the person who cleared it.** The app does
-  not record who cleared what, and anyone signed in to your household can open any athlete. So a child
-  can clear a weigh-in or a practice and a parent will not see it either. ⚠️ That is still the honest shape of it:
-  per-person sign-in is now the only way in, but the app records no author on an entry, so sign-in
-  alone did not fix this one.
-- **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
-  until a removal that runs a set number of days later is built.
+- **It hides from everyone in your household, not just from the person who cleared it.** Anyone
+  signed in to your household can clear any athlete's day, and restore it, unless that athlete is
+  archived. The app does not record who did either. ⚠️ Per-person sign-in is now the only way in,
+  but the app records no author on an entry, so sign-in alone did not fix this.
+- **A restore sometimes cannot bring an entry back**, when something has since been logged in its
+  place; the app says so rather than failing quietly. And ticking a cleared workout row again writes
+  the new numbers over the cleared ones.
+- **A workout's name and its "how it felt" note stay.** Clearing hides the day's entries, an
+  entry's own note included. The workout's name, its group names and any "how it felt" note stay
+  with the day until the athlete or household is deleted.
+- **Nothing is erased yet.** A cleared entry stays in the database, out of sight and out of the
+  export, until a removal that runs a set number of days later is built.
 
 There is still **no way to permanently remove one single logged item on demand**: the finest grain for
 removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
@@ -255,9 +263,13 @@ logs, or if the new name is already in use.
 
 ## Getting your data out
 
-Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the
+Open an athlete's page and use the export. **Only a household owner can download an export.** Today
+every adult given a sign-in to a household is an owner, so this changes nothing for anyone yet; it
+applies once people can be invited as members. Then an adult who is not an owner can ask for a copy of
+**their own** data (below); a child's copy goes only to an owner. Anyone signed in to the household
+still sees weigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the
 strength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins
-(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an
+(habits, counts and any wake-up time, written as a time of day). A workout an
 athlete logs from a program has one row per exercise in the strength log, with the **workout's name as
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
@@ -271,8 +283,8 @@ targets, the programs you build and who is on which program (only a workout's na
 an exercise an athlete logged, in the "prescribed" column, go out). The export covers your logged training; it is not yet a complete copy.
 
 **An archived athlete still exports.** Archiving hides an athlete from the picker; it does not hide
-or delete anything they logged. Their export is on the **Household settings** screen, beside their
-name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty
+or delete anything they logged. A household owner finds their export on the **Household settings**
+screen, beside their name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty
 file — an empty zip looks exactly like a download that failed.
 
 **If you want everything, ask** and you will be sent a full copy — including anything you have
@@ -285,7 +297,7 @@ even though it is still in the database, and once an athlete is erased there is 
 
 **Archiving an athlete is not deleting them.** It takes them off the picker so nobody taps their name
 by mistake, and that is all it does: everything they logged is kept, their page still opens for anyone
-**in your household** who has the link or who looks in Household settings, and their export still works. **The household
+**in your household** who has the link or who looks in Household settings, and the owner can still export them. **The household
 owner archives an athlete; any member of the household can rename and restore one.** An archived
 athlete is kept in full until you restore them, or until you ask us to delete them.
 
@@ -355,6 +367,25 @@ Because this cannot be undone, both of the steps below stay in place:
   children's first names — was committed to it before this review, and **removing a name from the
   current code does not remove it from the history**. That is being worked on, and it is a permanent
   limitation of having built this in the open.
+
+## What changed on 19 November 2026
+
+**Clear this day is in the app.** On today's page, it hides every entry logged for an athlete that
+day, after you type a word to confirm, and **Restore all** puts them back while the day is today or
+yesterday. Anyone signed in to the household can do either. Nothing is erased; see "How long we
+keep it" above.
+
+**Removed two notes that said no page logged a workout yet.** The day page has logged workouts since
+an athlete could be put on a program, so a workout logged there is kept and exported as this notice
+describes.
+
+**Only a household owner can download an athlete's export.** Any other sign-in is refused the
+download, and the export link is not shown to it. Everyone signed in to the household still sees
+every athlete's history in the app, weigh-ins included. Today every adult given a sign-in to a
+household is its owner, so nobody's access changes yet: this is a rule that now exists, for when
+people can be invited as members. An adult member exporting their own data is planned for later.
+**The export is also rate-limited per signed-in person**, with room to export every athlete of a full
+household before deleting anything.
 
 ## What changed on 5 November 2026
 
@@ -428,7 +459,9 @@ one.**
 
 **Reviewed in full against the code and signed off by the maintainer (the household operator),
 2026-10-26. Re-reviewed 2026-11-05** against the retirement of the shared access code, which changed
-who can get in, what Upstash is sent, and what a refused sign-up leaves behind.
+who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
+2026-11-19** against the export becoming the household owners' and its rate limit, and against
+Clear this day _(both pending the maintainer's re-read)_.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out

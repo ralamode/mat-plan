@@ -448,7 +448,8 @@ are clean.
 ## The seed's shadow guard fired (a WARNING since `TEN-2c` — it no longer refuses)
 
 **When:** a `migrate.yml` run is **green** and its `db:seed` step logs
-`seed: N seeded movement slug(s) are ALSO owned by a household …`. Added at `TEN-2b` as a **throw**;
+`seed: N household-owned movement(s) share a legacy seed slug and M share a library slug …` (since
+`CAT-3` A2-i, 2026-11-19; before that, `seed: N seeded movement slug(s) are ALSO owned by a household …`). Added at `TEN-2b` as a **throw**;
 **demoted to a warning at `TEN-2c`** (2026-10-12), when migration `0017` removed the premise it was
 built on. ⚠️ **If a run went RED on that message, it is running a deploy older than `TEN-2c`** — the
 refusal and its recovery are at the end of this section.
@@ -472,13 +473,30 @@ nothing complaining loudly — a loud confidentiality guard turned into a silent
 reference data, which is strictly worse than what it replaced. So the filter is **gone** and the
 `throw` is a `console.warn`: `packages/db/src/seed.ts` → the long note above the `movements` insert.
 
-**If you want the shadowed row gone anyway — adopt or rename, never null.** Pick one, per named slug:
+**To see which rows, run this from your own console** (never in a workflow step, whose log is public):
+
+```sql
+-- Slugs and counts only. Never select `name` or a household's `public_id`: a row's name is a
+-- household's free text, and this output must never be pasted into a PR, issue, plan, changelog
+-- fragment or commit. Soft-deleted rows are included, as the seed's count includes them.
+SELECT m.slug, count(*) AS household_rows
+FROM movements m
+WHERE m.household_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM movements g WHERE g.household_id IS NULL AND g.slug = m.slug)
+GROUP BY m.slug
+ORDER BY m.slug;
+```
+
+**If you want the shadowed row gone anyway — adopt or rename, never null.** Pick one, per slug the
+query lists:
 
 1. **The household's row is the real one** (someone typed a movement the catalog later added): the
    household row and the curated row must be merged. That is `TEN-2c-1`'s split machinery in reverse —
    repoint that household's `entries.movement_id` / `prescriptions.movement_id` to the curated row,
    then delete the household row. Needs a guarded, dry-run-first correction
-   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`.
+   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`. 🔴 **The correction takes the slug
+   from the environment** (as `household-claim-2026-10-25` takes its targets), never as a committed
+   constant: a slug a household holds says what they typed, and `git log -S` keeps it after any removal.
 2. **The seed row is the mistake** (the slug should not have been added globally): revert the
    `MOVEMENT_SEED_ROWS` entry in its own PR. The seed then stops adding it and the warning stops.
 
@@ -487,10 +505,10 @@ that promotes one household's free text into the global reference namespace, whi
 `ON DELETE NO ACTION` exists to prevent (`packages/db/src/schema.ts` → the `movements` docblock).
 
 ⚠️ **The message is published, and a warning is published exactly as widely as the refusal was.**
-`migrate.yml` logs are world-readable on a public repo, so the message names **seed slugs only** — a
-public const — and never the colliding row's `name`, which is uncontrolled household free text.
-`db:verify` asserts both halves against the captured `console.warn`; keep that property if you extend
-it, because the privacy half is the one a rewrite loses first.
+`migrate.yml` logs are world-readable on a public repo, so since `CAT-3` A2-i the message is **counts
+only**: no slug (a slug a household also holds says what they typed) and never a row's `name`.
+`db:verify` asserts both against everything printed to stdout and stderr; keep that property if you
+extend it, because the privacy half is the one a rewrite loses first.
 
 **The refusal this replaced, for anyone reading an older run.** While the non-partial
 `movements_slug_unique` lived, Postgres inferred **both** arbiters for
@@ -1244,8 +1262,8 @@ be a cross-tenant linkage over minors' health data.
 ## An owner-only athlete action was refused (the PROF-1 b alert)
 
 **What fired.** A Sentry event `athlete authority refused`, tagged
-`authority_outcome: owner_only`. A signed-in member of a household asked to **archive** an athlete
-in **their own** household, and the server refused because they are not the owner.
+`authority_outcome: owner_only`. A signed-in member of a household asked to **archive** an athlete, or
+(since 2026-11-19) to **download an athlete's export**, in **their own** household, and the server refused because they are not the owner.
 
 🔴 **This is not a cross-household event, and that is why it has its own alert.** The scope-miss
 alert above covers an id reached from the wrong household. This one is _inside_ the caller's own
@@ -1261,7 +1279,7 @@ household, so every tenancy predicate matched and `reportScopeMiss` is silent by
 | Action   | notify the issue's suggested assignees, else the recently active members           |
 | Throttle | none: it notifies on every trigger                                                 |
 
-The event's tags are `authority_outcome: owner_only` and `authority_action: archive_profile`; the
+The event's tags are `authority_outcome: owner_only` and `authority_action: archive_profile` or `export_profile`; the
 alert filters on the message, not on them.
 
 🔴 **There was no such alert before 2026-11-17 (UTC)**, for the reason the scope-miss section above
@@ -1275,15 +1293,16 @@ be one issue (Sentry groups by message; check under Issues): the first creates i
 a later one notifies only if Sentry calls the issue escalating or the issue had been resolved.
 **Resolve the issue when triage is done**, or the next refusal is quiet.
 
-⚠️ **How many events to expect.** The app reports this event at most once per account per server
-instance, and not at all once the per-principal bound it shares with the unresolved-scope events
+⚠️ **How many events to expect.** The app reports this event at most once per account **per act** (archive, export) per
+server instance, and not at all once the per-principal bound it shares with the unresolved-scope events
 fills (100 keys, held in memory; it emits `report_cap_reached` first). A caller with no user id
 shares one key. And the event carries no account id. So several events mean several accounts or
 several instances, and Sentry cannot tell which: read the count as "this happened more than once",
 never as "one account tried N times".
 
-**What makes it interesting rather than noise:** the UI renders **no Archive control for a member**,
-so this path cannot be reached by using the app. Reaching it takes a crafted POST. One event is
+**What makes it interesting rather than noise:** the UI renders **no Archive control and no export control for a
+member**, so this path cannot be reached by using the app. Reaching it takes a crafted POST (archive)
+or a typed export URL. One event is
 plausible as a stale tab (a member whose role changed mid-session, once `INVITE-1` can change roles);
 repeated events are someone probing an owner-only control (from how many accounts, the events cannot say).
 
@@ -1466,10 +1485,12 @@ forgotten you are left with orphan Clerk accounts — an email address and a Goo
 nothing in the database to find them by. Capture them now; the ledger is the recovery path.
 
 **1. The household exports its own data, in the app, while it still has access.**
-`/p/<profileId>/export` per athlete.
+`/p/<profileId>/export` per athlete, **downloaded by the household's owner** (only an owner login gets
+an export, since 2026-11-19). An adult who is not an owner may ask for the full copy of **their own**
+data, on their own verified channel; a child's copy goes only to an owner's channel.
 
-⚠️ **That export is a partial copy** — no check-ins or life activities, no readiness colours, no "how
-it felt" notes, no per-athlete prescribed targets
+⚠️ **That export is a partial copy** — no readiness colours, no "how it felt" notes (check-ins are in
+it since FAM-1 14b), no per-athlete prescribed targets
 ([data-inventory.md](./privacy/data-inventory.md) §6). The notice promises a full copy on request, so
 **ask whether they want one**, and if they do, produce it by hand **before step 4**, **including
 hidden rows** (`deleted_at IS NOT NULL`: a cleared weigh-in is one, and it is in no export). Handing
@@ -1975,8 +1996,8 @@ adult athlete also asks for **their account** to go, delete their Clerk user as 
 step 6 does (record its id at the ledger first); their `household_members` row is hidden by removing
 the membership and keeps its `clerk_user_id` until the household goes.
 
-**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`), and the full copy on
-request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
+**1. Offer the athlete's export first**, in the app (`/p/<profileId>/export`, which only the
+household's owner can download), and the full copy on request, **including hidden rows**, delivered on the verified channel: the owner's for a child, **the
 adult's own** for an adult athlete. Afterwards there is nothing to export.
 
 **2. Resolve the athlete by `public_id`** on the **production** database, and assert their household and
@@ -2197,7 +2218,8 @@ principle that also binds any later in-app removal:
 **0. Record the request** in the ledger (below).
 
 **1. The export is offered at step 3**, once its list says who trained on it: the in-app export
-(`/p/<profileId>/export`) for each of them, and the full copy on request. The in-app export holds no
+(`/p/<profileId>/export`, downloaded by the household's owner) for each of them, and the full copy on
+request. The in-app export holds no
 program, no targets and no record of who was on which program, which is what a removal deletes.
 
 **2. Resolve on the production database, by `public_id`.** `:H` comes from the **requester's**

@@ -15,13 +15,12 @@ import {
   schema,
   SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
-  writeStrengthSession,
 } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
   addDays,
+  CLEAR_DAY_CONFIRM_WORD,
   DEFAULT_BODYWEIGHT_UNIT,
-  DEFAULT_SESSION_TYPE,
   E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
   HOUSEHOLD_ROLE,
@@ -31,29 +30,28 @@ import {
   PROFILE_KIND,
   PROFILE_KIND_LABELS,
   type ProfileKind,
-  SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
   SEED_PROFILE_3_NAME,
   SEED_PROFILE_NAME,
-  UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { eq, isNull, sql } from 'drizzle-orm';
 
 import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
+  CLEAR_DAY_COPY,
+  RESTORE_ALL_ID,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
   NAV_RAIL_COPY,
   SETTINGS_PATH,
-  STRENGTH_COPY,
 } from '../lib/constants';
-import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
+import { isIanaTimeZone, localDayIso } from '../lib/date';
 import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
-import { DAY_COPY } from '../components/day/day-copy';
+import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
 import {
   BUILDER_COPY,
   EDITOR_COPY,
@@ -61,7 +59,7 @@ import {
   ITEM_PICKER_COPY,
 } from '../components/program-builder/builder-text';
 import { MOVEMENT_PICKER_COPY as PICKER_COPY } from '../lib/movements/movement-picker-copy';
-import { MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
+import { MODALITY_LABELS, MOVEMENT_FAMILY_LABELS, MUSCLE, MUSCLE_LABELS } from '@mat-plan/shared';
 import {
   freePort,
   isLocalDbUrl,
@@ -117,12 +115,6 @@ const EPHEMERAL_DB_PASSWORD = 'screenshot';
 // single-sourced in `e2e/steps.ts` (V1-12) — the a11y spec and the smoke need the same one.
 
 /**
- * GAP-1 P1-1c: a logged session that exercises BOTH status badges — a SKIPPED movement (zero sets)
- * and a movement whose last set is `sub_failure`. Written through the SHIPPED writer, so the capture
- * shows exactly what the app produces rather than a hand-built fixture. This is the read side, which
- * no amount of form interaction can reach.
- */
-/**
  * ONB-0 — the picker with NO athletes, i.e. the explained first-run empty state.
  *
  * This is the one state in the app that NOTHING could render before: `embedded-pg.ts` seeds
@@ -160,6 +152,11 @@ const EPHEMERAL_DB_PASSWORD = 'screenshot';
  * - `≥2` throws rather than picking — for the same reason `getHouseholdScope()` throws on a principal
  *   holding two memberships, though no longer by the same query: a fixture written into the wrong
  *   household would produce a screenshot of a leak and call it a feature.
+ *
+ * ⚠️ **No seeder calls it since FAM-1 12f.** Its three callers wrote legacy strength sessions for
+ * capture states of the retired forms. It stays because `packages/db/src/scope.test.ts` pins this
+ * file as the one fixture script that derives a scope: removing the function means removing that
+ * pin in the same change, and a later fixture that writes through a write core needs it again.
  */
 async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdScope> {
   const live = await liveHouseholdIds(db);
@@ -178,13 +175,13 @@ async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdS
 /**
  * AUTH-1 1c-2 — soft-delete the HOUSEHOLD, so the picker renders `NoHouseholdState`.
  *
- * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** — the way `seedClosedDays`
- * composes `seedWeighIns`. `fixtureScope` asserts *"expected exactly one live household in the
+ * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** (none does since 12f PR 2;
+ * the warning stands for the next one). `fixtureScope` asserts *"expected exactly one live household in the
  * throwaway DB"* and throws on 0, which is precisely the state this function creates. (There is no
  * scope-derivation pass to order against — ⚠️ **there is one since `1c-4a`**: `runEphemeral` runs
  * `migrateAndSeed`, then `linkFixtureMember` (which resolves the live household through the
  * correction's `requireLiveHouseholdScope`), then exactly one
- * `STATES[state]` seeder, and `fixtureScope()` is only ever called from inside a sibling seeder.)
+ * `STATES[state]` seeder; no seeder calls `fixtureScope()` since 12f PR 2.)
  *
  * This is the only way to see this screen outside the design-token harness: the Playwright suite runs
  * `fullyParallel` against one shared seeded database, and a hidden household breaks `selectProfile`
@@ -215,63 +212,6 @@ async function seedNoProfiles(dbUrl: string): Promise<void> {
       .where(isNull(schema.profiles.deletedAt))
       .returning({ publicId: schema.profiles.publicId });
     console.log(`✓ hid ${hidden.length} seeded profile(s) → the picker renders its empty state`);
-  } finally {
-    await pool.end();
-  }
-}
-
-async function seedStatusBadges(dbUrl: string): Promise<void> {
-  const pool = createDbPool(dbUrl);
-  const db = createDb(pool);
-  try {
-    const [scLift] = await db
-      .select({ id: schema.activityTypes.id })
-      .from(schema.activityTypes)
-      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift))
-      .limit(1);
-    if (!scLift) throw new Error('sc_lift activity type not seeded — did db:seed run?');
-    const movementRows = await db
-      .select({ id: schema.movements.id, name: schema.movements.name })
-      .from(schema.movements)
-      .limit(2);
-    if (movementRows.length < 2) throw new Error('seeded movements not found — did db:seed run?');
-
-    await writeStrengthSession(db, {
-      profilePublicId: SEED_PROFILE_PUBLIC_ID,
-      scope: await fixtureScope(db),
-      day: localDayIso(DEFAULT_TIME_ZONE),
-      sessionType: DEFAULT_SESSION_TYPE,
-      sessionClientId: newId(),
-      activityTypeId: scLift.id,
-      movements: [
-        {
-          // The realistic sub-failure shape: the LAST set failed, the earlier ones didn't — which is
-          // precisely what entry-level storage could never express.
-          movementName: movementRows[0].name,
-          unit: 'lb',
-          movementId: movementRows[0].id,
-          clientId: newId(),
-          sets: [
-            { reps: 5, weight: 60 },
-            { reps: 5, weight: 60 },
-            {
-              reps: 2,
-              weight: 60,
-              status: ENTRY_STATUS.sub_failure,
-            },
-          ],
-        },
-        {
-          // A skipped movement: zero sets, `drop-if-yellow`.
-          movementName: movementRows[1].name,
-          unit: 'lb',
-          movementId: movementRows[1].id,
-          clientId: newId(),
-          status: ENTRY_STATUS.skipped,
-          sets: [],
-        },
-      ],
-    });
   } finally {
     await pool.end();
   }
@@ -385,8 +325,8 @@ const STATES = {
   // AUTH-1 1c-2 — the "this account resolves no household" screen. The ONLY way to render it (see
   // `seedNoHousehold`): it needs zero live households, which breaks `selectProfile` in every spec.
   'no-household': seedNoHousehold,
-  // PROF-1 a-g: an ADULT on the day page — no day-role label, "Not a programmed day" as the form
-  // default, and the muted line explaining why the strength card is empty.
+  // PROF-1 a-g: an ADULT on the day page, with no day-role label (the form defaults this once
+  // showed went with the old forms).
   'adult-athlete': seedAdultAthlete,
   // PROF-1 b: an ARCHIVED athlete, so Household settings renders BOTH sections and the athlete's own
   // day page renders its notice. The ONLY way to capture either: the seed produces no archived row,
@@ -394,27 +334,6 @@ const STATES = {
   // approving an empty Archived section.
   'archived-athlete': seedArchivedAthlete,
   'already-logged': seedAlreadyLogged,
-  // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
-  calisthenics: seedCalisthenics,
-  // V1-8-2: a logged flat multi-movement strength session (via the shipped write core).
-  'strength-session': seedStrengthSession,
-  // V1-24 3a-i: the same session with Change OPEN on a superset member (the 280px worst case).
-  'strength-amend': seedStrengthSession,
-  // V1-24 3a-ii: the same session as a section receipt, with "Log more strength" OPENED.
-  'strength-log-more': seedStrengthSession,
-  // GAP-1 P1-1c — interaction-only states (no fixtures; see INTERACTIONS below).
-  'form-skipped': null,
-  'form-sub-failure': null,
-  // GAP-1 P1-1c — the READ side: a skipped entry badge + a sub-failure set badge.
-  'status-badges': seedStatusBadges,
-  // V1-19 — the scaffolded form. Interaction-only; needs a PROGRAMMED day, so pair it with
-  // `--tz` on a non-strength weekday (e.g. `--tz Pacific/Kiritimati` renders tomorrow).
-  'form-scaffolded': null,
-  // V1-23 PR 3 — "Today's program" shut. Interaction-only (see INTERACTIONS below).
-  'program-collapsed': null,
-  // V1-26 PR-A — the BW-tap warning on a catalog-declared-loaded movement. Interaction-only, and
-  // like `form-scaffolded` it needs a PROGRAMMED day — pair it with `--tz` if today has none.
-  'form-bw-warning': null,
   // V1-24 PR 1b — the weigh-in's OPEN editor. Interaction-only on top of the already-logged
   // fixture: the open state is transient client state no seeder can produce.
   'bodyweight-editing': seedAlreadyLogged,
@@ -449,23 +368,15 @@ const STATES = {
   // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
   // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
   'day-look-ahead': null,
+  // FAM-1 15c PR 1: the Program order dialog OPEN, on the preview route
+  // (`/design/program?screen=day&fixture=today-three-programs-one-ending`): it exists only after a tap.
+  'program-order-open': null,
   // FAM-1 12d — Change on a set row, typed over and not yet saved ("Not saved. Was …" and the ✕),
   // in today's superset. Interaction-only: the state exists only between typing and leaving the row.
   'day-change-typed-over': null,
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
   'bodyweight-rejected': null,
-  // V1-27 — partial sets. Interaction-only: all but the last row of card 1 filled (the mixed card, its
-  // "empty sets at the end" hint and the summary line), and a half-entered row (the blocked summary).
-  'form-partial-sets': null,
-  'form-partial-blocked': null,
-  // V1-30b-i — a TIME card: the BW/band chips are gone (the server refuses them there) and the number
-  // field reads "time". Interaction-only — the state exists only after the Measuring select changes,
-  // and it is the ONLY place this change is visible.
-  'form-time-card': null,
-  // V1-30b-ii — the history line with LENGTH units, which are now spelled out (`30 inches`,
-  // `1 foot`). The lb/kg/sec/min codes are unchanged, so a lb-only session shows nothing.
-  'history-spelled-units': seedLengthSession,
   // PROF-1 a-r — the rename form's REFUSED state: the alert under the field, `aria-invalid` on the
   // input, and the typed value STILL THERE. Interaction-only, and it is the one state that shows the
   // reason the island is controlled at all (React 19 resets an uncontrolled field when an action
@@ -488,6 +399,8 @@ const STATES = {
   'picker-filter-browse': null,
   'picker-filter-search': null,
   'picker-filter-none': null,
+  // CAT-3 B3 — the picker's browse tree with no filter, a kind and a family open (the e2e spec's step).
+  'picker-browse-open': null,
   // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
   // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
   'rename-duplicate': null,
@@ -499,6 +412,10 @@ const STATES = {
   'workout-edit': null,
   // FAM-1 15 — the Put on dialog with one athlete ticked (see INTERACTIONS).
   'put-on': null,
+  // V1-9b B2-ii — Clear this day's dialog, armed, and the banner after a clear. Both exist only
+  // after taps on today's page, so the capture logs a practice and drives them (see INTERACTIONS).
+  'clear-day-dialog': null,
+  'clear-day-banner': null,
   // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
   // that the server answers with a match. Three states, because the callout is three different
   // screens and the copy differs in each.
@@ -519,8 +436,8 @@ type StateName = keyof typeof STATES;
 
 /**
  * Post-load interactions, keyed by `--state`. Some UI states only exist AFTER a tap and cannot be
- * seeded: GAP-1 P1-1c's Skipped checkbox collapses the set rows, and the per-set sub-failure toggle
- * marks one attempt. A reviewer approving those needs to see them, so the capture performs the taps.
+ * seeded: an open editor, an armed Clear, a refused value. A reviewer approving those needs to see
+ * them, so the capture performs the taps.
  * Runs per viewport against a fresh page → must be idempotent from a clean load.
  */
 /**
@@ -539,87 +456,11 @@ const warnOnDuplicate = (name: string, kind: ProfileKind) => async (page: Page) 
   await page.getByRole('group').waitFor();
 };
 
-/** V1-27 — scaffold the day and return the open card's reps/weight inputs. */
-async function scaffoldOpenCard(page: Page) {
-  const strength = page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
-  await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
-  return { reps: strength.getByPlaceholder('reps'), weight: strength.getByPlaceholder('weight') };
-}
+/** Every picker state's name starts with this: they are captured in its sheet, after `load`. */
+const PICKER_STATE_PREFIX = 'picker-';
 
-/**
- * V1-30b-ii — one logged session using LENGTH units, so the capture shows the spelled history line.
- * The existing `strength-session` seeder is lb-only, where nothing changed.
- */
-async function seedLengthSession(dbUrl: string): Promise<void> {
-  const pool = createDbPool(dbUrl);
-  const db = createDb(pool);
-  try {
-    const [scLift] = await db
-      .select({ id: schema.activityTypes.id })
-      .from(schema.activityTypes)
-      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift));
-    // Named, not positional-with-no-orderBy: an unordered `.limit(3)` is non-deterministic across
-    // runs (so two screenshot rounds are not comparable), and in practice it paired `ft` with Front
-    // Squat — a movement the form itself would warn you off measuring in feet (`usuallyLoggedAs`).
-    // A reviewer judging the WORDING should not be distracted by a nonsense pairing.
-    const bySlug = async (slug: string) => {
-      const [row] = await db
-        .select({ id: schema.movements.id, name: schema.movements.name })
-        .from(schema.movements)
-        .where(and(eq(schema.movements.slug, slug), isNull(schema.movements.deletedAt)))
-        .limit(1);
-      if (!row) throw new Error(`movement '${slug}' not seeded — did db:seed run?`);
-      return row;
-    };
-    if (!scLift) throw new Error('sc_lift activity type not seeded — did db:seed run?');
-    const movementRows = [
-      await bySlug('box_jump'), // a height, in inches
-      await bySlug('broad_jump'), // a distance, in feet
-      await bySlug('back_squat'), // a weight, unchanged
-    ];
-    await writeStrengthSession(db, {
-      profilePublicId: SEED_PROFILE_PUBLIC_ID,
-      scope: await fixtureScope(db),
-      day: localDayIso(DEFAULT_TIME_ZONE),
-      sessionType: DEFAULT_SESSION_TYPE,
-      sessionClientId: newId(),
-      activityTypeId: scLift.id,
-      movements: [
-        // Plural, singular, and a second length unit — the three cases the wording changes.
-        {
-          movementName: movementRows[0].name,
-          unit: 'in',
-          movementId: movementRows[0].id,
-          clientId: newId(),
-          sets: [{ reps: 3, weight: 30 }],
-        },
-        {
-          movementName: movementRows[1].name,
-          unit: 'ft',
-          movementId: movementRows[1].id,
-          clientId: newId(),
-          sets: [
-            { reps: 1, weight: 6 },
-            { reps: 1, weight: 1 },
-          ],
-        },
-        // A mass movement beside them, unchanged — `lb` stays a code.
-        {
-          movementName: movementRows[2].name,
-          unit: 'lb',
-          movementId: movementRows[2].id,
-          clientId: newId(),
-          sets: [{ reps: 5, weight: 135 }],
-        },
-      ],
-    });
-  } finally {
-    await pool.end();
-  }
-}
-
-/** CAT-3 B2-ii: open the workout editor's item picker, then its filter panel. */
-async function openPickerFilters(page: Page) {
+/** CAT-3 B2-ii: open the workout editor's item picker. */
+async function openItemPicker(page: Page) {
   // Loaded, not idle (`waitUntil: 'load'`), so the first tap may land before hydration and do
   // nothing: tap until the sheet opens, a bounded number of times.
   const open = page.getByRole('button', { name: ITEM_PICKER_COPY.open, exact: true });
@@ -634,6 +475,10 @@ async function openPickerFilters(page: Page) {
       if (tries >= 10) throw error;
     }
   }
+}
+/** CAT-3 B2-ii: open the workout editor's item picker, then its filter panel. */
+async function openPickerFilters(page: Page) {
+  await openItemPicker(page);
   await page.getByRole('button', { name: PICKER_COPY.filtersName(0), exact: true }).click();
   await page.getByRole('heading', { name: PICKER_COPY.filtersHeading, exact: true }).waitFor();
 }
@@ -644,7 +489,9 @@ async function quadsOnThenBack(page: Page) {
     .getByRole('checkbox', { name: new RegExp(`^${quads}${PICKER_COPY.choiceJoin}`) })
     .check();
   await page.getByRole('button', { name: PICKER_COPY.filtersBack, exact: true }).click();
-  await page.getByRole('heading', { name: PICKER_COPY.fitHeading, exact: true }).waitFor();
+  // Not exact: the heading's name adds its count ("…, 3 movements"; CAT-3 B3-ii's tree). With
+  // "Quads" on the tree holds three rows, so it has opened itself (K26) by the time it is drawn.
+  await page.getByRole('heading', { level: 3, name: PICKER_COPY.fitHeading }).waitFor();
 }
 
 /**
@@ -662,26 +509,6 @@ async function settleAnimations(page: Page): Promise<void> {
 }
 
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
-  'form-partial-sets': async (page) => {
-    const { reps, weight } = await scaffoldOpenCard(page);
-    const n = await reps.count();
-    for (let i = 0; i < n - 1; i++) {
-      await reps.nth(i).fill('8');
-      await weight.nth(i).fill('20');
-    }
-  },
-  'form-partial-blocked': async (page) => {
-    const { reps, weight } = await scaffoldOpenCard(page);
-    await reps.nth(0).fill('8');
-    await weight.nth(0).fill('20');
-    await weight.nth(1).fill('20'); // weight, no reps: touched, so its reps stay required
-  },
-  'form-time-card': async (page) => {
-    const strength = page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
-    await strength.getByLabel('Movement', { exact: true }).fill('Plank');
-    // The chips vanish and the field word changes in the same update as the unit.
-    await strength.getByLabel('What movement 1 measures').selectOption(UNIT_DIMENSION.time);
-  },
   // PROF-1 a-r. Whitespace-only rather than empty: `required` stops a blank submit in the browser, so
   // an empty field would never reach the server's refusal — which is the state being captured.
   /**
@@ -711,6 +538,26 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await dialog.waitFor();
     await dialog.getByRole('checkbox', { checked: false, disabled: false }).first().check();
   },
+  /** V1-9b B2-ii — log a practice, open Clear this day, type the word: the armed dialog. */
+  'clear-day-dialog': async (page) => {
+    await logPractice(page);
+    await page.getByRole('button', { name: CLEAR_DAY_COPY.trigger, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.waitFor();
+    await dialog.getByRole('textbox').fill(CLEAR_DAY_CONFIRM_WORD);
+  },
+  /** V1-9b B2-ii — the same, cleared: the banner with Restore all, focused. */
+  'clear-day-banner': async (page) => {
+    await logPractice(page);
+    await page.getByRole('button', { name: CLEAR_DAY_COPY.trigger, exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.waitFor();
+    await dialog.getByRole('textbox').fill(CLEAR_DAY_CONFIRM_WORD);
+    await dialog.getByRole('button', { name: CLEAR_DAY_COPY.action, exact: true }).click();
+    // By id, not label: each width revisits the same day, so from the second capture an earlier clear
+    // is there too and the button truthfully reads "Restore 1 entry" rather than "Restore all".
+    await page.locator(`#${RESTORE_ALL_ID}`).waitFor();
+  },
   /** FAM-1 7b-ii — the seeded program's "+ New workout", waiting for the editor's name field. */
   'workout-new': async (page) => {
     await page.getByRole('link', { name: /^Family program/ }).click();
@@ -739,6 +586,17 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page
       .getByRole('heading', { name: PICKER_COPY.householdNotFiltered, exact: true })
       .waitFor();
+  },
+  'picker-browse-open': async (page) => {
+    await openItemPicker(page);
+    // A group's name is "Strength, 17 movements" (`choiceName`); Chrome may space the two spans.
+    const group = (label: string) =>
+      page.getByRole('button', {
+        name: new RegExp(`^${label}\\s*${PICKER_COPY.choiceJoin.trim()}`),
+      });
+    await group(MODALITY_LABELS.strength).click();
+    await group(MOVEMENT_FAMILY_LABELS.vertical_pull).click();
+    await page.getByRole('checkbox', { name: /^Chin-up\b/ }).waitFor();
   },
   'picker-filter-none': async (page) => {
     await openPickerFilters(page);
@@ -829,6 +687,10 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await load.fill(String(Number(await load.inputValue()) + 5));
     await superset.getByText(/^Not saved\. Was /).waitFor();
   },
+  'program-order-open': async (page) => {
+    await page.getByRole('button', { name: PROGRAM_COPY.order, exact: true }).click();
+    await page.getByRole('dialog').waitFor();
+  },
   'day-look-ahead': async (page) => {
     await page
       .getByRole('navigation', { name: 'Change day' })
@@ -842,83 +704,6 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await section.getByLabel('Weight', { exact: true }).fill('845');
     await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
     await section.getByRole('alert').waitFor();
-  },
-  // V1-19 — the whole point of the reviewed design is what the form looks like AFTER the tap:
-  // collapsed cards with a per-movement done/total counter, because scaffolding 7 movements × 4 sets
-  // renders ~6,600px of blank inputs at 360px otherwise. A reviewer cannot approve that from the
-  // before-state, so the capture performs the tap.
-  'form-scaffolded': async (page) => {
-    const fill = page.getByRole('button', { name: /Fill in today.s movements/i });
-    if ((await fill.count()) === 0) {
-      throw new Error(
-        'no "Fill in today\'s movements" button — this state needs a PROGRAMMED day; pass --tz (e.g. Pacific/Kiritimati) on a non-strength weekday',
-      );
-    }
-    await fill.click();
-  },
-  // V1-23 PR 3 — the card ships OPEN, so the default capture already shows the expanded state; what a
-  // reviewer cannot see there is the thing the PR is for: the form at the top of the screen once the
-  // athlete has shut the card. The disclosure is a native `<summary>`, so a click is the whole state.
-  'program-collapsed': async (page) => {
-    const summary = page.getByRole('region', { name: /Today.s program/ }).locator('summary');
-    if ((await summary.count()) === 0) {
-      throw new Error(
-        'no "Today\'s program" card — this state needs a day the seeded program prescribes movements for',
-      );
-    }
-    await summary.click();
-  },
-  /**
-   * V1-26 PR-A — the whole reviewable surface of the PR is a state that exists only after TWO taps:
-   * scaffold the day, then tap BW on a movement the catalog declares loaded. No fixture can seed it,
-   * because it is transient client state and was never written to the database.
-   *
-   * It finds the declared-loaded card by DRIVING THE UI rather than hardcoding a movement name — the
-   * YDP rotates A/B on date parity, so which movements are on today's card depends on the day the
-   * capture runs. It opens each collapsed card, taps BW, and stops at the first one that warns.
-   */
-  'form-bw-warning': async (page) => {
-    const fill = page.getByRole('button', { name: /Fill in today.s movements/i });
-    if ((await fill.count()) === 0) {
-      throw new Error(
-        'no "Fill in today\'s movements" button — this state needs a PROGRAMMED day; pass --tz (e.g. Pacific/Kiritimati)',
-      );
-    }
-    await fill.click();
-
-    const cards = page.getByRole('button', { name: /^\d+\.\s/ });
-    // Card 1 opens by default; the rest are collapsed summaries.
-    for (let i = 1; i <= (await cards.count()) + 1; i++) {
-      if (i > 1) await page.getByRole('button', { name: new RegExp(`^${i}\\.\\s`) }).click();
-      const chip = page.getByRole('checkbox', { name: `BW — Bodyweight — movement ${i} set 1` });
-      if ((await chip.count()) === 0) continue;
-      // `force`: the chip input is `sr-only` (clipped, so the LABEL can be the 44px tap target), and
-      // Playwright's actionability check treats a clipped element as not visible. It is genuinely in
-      // the a11y tree — which is why `getByRole` finds it — so the click is real, not a workaround.
-      await chip.check({ force: true });
-      if ((await page.getByText(/usually logged with a weight/).count()) > 0) return;
-      await chip.uncheck({ force: true });
-    }
-    throw new Error(
-      'no catalog-declared-loaded movement on this day — the warning cannot render; try another --tz',
-    );
-  },
-  /** V1-24 3a-ii — the session as a section receipt, with "Log more strength" opened. */
-  'strength-log-more': async (page) => {
-    const toggle = page.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true });
-    if ((await toggle.count()) === 0) {
-      throw new Error('no "Log more strength" — this state needs the strength-session fixture');
-    }
-    await toggle.click();
-  },
-  'strength-amend': async (page) => {
-    // `set 1` Change buttons in render order: the standalone movement's, then the superset's first
-    // member's (nth 1) — the narrowest editor on the page.
-    const changes = page.getByRole('button', { name: /^Change .* set 1 — / });
-    if ((await changes.count()) < 2) {
-      throw new Error('no superset Change control — this state needs the strength-session fixture');
-    }
-    await changes.nth(1).click();
   },
   /**
    * V1-24 PR 1b — the amend, open. The reviewable surface of the PR is a state two taps in: the
@@ -1004,26 +789,6 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await section.getByRole('button', { name: BODYWEIGHT_COPY.logLabel }).click();
     await section.getByRole('alert').waitFor();
   },
-  'form-skipped': async (page) => {
-    await page.getByLabel(/movement 1 skipped/i).check();
-  },
-  'form-sub-failure': async (page) => {
-    // Build the CROWDED case the panel asked for: 3 sets, one sub-failure, one canonical chip
-    // active — a 1-set card hides the width pressure the new control adds at 360px.
-    // `exact: true` is LOAD-BEARING: getByLabel is substring + case-insensitive by default, so a
-    // bare 'Movement' also matches "Select movement 1 for a superset" and "Movement 1 set 1 reps"
-    // → strict-mode violation (docs/lessons.md has this exact trap).
-    await page.getByLabel('Movement', { exact: true }).fill('Pull-up');
-    await page.getByLabel(/movement 1 set 1 reps/i).fill('5');
-    await page.getByLabel('Movement 1 set 1: BW').click(); // chips are `${ctx}: ${label}`
-    await page.getByRole('button', { name: /add set/i }).click();
-    await page.getByLabel(/movement 1 set 2 reps/i).fill('4');
-    await page.getByLabel('Movement 1 set 2: band').click();
-    await page.getByRole('button', { name: /add set/i }).click();
-    await page.getByLabel(/movement 1 set 3 reps/i).fill('2');
-    await page.getByLabel(/movement 1 set 3 weight or load/i).fill('BW');
-    await page.getByLabel(/sub-failure — movement 1 set 3/i).check();
-  },
 };
 
 /**
@@ -1055,7 +820,7 @@ function assertDbTargetAllowed(url: string, allowLive: boolean): void {
   );
 }
 
-/** Seed the "already-logged" check-in state: one habit + one brush-teeth metric today. */
+/** Seed the "already-logged" state: one habit and one brush-teeth metric logged today. */
 async function seedAlreadyLogged(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);
@@ -1148,12 +913,6 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
 }
 
 /**
- * Seed a realistic V1-6a day — the "fixed" state (contrast the duplicated-data bug). A couple
- * of log-once habits (each ONE row, no re-submit dupes) + several calisthenics bouts (push-ups
- * in TWO bouts → grouped into ONE row: "20, 30 · 2 sets"; pull-ups once). Same row shape as
- * `logCheckinEntries`: kind NULL, value_num set, unit from the DB catalog row.
- */
-/**
  * PROF-1 b — archive the third athlete (the one the archive specs own), so the two states that only
  * exist after an archive can be captured.
  *
@@ -1212,198 +971,6 @@ async function seedHouseholdAtCap(dbUrl: string): Promise<void> {
         name: `Filler ${i + 1}`,
         kind: PROFILE_KIND.kid,
       })),
-    );
-  } finally {
-    await pool.end();
-  }
-}
-
-async function seedCalisthenics(dbUrl: string): Promise<void> {
-  const pool = createDbPool(dbUrl);
-  const db = createDb(pool);
-  try {
-    const [profile] = await db
-      .select({ id: schema.profiles.id })
-      .from(schema.profiles)
-      .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID))
-      .limit(1);
-    if (!profile) throw new Error('seeded profile not found — did db:seed run?');
-
-    const activityId = async (key: string) => {
-      const [row] = await db
-        .select({ id: schema.activityTypes.id, defaultUnit: schema.activityTypes.defaultUnit })
-        .from(schema.activityTypes)
-        .where(eq(schema.activityTypes.key, key))
-        .limit(1);
-      return row;
-    };
-    const metric = async (key: string) => {
-      const [row] = await db
-        .select({ key: schema.metricDefinitions.key, unit: schema.metricDefinitions.unit })
-        .from(schema.metricDefinitions)
-        .where(eq(schema.metricDefinitions.key, key))
-        .limit(1);
-      return row;
-    };
-    const calisthenics = await activityId(ACTIVITY_TYPE_KEYS.calisthenics);
-    const riceBucket = await activityId(ACTIVITY_TYPE_KEYS.rice_bucket);
-    const splits = await activityId(ACTIVITY_TYPE_KEYS.splits);
-    const pushups = await metric(METRIC_KEYS.pushups);
-    const pullups = await metric(METRIC_KEYS.pullups);
-
-    const day = localDayIso(DEFAULT_TIME_ZONE);
-    const base = () => ({
-      publicId: newId(),
-      clientId: newId(),
-      profileId: profile.id,
-      activityDate: day,
-      valueNum: '1',
-      status: ENTRY_STATUS.done,
-    });
-    const bout = (m: { key: string; unit: string }, value: string) => ({
-      ...base(),
-      unit: m.unit,
-      valueNum: value,
-      activityTypeId: calisthenics.id,
-      metricKey: m.key,
-    });
-    const habit = (a: { id: number; defaultUnit: string | null }) => ({
-      ...base(),
-      unit: a.defaultUnit ?? 'bool',
-      activityTypeId: a.id,
-      metricKey: null,
-    });
-    // Two habits (ONE row each) + two push-up bouts (grouped) + one pull-up set.
-    await db
-      .insert(schema.entries)
-      .values([
-        habit(riceBucket),
-        habit(splits),
-        bout(pushups, '20'),
-        bout(pushups, '30'),
-        bout(pullups, '12'),
-      ])
-      .onConflictDoNothing({
-        target: schema.entries.clientId,
-        where: isNull(schema.entries.deletedAt),
-      });
-
-    // V1-6b-2: a ramp target per logged metric for THIS ISO week, so the "This week" <progress>
-    // bars render (the shipped schedule is empty). Targets above the seeded actuals (push-ups 50,
-    // pull-ups 12) → partially-filled bars.
-    const weekStart = localWeekStartIso(day);
-    await db
-      .insert(schema.rampTargets)
-      .values([
-        {
-          publicId: newId(),
-          profileId: profile.id,
-          metricKey: pushups.key,
-          weekStart,
-          targetValue: '60',
-        },
-        {
-          publicId: newId(),
-          profileId: profile.id,
-          metricKey: pullups.key,
-          weekStart,
-          targetValue: '15',
-        },
-      ])
-      .onConflictDoNothing({
-        target: [
-          schema.rampTargets.profileId,
-          schema.rampTargets.metricKey,
-          schema.rampTargets.weekStart,
-        ],
-        where: isNull(schema.rampTargets.deletedAt),
-      });
-    console.log(
-      '✓ seeded calisthenics fixture (habits; push-ups 20+30, pull-ups 12; ramp targets 60/15)',
-    );
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * V1-8-2: a logged multi-movement strength SESSION today, seeded THROUGH the shipped write core
- * (`writeStrengthSession`) — so the screenshot shows the real flat-session rows, and the fixture
- * dogfoods the same path the app + `db:verify` use. Two movements (2 sets + 1 set) render flat in
- * the "Logged entries" list (session grouping is V1-8-3).
- */
-async function seedStrengthSession(dbUrl: string): Promise<void> {
-  const pool = createDbPool(dbUrl);
-  const db = createDb(pool);
-  try {
-    const [scLift] = await db
-      .select({ id: schema.activityTypes.id })
-      .from(schema.activityTypes)
-      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift))
-      .limit(1);
-    if (!scLift) throw new Error('sc_lift activity type not seeded — did db:seed run?');
-    const movementRows = await db
-      .select({ id: schema.movements.id, name: schema.movements.name })
-      .from(schema.movements)
-      .limit(4);
-    if (movementRows.length < 4) throw new Error('seeded movements not found — did db:seed run?');
-
-    // V1-8-3d: one standalone movement + a 2-movement SUPERSET, so the screenshot shows the bracket.
-    const supersetClientId = newId();
-    await writeStrengthSession(db, {
-      profilePublicId: SEED_PROFILE_PUBLIC_ID,
-      scope: await fixtureScope(db),
-      day: localDayIso(DEFAULT_TIME_ZONE),
-      sessionType: DEFAULT_SESSION_TYPE,
-      sessionClientId: newId(),
-      activityTypeId: scLift.id,
-      feel: 'strong, easy warmup', // V1-8-3b: session feel shows in the block header
-      supersets: [{ clientId: supersetClientId }],
-      movements: [
-        {
-          movementName: movementRows[0].name,
-          unit: 'lb',
-          movementId: movementRows[0].id,
-          clientId: newId(),
-          sets: [
-            { reps: 5, weight: 135 },
-            { reps: 5, weight: 155 },
-          ],
-        },
-        {
-          movementName: movementRows[1].name,
-          unit: 'lb',
-          movementId: movementRows[1].id,
-          clientId: newId(),
-          sets: [{ reps: 8, weight: 95 }],
-          supersetClientId,
-          supersetOrder: 1,
-        },
-        {
-          movementName: movementRows[2].name,
-          unit: 'lb',
-          movementId: movementRows[2].id,
-          clientId: newId(),
-          sets: [{ reps: 10, weight: 30 }],
-          supersetClientId,
-          supersetOrder: 2,
-        },
-        // V1-24 3a-i: a BODYWEIGHT movement, so the Locked reason line ("can't be changed … ask a
-        // parent") is in the capture beside sets that do have Change.
-        {
-          movementName: movementRows[3].name,
-          unit: 'lb',
-          movementId: movementRows[3].id,
-          clientId: newId(),
-          sets: [
-            { reps: 10, weight: null, isBodyweight: true },
-            { reps: 8, weight: null, isBodyweight: true },
-          ],
-        },
-      ],
-    });
-    console.log(
-      `✓ seeded strength-session fixture (${movementRows[0].name} standalone + ${movementRows[1].name}/${movementRows[2].name} superset + a BW movement)`,
     );
   } finally {
     await pool.end();
@@ -1527,8 +1094,8 @@ async function runEphemeral(
       allowConsole,
       // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver. The picker's
       // filter states are in its sheet too.
-      viewportOnly: state.startsWith('sheet-') || state.startsWith('picker-filter-'),
-      waitUntil: state.startsWith('picker-filter-') ? 'load' : undefined,
+      viewportOnly: state.startsWith('sheet-') || state.startsWith(PICKER_STATE_PREFIX),
+      waitUntil: state.startsWith(PICKER_STATE_PREFIX) ? 'load' : undefined,
     });
   } finally {
     if (server) await stopChildProcess(server);
@@ -1591,14 +1158,14 @@ async function main(): Promise<void> {
   // reviewed in one.
   const themeFlagIdx = argv.indexOf('--theme');
   const rawTheme = themeFlagIdx >= 0 ? argv[themeFlagIdx + 1] : undefined;
-  // Validated like `--tz`, and for the same reason: `--theme --state calisthenics` swallows the value
+  // Validated like `--tz`, and for the same reason: `--theme --state already-logged` swallows the value
   // into the next flag, and an unvalidated value would silently capture the wrong theme onto the
   // artifact a reviewer approves from.
   if (themeFlagIdx >= 0 && rawTheme !== 'light' && rawTheme !== 'dark') {
     throw new Error(`--theme requires light|dark, got: ${rawTheme ?? ''}`);
   }
   const colorScheme = rawTheme as 'light' | 'dark' | undefined;
-  // Validated with the SAME helper the app uses on the `tz` cookie — so `--tz --state calisthenics`
+  // Validated with the SAME helper the app uses on the `tz` cookie — so `--tz --state already-logged`
   // (value swallowed by the next flag) fails here with a clear message instead of deep inside Playwright.
   if (tzFlagIdx >= 0 && !isIanaTimeZone(timeZone)) {
     throw new Error(

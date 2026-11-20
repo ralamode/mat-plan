@@ -6,7 +6,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 
 import { schema } from '../../src/client';
-import type { HouseholdScope } from '../../src/scope';
+import { type HouseholdScope, type OwnerScope, ownerScope } from '../../src/scope';
 import { LOCK_TIMEOUT, rowsOf, type Executor } from '../../src/writers/executor';
 
 /**
@@ -193,21 +193,32 @@ export async function constraintDef(conname: string): Promise<string> {
 }
 
 /**
- * Run `fn` with `console.warn` captured, and return what it warned. The seed's TEN-2c shadow guard is
- * a WARNING, not a `throw`, so `assert.rejects` cannot reach it, and what must be true of its text (it
- * names the seed slug; it does NOT name a household's free text) is a privacy proof. Restores the real
- * `console.warn` in a `finally`. Moved here from `verify.ts` at OPS-2 PR 1, its second caller.
+ * Run `fn` with **everything the process prints** captured (both of its output streams, so every
+ * console method and any direct write), and return it, in order. The seed's report is printed to `migrate.yml`'s world-readable log,
+ * and what must NOT be in it (a slug of a row a household owns, a household's free text) is a privacy
+ * proof: capturing `warn` alone would let a line moved to `console.log` pass every "does not include"
+ * assertion while checking nothing (CAT-3 A2-i, privacy P1-2). Restores the real methods in a `finally`.
  */
-export async function captureWarnings(fn: () => Promise<void>): Promise<string> {
-  const real = console.warn;
-  const lines: string[] = [];
-  console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+export async function captureOutput(fn: () => Promise<void> | void): Promise<string> {
+  // The process's two streams, not a list of console methods: `debug`, `trace`, `dir` and `table`
+  // are their own properties, and a direct `process.stdout.write` bypasses `console` altogether.
+  const streams = [process.stdout, process.stderr] as const;
+  const real = streams.map((s) => s.write.bind(s));
+  let printed = '';
+  for (const s of streams) {
+    s.write = ((chunk: string | Uint8Array) => {
+      printed += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      return true;
+    }) as typeof s.write;
+  }
   try {
     await fn();
   } finally {
-    console.warn = real;
+    streams.forEach((s, k) => {
+      s.write = real[k]! as typeof s.write;
+    });
   }
-  return lines.join('\n');
+  return printed.replace(/\n$/, '');
 }
 
 // The raw-result readers live once in `src/writers/executor.ts` (`src/erasure/` needs them too).
@@ -340,6 +351,20 @@ export async function orFail<T>(what: string, run: () => Promise<T>): Promise<T>
   } catch (e) {
     assert.fail(`${what} (threw: ${String((e as Error).message).slice(0, 120)})`);
   }
+}
+
+/**
+ * **Narrow a proof's scope to an `OwnerScope`, or fail the proof** (FAM-1 export follow-up). For a
+ * proof that calls an owner-gated read or writer with a scope it built as an owner: it routes through
+ * `ownerScope()`, the one narrowing, rather than a cast (`src/scope.test.ts` → `ALLOWED_CAST`), and a
+ * scope that is not an owner's fails here, loudly, instead of reading zero rows.
+ *
+ * `what` names the proof in the failure.
+ */
+export function asOwner(scope: HouseholdScope, what: string): OwnerScope {
+  const owner = ownerScope(scope);
+  assert.ok(owner, `${what}: the scope is an owner scope`);
+  return owner;
 }
 
 /**
