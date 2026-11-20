@@ -362,3 +362,22 @@ on Opus 5.5). No P0 stands: the db-safety P0 is fixed in D3. Every finding is ac
 | —               | all                          | `rolledBack` + `seed(asPg)` hangs on PGlite                                                                                                       | D3: `seed(asDb(tx))`, reads on `tx`                                                         |
 | —               | db-safety, correctness       | 506, 599, A3's delta, the identity-value note, the failed-seed runbook line, the preview and localhost mixed states, the inventory's future tense | in D3, D4, D6, D8 and the mutation list                                                     |
 | Q1              | correctness (lane E's sheet) | Jump rope / Easy run types                                                                                                                        | the contract owner's #763: the test library takes the world's types (the board, 2026-11-20) |
+
+## As built (2026-11-20)
+
+Three places the code differs from the plan's wording; none changes a decision.
+
+- **`CATALOG_LIBRARY_NAMES` lives in `packages/shared/src/db-environment.ts`**, beside the rule that
+  chooses between them, not in `packages/shared/src/catalog/`. One module holds the names, the rule and
+  the notice.
+- **`seedReference` takes a resolved `SeedLibrary`** (`{ entries, legacyMovements }`), and `seed()` only
+  ever builds one with `seedLibraryOf(name)`. One name still decides both halves in every production
+  and fixtures run (D1); `db:verify` builds one-entry libraries to prove A2-i's cases one at a time.
+- **The ownership report checks against `CATALOG_MOVEMENTS`**, the library production holds, and says
+  so on its line. On a fixtures database the test library's own slugs land on the "modality but no
+  library slug" line; the report is production's census.
+
+The proofs as planned, with their mutations: A1 (`598`), A2 (`599`), A3 (`603`), A6 (`601`), A9
+(`600`), the TEN-2 discriminator (`602`), the household digests (`604`); `515` re-pointed to an early
+empty-list proof; `506` retired; `326`, `328`, `329`, `45`, `502`, `507`, `514`, `517` and `588`
+re-cut against the new code.

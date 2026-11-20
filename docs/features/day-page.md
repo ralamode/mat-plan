@@ -318,6 +318,10 @@ Start from the step's row in the plan (§5) and its prototype states (§8). A sc
 panel before it is built ([AGENTS.md](../../AGENTS.md) → "UI PR rules"). Re-run `pnpm test`, and
 `pnpm e2e:local e2e/program-preview-a11y.spec.ts` for the screen on the preview route.
 
+`day.test.ts` sets the movement library in effect explicitly (`CAT-3` K29): under vitest
+`DATABASE_URL` is local, so the real `lib/env.ts` would pick the test library. It mocks
+`catalog-library` and has a case for each library, so `getDayPlan` is proved to pass the one in effect.
+
 A program row's ✓ in an e2e spec is `programRowTick(page, workout, item)` and its wait
 `settled(button, pressed)`, both in `e2e/steps.ts` (moved out of `e2e/day-page.spec.ts` at FAM-1
 15 PR 1, when the builder's spec became the second to tick a row): a change to a row's heading level

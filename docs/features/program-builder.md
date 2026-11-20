@@ -448,6 +448,10 @@ flowchart LR
 
 ## Traps
 
+- **The DAL tests set the movement library explicitly** (`CAT-3` K29). Under vitest `DATABASE_URL` is
+  local, so the real `lib/env.ts` would pick the test library: `picker.test.ts` and
+  `program-dal.test.ts` mock `catalog-library` and have one case for each library.
+
 - **The sheet pops its history entry on close, and in jsdom that `popstate` lands in the next
   test**, closing its sheet. A test file that opens a sheet stubs `history.back` (as
   `sheet.test.tsx` does).
