@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Self-test for changed-scopes.mjs (DX-18 D7). Builds a throwaway repo with the real layout (the
 # script, the mutation runner and one patch that touches a file outside the packages), changes files
-# on top of a base commit, and reads the three flags. No network. Runs in guards:test.
+# on top of a base commit, and reads the four flags. No network. Runs in guards:test.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -48,7 +48,7 @@ BASE="$(g rev-parse HEAD)"
 scopes() {
   (cd "$R" && GITHUB_EVENT_NAME="$1" BASE_SHA="$2" node .github/scripts/changed-scopes.mjs 2>/dev/null)
 }
-# case <name> <expected: mutations build e2e> — commits the staged change, checks, then resets.
+# case <name> <expected: mutations build e2e import_pins> — commits the staged change, checks, then resets.
 case_() {
   local name="$1" want="$2" event="${3:-pull_request}"
   g add -A && g commit -qm "$name" --allow-empty
@@ -59,58 +59,104 @@ case_() {
 }
 
 printf 'more\n' >>"$R/docs/a.md"
-case_ "a docs-only change skips all three" "false false false"
+case_ "a docs-only change skips all four" "false false false false"
 
 printf 'more\n' >"$R/README.md"
-case_ "root markdown is inert" "false false false"
+case_ "root markdown is inert" "false false false false"
 
 printf 'x\n' >"$R/pnpm-lock.yaml"
-case_ "a lockfile-only change (#306) runs everything" "true true true"
+case_ "a lockfile-only change (#306) runs everything" "true true true true"
 
 printf 'export const x = 2;\n' >"$R/apps/web/lib/other.ts"
-case_ "an app file no patch touches: build and e2e, no mutations" "false true true"
+case_ "an app file no patch touches: build, e2e and the import pins, no mutations" "false true true true"
 
 printf '// edit\n' >>"$R/apps/web/lib/scoped.ts"
-case_ "an app file a patch touches runs the mutations" "true true true"
+case_ "an app file a patch touches runs the mutations" "true true true true"
 
 mkdir -p "$R/packages/shared/src" && printf 'x\n' >"$R/packages/shared/src/x.ts"
-case_ "a packages/shared change runs the mutations" "true true true"
+case_ "a packages/shared change runs the mutations" "true true true true"
 
 mkdir -p "$R/.github/workflows" && printf 'name: x\n' >"$R/.github/workflows/x.yml"
-case_ "a workflow change runs everything" "true true true"
+case_ "a workflow change runs everything" "true true true true"
 
 mkdir -p "$R/.github/PULL_REQUEST_TEMPLATE" && printf 'x\n' >"$R/.github/PULL_REQUEST_TEMPLATE/a.md"
-case_ "a PR template is inert for build and e2e, but runs the mutations (.github/)" "true false false"
+case_ "a PR template is inert for build, e2e and the import pins, but runs the mutations (.github/)" "true false false false"
 
 printf 'png' >"$R/docs/shot.png"
-case_ "an image under docs/ is inert" "false false false"
+case_ "an image under docs/ is inert" "false false false false"
 
 printf 'png' >"$R/apps/web/logo.png"
-case_ "an image under apps/web/ is app content" "false true true"
+case_ "an image under apps/web/ is app content" "false true true true"
 
 g mv apps/web/lib/scoped.ts docs/scoped.md
-case_ "a move counts its source path (--no-renames)" "true true true"
+case_ "a move counts its source path (--no-renames)" "true true true true"
 
-case_ "an empty diff runs everything" "true true true"
+case_ "an empty diff runs everything" "true true true true"
 
 printf 'more\n' >>"$R/docs/a.md"
-case_ "a push runs everything" "true true true" push
+case_ "a push runs everything" "true true true true" push
+
+# ── run_import_pins (docs/plans/td-program-tables-import-graph.md D7): one case per scope entry ────
+# pins_case <name> <want>: like case_, but compares run_import_pins alone.
+pins_case() {
+  local name="$1" want="$2"
+  g add -A && g commit -qm "$name" --allow-empty
+  local got
+  got="$(scopes pull_request "$BASE" | sed -n 's/^run_import_pins=//p')"
+  if [ "$got" = "$want" ]; then ok "import pins: $name → $want"; else no "import pins: $name: want '$want', got '$got'"; fi
+  g reset -q --hard "$BASE"
+}
+# B1: the privacy-docs test stays in the unscoped program-tables-stay-dark.test.ts, so a skip here
+# skips no privacy check.
+mkdir -p "$R/docs/privacy" && printf '# inventory\n' >"$R/docs/privacy/data-inventory.md"
+pins_case "docs/privacy/data-inventory.md alone skips them" false
+mkdir -p "$R/packages/db/scripts" && printf 'x\n' >"$R/packages/db/scripts/x.ts"
+pins_case "a packages/db/scripts file skips them" false
+mkdir -p "$R/packages/evals/src" && printf 'x\n' >"$R/packages/evals/src/x.ts"
+pins_case "a packages/evals file skips them" false
+mkdir -p "$R/.claude/skills" && printf 'x\n' >"$R/.claude/skills/x.md"
+pins_case "a .claude/ file skips them" false
+printf 'a {}\n' >"$R/apps/web/lib/x.css"
+pins_case "an apps/web stylesheet runs them" true
+printf 'x\n' >"$R/packages/db/src/x.ts"
+pins_case "a packages/db/src file runs them" true
+mkdir -p "$R/packages/shared/src" && printf 'x\n' >"$R/packages/shared/src/x.ts"
+pins_case "a packages/shared/src file runs them" true
+mkdir -p "$R/packages/engine/src" && printf 'x\n' >"$R/packages/engine/src/x.ts"
+pins_case "a packages/engine/src file runs them" true
+mkdir -p "$R/packages/evals" && printf '{}\n' >"$R/packages/evals/package.json"
+pins_case "a nested package.json runs them" true
+mkdir -p "$R/packages/evals" && printf '{}\n' >"$R/packages/evals/tsconfig.json"
+pins_case "a nested tsconfig.json runs them" true
+printf 'x\n' >"$R/.npmrc"
+pins_case ".npmrc runs them" true
+printf 'x\n' >"$R/pnpm-lock.yaml"
+pins_case "the lockfile runs them" true
+printf 'x\n' >"$R/pnpm-workspace.yaml"
+pins_case "pnpm-workspace.yaml runs them" true
+printf '// x\n' >>"$R/.github/scripts/changed-scopes.mjs"
+pins_case "changed-scopes.mjs runs them" true
+got="$(cd "$R" && node --input-type=module -e "
+  import { importPinsInScope } from './.github/scripts/changed-scopes.mjs';
+  console.log(importPinsInScope([]), importPinsInScope(['docs/a.md']));
+")"
+[ "$got" = "true false" ] && ok "import pins: an empty list runs them, a docs list does not" || no "importPinsInScope([]), ([docs]): got '$got'"
 
 # Fail-safes that need no commit.
 got="$(scopes pull_request "" | tr '\n' ' ')"
-[ "$got" = "run_mutations=true run_build=true run_e2e=true " ] && ok "no base SHA runs everything" || no "no base SHA: got '$got'"
+[ "$got" = "run_mutations=true run_build=true run_e2e=true run_import_pins=true " ] && ok "no base SHA runs everything" || no "no base SHA: got '$got'"
 got="$(scopes pull_request "0000000000000000000000000000000000000000" | tr '\n' ' ')"
-[ "$got" = "run_mutations=true run_build=true run_e2e=true " ] && ok "an unreadable base runs everything" || no "unreadable base: got '$got'"
+[ "$got" = "run_mutations=true run_build=true run_e2e=true run_import_pins=true " ] && ok "an unreadable base runs everything" || no "unreadable base: got '$got'"
 
 out="$T/gh-output"
 : >"$out"
 (cd "$R" && GITHUB_OUTPUT="$out" GITHUB_EVENT_NAME=push node .github/scripts/changed-scopes.mjs >/dev/null 2>&1)
-[ "$(cat "$out")" = "$(printf 'run_mutations=true\nrun_build=true\nrun_e2e=true')" ] && ok "writes the flags to GITHUB_OUTPUT" || no "GITHUB_OUTPUT: $(cat "$out")"
+[ "$(cat "$out")" = "$(printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\nrun_import_pins=true')" ] && ok "writes the flags to GITHUB_OUTPUT" || no "GITHUB_OUTPUT: $(cat "$out")"
 
 # scopes-step.sh, the step every heavy job runs: its fallbacks.
 cp "$HERE/scopes-step.sh" "$R/.github/scripts/"
 step() { : >"$T/out"; (cd "$R" && GITHUB_OUTPUT="$T/out" RUNNER_TEMP="$T" BASE_SHA="$1" GITHUB_EVENT_NAME=pull_request bash .github/scripts/scopes-step.sh >"$T/step.log" 2>&1); tr '\n' ' ' <"$T/out"; }
-ALL="run_mutations=true run_build=true run_e2e=true "
+ALL="run_mutations=true run_build=true run_e2e=true run_import_pins=true "
 [ "$(step "")" = "$ALL" ] && ok "scopes-step: no base runs everything" || no "scopes-step no base: $(cat "$T/out")"
 nobase="$(git -C "$R" rev-list --max-parents=0 HEAD)"
 g rm -q --cached .github/scripts/changed-scopes.mjs && g commit -qm "no script" && g checkout -q -- .github/scripts 2>/dev/null; cp "$HERE/changed-scopes.mjs" "$R/.github/scripts/"
@@ -122,7 +168,7 @@ broken="$(g rev-parse HEAD)"
 g reset -q --hard "$BASE"
 printf 'more\n' >>"$R/docs/a.md"; g add docs && g commit -qm docs
 cp "$HERE/scopes-step.sh" "$R/.github/scripts/" # untracked: the step is the PR's own file
-[ "$(step "$BASE")" = "run_mutations=false run_build=false run_e2e=false " ] && ok "scopes-step: the base's script decides a docs-only PR" || no "scopes-step docs: $(cat "$T/out") $(cat "$T/step.log")"
+[ "$(step "$BASE")" = "run_mutations=false run_build=false run_e2e=false run_import_pins=false " ] && ok "scopes-step: the base's script decides a docs-only PR" || no "scopes-step docs: $(cat "$T/out") $(cat "$T/step.log")"
 g reset -q --hard "$BASE"
 
 # ── (c) catalog data is not a mutation trigger (docs/plans/dx-18-mutation-savings.md C1–C5) ────────
@@ -163,9 +209,9 @@ mkdir -p "$SHIM"
 printf '#!/bin/sh\n[ "$1" = ls-files ] && { echo "shim: git failed" >&2; exit 128; }\nexec "%s" "$@"\n' "$(command -v git)" >"$SHIM/git"
 chmod +x "$SHIM/git"
 
-# id | pre-fn | pr-fn | PATH prefix | expected (C-1 compares all three flags, the rest run_mutations)
+# id | pre-fn | pr-fn | PATH prefix | expected (C-1 compares all four flags, the rest run_mutations)
 C_SPEC=(
-  "C-1|-|-||false true true"
+  "C-1|-|-||false true true true"
   "C-2|c_pre_c2|-||true"
   "C-3|c_pre_c3|-||true"
   "C-4|-|c_pr_c4||true"
@@ -190,7 +236,7 @@ C_SPEC=(
   "C-23|c_pre_c23|-||true"
 )
 C_DESC=(
-  "C-1 a batch file plus docs: no mutations; build and e2e still run"
+  "C-1 a batch file plus docs: no mutations; build, e2e and the import pins still run"
   "C-2 a db file on main imports @mat-plan/shared/catalog/data: mutations run"
   "C-3 a patch on main targets batch-01.ts: mutations run (the target branch)"
   "C-4 a batch file plus packages/shared/src/x.ts: mutations run"
@@ -277,7 +323,7 @@ printf 'export const batch01 = [2];\n' >"$R/$CAT/data/batch-01.ts"
 printf 'more\n' >>"$R/docs/a.md"
 g add -A -- packages docs && g commit -qm batch
 cp "$HERE/scopes-step.sh" "$R/.github/scripts/"
-[ "$(step "$BASE")" = "run_mutations=false run_build=true run_e2e=true " ] && ok "C-1 through scopes-step.sh: the base's copy skips the mutations for a batch file" || no "C-1 scopes-step: $(cat "$T/out") $(cat "$T/step.log")"
+[ "$(step "$BASE")" = "run_mutations=false run_build=true run_e2e=true run_import_pins=true " ] && ok "C-1 through scopes-step.sh: the base's copy skips the mutations for a batch file" || no "C-1 scopes-step: $(cat "$T/out") $(cat "$T/step.log")"
 g reset -q --hard "$BASE"
 
 # The (c) mutants (H5): each is one from/to literal on a copy of the script. `from` must occur exactly
@@ -348,10 +394,17 @@ fi
 
 # The polarity rule, on the real workflows: a step skips only on a literal false. Any comparison of
 # a scope (or an env var carrying one) with true, quoted or not, is refused.
-if grep -nE "(run_(mutations|build|e2e)|RUN_(MUTATIONS|BUILD|E2E))[^#]*(==|=|!=)[[:space:]]*['\"]?true\b" "$ROOT"/.github/workflows/*.yml; then
-  no "a workflow compares a scope with true (must compare with false)"
+GUARD="$ROOT/apps/web/test/program-imports.test.ts"
+if grep -nE "(run_(mutations|build|e2e|import_pins)|RUN_(MUTATIONS|BUILD|E2E|IMPORT_PINS))[^#]*(==|=|!=)[[:space:]]*['\"]?true\b" "$ROOT"/.github/workflows/*.yml "$GUARD"; then
+  no "a workflow or the import-pins guard compares a scope with true (must compare with false)"
 else
-  ok "no workflow compares a scope with true"
+  ok "no workflow, nor the import-pins guard, compares a scope with true"
+fi
+# The guard skips only on a literal 'false': unset, empty or mistyped runs it.
+if grep -qF "process.env.RUN_IMPORT_PINS === 'false'" "$GUARD"; then
+  ok "the import-pins guard skips only on RUN_IMPORT_PINS === 'false'"
+else
+  no "the import-pins guard's skip does not read RUN_IMPORT_PINS === 'false'"
 fi
 
 echo
