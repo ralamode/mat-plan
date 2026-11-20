@@ -138,6 +138,7 @@ c_pre_c3() {
 c_pr_c4() { mkdir -p "$R/packages/shared/src" && printf 'export const x = 1;\n' >"$R/packages/shared/src/x.ts"; }
 c_pre_c5() { printf "import './nope';\nexport const fixture = 1;\n" >"$R/$CAT/fixture.ts"; }
 c_pre_c7() { printf "import './data/batch-01';\nexport const fixture = 1;\n" >"$R/$CAT/fixture.ts"; }
+c_pre_c9() { printf "import { x } from '@mat-plan/other';\nexport { x };\n" >"$R/packages/db/src/reads-other.ts"; }
 # A git that fails on the walk's `ls-files`, and only there: the diff still works.
 SHIM="$T/shim"
 mkdir -p "$SHIM"
@@ -186,6 +187,8 @@ c_cases() {
     console.log(dirs.length === 1 && dirs[0] === CATALOG_DATA ? 'equal' : 'CATALOG_DATA=' + CATALOG_DATA + ' DIR=' + dirs);
   " 2>&1 | tail -1)"
   [ "$got" = equal ] && echo "C-8=ok" || echo "C-8=RED(${got// /,})"
+  got="$(c_flags "$s" c_pre_c9 -)"
+  [ "${got%% *}" = true ] && echo "C-9=ok" || echo "C-9=RED(${got// /,})"
 }
 C_DESC=(
   "C-1 a batch file plus docs: no mutations; build and e2e still run"
@@ -196,6 +199,7 @@ C_DESC=(
   "C-6 git fails during the walk: mutations run"
   "C-7 fixture.ts on main imports ./data/batch-01: mutations run (the walk, not a grep)"
   "C-8 CATALOG_DATA equals check-catalog-append-only.mjs's DIR"
+  "C-9 a db file imports another @mat-plan package the walk cannot follow: mutations run"
 )
 cp "$HERE/changed-scopes.mjs" "$T/under-test.mjs"
 results="$(c_cases "$T/under-test.mjs")"
@@ -204,7 +208,7 @@ for line in $results; do
   [ "${line#*=}" = ok ] && ok "${C_DESC[$i]}" || no "${C_DESC[$i]}: ${line#*=}"
   i=$((i + 1))
 done
-[ "$i" -eq 8 ] || no "the (c) cases: expected 8 results, got $i"
+[ "$i" -eq 9 ] || no "the (c) cases: expected 9 results, got $i"
 
 # C-1 again, through scopes-step.sh with the BASE's copy (R3: a decider that imported a sibling would
 # throw from $RUNNER_TEMP and run everything, so the saving would never save).
@@ -243,7 +247,7 @@ mutant() {
 # Ignoring relative specifiers also hides C-5's unresolved RELATIVE specifier: both go red.
 mutant c-walk-ignores-relative "C-5 C-7" \
   "if (spec.startsWith('.')) {" "if (spec.startsWith('.')) { return undefined;"
-mutant c-unresolved-is-fine "C-5" \
+mutant c-unresolved-is-fine "C-5 C-9" \
   "if (next === null) return true;" "if (next === null) continue;"
 mutant c-any-throw-is-no-match "C-6" \
   "return true; // an error proves nothing" "return false; // an error proves nothing"

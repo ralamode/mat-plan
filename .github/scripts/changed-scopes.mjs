@@ -90,6 +90,10 @@ export function catalogReachable(io) {
       const base = posix.join(posix.dirname(from), spec);
       return [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`].find(io.isFile) ?? null;
     }
+    // Another workspace package (`@mat-plan/db`, …) is first-party but not mapped here: treat it as
+    // unresolved, so the walk runs everything rather than skipping a path it cannot follow.
+    if (spec.startsWith('@mat-plan/') && spec !== SHARED && !spec.startsWith(`${SHARED}/`))
+      return null;
     if (spec !== SHARED && !spec.startsWith(`${SHARED}/`)) return undefined;
     const target = exportsMap[`.${spec.slice(SHARED.length)}`];
     return typeof target === 'string' ? fromExports(target) : null;
