@@ -103,7 +103,7 @@ flowchart LR
 | `apps/web/app/programs/not-found.tsx` · `loading.tsx` · `layout.tsx`    | The builder's 404 ("← Programs", its own `AppShell`, since `notFound()` replaces the page) its busy frame, and its `ClerkRoot` (#626: Clerk loads per segment, never in the root layout).                                                                                                                                                                                                                                                          |
 | `apps/web/e2e/program-builder.spec.ts` · `program-builder.a11y.spec.ts` | From `/p`: create, rename, copy a seeded workout, Copy at 360px, a random id's 404; a new workout with two items, Save, then Back (7b-ii); another program's workout is a 404; a new athlete's day page linking to Programs, then put on this run's program, a ✓ logged, Take off and back on (15); the four routes' a11y walk at 360px, the Copy and Put-on dialogs (in-sheet overflow, `expectNoOverflowWithin`), and one desktop axe pass each. |
 | `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`), `getProgramEntry` (7b-ii: one entry of the list, by the id lower-cased) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                                                                                                |
-| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15), `reportAthleteMiss` (15c, the athlete alone; the same athlete probe as Put on's): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                                                                                                                                                                        |
+| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15), `reportAthleteMiss` (15c, the athlete alone; the same athlete probe as Put on's), `reportOrderProgramMiss` (15c, an `invalid` order's first foreign program, one read): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                                                                                  |
 | `apps/web/lib/dal/program/revalidate.ts`                                | `refreshPrograms` and `refreshAssignment`: what a program write revalidates (15c PR 2 moved them out of `app/programs/actions.ts`, unchanged). The builder's actions and the day page's Program order both call them, after a success only.                                                                                                                                                                                                        |
 
 ## Invariants
@@ -388,6 +388,14 @@ flowchart LR
       reports the program, then the first athlete id (input order) not among the household's
       athletes, archived ones included (`reportAssignMiss`, one `listHouseholdAthletes` read): an
       archived athlete of this household names nothing outside it, so it is not reported.
+    - **Program order** (15c PR 2) is the one action outside `app/programs/` that reaches
+      `lib/dal/program/`: the day page's `reorderProgramsAction` (`app/p/[profileId]/row-actions.ts`,
+      lane C's module) calls `reorderHouseholdPrograms` and, on success, `refreshAssignment`
+      (`lib/dal/program/revalidate.ts`, shared with Put on and Take off). Today comes from the action,
+      as for Put on. A `not_found` reports the athlete alone (`reportAthleteMiss`, the same athlete
+      probe); an `invalid` reports the first program id that is not the household's
+      (`reportOrderProgramMiss`, one `readProgramList` read), and a stale list of its own programs
+      reports nothing. The answer is the writer's either way.
     - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
       DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
       editor reads it as a stale page.

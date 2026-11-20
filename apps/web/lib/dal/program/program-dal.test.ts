@@ -32,6 +32,7 @@ vi.mock('./report-miss', () => ({
   reportCopyMiss: vi.fn(async () => {}),
   reportAssignMiss: vi.fn(async () => {}),
   reportAthleteMiss: vi.fn(async () => {}),
+  reportOrderProgramMiss: vi.fn(async () => {}),
 }));
 
 import {
@@ -58,6 +59,7 @@ import {
   reportAssignMiss,
   reportAthleteMiss,
   reportCopyMiss,
+  reportOrderProgramMiss,
   reportProgramMiss,
   reportWeekMiss,
 } from './report-miss';
@@ -350,12 +352,14 @@ describe('the program DAL (FAM-1 15c): Program order', () => {
     expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual({ ok: true });
     expect(vi.mocked(reorderPrograms).mock.calls).toEqual([[db, SCOPE, order(), TODAY]]);
     expect(reportAthleteMiss).not.toHaveBeenCalled();
+    expect(reportOrderProgramMiss).not.toHaveBeenCalled();
   });
 
   it('a not_found reports the athlete id once, and stays not_found', async () => {
     vi.mocked(reorderPrograms).mockResolvedValueOnce(NOT_FOUND);
     expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual(NOT_FOUND);
     expect(vi.mocked(reportAthleteMiss).mock.calls).toEqual([[SCOPE, ATHLETE]]);
+    expect(reportOrderProgramMiss).not.toHaveBeenCalled();
   });
 
   it('no scope: not_found, the writer never called, the miss reported with no scope', async () => {
@@ -365,7 +369,7 @@ describe('the program DAL (FAM-1 15c): Program order', () => {
     expect(vi.mocked(reportAthleteMiss).mock.calls).toEqual([[null, ATHLETE]]);
   });
 
-  it('another refusal passes through, and nothing is reported', async () => {
+  it('an invalid stays invalid, and asks once which program id missed, with the scope, the ids and today', async () => {
     vi.mocked(reorderPrograms).mockResolvedValueOnce({
       ok: false,
       reason: PROGRAM_REFUSAL.invalid,
@@ -374,7 +378,20 @@ describe('the program DAL (FAM-1 15c): Program order', () => {
       ok: false,
       reason: PROGRAM_REFUSAL.invalid,
     });
+    expect(vi.mocked(reportOrderProgramMiss).mock.calls).toEqual([
+      [SCOPE, order().programPublicIds, TODAY],
+    ]);
     expect(reportAthleteMiss).not.toHaveBeenCalled();
+  });
+
+  it('another refusal passes through, and nothing is reported', async () => {
+    vi.mocked(reorderPrograms).mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry });
+    expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.retry,
+    });
+    expect(reportAthleteMiss).not.toHaveBeenCalled();
+    expect(reportOrderProgramMiss).not.toHaveBeenCalled();
   });
 
   it('a thrown database error leaves as a DbWriteError', async () => {

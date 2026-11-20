@@ -33,6 +33,7 @@ import {
   reportAssignMiss,
   reportAthleteMiss,
   reportCopyMiss,
+  reportOrderProgramMiss,
   reportProgramMiss,
   reportWeekMiss,
 } from './report-miss';
@@ -157,7 +158,9 @@ export async function takeOffHouseholdProgram(
  * Take off, with `today` from the action. Lane P's writer is the one check of the athlete
  * (`lockAthletes`: this household's, live, not archived) and of the list (a permutation of the
  * athlete's current programs, else `invalid`). A `not_found` reports the athlete id, the one id it
- * answers `not_found` for.
+ * answers `not_found` for. An `invalid` reports the first program id that is not this household's
+ * (`reportOrderProgramMiss`, one read); a stale list of the household's own programs reports
+ * nothing. Either way the answer is the writer's.
  */
 export async function reorderHouseholdPrograms(
   input: ProgramOrder,
@@ -169,5 +172,9 @@ export async function reorderHouseholdPrograms(
   const result = await quietDbErrors('reorderPrograms', () =>
     reorderPrograms(db, scope, input, today),
   );
-  return isNotFound(result) ? missed(report) : result;
+  if (isNotFound(result)) return missed(report);
+  if (!result.ok && result.reason === PROGRAM_REFUSAL.invalid) {
+    await reportOrderProgramMiss(scope, input.programPublicIds, today);
+  }
+  return result;
 }

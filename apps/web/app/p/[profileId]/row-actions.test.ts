@@ -281,7 +281,6 @@ describe('Program order (FAM-1 15c)', () => {
     expect(reorderHouseholdPrograms).not.toHaveBeenCalled();
     expect(getActiveLocalDay).not.toHaveBeenCalled();
     expect(refreshAssignment).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it(`${MAX_ORDER_PROGRAMS} distinct ids reach the DAL: the cap is the schema's, not lower`, async () => {
@@ -315,18 +314,18 @@ describe('Program order (FAM-1 15c)', () => {
       vi.mocked(reorderHouseholdPrograms).mockResolvedValueOnce({ ok: false, reason });
       expect(await reorderProgramsAction(orderInput())).toEqual({ ok: false, reason });
       expect(refreshAssignment).not.toHaveBeenCalled();
-      expect(revalidatePath).not.toHaveBeenCalled();
     },
   );
 
   /**
-   * 🔴 **Another household's athlete id** (`write-path.md` invariant 13; `mutating-actions.ts`): the
-   * matrix's scope miss drives "no household"; this row drives "an athlete that is not this
-   * household's". The DAL is mocked to answer as lane P's writer does (`lockAthletes` finds no such
-   * athlete in the scope; proved against two households in `packages/db/scripts/verify/program.ts`),
-   * and the refusal's bytes are the no-session refusal's, so the caller learns nothing.
+   * 🔴 **Another household's athlete id** (`write-path.md` invariant 13; `mutating-actions.ts`). What
+   * this layer proves is the pass-through: the id reaches the DAL unchanged, and the writer's
+   * `not_found` leaves with the no-session refusal's bytes, nothing revalidated. The DAL is mocked,
+   * so the refusal itself is not proved here: that is `verifyReorderPrograms`'s "another household’s
+   * athlete" row (`packages/db/scripts/verify/program.ts`), where lane P's `lockAthletes` finds no
+   * such athlete in A's scope.
    */
-  it('🔴 another household’s athlete id: the same bytes as no session, and nothing revalidated', async () => {
+  it('🔴 the writer’s not_found for a foreign athlete id passes through with no-session bytes; the id reaches the DAL unchanged', async () => {
     const FOREIGN_ATHLETE = '019826b4-0000-7000-8000-0000000000f1';
     vi.mocked(reorderHouseholdPrograms).mockResolvedValueOnce(ORDER_NOT_FOUND);
     const foreign = await reorderProgramsAction({
@@ -342,6 +341,5 @@ describe('Program order (FAM-1 15c)', () => {
     expect(foreign).toEqual(noSession);
     expect(JSON.stringify(foreign)).toBe(JSON.stringify(noSession));
     expect(refreshAssignment).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import 'server-only';
 import {
   programIn,
   programWorkoutIds,
+  readProgramList,
   workoutInHousehold,
   type HouseholdScope,
 } from '@mat-plan/db';
@@ -18,8 +19,8 @@ import { listHouseholdAthletes } from '../profiles';
  *
  * - **One id at a time, in the writer's order, and only the first miss is reported**: a workout of
  *   a program that is not the household's would otherwise be reported twice.
- * - **With no scope**, the first id (always a program's) is reported, and `reportScopeMiss` records
- *   it as `no_scope`.
+ * - **With no scope**, the first id (a program's; for Program order, the athlete's) is reported, and
+ *   `reportScopeMiss` records it as `no_scope`.
  * - **All found** means the miss was something else (an item, a stale workout list): nothing is
  *   reported, since no id named something outside the household.
  * - The ids have already parsed as uuids (the contract's schemas, or the read's own check).
@@ -177,4 +178,34 @@ export async function reportAthleteMiss(
   profilePublicId: string,
 ): Promise<void> {
   await reportFirstMiss(scope, athleteProbes(scope, [profilePublicId]));
+}
+
+/**
+ * A Program order the writer refused as `invalid` (FAM-1 15c): each program id it names, distinct, in
+ * the order's order, until the first that is not one of this household's live programs. `invalid`
+ * is also the writer's answer for a stale list (a put on, a take off, midnight), so an id the
+ * household has reports nothing: only one that names something outside it is a scope miss.
+ *
+ * **One read, however many ids the order names** (at most `MAX_ORDER_PROGRAMS`): the household's
+ * Programs list (`readProgramList`, the same scoped read the Programs page makes), read once on the
+ * first probe, each id looked up in its set. The caller has a scope here: with none, the DAL answers
+ * `not_found` and reports the athlete before the writer runs.
+ */
+export async function reportOrderProgramMiss(
+  scope: HouseholdScope,
+  programPublicIds: readonly string[],
+  today: string,
+): Promise<void> {
+  let known: Promise<ReadonlySet<string>> | undefined;
+  const programs = () =>
+    (known ??= readProgramList(db, scope, today).then(
+      (list) => new Set(list.map((program) => program.programPublicId)),
+    ));
+  await reportFirstMiss(
+    scope,
+    [...new Set(programPublicIds)].map((id): Probe => ({
+      found: async () => (await programs()).has(id),
+      miss: programMiss(id),
+    })),
+  );
 }
