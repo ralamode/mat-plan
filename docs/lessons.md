@@ -792,6 +792,12 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **A CSP assertion filtered on `'script-src inline'` never matched: Chromium reports a blocked
+  inline script under `script-src-elem`.** Two `theme.spec.ts` checks had stayed green on every run.
+  A probe that stripped one script's nonce printed `script-src-elem inline` (2026-11-20). Filter
+  through `blockedInlineScripts` in `e2e/csp.ts`, and keep its proof (a stripped nonce must be
+  caught). **The general rule: an assertion that a list is empty needs a sibling that makes the list
+  non-empty**, or a wrong filter reads as a pass.
 - 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
   mutation patch is still applied in your worktree.** `pnpm verify` runs `db:mutations`, which
   applies each patch in `packages/db/scripts/mutations/`, runs the proofs and reverts it. Run a

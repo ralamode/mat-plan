@@ -23,6 +23,17 @@ export async function recordCspViolations(page: Page): Promise<void> {
   });
 }
 
+/**
+ * The recorded violations that are a blocked INLINE script. 🔴 Chromium reports one as
+ * `script-src-elem`, not `script-src` (probed 2026-11-20: a nonce stripped from the theme script
+ * reported `script-src-elem inline`). A filter on `'script-src inline'` alone matched nothing, so the
+ * two `theme.spec.ts` assertions that used it could not fail. Both names are accepted, and
+ * `theme.spec.ts` proves this catches a stripped nonce.
+ */
+export function blockedInlineScripts(violations: readonly string[]): string[] {
+  return violations.filter((v) => /^script-src(-elem)? inline /.test(v));
+}
+
 /** The violations recorded so far, as `"<directive> <blockedURI|inline> @<file>:<line> <sample>"`. */
 export function cspViolations(page: Page): Promise<string[]> {
   return page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations);

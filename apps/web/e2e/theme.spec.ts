@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { APP_HOME_PATH, SIGN_IN_PATH, THEME_COPY, THEME_STORAGE_KEY } from '../lib/constants';
 import { seedStoredTheme } from './a11y-checks';
-import { cspViolations, headerNonce, recordCspViolations } from './csp';
+import { blockedInlineScripts, cspViolations, headerNonce, recordCspViolations } from './csp';
 
 /**
  * UI-4 — the theme switch, proven at the only level that can prove it.
@@ -100,10 +100,10 @@ test('the theme script is nonced with the response’s own nonce, and nothing is
 
   const violations = await cspViolations(page);
   // INLINE only: the app already raises zod's `script-src eval` probe on every page (`e2e/csp.ts`).
-  // An un-nonced inline script reports `blockedURI: 'inline'`, which is the failure this assertion
-  // exists to catch, and the full list is printed either way.
+  // An un-nonced inline script reports `blockedURI: 'inline'` under `script-src-elem`, which is the
+  // failure this assertion exists to catch (`blockedInlineScripts`), and the full list is printed.
   expect(
-    violations.filter((v) => v.startsWith('script-src inline')),
+    blockedInlineScripts(violations),
     `inline script blocked by CSP — the theme script is not nonced. All violations: ${violations.join(' | ')}`,
   ).toEqual([]);
 });
@@ -200,9 +200,9 @@ test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egre
 
     const violations = await cspViolations(page);
     // Same narrowing as above: zod's JIT feature probe raises one pre-existing `script-src eval`
-    // report on every page in this app. An un-nonced inline script reports `inline`.
+    // report on every page in this app. An un-nonced inline script is `blockedInlineScripts`.
     expect(
-      violations.filter((v) => v.startsWith('script-src inline')),
+      blockedInlineScripts(violations),
       `${path}: inline script blocked by CSP. All violations: ${violations.join(' | ')}`,
     ).toEqual([]);
   }
@@ -211,4 +211,29 @@ test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egre
     clerkRequests,
     `a Clerk host was contacted with no publishable key set — "1a ships dark" is false: ${clerkRequests.join(' | ')}`,
   ).toEqual([]);
+});
+
+test('the inline-script check catches a script with its nonce stripped (it can fail)', async ({
+  page,
+}) => {
+  await recordCspViolations(page);
+  let stripped = false;
+  await page.route(`**${APP_HOME_PATH}`, async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    // The first nonced inline <script>: drop its nonce, as a regression in the theme script would.
+    const body = html.replace(/(<script)([^>]*?)\snonce="[^"]*"([^>]*>)(?!<\/script>)/, '$1$2$3');
+    stripped = body !== html;
+    await route.fulfill({ response, body });
+  });
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  expect(
+    stripped,
+    'no nonced inline script on the page to strip; this proof has nothing to test',
+  ).toBe(true);
+  const violations = await cspViolations(page);
+  expect(
+    blockedInlineScripts(violations),
+    `a stripped nonce was not seen as a blocked inline script. All violations: ${violations.join(' | ')}`,
+  ).not.toEqual([]);
 });
