@@ -83,10 +83,12 @@ Done when:
 
 **Lane C builds PR 1; lane B builds PR 2 and PR 3** (the hand-over above). The tables below were
 written with lane C as the builder of all three, and their marks stand with one change of reading:
-in PR 2 the `lib/dal/program/` and `app/programs/` files are lane B's own and need no clearance,
-and in PR 2 and PR 3 the files in lane C's area (`app/p/[profileId]/row-actions*`,
-`mutating-actions*`, `components/day/`, `page.tsx`, `e2e/day-page.spec.ts`, `day-page.md`) are
-lane B's guest edits, which lane C reviews. PR 3 still waits for PR 1 and PR 2.
+in PR 2 and PR 3 lane B's own files (`lib/dal/program/`, `app/programs/`,
+`e2e/program-builder*.spec.ts`) need no clearance, so Q1's answer below no longer has anything to
+clear; the files in lane C's area (`app/p/[profileId]/row-actions*`, `components/day/`, `page.tsx`,
+`e2e/day-page.spec.ts`, `day-page.md`) are lane B's guest edits, which lane C reviews; and
+`mutating-actions*` stays what its row says, a write-path file whose turn the board places. PR 3
+still waits for PR 1 and PR 2.
 
 ### 15c PR 1: the dialog as D47 shows it, and the names as links (≈ 300 lines with tests)
 

@@ -183,14 +183,17 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 above). The tables below were written with lane C as the builder of all five, and their marks stand
 with one change of reading:
 
-- **PR 1 and PR 4 (lane E).** The files in lane C's and lane S's areas (`app/p/[profileId]/`,
-  `components/`, `lib/`) are lane E's guest edits, which lane C reviews. Lane E takes over the
-  clearance to edit the token preview (Q2). PR 4's `packages/db` hunks are still reviewed by lane P.
-- **PR 3 (lane S).** `actions.ts` holds lane S's four actions beside the three this PR deletes, so
-  the review the table asks of lane S becomes lane C's. Lane S builds it after its own B2, which
-  adds no gate to the plan but does set when PR 3, and so PR 5, can start.
+- **PR 1 and PR 4 (lane E).** Every unmarked app file (`app/p/[profileId]/`, `components/`, `lib/`,
+  `test/`) is lane E's guest edit, which lane C reviews. Lane E takes over two clearances the board
+  gave lane C: Q2's, to edit the token preview in PR 1, and Q1's, for PR 4's comment in
+  `ownership.ts` (the board's hand-over, 2026-11-19). PR 4's `packages/db` hunks are still reviewed
+  by lane P.
+- **PR 3 (lane S).** Its files (`actions.ts`, `actions.registry.ts`, `actions.test.ts`) are lane S's
+  guest edits, which lane C reviews. The table asks lane S to read the `actions.ts` diff, because
+  lane S's four actions share the file: lane S building it meets that. Lane S builds it after its
+  own B2, which adds no gate to the plan but does set when PR 3, and so PR 5, can start.
 
-Files outside the builder's area are marked. Each PR carries its changelog
+Files outside lane C's area are marked. Each PR carries its changelog
 fragment, its `docs/status.md` and `docs/roadmap.md` move, and the milestone chart in its description.
 The 400-line target is for code a reviewer must read; each PR says below why its size is acceptable.
 
