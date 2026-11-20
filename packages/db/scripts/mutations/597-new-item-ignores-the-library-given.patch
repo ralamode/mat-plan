@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index 99c4bc20..b99a4601 100644
+index ed01ac08..1dcb082f 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
 @@ -11,6 +11,7 @@ import {
@@ -10,8 +10,8 @@ index 99c4bc20..b99a4601 100644
  
  import { schema } from '../../client';
  import { matchableOption } from '../../queries/program/catalog-arm-option';
-@@ -90,7 +91,8 @@ async function addOrSelect(
-     .where(householdRowIs(scope));
+@@ -99,7 +100,8 @@ async function addOrSelect(
+     .for('key share');
    if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
  
 -  const options = await movementOptions(exec, scope, library);

@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index e95cef62..9602751f 100644
+index ed01ac08..3a773b9e 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -80,13 +80,6 @@ async function addOrSelect(
-   // Held until the transaction ends. Reached through the household row, so the tenant id is never
-   // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
-   // count below never runs without the lock.
+@@ -90,14 +90,6 @@ async function addOrSelect(
+   // COMMITTED it re-checks the row, finds it gone, and returns nothing. No deadlock: the core never takes
+   // the advisory lock below, and this holds nothing the core waits on. The wait is bounded by the
+   // `lock_timeout` above, so an erasure slower than that answers `55P03` instead.
 -  const locked = await exec
 -    .select({
 -      locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
