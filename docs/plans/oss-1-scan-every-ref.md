@@ -4,8 +4,8 @@
 > [beta-1.md](../milestones/beta-1.md), "The remaining path to Beta 0", row 10, and the first Beta 0
 > exit criterion. Branch for this plan: `docs/oss-1-scan-every-ref-plan`.
 >
-> **Draft 2, not yet approved.** Drafted by the plan owner on 2026-11-20 from the docs and the refs
-> on the remote that day. Panel round 1 (the privacy lens) is applied; the log is at the end. The
+> **Draft 3, not yet approved.** Drafted by the plan owner on 2026-11-20 from the docs and the refs
+> on the remote that day. Two panel rounds (the privacy lens) are applied; the log is at the end. The
 > maintainer approves it before its PR is built.
 
 ## Where this sits
@@ -71,14 +71,19 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
      pull-request ref, in a private temporary folder (mode 0700). The folder is removed when the
      scan ends, fails or is interrupted, because the clone itself holds the data. With the same
      terms it also reads: every commit's message, author name and email; every file path; and, through
-     the API, every pull request's title, description, comments and review comments with the lines
-     they quote.
+     the API with a signed-in token (about 2,500 calls), every pull request's title, description,
+     comments, reviews and review comments with the lines they quote, every issue and its comments,
+     every commit comment, and each of those texts' edit history. The calls send no term: the text
+     is fetched and matched locally. A quote is removed by deleting the comment or its edit
+     revision, not by editing it.
    - **The term list is never in the repo.** It is read from `.local-secrets/pii-terms.txt`, which
      `.gitignore` already excludes. The script refuses a term file that git would track: one inside
      a work tree that `git check-ignore` does not ignore.
    - **Two classes of term.** Third-party terms must match nowhere. Household terms may match only
-     in the places Q1 accepts. The scan exits zero only when both hold, so an accepted residual
-     does not make every run fail.
+     in what Q1 accepts: objects reachable from the refs as they stood at the sign-off, author
+     fields, and pull-request text written before the sign-off date. The sign-off records that
+     snapshot of refs locally (commit ids are not personal data) and its date in the inventory. Any
+     later match fails. The scan exits zero only when both classes hold.
    - **Matching.** Fixed strings, case-insensitive. A term under four characters is matched on word
      boundaries. A term may carry a local list of blob ids it is allowed to match, for a name that
      is also a common word.
@@ -92,9 +97,12 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
      every match**, for the Support request and for the proof.
    - Counts by class of ref need one walk per ref class, not one walk of all objects.
 2. **It runs locally, not in CI.** Actions logs on this repo are public, and a job cannot hold the
-   terms: even hashed, names can be guessed. A local `pre-push` hook runs the term scan over the
-   commits being pushed, on the machine that holds the list.
-3. **A test** on a scratch repository with a planted made-up term on a branch, in a pull-request
+   terms: even hashed, names can be guessed. The repo's `pre-push` hook (`.husky/pre-push`) gains the
+   term scan over the commits being pushed. It looks for the term file under the main checkout, not
+   the worktree it runs in, or at a path in `MAT_PLAN_PII_TERMS`, and passes with one line, "no term
+   list here", when there is none. So it checks every push from the machine that holds the list,
+   worktrees included, and never blocks another machine.
+3. **A test**, which also covers a push from a worktree, on a scratch repository with a planted made-up term on a branch, in a pull-request
    style ref, in an old commit, in a commit message and in a path. Each is found. Nothing of the
    term appears in any output, error output included. A term file in a tracked path is refused. The
    temporary folder is gone after a forced failure. The test clears the `GIT_*` variables before it
@@ -107,8 +115,13 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
      quote the data. Its text carries no personal data;
    - **what the owner removes without Support:** the workflow runs of the affected pull requests,
      whose logs are public for 90 days, and their preview deployments;
-   - **the proof:** each recorded commit and blob id answers "not found" from the API and from the
-     site, and the scan's third-party class is zero.
+   - **before filing:** for each recorded commit, the refs that still contain it are listed in the
+     mirror. A commit that a surviving ref still reaches cannot be cleared, so that ref is named in
+     the request too;
+   - **the proof, checked signed out:** each recorded commit id answers "not found" from the API
+     and from the site's commit, patch and diff addresses; each recorded blob id answers "not found"
+     from the API; each affected pull request's patch and diff answer "not found" and its file list
+     shows no changed lines; and the scan's third-party class is zero.
 5. **The records.** The data inventory gains the term file as a place personal data is held, with
    how long it is kept, and `.local-secrets/README.md` lists it. §9 records the outcome as a dated
    pass or fail for each class, written after the removal, with no counts. The exit criterion is
@@ -121,15 +134,18 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
    Household: the given names. It never leaves that machine.
 2. Run `pnpm scan:refs`. Read the result in the terminal.
 3. **Check that nothing accepted under Q1 names a person outside the household.** If the scan's
-   household class or a read of the old notes shows one, it moves to the third-party class.
+   household class or a read of the old notes shows one, it moves to the third-party class. **Look
+   at the `screenshots` branch's images from the weeks of the roster pull requests**, locally: if
+   one shows a third party, Q2's answer is to delete the branch.
 4. File the Support request, and remove the workflow runs and preview deployments.
 5. Run the scan and the proof again after Support answers. Record the dated outcome.
 6. Run it again before each new family is invited.
 
 ## Acceptance
 
-1. Every recorded commit and blob id of third-party data answers "not found", and the scan's
-   third-party class is zero across refs, commit messages, paths and pull-request text.
+1. The proof above holds for every recorded id of third-party data, and the scan's third-party
+   class is zero across refs, commit messages, paths and every public text of pull requests, issues
+   and commits.
 2. Household terms are found only where Q1 accepts them, and the criterion's wording says so; or
    they are found nowhere, if Q1 chooses a rewrite.
 3. The scan's test passes, and fails when the scan is made to skip pull-request refs.
@@ -158,7 +174,8 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
 - **Q1. The household's own data.** Recommended for Beta 0: **accept it, in writing, signed and
   dated by the maintainer as the accountable role.** The criterion is reworded to: "no third
   party's data on any public surface of the repo, proved by commit id; the household's own given
-  names, ages and bodyweight values in `main`'s history, one given name in an applied migration's
+  names, ages and bodyweight values in any commit, pull-request ref, commit message or pull-request
+  text before the sign-off date, one given name in an applied migration's
   comment, the maintainer's commit author and email, and the `screenshots` branch's images are
   accepted residuals; numbers and images are not scannable." This is an exception to AGENTS.md's
   rule that a real value committed anywhere is a P0 and that deleting it from `HEAD` is not removing
@@ -166,7 +183,8 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
   to rewrite history before Beta 0 ends. A rewrite is the only way to make that rule true without
   an exception, and the quietest time for one is before the first outside invite, when few pull
   requests are open.
-- **Q2. The `screenshots` branch.** Recommended: **accept its old images under Q1 for now.**
+- **Q2. The `screenshots` branch.** Recommended: **accept its old images under Q1 for now, once
+  step 3's look finds no third party in them.**
   Deleting the branch breaks the images on every open pull request, and its old commits stay served
   by id until Support clears them, so deleting alone removes nothing. If it is deleted later, its
   last commit id is recorded first and goes into a Support request, with the same proof.
@@ -191,3 +209,14 @@ finding is accepted.
 | 9   | P2       | Deleting the `screenshots` branch breaks open pull requests' images and removes nothing by itself                  | Q2's recommendation is reversed                                    |
 | 10  | P2       | Running once enforces nothing afterwards                                                                           | A local pre-push hook; re-run before each invite                   |
 | 11  | P2       | Counts per class need a walk per class; the ref counts were already stale                                          | Said; counts dated                                                 |
+
+**Round 2, 2026-11-20.** The same lens, on draft 2. It confirmed all eleven fixes. Every new finding is
+accepted.
+
+| #   | Severity | Finding                                                                                                       | Response                                                               |
+| --- | -------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 12  | P1       | The proof by id missed a commit that a surviving ref still reaches, and the patch and diff addresses          | "Before filing"; the proof's list of addresses                         |
+| 13  | P1       | Public text is wider: reviews, issues, commit comments and edit history                                       | The scan reads them; a quote is deleted, not edited                    |
+| 14  | P1       | The accepted places were undefined, and left out old pull-request refs, commit messages and pull-request text | A dated snapshot of refs at the sign-off; Q1's wording                 |
+| 15  | P1       | Accepting the `screenshots` branch could sweep in a third party's image                                       | The maintainer's step 3; Q2 depends on it                              |
+| 16  | P1       | A hook that reads a path relative to a worktree would silently skip most pushes                               | It finds the list under the main checkout, and says when there is none |
