@@ -5,8 +5,8 @@
 > rules 4, 6 and 7, decisions **K22 to K24**, and the rows **A3**, **Post-R2 cleanup** and **F1** of
 > "Chunks, in order". Branch for this plan: `docs/cat-3-after-the-fresh-start-plan`.
 >
-> **Draft 2, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
-> (`b6ef8287`) and #770's branch. Panel round 1 (two lenses) and the feasibility checks of lane B,
+> **Draft 3, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
+> (`b6ef8287`) and #770's branch. Two panel rounds (two lenses each) and the feasibility checks of lane B,
 > lane P and the Native Scaling thread are applied; the log is at the end. The maintainer approves
 > it before any of its PRs is built.
 
@@ -55,7 +55,7 @@ the code on `main` gives a different order.
 | --------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | **PR 1 · F1-i**                   | Test databases hold the library only                                             | The fresh start, and its first check (R4) clean                                   | Seed and proofs: lane P (Q2). Test library: the contract owner. Specs: their owners                        |
 | **PR 2 · the clean-up, with P12** | The interim code and the legacy groups go                                        | PR 1                                                                              | One PR on the contract owner's branch, with lane B's and lane P's commits added from local branches off it |
-| **PR 3 · F1-ii**                  | The old list, the fresh start's two one-shot corrections and its report lines go | PR 2, and the four gates in its section                                           | The contract owner, with Native Scaling's commits for the corrections and the runbook                      |
+| **PR 3 · F1-ii**                  | The old list, the fresh start's two one-shot corrections and its report lines go | The four gates in its section                                                     | The contract owner, with Native Scaling's commits for the corrections and the runbook                      |
 | **PR 4 · A3**                     | The seed keeps a stored library row equal to its entry                           | The fresh start; the trial week's end, or the maintainer's go (Q5). Not PR 1 to 3 | Lane A when it restarts (Q2)                                                                               |
 
 **Count: four PRs, none split.** A3 is one PR: a row-only half would leave names updated and
@@ -101,8 +101,8 @@ seed and `verify/catalog.ts`; whichever lands second rebases.
      `movementIsCatalog()`.
   2. The whole e2e suite passes with no old built-in's name in any spec.
   3. `db:verify` and `db:mutations` pass, and each re-cut proof is shown to fail on its mutation.
-  4. `seedLibraryOf('catalog')` and production's branch of `seedReference` are unchanged (the diff
-     is shown in the PR), and #770's equality pins still pass.
+  4. `seedLibraryOf('catalog')` and production's branch of `seedReference` are unchanged in what
+     they write (the diff is shown in the PR), and #770's equality pins still pass.
 
 ## PR 2 · the clean-up, with P12
 
@@ -126,9 +126,14 @@ from local branches off it, as FAM-1's contract changes C32 and C35 did.
   `program/existing-item.test.ts:3`, `:145-152`.
 - `apps/web/app/design/program/picker-options.ts`: `interimGroupOf` goes with `group`.
 - **A shape change (Q6): `newItem`'s success answer gains `owner`, `unitDefault` and
-  `isBodyweight`** (`packages/shared/src/program/actions.ts:113-120`, the schema at
-  `program-shapes.ts:63`, the preview's fake). Additive. It is what lets the picker's fix below work
-  without a new read.
+  `isBodyweight`** (`packages/shared/src/program/actions.ts:113-120`, with `NewItemResult` at
+  `packages/db/src/writers/program/new-item.ts:24-29`). Additive. `owner` is the two-word enum the
+  option already uses (`'catalog' | 'household'`), never a household's or a movement's id. The answer
+  comes only from rows `movementIsAvailableTo` the caller, and the tenancy mutation on that predicate
+  covers the new fields. It is what lets the picker's fix below work without a new read. The
+  preview's fake changes only its two returns (`fakes.ts:603`, `:619`). The exact-shape assertions
+  that change: `actions.test.ts:95`, `:379`; `program-dal.test.ts:24`; `verify/program.ts:2277`,
+  `:2327`, `:2366`; and mutations 308, 381 and 383, whose context lines move.
 
 **Lane B's commits** (the picker; lane B's own files and guides).
 
@@ -161,7 +166,9 @@ from local branches off it, as FAM-1's contract changes C32 and C35 did.
   type (`:12-13`, `:43-44`, `:175`) and `joinAliases`' const half. `tables` becomes required, with a
   row that has no join rows handled, so `taxonomy` is never `null`. Case 4, a catalog row with no
   entry in the library given, stays.
-- `newItem` returns the three new fields.
+- `newItem` returns the three fields: from the option on a match; on its same-slug and new-item
+  branches the selected `columns` (`new-item.ts:113-117`) gain `householdId`, `unitDefault` and
+  `isBodyweight`, and `owner` is `'catalog'` when `householdId` is null.
 - `apps/web/lib/dal/program/picker.ts`: the `BuiltInWithoutLibrary` arm (`:24`, `:55-63`).
 - Tests and proofs: `picker.test.ts:6`, `:333-335`; `catalog-arm-option.test.ts:5`, `:29` and its ⏳
   `describe` (`:102`); the import at `verify/program.ts:25`; mutations 592, 593, 595 and 397.
@@ -191,9 +198,11 @@ while anything could bring that data back.
 2. The fresh start's second check (R4, at the start of the trial week) clean.
 3. Production's seed unable to write an old row, which holds by construction once PR 1 deletes
    `legacyMovements`.
-4. **The fresh start's restore branch deleted, with its date in the ledger, and the database's
-   point-in-time window past step 5.** Until then a restore can reach a point before the fresh
-   start, and the spec says steps 3 to 8 are then run again.
+4. **No branch of production cut before step 5's apply still exists**, the fresh start's restore
+   branch and #770's rehearsal branch included, each with its deleted date in the ledger; and
+   production's history retention, read from the Neon console's project settings on the day (6 hours
+   when this was written), is shorter than the time since step 5's apply. Until then a restore can
+   reach a point before the fresh start, and the spec says steps 3 to 8 are then run again.
 
 It also merges after R2's close-out PR, which corrects the privacy notice's sentences about the
 procedure this PR removes.
@@ -207,9 +216,13 @@ procedure this PR removes.
   that name the old list are corrected: `schema.ts:815`, `movement-ownership.ts:137`,
   `catalog/fixture.ts:31-33`, `seed-ids.ts:52`, `strength-session-schema.test.ts:234`.
 - **Production's seed changes in one way:** the legacy-slug shadow count (`seed.ts:393-396`), which
-  runs on every push, is retired with the list it reads. Proved by a production-mode seed on a fresh
-  verify database exiting 0 with the same counts less that line; the first deploy's seed log is read
-  after merge.
+  runs on every push, is retired with the list it reads, and the catalog count's legacy-slug filter
+  (`:396-399`) goes with it, so a household's row on one of the 12 shared slugs is still counted.
+  Proved in `db:verify`: OPS-2 A (`verify/seed.ts:130-198`), which already seeds a fresh database in
+  production mode twice, asserts the report's lines less the shadow count; a household row on a
+  shared slug is counted once, with the count-only privacy assertion re-pointed; and a mutation
+  restores the filter. `runbooks.md`'s "The seed's shadow guard fired" is updated to the new log
+  line. The first deploy's seed log is read after merge.
 - **Deleted, Native Scaling's commits.** The code of the two one-shot corrections
   (`erase-seeded-household-2026-11-19`, `delete-legacy-movements-2026-11-20`), on the rule change of
   Q7:
@@ -222,7 +235,8 @@ procedure this PR removes.
 'erasure' })`, which `erase-household` will need; `correctionTargetDatabaseIsUnnamed`;
     `hasHostOverride`; the older erasure proofs; mutation 276, whose context is only re-checked.
   - `corrections/README.md`: the two **Applied rows stay, dated, as the record**, and rule 6 gains
-    its one exception.
+    its one exception. Each row cites the PR that added the correction and the last commit that held
+    its code, so a later reader can read exactly what ran. No row counts are added to it.
 - **The alarms that stay:** the report's count of households and profiles whose id is a seed id
   (`SEED_PUBLIC_IDS`, which this PR does not delete), and its line that every global movement is a
   catalog row. The count of movements with a seed id reads the list this PR deletes (Q8).
@@ -256,13 +270,16 @@ What E6 asks, with lane P's and the panel's points as the design.
    since no trigger does. It never writes `deleted_at`, `household_id` or `tracking_type`, and never
    clears `modality`. A row with `deleted_at` set is skipped and counted. Aliases, the supervision
    label and the steps are not stored, so nothing here touches them.
-3. **Join rows by difference**, in the same transaction, under the one-primary index: a change of
-   primary muscle demotes first, then promotes. This is the first code that deletes a catalog join
-   row, so it carries its own proof that it never touches a household's row.
+3. **Join rows by difference**, in the same transaction. A muscle whose role changes is updated in
+   place, never deleted and re-inserted, and a change of primary demotes first, then promotes: that
+   respects both the pair index (one row per movement and muscle) and the one-primary index. This is
+   the first code that deletes a catalog join row, so it carries its own proof that it never touches
+   a household's row.
 4. **It never throws on catalog data** (rule 7). `migrate.yml` has no rollback, and a throw after
    the migrations leaves every later push red. Each change is checked before it is written: a
    unit, equipment or muscle code the reference tables lack, or a change that would break
-   `movements_global_row_has_pattern`, is skipped and counted. The library transaction is the only
+   `movements_global_row_has_pattern` or the pattern and kind-of-training checks, is skipped and
+   counted. The library transaction is the only
    unit. A mutation proves a would-fail row turns `db:verify` red if it is thrown and not skipped.
 5. **The tracking type is never updated.** If a stored type differs from the lockfile's, the row is
    skipped and counted, as E6 says; a real type change is a new movement.
@@ -272,11 +289,13 @@ What E6 asks, with lane P's and the panel's points as the design.
    seed's switch, to rows the family logs against. So **before merge the maintainer runs the seed
    from the PR's head on a child branch of production**: it prints rows updated, join rows added
    and removed, and rows skipped; a second run prints 0 for each. Only the counts go in the PR. The
-   merge needs the maintainer's go.
+   merge needs the maintainer's go. The child branch is deleted in the same sitting. The counts are
+   of library rows only, never of a household's rows, and nothing else from the branch is pasted.
 8. **Proofs.** Its own mutation range. It re-cuts A2-ii's "a second run inserts nothing" into
    "updates nothing when no entry changed, and exactly the changed rows when one did", and
    `assertOnlyLibraryRowsAdded` into "an existing global row changes only where its entry changed".
-   It keeps mutation 505 and the pins at `verify/catalog.ts:500-512`.
+   It re-cuts mutation 505 to drop `targetWhere`, so that it would adopt an old or a household's
+   row, and keeps the pins at `verify/catalog.ts:500-512`.
 9. **The lines that stop being true:** `AGENTS.md:150`; `migrate.yml`'s header; the docstrings in
    `seed.ts:433-452`, `scripts/seed.ts:10`, `catalog-movements.ts:34-38` and `schema.ts:127`;
    `movement-catalog.md` invariants 4 and 6; `catalog-data.md:78-80`; `lessons.md:76`;
@@ -304,6 +323,8 @@ a would-fail change are each skipped and counted.
   production from a fixtures database" closes at the fresh start only because the fresh start
   erases the household with the seed's id.
 - **The bundle gate** (#713) applies to PR 2; deletions should shrink the routes.
+- **Copies of production hold the family's data.** PR 4's rehearsal branch, and any branch counted
+  in PR 3's gate 4, is deleted in the same sitting or on its expiry date, with the date in the ledger.
 
 ## Not planned here
 
@@ -330,9 +351,10 @@ a would-fail change are each skipped and counted.
   alternative keeps both, with a frozen copy of the 35 old ids inside one of them.
 - **Q8. One alarm.** The report's count of movements with a seed id reads the list PR 3 deletes. It
   is the only check that sees an old built-in on a shared slug that was hand-given a kind of
-  training. Recommended: keep it by a test on the seed ids' own form if they share one (checked
-  when PR 3 is built), and otherwise drop it on the maintainer's go, since gate 4 leaves no path
-  that brings such a row back.
+  training. Recommended: keep it as a count of `movements` rows whose id has the seed's prefix
+  (`SEED_PUBLIC_ID_PREFIX`, which every seeded movement's id carries), so it no longer needs the
+  list. Gate 4 removes the restore path; a hand `UPDATE` remains, and the corrections rules are its
+  control.
 
 ## Review-response log
 
@@ -362,3 +384,17 @@ safety, operations and privacy) and three feasibility checks. Every finding is a
 | 19  | lane B              | `made()` cannot take an owner and unit the answer does not carry                                 | Q6                                                            |
 | 20  | Native Scaling      | Deleting the corrections breaks README rule 6; which helpers stay                                | Q7; the keep and delete lists                                 |
 | 21  | lane P, correctness | Wrong names and line numbers                                                                     | Corrected                                                     |
+
+**Round 2, 2026-11-20.** The same two lenses, on draft 2. Both confirmed every round-1 fix. Every new
+finding is accepted.
+
+| #   | From            | Finding                                                                               | Response                                                                           |
+| --- | --------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 22  | safety, P1      | Gate 4 named one restore branch; the rehearsal for the seed's switch cuts another     | Gate 4 covers every branch cut before step 5, and says where the retention is read |
+| 23  | safety, P1      | Retiring the shadow count would also stop counting a household's row on a shared slug | The filter goes with it; proved in `db:verify`, with a mutation                    |
+| 24  | correctness, P1 | A muscle changing role would break the pair index on join rows                        | A3 point 3: updated in place                                                       |
+| 25  | correctness, P1 | `newItem` does not have the three values on two of its branches                       | Lane P's commit selects them; the assertions that change are listed                |
+| 26  | correctness, P2 | Q8 can be answered now: seed ids share a prefix                                       | Q8's recommendation                                                                |
+| 27  | safety, P2      | An Applied row records too little once the code is gone                               | Each row cites its PR and last commit                                              |
+| 28  | safety, P2      | The rehearsal's copy of production, and what may be pasted from it                    | A3 point 7; a Risks entry                                                          |
+| 29  | both, P2        | Wording: "unchanged", the gates cell, mutation 505, Q8's "no path"                    | Corrected                                                                          |
