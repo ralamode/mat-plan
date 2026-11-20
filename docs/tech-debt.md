@@ -32,6 +32,17 @@ expected?)` (any root, an optional exact count, fail-fast) measure the same 44px
   and the link check instead of its loop.
 - **Severity:** low. Tests only; both copies hold the same 44px bar today.
 
+### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
+
+- **What & why it's debt:** `getProgramsByAthlete` is one DAL call, but lane P's
+  `athletesOnPrograms` (`packages/db/src/queries/program/athletes.ts`) runs `dayAssignments` once per
+  athlete, so Home makes 1 + N queries, N at most `MAX_HOUSEHOLD_ATHLETES` (25).
+- **Impact:** none measured; a household has a handful of athletes. On the app's front door the
+  queries add up before the tiles render.
+- **The fix:** if Home's LCP suffers, batch `dayAssignments` with `profile_id IN (...)` and group in
+  memory, keeping `currentPrograms`' order rule unchanged (the Programs list shares the read).
+- **Severity:** low.
+
 ### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
 
 - **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
