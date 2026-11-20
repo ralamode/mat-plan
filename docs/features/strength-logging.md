@@ -114,6 +114,9 @@ regresses.
    set with reps, no mode, and one live PRIMARY quantity in a mass unit; anything else matches no row
    and answers `null`, a typed refusal. Change what a set can be, and decide here whether it stays
    editable.
+   Nothing on the client mirrors it: the old form's `isEditableSet` was deleted at FAM-1 12f, and the
+   comments in `shared/strength.ts` and `shared/units.ts` now say "the edit path", and the writer's
+   say its WHERE is the boundary.
    🔴 **It also refuses a PROGRAM row** (`programRow()`, which a purge leaves set). A program row's
    numbers belong to the day page's Change (`amendRow`), which holds the writable window and the
    program checks. `db:verify`'s "TD fix-a-set" block, mutations `449` and `450`.

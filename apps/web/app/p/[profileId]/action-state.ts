@@ -36,8 +36,7 @@ export type ActionState = {
    */
   duplicate?: {
     // The writer's own type, imported — not a fourth hand-typed copy. A type-only import is erased,
-    // so nothing from `@mat-plan/db` reaches the client bundle this module is part of (precedent:
-    // `lib/entries/adherence.ts`, `lib/programming/program-day.ts`).
+    // so nothing from `@mat-plan/db` reaches the client bundle this module is part of.
     match: NameMatch;
     /**
      * The household is at `MAX_HOUSEHOLD_ATHLETES`, so "Add another" would be refused — hide it.

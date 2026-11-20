@@ -206,26 +206,21 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   branch is reset from main afterwards, or stop recommending the branch refresh.
 - **Severity:** low.
 
-### The old log forms are unmounted, not deleted, and older days have no in-app fix (added 2026-11-15)
+### Older days have no in-app fix, and the old forms left callerless code in the packages (added 2026-11-15, 12f half closed 2026-11-20)
 
-- **What & why it's debt:** V1-24 3b-page took the Check-ins form, the Strength section (form,
-  program card, receipts), the "Logged entries" list and the "Calisthenics today" card off the day
-  page, and left their components in the tree: `checkin-form.tsx`, `strength-section.tsx`,
-  `strength-form*.ts(x)`, `strength-session-receipt.tsx`, `program-reference.tsx`,
-  `movement-line.tsx`, `todayRows` / `calisthenicsTotals` in `lib/entries/activity-totals.ts`, and
-  the reads only those used: `getProgramDay` (`lib/dal/programming.ts`), `resolveDayRole`,
-  `checkinFieldsForKeys`, `readsHouseholdProgram`, and `DayNav`'s unused `dayRoleLabel` prop. About a
-  dozen `screenshot-ephemeral.ts` states (`strength-*`, `form-*`, `calisthenics`, `program-collapsed`,
-  `status-badges`) now target surfaces that are not on the page. Their three Server Actions
-  (`logCheckinsAction`, `logStrengthSessionAction`, `editStrengthSetAction`) were removed in 12f PR 3. FAM-1 12f deletes them, once 12d and 13b have rebuilt what the
-  new page needs (the PICK-1 PR 3 precedent for an unmounted component).
-- **Impact:** dead code that still type-checks and still costs review attention; PICK-1 PR 4, which
-  mounts into the strength form, waits for FAM-1 13b's surface instead.
+- **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
+  capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
+  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet`;
+  `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
+  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
+  (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
+  `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
+  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user is `lib/checkins`.
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** FAM-1 12f deletes each file and the actions nothing calls. Revisit the older-day recovery path before FAM-1
-  slice 3 opens the new page to the household, or before a second household. **Expiry: FAM-1 12f.**
-- **Severity:** low.
+- **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
+  moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
+  the new page to the household, or before a second household.
 
 ### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
 
