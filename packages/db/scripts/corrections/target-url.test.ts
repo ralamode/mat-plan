@@ -7,6 +7,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  correctionTargetDatabaseIsUnnamed,
   correctionTargetIsLocal,
   correctionTargetIsPreview,
   correctionTargetUrl,
@@ -176,5 +177,31 @@ describe("seedHouseholdClaimIsAllowed — a seed household only where the seed's
   it('does not constrain an ordinary household id on production', () => {
     process.env.DATABASE_URL_UNPOOLED = PROD;
     expect(seedHouseholdClaimIsAllowed(newId())).toBe(true);
+  });
+});
+
+describe('the erasure target and an unnamed database (CAT-3 R0, D1)', () => {
+  const NO_PATH = 'postgres://u:p@ep-x.invalid';
+
+  it('an erasure reads the direct string only: no fallback to DATABASE_URL', () => {
+    process.env.DATABASE_URL = PROD;
+    expect(correctionTargetUrl({ kind: 'erasure' })).toBeUndefined();
+    process.env.DATABASE_URL_UNPOOLED = PROD;
+    expect(correctionTargetUrl({ kind: 'erasure' })).toBe(PROD);
+  });
+
+  it('a URL with no path names no database; a named one, and an unset one, do not count', () => {
+    process.env.DATABASE_URL_UNPOOLED = NO_PATH;
+    expect(correctionTargetDatabaseIsUnnamed()).toBe(true);
+    process.env.DATABASE_URL_UNPOOLED = PROD;
+    expect(correctionTargetDatabaseIsUnnamed()).toBe(false);
+    delete process.env.DATABASE_URL_UNPOOLED;
+    expect(correctionTargetDatabaseIsUnnamed()).toBe(false);
+  });
+
+  it('a seed-household claim against a URL with no database name is refused, not read as the preview', () => {
+    process.env.DATABASE_URL_UNPOOLED = NO_PATH;
+    expect(correctionTargetIsPreview()).toBe(false);
+    expect(seedHouseholdClaimIsAllowed(SEED_HOUSEHOLD_PUBLIC_ID)).toBe(false);
   });
 });

@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index feddd632..e3785765 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -993,7 +993,7 @@ async function householdScopeByPublicId(
+   const [row] = await db
+     .select({ id: schema.households.id })
+     .from(schema.households)
+-    .where(eq(schema.households.publicId, publicId))
++    .where(and(eq(schema.households.publicId, publicId), isNull(schema.households.deletedAt)))
+     .limit(1);
+   return row ? householdScopeForScript(row.id) : null;
+ }

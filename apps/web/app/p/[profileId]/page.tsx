@@ -14,9 +14,8 @@ import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
-import { localDayIso, localWeekStartIso } from '@/lib/date';
+import { localDayIso } from '@/lib/date';
 import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
-import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { getDayPlan } from '@/lib/dal/day/day';
 import { householdState } from '@/lib/dal/household';
 import { dayClearEvents, lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
@@ -48,7 +47,6 @@ import { clearedNoticeLine } from './clear-day-notice';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
 import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
-import { WeeklyAdherence } from './weekly-adherence';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -111,12 +109,10 @@ export default async function TodayPage({
     today,
     profile.archived,
   );
-  const weekStart = localWeekStartIso(day);
-  // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
-  // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
-  const [entries, adherence, clears] = await Promise.all([
+  // Independent reads → one round-trip (hot page, INP/LCP budget). The weekly ramp read left with the
+  // "This week" card (FAM-1 12f PR 4, D21).
+  const [entries, clears] = await Promise.all([
     listEntriesForDay(profile.id, day),
-    getWeeklyAdherence(profile.id, weekStart),
     // V1-9b B2: the day's clears, newest first, for the banner and the notice's cleared sentence.
     dayClearEvents(profile.id, day),
   ]);
@@ -303,8 +299,6 @@ export default async function TodayPage({
           by person who programmed the workout / day"). Not mounted for an athlete on no program
           with no rows to show: it would be an empty landmark under a hidden heading, every day. */}
       {view.screen ? <DayScreen plan={plan} actions={dayActions} /> : null}
-
-      {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
 
       {/* 🔴 **This slot used to link the ROUTINE EDITOR; PROF-1 a-r replaces it** (acceptance
           criterion 11 / M30: nothing in the app links to `/routine` until ACT-1 replaces that editor;

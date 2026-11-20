@@ -287,9 +287,8 @@ export function movementIsAvailableTo(scope: HouseholdScope) {
  * `scope.householdId`, which is why it belongs in this module — `scope.test.ts` asserts exactly one
  * module does.
  *
- * Its consumers: `householdHasProgram` (whose one caller is the add-athlete form,
- * `apps/web/app/p/new/page.tsx`, wording the Child option by whether the household has a legacy
- * program), `liveTemplateBlockIn` below, and the template-block helpers.
+ * Its consumers: `liveTemplateBlockIn` below and the template-block helpers. (`householdHasProgram`
+ * was one until FAM-1 12f deleted it with its last caller.)
  */
 export function programBlockInHousehold(scope: HouseholdScope) {
   return eq(schema.programBlocks.householdId, scope.householdId);

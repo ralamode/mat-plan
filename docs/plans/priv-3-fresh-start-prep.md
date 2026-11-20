@@ -100,8 +100,10 @@ as not production:
     treat it as local or preview, or a no-path URL would let a seed-household claim bind remotely.
   - it carries a host override: `hasHostOverride`, exported here from `db-environment.ts`.
 - **The database, inside the transaction.** It reads `current_database()` on the connection that writes.
-  It refuses unless that equals the URL's name and does not name the preview. This also closes the
-  socket and no-path cases.
+  It refuses unless that equals the URL's name and does not name the preview. ⚠️ _As built (#708):_
+  that does NOT close the socket and empty-host cases on its own, since a local database named
+  `mat_plan` matches. So the pre-connect gate also refuses an empty host, a socket host, a scheme
+  other than `postgres:` and loopback however it is spelled (security and correctness lenses).
 - **Pure, with a unit test.** The gate, `seededHouseholdErasureIssue(target, observed)`, takes those
   two values. Its colocated test drives every branch.
 - **The same gap in RC.** `create-household`'s preview refusal (#546, `registry.ts:886`) accepts a
@@ -118,10 +120,14 @@ as not production:
   as an integer ≥ 0, refuses before the core is called. 2a's signature needs no change. If 2a's core
   turns out to commit on its own, this becomes a delta to 2a (an `expectedTotal` checked before its first
   `DELETE`), raised before R0 is cut.
-- `db:verify` asserts that after a mismatched `--apply` **every graph table's rows are unchanged**, so a
-  compare that ran after a commit would also go red.
-- So a bare `--apply`, or one run with an earlier sitting's number, refuses. This is the interlock D2
-  already had, on the more harmful of the two.
+- `db:verify` asserts that after a mismatched `--apply` **every graph table's rows are unchanged**.
+  ⚠️ _As built (#708):_ under PGlite that alone cannot tell a core that ran in the entry's
+  transaction from one that opened its own, so the proof also counts transaction opens (one, with the
+  core's savepoint nested in it), and mutation 542 hands the core the outer handle.
+- So a bare `--apply` refuses, and so does a number that no longer equals the count. ⚠️ _As built:_
+  a stale number that still equals the count passes, so this is a restatement of the current total,
+  not a binding to one dry run (security lens, #708). This is the interlock D2 already had, on the
+  more harmful of the two.
 
 **Once the target is gone:**
 
