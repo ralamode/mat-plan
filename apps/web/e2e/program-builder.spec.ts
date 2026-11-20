@@ -29,6 +29,7 @@ import {
   workoutPath,
 } from '../components/program-builder/routes';
 import { PROGRAM_COPY } from '../components/day/day-copy';
+import { SHEET_COPY } from '../components/ui/sheet';
 import { APP_HOME_PATH, MIN_TAP_TARGET_PX, NOT_FOUND_COPY, SETTINGS_COPY } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
 import { NARROW_VIEWPORT } from './contexts';
@@ -267,6 +268,47 @@ const added: string[] = [];
 test.afterEach(async ({ page }) => {
   test.setTimeout(60_000);
   await archiveAdded(page, added.splice(0));
+});
+
+/**
+ * 🔴 **A server action while a sheet stays open must not strand its history entry** (2026-11-19).
+ * "+ New item" saves through a Server Action that revalidates, and Next's router then rewrites the
+ * current history entry without the sheet's key; the picker used to skip its pop on Close, so the
+ * next Back press did nothing. One Back after Close must leave the editor.
+ */
+test('one Back after making an item in the open picker and closing it leaves the editor', async ({
+  page,
+}, info) => {
+  const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
+  await openPrograms(page);
+  await createProgram(page, `E2E back ${stamp}`);
+  const programPage = page.url();
+  await page
+    .getByRole('region', { name: BUILDER_COPY.workouts })
+    .getByRole('link', { name: BUILDER_COPY.newWorkout })
+    .click();
+  await page.waitForURL(/\/workouts\/new$/);
+  const editor = page.url();
+  await page.getByRole('button', { name: ITEM_PICKER_COPY.open }).click();
+  const picker = page.getByRole('dialog', { name: ITEM_PICKER_COPY.title });
+  await expect(picker).toBeVisible();
+  await picker.getByRole('button', { name: ITEM_PICKER_COPY.newItem }).click();
+  await picker.getByLabel(ITEM_PICKER_COPY.name, { exact: true }).fill(`E2E item ${stamp}`);
+  await picker.getByLabel(ITEM_PICKER_COPY.tracks).selectOption(TRACKING_TYPE.reps);
+  await picker.getByRole('button', { name: ITEM_PICKER_COPY.create, exact: true }).click();
+  // Created and selected: the picker is still open, and the save has revalidated the page.
+  await expect(
+    picker.getByRole('checkbox', { name: new RegExp(`^E2E item ${stamp}\\s*,`) }),
+  ).toBeChecked();
+  // The footer's Close. The header has one too, and the footer always comes after it in the DOM
+  // (`sheet.tsx`), so the last match is the footer's.
+  await picker.getByRole('button', { name: SHEET_COPY.close, exact: true }).last().click();
+  await expect(picker).toBeHidden();
+  // Exactly one entry back: the program page, not the editor (a stranded entry) and not further
+  // (a second pop).
+  await page.goBack();
+  await expect(page).toHaveURL(programPage);
+  expect(editor).not.toBe(programPage);
 });
 
 test('a parent puts a new athlete on a program, the athlete logs it, then off and back on', async ({
