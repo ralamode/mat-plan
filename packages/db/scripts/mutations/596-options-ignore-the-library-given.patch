@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
-index 1d361c8d..e0a16488 100644
+index 835f94c7..c58de98c 100644
 --- a/packages/db/src/queries/program/movement-options.ts
 +++ b/packages/db/src/queries/program/movement-options.ts
 @@ -11,6 +11,7 @@ import {
@@ -17,6 +17,6 @@ index 1d361c8d..e0a16488 100644
 -  const bySlug = new Map(library.map((entry) => [entry.slug, entry]));
 +  void library;
 +  const bySlug = new Map(CATALOG_MOVEMENTS.map((entry) => [entry.slug, entry]));
-   const pickerEntries: Readonly<
-     Record<string, (typeof MOVEMENT_PICKER_ENTRIES)[keyof typeof MOVEMENT_PICKER_ENTRIES]>
-   > = MOVEMENT_PICKER_ENTRIES;
+   return [
+     ...[...catalog]
+       .sort(byName)
