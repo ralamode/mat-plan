@@ -131,16 +131,40 @@ describe('ClearDay (V1-9b B2-ii)', () => {
     expect(field().getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('Enter with the word moves focus to Clear day and never clears, even held', () => {
+  it('Enter with the word moves focus to Clear day and never clears', () => {
     render(clearIsland());
     fireEvent.click(trigger());
     fireEvent.change(field(), { target: { value: ' Delete ' } });
     fireEvent.keyDown(field(), { key: 'Enter' });
     expect(document.activeElement).toBe(clearButton());
-    // The held key's auto-repeat now lands on the button, as a submit: ignored.
-    fireEvent.click(clearButton());
     expect(clearDayAction).not.toHaveBeenCalled();
     expect(dialog()).toBeTruthy();
+  });
+
+  it('a held Enter (its auto-repeat) is stopped while the dialog is open; a fresh one is not', () => {
+    render(clearIsland());
+    fireEvent.click(trigger());
+    const held = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      repeat: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    clearButton().dispatchEvent(held);
+    expect(held.defaultPrevented).toBe(true);
+    const fresh = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    clearButton().dispatchEvent(fresh);
+    expect(fresh.defaultPrevented).toBe(false);
+  });
+
+  it('a tap right after Enter armed Clear day still clears', async () => {
+    clearDayAction.mockResolvedValueOnce({ ok: true, count: 1 });
+    render(clearIsland());
+    fireEvent.click(trigger());
+    fireEvent.change(field(), { target: { value: CLEAR_DAY_CONFIRM_WORD } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    fireEvent.click(clearButton());
+    await waitFor(() => expect(clearDayAction).toHaveBeenCalled());
   });
 
   it('resets the word on every open, so a reopened dialog is never armed', () => {

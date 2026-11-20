@@ -8,14 +8,7 @@ import {
   expectNoOverflowWithin,
   seedStoredTheme,
 } from './a11y-checks';
-import {
-  addAthlete,
-  archiveAdded,
-  logBodyweight,
-  loggedWeight,
-  logPractice,
-  practiceChange,
-} from './steps';
+import { addAthlete, archiveAdded, logBodyweight, loggedWeight } from './steps';
 
 /**
  * **V1-9b B2 — Clear this day, end to end:** log, clear behind the typed word, Restore all.
@@ -25,8 +18,11 @@ import {
  * (`fullyParallel`). The name carries the retry, so a retry starts on an empty day. Each run spends one
  * of `MAX_HOUSEHOLD_ATHLETES`' slots, which archiving does not free; the e2e database is fresh per run.
  *
- * Program rows are proved hidden and restored by `db:verify` (B2-0's proof 3); the dialog's counts, the
- * four restore outcomes, the reset on open and the two-clear banner by `clear-day.test.tsx`.
+ * ⚠️ **A weigh-in only.** A new athlete has the neutral first-run routine (strength only,
+ * `NEUTRAL_DEFAULT_KEYS`), so its Life section has no practice row to log; the seeded athletes that
+ * have one are shared. Program rows and practices are proved hidden and restored by `db:verify`
+ * (B2-0's proofs 3 and 6); the dialog's counts, the four restore outcomes, the reset on open and the
+ * two-clear banner by `clear-day.test.tsx`.
  */
 const added: string[] = [];
 test.afterEach(async ({ page }) => {
@@ -39,7 +35,6 @@ async function newAthleteWithADay(page: Page, name: string): Promise<void> {
   await addAthlete(page, name, undefined, added);
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
   await logBodyweight(page, WEIGHT);
-  await logPractice(page);
 }
 const nameFor = (label: string, retry: number) =>
   `CLEAR ${label} ${retry} ${Date.now().toString(36)}`;
@@ -61,8 +56,11 @@ test('clear the day behind the typed word, then Restore all, with focus at each 
 
   await triggerButton(page).click();
   await expect(dialog(page)).toBeVisible();
-  // Not armed until the word is typed: a tap says why and clears nothing.
-  await clearButton(page).click();
+  // Not armed until the word is typed: Clear day is `aria-disabled` (Playwright will not tap it, which
+  // is the point), and Enter on the empty field says why and clears nothing. The tap's own message is
+  // `clear-day.test.tsx`'s.
+  await expect(clearButton(page)).toHaveAttribute('aria-disabled', 'true');
+  await confirmField(page).press('Enter');
   await expect(dialog(page)).toContainText(CLEAR_DAY_COPY.confirmFirst(CLEAR_DAY_CONFIRM_WORD));
 
   // Case and spaces ignored. 🔴 Enter moves focus to Clear day and NEVER clears.
@@ -82,10 +80,9 @@ test('clear the day behind the typed word, then Restore all, with focus at each 
   await expect(dialog(page)).toHaveCount(0);
   // The day is empty, and focus waits on the banner's Restore all.
   await expect(loggedWeight(page, WEIGHT)).toHaveCount(0);
-  await expect(practiceChange(page)).toHaveCount(0);
   await expect(restoreAll(page)).toBeFocused();
   await expect(
-    page.getByText(CLEAR_DAY_COPY.banner(2, CLEAR_DAY_COPY.deadline.tomorrow)),
+    page.getByText(CLEAR_DAY_COPY.banner(1, CLEAR_DAY_COPY.deadline.tomorrow)),
   ).toBeVisible();
   // Nothing live, so no trigger: there is nothing left to clear.
   await expect(triggerButton(page)).toHaveCount(0);
@@ -96,7 +93,6 @@ test('clear the day behind the typed word, then Restore all, with focus at each 
   await expect(page.locator(`#${CLEAR_DAY_OUTCOME_ID}`)).toContainText(CLEAR_DAY_COPY.restored);
   await expect(page.locator(`#${CLEAR_DAY_OUTCOME_ID}`)).toBeFocused();
   await expect(loggedWeight(page, WEIGHT)).toHaveCount(1);
-  await expect(practiceChange(page)).toHaveCount(1);
 });
 
 test('on a small phone with the keyboard up, the field and then Clear day stay in view', async ({
@@ -130,6 +126,10 @@ for (const theme of ['light', 'dark'] as const) {
     await triggerButton(page).click();
     // Typed first: axe skips an inactive control, and the armed danger button is the one to check.
     await confirmField(page).fill(CLEAR_DAY_CONFIRM_WORD);
+    // 🔴 Wait for the button to finish arming. It fades from its inactive opacity (`transition-all`),
+    // and a scan mid-fade measures a blend of the label and the fill (4.15:1 here) that no one sees.
+    await expect(clearButton(page)).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(clearButton(page)).toHaveCSS('opacity', '1');
     await expectNoAxeViolations(page, `clear-day dialog, armed (${theme})`);
   });
 }

@@ -32,8 +32,6 @@ import { clearDayAction } from './clear-day-actions';
 import { clearDayKey, reportClearOutcome } from './clear-day-outcome';
 
 const SHEET_ID = 'clear-day-confirm';
-/** How long after Enter armed Clear day a submit is ignored: a held key's auto-repeat, not a tap. */
-const ENTER_REPEAT_GUARD_MS = 600;
 const FORM_ID = 'clear-day-form';
 
 /** The summary's pieces, in the Amendment's order: workouts, then bodyweight, practice, the rest. */
@@ -59,8 +57,8 @@ function summaryParts(summary: ClearDaySummary): string[] {
  *   2026-11-19): on a phone the keyboard would otherwise hide the consequence or the buttons.
  * - **Enter or Done never clears.** With the word typed it moves focus to Clear day (the keyboard drops
  *   and the footer re-pins), so the destructive step is a visible tap. The footer's action is a
- *   submit, so the input's Enter is intercepted before the form's implicit submission, and a held
- *   Enter's auto-repeat that lands on the button within `ENTER_REPEAT_GUARD_MS` is ignored.
+ *   submit, so the input's Enter is intercepted before the form's implicit submission, and while the
+ *   dialog is open a repeated (held) Enter is stopped before it reaches the button.
  * - **The dialog does not close while the clear is in flight**: its answer is reported from
  *   `onReturned`, which a close mid-flight would have spent with nothing to say.
  * - **The word resets on every open**, so a reopened dialog is never armed.
@@ -95,14 +93,24 @@ export function ClearDay({
   const trigger = useRef<HTMLButtonElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const after = useRef<{ target: string; report?: string } | null>(null);
-  // When Enter last moved focus to Clear day: a held Enter's auto-repeat must not then press it.
-  const armedByEnter = useRef(0);
   const bodyId = useId();
   const messageId = useId();
   const armed = normalizeClearConfirm(word) === CLEAR_DAY_CONFIRM_WORD;
 
   // A claim this island made must not outlive it (`focus-handoff.ts`).
   useEffect(() => () => expire(key), [key]);
+
+  // A held Enter: the first keydown moves focus to Clear day, and the key's auto-repeat would then
+  // press it. While the dialog is open, a repeated Enter is stopped before it reaches any control,
+  // so the destructive step stays a deliberate press. Only the repeat: a fresh Enter or a tap works.
+  useEffect(() => {
+    if (!open) return;
+    const stopRepeat = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && event.repeat) event.preventDefault();
+    };
+    document.addEventListener('keydown', stopRepeat, true);
+    return () => document.removeEventListener('keydown', stopRepeat, true);
+  }, [open]);
 
   function openDialog() {
     pinDayBeforeWrite({ day, today });
@@ -140,7 +148,6 @@ export function ClearDay({
 
   async function clear() {
     if (pending) return;
-    if (Date.now() - armedByEnter.current < ENTER_REPEAT_GUARD_MS) return;
     if (!armed) {
       setMessage(CLEAR_DAY_COPY.confirmFirst(CLEAR_DAY_CONFIRM_WORD));
       input.current?.focus();
@@ -262,7 +269,6 @@ export function ClearDay({
                 event.preventDefault();
                 if (event.repeat) return;
                 if (!armed) return setMessage(CLEAR_DAY_COPY.confirmFirst(CLEAR_DAY_CONFIRM_WORD));
-                armedByEnter.current = Date.now();
                 actionButton()?.focus();
               }}
             />

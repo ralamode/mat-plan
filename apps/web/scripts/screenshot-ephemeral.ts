@@ -45,6 +45,7 @@ import {
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   CLEAR_DAY_COPY,
+  RESTORE_ALL_ID,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
@@ -744,7 +745,9 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await dialog.waitFor();
     await dialog.getByRole('textbox').fill(CLEAR_DAY_CONFIRM_WORD);
     await dialog.getByRole('button', { name: CLEAR_DAY_COPY.action, exact: true }).click();
-    await page.getByRole('button', { name: CLEAR_DAY_COPY.restoreAll, exact: true }).waitFor();
+    // By id, not label: each width revisits the same day, so from the second capture an earlier clear
+    // is there too and the button truthfully reads "Restore 1 entry" rather than "Restore all".
+    await page.locator(`#${RESTORE_ALL_ID}`).waitFor();
   },
   /** FAM-1 7b-ii — the seeded program's "+ New workout", waiting for the editor's name field. */
   'workout-new': async (page) => {
