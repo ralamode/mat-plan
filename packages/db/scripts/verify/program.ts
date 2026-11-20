@@ -6,7 +6,6 @@ import {
   pickerEntryOf,
   trackingTypeSchema,
   existingItem,
-  matchableOption,
   ACTIVITY_TYPE_KEYS,
   addDays,
   localWeekday,
@@ -94,7 +93,7 @@ import { createProgram } from '../../src/writers/program/create-program';
 import { copyWorkout } from '../../src/writers/program/copy-workout';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { newItem } from '../../src/writers/program/new-item';
-import { catalogArmOption } from '../../src/queries/program/catalog-arm-option';
+import { catalogArmOption, matchableOption } from '../../src/queries/program/catalog-arm-option';
 import { seedCatalog } from '../../src/seed';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';

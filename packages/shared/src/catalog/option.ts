@@ -89,10 +89,14 @@ export type CatalogOption = {
  * entry lists them in (`equipmentInOrder`, `musclesInOrder`; spec K31). Aliases keep the entry's
  * order: search ranks by it.
  *
- * ⏳ **Until the catalog's fresh start the real picker's option is not always this** (spec K22):
- * the option read builds every catalog-arm row through `catalogArmOption`
- * (`packages/db/src/queries/program/catalog-arm-option.ts`, which owns the four-case table), with
- * this mapping's fields on the database row's identity.
+ * ⏳ **Until the catalog's fresh start the real picker's option is not always this** (spec K22,
+ * FAM-1 7a-ii). The database's global rows are still the old built-ins, and the web DAL lists
+ * every one. For a built-in the library has an entry for, on its slug, it takes the taxonomy,
+ * the supervision label and `hasInstructions` from this mapping, **and the name, tracking type,
+ * unit and bodyweight flag from the database row**, since the row is what a save and a log use;
+ * its aliases are the row's joined with the entry's. A built-in with no entry carries no taxonomy
+ * at all. After the fresh start every global row is a catalog row seeded from the const, and the
+ * option is this mapping again.
  */
 export function catalogOptionOf(entry: CatalogMovement, publicId: string): CatalogOption {
   return {

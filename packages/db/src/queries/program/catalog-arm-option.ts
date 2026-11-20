@@ -97,3 +97,19 @@ export function catalogArmOption(
     hasInstructions: fromLibrary?.hasInstructions ?? false,
   };
 }
+
+/**
+ * A read option as `existingItem` matches it: `isCatalog` from `owner`, and a catalog item's aliases
+ * only (a household item's typed name is never an alias). **The one mapping** `newItem` uses over the
+ * read's options, so it matches the fields the picker's search reads (CAT-3 K23). ⏳ The client's own
+ * copy (`movement-picker.tsx`'s `matchable`) predates this; folding it in is a follow-up.
+ */
+export function matchableOption<
+  O extends { readonly owner: 'catalog' | 'household'; readonly aliases?: readonly string[] },
+>(option: O): O & { readonly isCatalog: boolean; readonly aliases: readonly string[] } {
+  return {
+    ...option,
+    isCatalog: option.owner === 'catalog',
+    aliases: option.owner === 'catalog' ? (option.aliases ?? []) : [],
+  };
+}

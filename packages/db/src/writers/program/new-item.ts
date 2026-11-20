@@ -2,7 +2,6 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 
 import {
   existingItem,
-  matchableOption,
   MAX_HOUSEHOLD_ITEMS,
   movementSlug,
   newItemSchema,
@@ -14,6 +13,7 @@ import {
 } from '@mat-plan/shared';
 
 import { schema } from '../../client';
+import { matchableOption } from '../../queries/program/catalog-arm-option';
 import { movementOptions } from '../../queries/program/movement-options';
 import type { HouseholdScope } from '../../scope';
 import { setLocalLockTimeout, type Executor } from '../executor';
