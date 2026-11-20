@@ -435,3 +435,11 @@ A fresh reviewer that wrote none of the amendment (Opus 5.5). No P0.
 | P2-4       | The original (a2) was unedited                                                                          | **accepted**: "unchanged at the DTO"                                                                       |
 | P2-5       | Who owns A2-i conflicted                                                                                | **accepted**: lane P, with the decision cited (the spec owner updates the A2 row)                          |
 | P2-6, P2-7 | `:159-170`; the stale "326"                                                                             | **accepted**                                                                                               |
+
+### P11-ii-b as built (#767, 2026-11-20)
+
+- **Builder:** lane E, handed over by lane P with the board. Lane P reviewed.
+- **Q4's retirement of the stays-dark `describe`:** lane A is retired, so the board cleared it in lane A's place (2026-11-20).
+- **(b4) has no `db:verify` proof of its own.** `catalogTaxonomyOf`'s parse throws are vitest cases. What makes them unreachable is `verify/catalog.ts`'s S1 parity (both ways, pinned by mutation 321), and a one-way copy in `verify/program.ts` would only take 321's first failure (lane P's review, P1-2).
+- **The (b3) anchor is `weighted_dip`:** `incline_dumbbell_press` is not in the library at 587. Its equipment and its secondary muscles are both authored out of the vocabulary's order.
+- **(b5), measured:** 610 options (the 12 library slugs that are also old built-ins list once) are 208,104 bytes; 500 options are 173,463. Both have ceilings in `picker.test.ts`.

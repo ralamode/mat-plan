@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import {
   catalogOptionOf,
   equipmentInOrder,
-  equipmentSchema,
   movementNameKey,
   MUSCLE_ROLE,
-  muscleSchema,
   musclesInOrder,
   pickerEntryOf,
   trackingTypeSchema,
@@ -132,7 +130,6 @@ import {
   rolledBack,
   type VerifyContext,
   type VerifyTx,
-  db,
 } from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
@@ -1726,30 +1723,34 @@ async function verifyCatalogTaxonomyFromTables({ A_SCOPE }: VerifyContext): Prom
   await rolledBack(async (tx) => {
     await seedCatalog(asDb(tx), [WDIP]);
     const id = await idOf(tx, WDIP.slug);
+    // A different pattern (still non-null: a strength row needs one) and a new primary muscle, as well
+    // as new equipment and secondaries, so the library cannot be the source of any of them.
+    const pattern = WDIP.pattern === 'core' ? 'carry' : 'core';
+    assert.notEqual(
+      WDIP.primaryMuscle,
+      'lats',
+      'CAT-3 P11-ii-b (b1) anti-vacuity: lats is a new primary',
+    );
+    await tx.update(schema.movements).set({ pattern }).where(eq(schema.movements.id, id));
     await tx.delete(schema.movementEquipment).where(eq(schema.movementEquipment.movementId, id));
     await tx.insert(schema.movementEquipment).values({ movementId: id, equipmentCode: 'bench' });
-    await tx
-      .delete(schema.movementMuscles)
-      .where(
-        and(
-          eq(schema.movementMuscles.movementId, id),
-          eq(schema.movementMuscles.role, MUSCLE_ROLE.secondary),
-        ),
-      );
-    await tx
-      .insert(schema.movementMuscles)
-      .values({ movementId: id, muscleCode: 'biceps', role: MUSCLE_ROLE.secondary });
+    // Every muscle row goes first, then the new ones: the one-primary index is checked row by row.
+    await tx.delete(schema.movementMuscles).where(eq(schema.movementMuscles.movementId, id));
+    await tx.insert(schema.movementMuscles).values([
+      { movementId: id, muscleCode: 'lats', role: MUSCLE_ROLE.primary },
+      { movementId: id, muscleCode: 'biceps', role: MUSCLE_ROLE.secondary },
+    ]);
     const { taxonomy } = await optionOf(tx, WDIP.name);
     assert.deepEqual(
       taxonomy,
       {
         modality: WDIP.modality,
-        pattern: WDIP.pattern,
+        pattern,
         equipment: ['bench'],
-        primaryMuscle: WDIP.primaryMuscle,
+        primaryMuscle: 'lats',
         secondaryMuscles: ['biceps'],
       },
-      'CAT-3 P11-ii-b (b1): a catalog row’s equipment and muscles are its join rows, not its library entry',
+      'CAT-3 P11-ii-b (b1): a catalog row’s pattern, equipment and muscles are the tables’, not its library entry’s',
     );
   });
 
@@ -1795,18 +1796,9 @@ async function verifyCatalogTaxonomyFromTables({ A_SCOPE }: VerifyContext): Prom
     );
   });
 
-  // (b4) What makes a parse failure unreachable: every code the reference tables hold (which the join
-  // tables' foreign keys allow) parses through the shared vocabulary.
-  const equipmentCodes = await db.select({ code: schema.equipment.code }).from(schema.equipment);
-  const muscleCodes = await db.select({ code: schema.muscles.code }).from(schema.muscles);
-  assert.deepEqual(
-    [
-      equipmentCodes.filter((r) => !equipmentSchema.safeParse(r.code).success),
-      muscleCodes.filter((r) => !muscleSchema.safeParse(r.code).success),
-    ],
-    [[], []],
-    'CAT-3 P11-ii-b (b4): every equipment and muscle code a join row can hold parses through the vocabulary',
-  );
+  // (b4) is not re-proved here: `catalogTaxonomyOf`'s parse throws are its vitest cases, and what makes
+  // them unreachable (every code a join row can hold is in the shared vocabulary, both ways) is
+  // `verify/catalog.ts`'s S1 parity, which mutation 321 pins.
   console.log(
     '✓ CAT-3 P11-ii-b: a catalog row’s taxonomy is read from the tables, for listed ids only, in the vocabulary’s order',
   );

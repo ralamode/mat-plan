@@ -313,36 +313,44 @@ describe('(b5) the picker payload, measured', () => {
       hasInstructions: o.hasInstructions,
     } satisfies MovementOption;
   };
-  const oldRows = MOVEMENT_SEED_ROWS.map(
-    (r) =>
-      ({
-        publicId: r.publicId,
-        owner: 'catalog',
-        slug: r.slug,
-        name: r.name,
-        trackingType: r.trackingType,
-        unitDefault: r.unitDefault,
-        isBodyweight: r.isBodyweight,
-        group: pickerEntryOf(r.slug)!.group,
-        aliases: pickerEntryOf(r.slug)?.aliases ?? [],
-        taxonomy: null,
-        supervision: null,
-        hasInstructions: false,
-      }) satisfies MovementOption,
-  );
+  // An old built-in as the read gives it: the row's identity, and where the library has its slug
+  // (12 of them), the library's aliases, taxonomy and flags too. Those 12 are ONE row each, so the
+  // library entries on old slugs are not listed again below.
+  const oldSlugs = new Set<string>(MOVEMENT_SEED_ROWS.map((r) => r.slug));
+  const oldRows = MOVEMENT_SEED_ROWS.map((r) => {
+    const e = CATALOG_MOVEMENTS.find((x) => x.slug === r.slug);
+    const lib = e && asRead(0, e);
+    return {
+      publicId: r.publicId,
+      owner: 'catalog',
+      slug: r.slug,
+      name: r.name,
+      trackingType: r.trackingType,
+      unitDefault: r.unitDefault,
+      isBodyweight: r.isBodyweight,
+      group: pickerEntryOf(r.slug)!.group,
+      aliases: [...(pickerEntryOf(r.slug)?.aliases ?? []), ...(lib?.aliases ?? [])],
+      taxonomy: lib?.taxonomy ?? null,
+      supervision: lib?.supervision ?? null,
+      hasInstructions: lib?.hasInstructions ?? false,
+    } satisfies MovementOption;
+  });
   const bytesOf = async (options: MovementOption[]) => {
     vi.mocked(movementOptions).mockResolvedValueOnce(options);
     return Buffer.byteLength(JSON.stringify(await getItemPickerData()), 'utf8');
   };
 
   it('the real library plus the 35 old built-ins, and 500 options', async () => {
-    const real = [...CATALOG_MOVEMENTS.map((e, i) => asRead(i, e)), ...oldRows];
+    const library = CATALOG_MOVEMENTS.filter((e) => !oldSlugs.has(e.slug));
+    const real = [...library.map((e, i) => asRead(i, e)), ...oldRows];
     const five = Array.from({ length: 500 }, (_, i) =>
       asRead(i, CATALOG_MOVEMENTS[i % CATALOG_MOVEMENTS.length]!),
     );
-    // Measured 2026-11-20: 622 options, 210,162 bytes; 500 options, 173,463 (about 347 each). The
+    // Measured 2026-11-20: 610 options, 208,104 bytes; 500 options, 173,463 (about 347 each). The
     // ceilings leave about 15%: carrying each option's steps (rule 11, P16) would cross them many times.
-    expect(real.length).toBe(CATALOG_MOVEMENTS.length + MOVEMENT_SEED_ROWS.length);
+    // The 12 library slugs that are also old built-in slugs (back_squat … walking_lunge) list once.
+    expect(CATALOG_MOVEMENTS.length - library.length).toBe(12);
+    expect(real.length).toBe(library.length + MOVEMENT_SEED_ROWS.length);
     expect(await bytesOf(real), 'the real library and the old built-ins').toBeLessThan(240_000);
     expect(await bytesOf(five), '500 library options').toBeLessThan(200_000);
   });
