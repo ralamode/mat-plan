@@ -205,6 +205,11 @@ The 400-line target is for code a reviewer must read; each PR says below why its
 
 ### 12f PR 1: the unmounted components and the reads only they used (about 5,600 lines of code deleted; lane E builds it)
 
+**As built (lane E):** merged as #725 (2026-11-19): 28 whole files (5,484 lines) deleted by the plan's
+list, plus the forced edits to the token preview, the containment test and the strength-logging,
+programming and write-path guides. Beyond the plan's wording, `programming.md` also dropped invariants
+3b and 3e, whose only code (`day-role-schedule.ts`) is deleted; the A/B decision stays in ADR 0007.
+
 Waits for a turn in three guides. Starting before B2 merges is cleared by the board (2026-11-19), Q3, if no file
 overlaps B2's. 5,484 of its lines
 are 28 whole files with no importer left, which `tsc` proves. It holds only the edits the build
