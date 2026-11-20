@@ -1376,3 +1376,30 @@ describe('another phone’s Change over a draft that was not an edit (12c-iii fo
     expect(within(bench()).getByText(DAY_COPY.change.notSaved('35 lb × 8'))).toBeTruthy();
   });
 });
+
+describe('a failed save, then another phone’s Change to that entry', () => {
+  const failing = () => ({
+    amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }),
+  });
+  function changedElsewhere(plan: DayPlan, value: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = value;
+    return next;
+  }
+
+  it('no longer says "Still" the old number: the draft’s own line names what is stored now', async () => {
+    const control = mount(yesterdayHalfDone, { change: true, wrap: failing });
+    type(load(), '30');
+    await leave(load());
+    expect(within(bench()).getByText(DAY_COPY.change.failed('27.5 lb × 8'))).toBeTruthy();
+    expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    await act(async () => control.setPlan(changedElsewhere(control.plan, 35)));
+    expect(within(bench()).queryByText(/^Couldn’t save\./)).toBeNull();
+    expect(within(bench()).getByText(DAY_COPY.change.notSaved('35 lb × 8'))).toBeTruthy();
+    expect(load().value).toBe('30');
+    // Only a failed write counts as not saved; a typed draft never does.
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+});

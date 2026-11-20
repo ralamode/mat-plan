@@ -437,7 +437,9 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     program, and no fixture holds this: the day resolver's own proof does.
 26. **An id has one spelling after the parse: lower case** (contract change C25, from 6a-ii's
     review). Every id in the shapes, a public id or a client id, is `lowerCaseUuidSchema`
-    (`pieces.ts`): any uuid, handed back in lower case. Postgres reads `0193A2B4-…` and
+    (`pieces.ts`): any uuid, handed back in lower case. The app-wide `uuidSchema`
+    (`packages/shared/src/id.ts`) folds the case itself since the root fix, so the two are one
+    schema (`lowerCaseUuidSchema` is an alias, with no fold of its own); the shapes keep the contract's name, and the rule below still holds for every reader. Postgres reads `0193A2B4-…` and
     `0193a2b4-…` as one uuid and answers in lower case; `===`, a `Map` and a `Set` read them as
     two. So the "no two the same" checks (a workout's cards, a day's slots, a program order, a
     Put on's athletes) refuse one id written in two cases, and a replay under the other spelling
@@ -447,7 +449,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     place that must look at a refused draft, `saveWeek` deciding between `once_per_day` and
     `invalid`, asks `weekRepeatsAWorkout(draft)`, which folds the case itself; the fake does, and
     6b's writer is to. `id-case.test.ts` sweeps every schema that reads an
-    id and scans both files for the case-keeping schema; a schema added with an id belongs in its
+    id and scans both files for `uuidSchema` by name and for a bare `.uuid(`; a schema added with an id belongs in its
     table. Nothing changes for an id the app made (`newId`, `crypto.randomUUID` and Postgres all
     write lower case). A writer may still lower-case for itself; it is then doing nothing.
 27. 🔴 **A Change is judged in the unit the row was logged in, never the item's unit now**
