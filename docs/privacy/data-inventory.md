@@ -439,6 +439,12 @@ only way a notice about minors' health data is worth anything.
 > data; `movement_equipment` and `movement_muscles` are in the household graph through their movement,
 > but no writer makes a row for a household's own movement, so they hold reference data only once A2
 > seeds them; `movements.modality` holds nothing yet. No new processor, reader, export or retention.
+>
+> 🔴 **§1b / §4 re-read 2026-11-20 for `CAT-3` P11-ii-b** ([plan](../plans/cat-3-p11-ii-option-taxonomy.md)):
+> the program builder's picker now reads `movement_equipment` and `movement_muscles` for the library
+> rows it lists. Those are global rows (the CHECK and `movementIsCatalog()` hold it), so the read
+> carries reference data only, to the same members who already see the picker. No new category,
+> processor, export or retention.
 
 > 🔴 **§1a re-read 2026-11-17 for `PRIV-3` RC** ([plan](../plans/priv-3-rc-create-household.md)):
 > `household_members.clerk_user_id` gains a second writer, the operator-run `create-household-…`
@@ -498,8 +504,8 @@ quietly, and this is the mechanism that stopped it.
 
 Every household-reachable table carries `created_at`, `updated_at` and `deleted_at` (`schema.ts` →
 `timestamps`), and `deleted_at` is a **soft** delete — see §5. **Except** `movement_equipment` and
-`movement_muscles` (`CAT-3` A1), which carry `created_at` only. Nothing writes them yet: A3's catalog
-seed will write global rows by difference and delete them hard, and a household's own row (none
+`movement_muscles` (`CAT-3` A1), which carry `created_at` only. The catalog seed writes them for library
+movements only (`seedCatalog`, since A2-i); A3's seed will write global rows by difference and delete them hard, and a household's own row (none
 exist) is deleted hard with its movement (`runbooks.md` steps 10a, 10b).
 
 ✅ **The table set is proved, not only listed** (re-read 2026-11-17, `PRIV-3` PR 1). §1a's twenty-one

@@ -4,6 +4,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   foldMovementQuery,
   MOVEMENT_PICKER_ENTRIES,
+  MUSCLE_ROLE,
   pickerEntryOf,
   trackingTypeSchema,
   unitSchema,
@@ -16,7 +17,13 @@ import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../../writers/executor';
 import { movementInHousehold, movementIsCatalog, movementIsGlobal } from '../../writers/ownership';
-import { catalogArmOption, type CatalogArmOption, type CatalogArmRow } from './catalog-arm-option';
+import {
+  catalogArmOption,
+  catalogTaxonomyOf,
+  type CatalogArmOption,
+  type CatalogArmRow,
+  type CatalogTaxonomyRows,
+} from './catalog-arm-option';
 
 /**
  * One item the program builder's picker can offer. Structurally the web's `MovementOptionDTO`
@@ -40,8 +47,12 @@ const PICKER_SLUGS = Object.keys(MOVEMENT_PICKER_ENTRIES) as Array<
  *   `movementIsCatalog()`, inside the global and live conjuncts). Until the fresh start (CAT-3's R2)
  *   the 35 old built-ins stay listed (K22); a row with no library entry is listed bare, never dropped.
  *   Each row becomes its option through `catalogArmOption` (one mapping, its four cases tested there):
- *   the row's identity, the const's and the library's aliases joined, and the library's taxonomy,
- *   supervision label and `hasInstructions` by slug.
+ *   the row's identity, the const's and the library's aliases joined, and the library's supervision
+ *   label and `hasInstructions` by slug.
+ * - **A catalog row's taxonomy is the tables'** (P11-ii-b): `modality` and `pattern` from its row, its
+ *   equipment and muscles from `movement_equipment` and `movement_muscles`, read for the listed catalog
+ *   ids only (`catalogTaxonomyRows`) and assembled by `catalogTaxonomyOf`. An old built-in keeps the
+ *   library entry's taxonomy by slug, or none.
  * - **A household item a catalog row shadows is left out**: the resolver is global-first
  *   (`findOrCreateTypedMovement`), so a household row with a catalog slug is never the one a name
  *   reaches, and listing it would offer a second "Push-ups".
@@ -69,7 +80,15 @@ export async function movementOptions(
     trackingType: schema.movements.trackingType,
   };
   const catalog = await exec
-    .select(columns)
+    .select({
+      ...columns,
+      // The internal id keys the join reads below and never reaches an option ((a8)).
+      id: schema.movements.id,
+      // Rule 2's one predicate, selected, never re-derived as `modality !== null` here.
+      isCatalog: sql<boolean>`(${movementIsCatalog()})`,
+      modality: schema.movements.modality,
+      pattern: schema.movements.pattern,
+    })
     .from(schema.movements)
     .where(
       // The old built-ins and every library row (spec rule 2), INSIDE the global and live conjuncts:
@@ -106,7 +125,7 @@ export async function movementOptions(
     )
     .orderBy(asc(schema.movements.id));
 
-  const declared = (row: (typeof catalog)[number]) => ({
+  const declared = (row: (typeof own)[number]) => ({
     publicId: row.publicId,
     name: row.name,
     unitDefault: row.unitDefault === null ? null : unitSchema.parse(row.unitDefault),
@@ -120,6 +139,14 @@ export async function movementOptions(
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   };
   const bySlug = new Map(library.map((entry) => [entry.slug, entry]));
+  const catalogRows = catalog.filter((row) => row.isCatalog);
+  const tables = catalogTaxonomyOf(
+    catalogRows,
+    await catalogTaxonomyRows(
+      exec,
+      catalogRows.map((row) => row.id),
+    ),
+  );
   return [
     ...[...catalog]
       .sort(byName)
@@ -128,8 +155,47 @@ export async function movementOptions(
           { ...declared(row), slug: row.slug },
           pickerEntryOf(row.slug),
           bySlug.get(row.slug),
+          tables.get(row.id),
         ),
       ),
     ...[...own].sort(byName).map((row) => ({ ...declared(row), owner: 'household' as const })),
   ];
+}
+
+/**
+ * 🔴 **The join rows for the listed catalog ids, and only those** (CAT-3 P11-ii-b (b2)). Three reads:
+ * the equipment, the primary muscle and the secondaries (never one read ordered "by role"), in turn. Unparsed
+ * and unordered: `catalogTaxonomyOf` parses, orders, and throws on a row for an id not listed. No ids,
+ * no query. Exported so `db:verify` asserts its raw rows.
+ */
+export async function catalogTaxonomyRows(
+  exec: Executor,
+  ids: readonly number[],
+): Promise<CatalogTaxonomyRows> {
+  if (ids.length === 0) return { equipment: [], primaryMuscles: [], secondaryMuscles: [] };
+  const muscles = (role: (typeof MUSCLE_ROLE)[keyof typeof MUSCLE_ROLE]) =>
+    exec
+      .select({
+        movementId: schema.movementMuscles.movementId,
+        code: schema.movementMuscles.muscleCode,
+      })
+      .from(schema.movementMuscles)
+      .where(
+        and(
+          inArray(schema.movementMuscles.movementId, [...ids]),
+          eq(schema.movementMuscles.role, role),
+        ),
+      );
+  // One after another, never `Promise.all`: `newItem` passes its transaction's client, and pg warns on
+  // concurrent queries on one client (removed in pg 9); on the pool it would take three connections.
+  const equipment = await exec
+    .select({
+      movementId: schema.movementEquipment.movementId,
+      code: schema.movementEquipment.equipmentCode,
+    })
+    .from(schema.movementEquipment)
+    .where(inArray(schema.movementEquipment.movementId, [...ids]));
+  const primaryMuscles = await muscles(MUSCLE_ROLE.primary);
+  const secondaryMuscles = await muscles(MUSCLE_ROLE.secondary);
+  return { equipment, primaryMuscles, secondaryMuscles };
 }

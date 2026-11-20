@@ -152,7 +152,8 @@ describe('CollapsibleSection', () => {
   it('under StrictMode a part mounted busy still holds Collapse: its count survives the second run', () => {
     const strict = (busy: boolean) => <StrictMode>{shell({ busy })}</StrictMode>;
     const { rerender } = render(strict(true));
-    fireEvent.click(line()!);
+    // Busy on arrival opens it (nothing is ever busy behind a line), with Collapse held.
+    expect(line()).toBeNull();
     expect(inside()).not.toBeNull();
     expect(collapse()).toBeNull();
     rerender(strict(false));
@@ -173,5 +174,39 @@ describe('CollapsibleSection', () => {
   it('outside a section, useSectionBusy does nothing', () => {
     render(<Busy busy />);
     expect(inside()).not.toBeNull();
+  });
+});
+
+describe('the follow-up to 12c-iii (#761: nothing busy behind a line)', () => {
+  it('a folded part that turns busy opens by itself (the backstop)', () => {
+    const { rerender } = render(shell());
+    expect(line()).not.toBeNull();
+    rerender(shell({ busy: true }));
+    expect(line()).toBeNull();
+    expect(inside()).not.toBeNull();
+  });
+
+  it('busy while Collapse has focus, in a browser that drops it to the page: the name takes it', () => {
+    const { rerender } = render(shell());
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
+    // A browser blurs a focused button that turns disabled and focuses nothing (jsdom does not).
+    act(() => {
+      collapse()!.blur();
+      rerender(shell({ busy: true }));
+    });
+    expect(document.activeElement).toBe(nameSpan());
+  });
+
+  it('a tap elsewhere that moves no focus (Safari, plain text) ends it: a later hold moves nothing', () => {
+    const { rerender } = render(shell());
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
+    act(() => {
+      fireEvent.pointerDown(document.body);
+      collapse()!.blur();
+    });
+    rerender(shell({ busy: true }));
+    expect(document.activeElement).toBe(document.body);
   });
 });
