@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index ebd554ca..bc1d3a16 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -127,7 +127,7 @@ export async function movementOptions(
+     if (fa !== fb) return fa < fb ? -1 : 1;
+     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+   };
+-  const bySlug = new Map(library.map((entry) => [entry.slug, entry]));
++  const bySlug = new Map(CATALOG_MOVEMENTS.map((entry) => [entry.slug, entry]));
+   const pickerEntries: Readonly<
+     Record<string, (typeof MOVEMENT_PICKER_ENTRIES)[keyof typeof MOVEMENT_PICKER_ENTRIES]>
+   > = MOVEMENT_PICKER_ENTRIES;
