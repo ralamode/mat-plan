@@ -1,10 +1,10 @@
 diff --git a/packages/shared/src/id.ts b/packages/shared/src/id.ts
-index 3606d53e..a74ae81f 100644
+index 49a98d3b..fb76b61b 100644
 --- a/packages/shared/src/id.ts
 +++ b/packages/shared/src/id.ts
 @@ -26,4 +26,4 @@ export function newId(): string {
-  * ⚠️ A reader of the RAW input after the parse still sees the spelling it was sent
-  * (`deriveSupersets` in the strength action is the one that does, and folds for itself).
+  * ⚠️ A reader of the RAW input after the parse still sees the spelling it was sent, so it must fold
+  * for itself.
   */
 -export const uuidSchema = z.uuid().toLowerCase();
 +export const uuidSchema = z.uuid();
