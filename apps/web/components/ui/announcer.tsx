@@ -5,7 +5,7 @@
  *
  * `docs/tech-debt.md` records **four** copies of `<p role="status" className="sr-only">{message}</p>`
  * paired with transition tracking (the day page's former `SavedAnnouncer`, removed at
- * V1-24 3b-life; `bodyweight-amend.tsx`, `editable-set.tsx`, the `StrengthForm` island). PROF-1 a-r's rename form was going to be the fifth,
+ * V1-24 3b-life; `bodyweight-amend.tsx`; two in the strength form FAM-1 12f deleted). PROF-1 a-r's rename form was going to be the fifth,
  * which the UX panel flagged (U12), so the element gets a home before it multiplies rather than after.
  *
  * ⚠️ **It owns the REGION, not the trigger — and that split is deliberate.** The four copies differ in

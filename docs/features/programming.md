@@ -6,7 +6,6 @@ owns:
   - apps/web/lib/routine/
   - packages/db/src/queries/program-day.ts
   - apps/web/lib/programming/
-  - apps/web/app/p/[profileId]/program-reference.tsx
   - apps/web/app/p/[profileId]/routine/
 ---
 
@@ -47,14 +46,12 @@ flowchart TD
 
   subgraph read["read path"]
     QUERY["queries/program-day.ts<br/>programDayRows — ONE block by design"]
-    DALP["lib/dal/programming.ts<br/>BOLA + day-aware scoping"]
     ROUTINE["shared/routine.ts<br/>resolveRoutine(raw, membership, fallback)<br/>NULL → the NEUTRAL first-run routine"]
   end
 
   SEED --> SEEDFN --> BLOCK
-  BLOCK --> QUERY --> DALP --> CARD["program-reference.tsx<br/>Today's card"]
+  BLOCK --> QUERY --> USES["the export's live fallback<br/>+ the strength writer's frozen snapshot"]
   PROFILE --> ROUTINE --> TODAY["Today's section order"]
-  CARD -.->|"V1-19 scaffold:<br/>names + blank rows ONLY"| FORM["strength-form.tsx"]
 ```
 
 ## Files
@@ -64,33 +61,16 @@ flowchart TD
 | `shared/programming.ts`      | `PROGRAM_SEED` — the authored program as data, and its types (`programBlockSeedRowSchema.name` is trimmed and bounded by `PROGRAM_NAME_MAX`, as `program_blocks_name_length_check` bounds a block's name: every row (0029, validated by 0031)). The only author of prescriptions. **Also the limits of a program a household builds itself** (FAM-1 0a, plan D5): `PROGRAM_NAME_MAX`, `WORKOUT_NAME_MAX`, `SLOT_LABEL_MAX`, `MAX_WORKOUT_ITEMS`, `TARGET_REPS_MAX`, and `SLOT_LABEL_SUGGESTIONS` (suggestions only: a label never sorts a day, D8). App-input limits; the columns that carry them have CHECKs pinned to them, and the contract shapes in `packages/shared/src/program/` are bounded by them ([plan §4](../plans/fam-1-family-program.md)). 🔴 **`DAY_ROLES` spreads `LEGACY_SESSION_TYPES`, not `SESSION_TYPES`** (FAM-1 step 3, plan D6): `SESSION_TYPES` gained `workout`, which is a session type and never a day role, so neither `day_role` CHECK widens. `DAY_ROLE_LABELS` spreads `LEGACY_SESSION_TYPE_LABELS` for the same reason (spreading the full map would add a stray `workout` key at runtime, which TypeScript does not catch in a spread). `lib/programming/contract.test.ts` pins both. **`PROGRAM_BLOCK_KINDS`** (FAM-1 4a-i, ADR 0007 A2 §1): `legacy` (the seed's day-role block, the column default) and `template` (a block a household builds, set explicitly by the writer); `program_blocks_kind_check` is pinned to it. Until step 5b, the legacy reads (`programDayRows`, `householdHasProgram`) do not yet filter on it, which is safe only because nothing writes a template block before lane P. |
 | `shared/routine.ts`          | `RoutineConfig` + `resolveRoutine`. Every read zod-parses — the JSONB value is untrusted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `apps/web/lib/routine/`      | `ROUTINE_CATALOG` (membership + order), `NEUTRAL_DEFAULT_KEYS` (first-run), `resolveProfileRoutine` (the one pairing). `editor.ts` holds the routine editor's pure transforms; **its `moveUp` / `moveDown` are generic over the element since FAM-1 step 0b** (an adjacent swap whatever the list holds), so the program builder imports them for workout items instead of writing a second pair. `toggle` stays `RoutineItem`-specific: it matches by `key` and carries the `conditional` marker.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `queries/program-day.ts`     | `programDayRows`, shared so the DAL and `db:verify` run the identical query. Also feeds V1-13's `prescribed` column.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `lib/programming/`           | App-side contract + day tests.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `program-reference.tsx`      | Today's "here's your day" card — a collapsible native `<details open>` (V1-23 PR 3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `queries/program-day.ts`     | `programDayRows`, shared so the export's live fallback, the strength writer's frozen snapshot (`writers/prescribed-snapshot.ts`) and `db:verify` run the identical query. Feeds V1-13's `prescribed` column.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `lib/programming/`           | App-side contract tests (`contract.test.ts`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `app/p/[profileId]/routine/` | The V1-18 routine editor. 🔴 **UNLINKED since PROF-1 a-r** (acceptance criterion 11, M30): nothing in `apps/web/app` or `apps/web/components` links to `/routine`, so **nobody should "restore" the link** — ACT-1 replaces this editor, and the day-page slot it used now holds "→ Edit {name}". The route stays in code and still renders, exactly as it did before V1-23 PR 2, and `e2e/a11y.spec.ts` deliberately keeps scanning it so an unlinked-but-reachable page is still audited. A routine already saved keeps rendering and logging; a profile with none keeps `NEUTRAL_DEFAULT_KEYS`. ⚠️ **Its frame is `AppShell` since UI-5** — like every authenticated page, it no longer declares its own `<main>` and gets the nav rail at `lg`. It passes `current={{ athlete }}`, so the rail marks the athlete whose routine is open; the editor's own content is untouched. A page that reintroduces a bare `<main>` fails `app/pages-need-a-session.test.ts`. ⚠️ It was **linked** from Today between V1-23 and a-r, and its own docstring claimed otherwise until ONB-0 fixed it — a guide that was right while the code's comment was wrong.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Invariants
 
 1. **The plan is never a performed value.** A prescription's load is the coach's _cue_, and it must
-   not cross into the log as a logged number. V1-19's scaffold carries movement names and blank set
-   rows **only** — `ScaffoldRow` has no `load` field, so the type enforces it. This is the product's
-   one inviolable rule wearing a data-model hat.
-
-1b. **Today's card collapses natively, and its `<h3 id=…>` MUST stay inside the `<summary>`.** V1-23
-PR 3 made the card a `<details open>`. The wrapping `<section>` is labelled by that heading's id, so a
-heading moved into the collapsible body is **gone from the accessibility tree when the card is closed** —
-`aria-labelledby` dangles, axe raises `aria-valid-attr-value`, and `apps/web/e2e/a11y.spec.ts` (which now
-scans the card in **both** states) **fails the build**. Two more things not to re-litigate:
-
-- **Native, not React state, deliberately.** The rejected alternative was passing the card as `children`
-  into `StrengthForm`; that form remounts on `key={gen}` after every logged session, so a state-based
-  collapse would **re-expand on every log** — the exact complaint V1-23 exists to fix. `<details>` keeps
-  the card a Server Component, ships zero client JS, and the athlete's collapse survives a log.
-- ⚠️ **The "NOT a native `<details>`" note on the form's collapsed MOVEMENT cards does not generalise.**
-  Its reason is `required`-INPUT-specific (a hidden-but-present `required` input deadlocks the native
-  submit with an invisible error). This card has **no form controls at all**, and sits outside the
-  `<form>` — so a `<summary>` cannot submit either (a `<button>` trigger would need `type="button"`).
+   not cross into the log as a logged number. The frozen `prescribed_snapshot` is a rendering of the
+   cue kept beside the logged sets, never a logged value. This is the product's one inviolable rule
+   wearing a data-model hat.
 
 2. **`prescriptions.target_reps` and `prescription_targets.load` are verbatim TEXT, deliberately.**
    They hold `AMRAP`, `~145-150`, `3 (top triple, then 2 back-offs)`. GAP-3 typed the **log**, not the
@@ -108,12 +88,12 @@ scans the card in **both** states) **fails the build**. Two more things not to r
    `db:verify` proves the legacy output byte-identical with a newer template block on the same day,
    and mutations 55 and 56 keep it honest. ⚠️ So a household whose only programs are built ones reads
    "no program" in `householdHasProgram`. Since FAM-1 15 PR 2 the add-athlete form no longer reads
-   it (or `householdProgramsAnything`): it says every new athlete starts with no program.
+   it: it says every new athlete starts with no program.
 
    ⚠️ **This is why only ONE block is seeded.** Since 2026-09-24 that is the **Youth Daily Program**
    — the A/B rotation the kids actually run. The Kids S&C Foundation block it replaced is archived
    verbatim at [docs/programs/kids-sc-foundation-archived.md](../programs/kids-sc-foundation-archived.md)
-   and can be re-seeded when it returns. Seeding both would silently hijack one card with the other,
+   and can be re-seeded when it returns. Seeding both would silently hijack one program with the other,
    because the newest block per day-role wins.
 
    🔴 **Since FAM-1 step 1 (plan D10) only TEST databases are seeded with it.** `seed(db, { fixtures })`
@@ -122,38 +102,9 @@ scans the card in **both** states) **fails the build**. Two more things not to r
    database. CI's smoke, the preview migration and the local harnesses set it; `migrate.yml` does
    not, so **production keeps the block it already holds and is never re-seeded**.
 
-3b. **The day letter comes from the CALENDAR, and that is a decision.** `resolveDayRole` is
-epoch-day parity — every calendar day is A or B, alternating, with no rest day. Date parity, not
-a weekday map: seven is odd, so a weekday map repeats a letter across every Sat→Sun boundary.
-
-The program spec says the letter must come from the count of COMPLETED SESSIONS and warns that a
-calendar-derived letter doubles up box jumps after a missed day. **The maintainer accepted that deliberately**
-— the motivation model is streak and consistency. **Do not "fix" it without asking**; session
-indexing is YDP-1, blocked on SCHED-1. The tests pin the decision, so a "fix" turns them red.
-
 3c. **`strength_a`/`strength_b` are REUSED as Day A / Day B** — temporary. Proper `ydp_a`/`ydp_b`
 roles need a migration altering two `day_role` CHECKs; reusing them is what let the athletes log
 the same evening instead of on paper.
-
-⚠️ **Off the day page since V1-24 3b-page (2026-11-15):** the program card (`program-reference.tsx`)
-and the day-role label beside the date are not rendered, and the page no longer calls
-`getProgramDay` or `householdProgramsAnything`. 3d below describes the code as it stands until FAM-1 12f
-deletes it; `DayNav` keeps its optional `dayRoleLabel` prop.
-
-3d. **The day letter appears TWICE on Today, and the two are different things.** Since V1-23 the date
-line reads `Today · Fri, Sep 26 · Strength B` — that badge is **derived** page metadata, straight off
-`resolveDayRole`, and nobody asserts it. The `dayRole` **select** in `strength-form.tsx` is the
-athlete's **assertion**, the one that gets stored on the session (GAP-1 P0-1), and it stays where it
-is: after every movement card, immediately before submit. **Do not "deduplicate" them by moving the
-select into the header** — three V1-23 panels rejected exactly that. What makes the assertion real is
-the select's **position** (unavoidable on the way to "Log strength"), not its visibility; pre-filled
-in the header it is functionally the hidden input the P0-1 note forbids. `DAY_ROLE_LABELS` is the
-single label source for both, so the badge also inherits 3c's "Strength B" wording for Day B.
-
-3e. **`resolveDayRole` is TOTAL** — `(day: string) => DayRole`, never null, because the YDP has no rest
-day. Guards of the form `dayRole ? … : []` are dead code left over from the Mon/Wed/Fri map; V1-23
-removed the one in Today's `Promise.all`. Do not add new ones, and do not read a `null` branch as
-evidence that an unprogrammed day exists.
 
 4. **Every read is scoped by profile `public_id` and filters soft-deleted rows at every level** —
    block, prescription, target, movement. `db:verify` proves each one independently.
@@ -168,9 +119,8 @@ What changed is the _claim_, not the shape. The pre-TEN-1 chain authorized the *
 **profile's own** `household_id`; nothing checked that the **requester** belonged to that household,
 because there was no requester. Now the requester's household is asserted independently and the two
 must agree — so a profile whose `household_id` were ever repointed (a household transfer, a
-correction, an ONB-2 bug) can no longer read the new household's program unchecked. `lib/dal/programming.ts`
-resolves the scope with `getHouseholdScope()` and returns `[]` on a null one, so the page signature
-and the no-card-rendered behaviour are unchanged.
+correction, an ONB-2 bug) can no longer read the new household's program unchecked. Each caller resolves the scope first
+(the export DAL with `getHouseholdScope()`) and passes it in.
 
 Two things not to tidy:
 
@@ -202,15 +152,14 @@ is what catches one that got in another way (`TEN-2b`'s `23505` fallback does cr
 
 **What follows is the defect as it stood before `TEN-2b`**, kept because it is what the 1d proof
 asserts. `TEN-2c` closed the **denial** half; the read leak's residual closes at `TEN-2c-1`. The
-strength form writes `movements` from free text (`resolveSessionMovements` → `findOrCreateMovement` →
+strength log writes `movements` from free text (`resolveSessionMovements` → `findOrCreateMovement` →
 `packages/db/src/writers/movement-catalog.ts`), and prescriptions resolved by **slug** against a
 single global namespace — the same arbiter — so:
 
 - whichever household types a movement name **first** pins that slug's row permanently, with its own
   free text as `name`, `is_bodyweight: false` and no `unit_default` (all this function can write);
-- a prescription authored by **another** household on that slug then renders the first typist's
-  string on its own Today card, and the log form seeds its unit from the first typist's declaration —
-  which `ScaffoldRow` reads as _"the MOVEMENT's declaration, not the coach's"_.
+- a prescription authored by **another** household on that slug then carries the first typist's
+  string and declaration as its own movement's.
 
 **Proved, not suspected** (TEN-1 chunk 1d): `db:verify` → _"TEN-1 1d: the catalog verdict"_ does
 exactly this, end to end, through the real `findOrCreateMovement` and this query. **`TEN-2` is the
@@ -258,13 +207,12 @@ and complete; this is the one thing it cannot reach.
    `packages/shared/src/programming.ts`; the enforcement is a `profiles.kind` conjunct inside
    `programDayRows`' block subquery, which `isLiveProfile` has already pinned to this profile's row.
    An adult resolves no `blockId` and the query returns `[]` — the same "nothing programmed" shape
-   the DAL and page already handle.
-   **Guarded in the QUERY, not the page or the DAL**, because that one query feeds FOUR consumers:
-   the day card, the scaffold/prefill through `getProgramDay`, the export's live fallback, and —
-   since V1-22 chunk 2 — `prescribedSnapshotsFor`, which **freezes** this query's answer onto the
-   entry. 🔴 **Invariant 3's `id DESC LIMIT 1` rule and this kind conjunct are therefore write-path
+   its callers already handle.
+   **Guarded in the QUERY, not in a caller**, because that one query feeds two consumers: the
+   export's live fallback and — since V1-22 chunk 2 — `prescribedSnapshotsFor`, which **freezes** this
+   query's answer onto the entry. 🔴 **Invariant 3's `id DESC LIMIT 1` rule and this kind conjunct are therefore write-path
    concerns now**: what they decide is recorded permanently, not merely displayed.
-   Guarding the latter two separately would be two copies, and `db:verify` drives the query rather
+   Guarding each separately would be two copies, and `db:verify` drives the query rather
    than the DAL, so the copies would go unproven.
    ⚠️ **THE CONSEQUENCE TO UNDERSTAND BEFORE `a-r` SHIPS: flipping a kid to adult empties
    `prescribed` in every PAST month of their export, and flipping back restores it.**
@@ -286,28 +234,22 @@ and complete; this is the one thing it cannot reach.
    one drops the conjunct (an adult then reads the kids' program), the other inverts
    `PROGRAM_READ_KIND` (kids read nothing), because a missing conjunct and a wrong constant are
    different defects and one patch cannot catch both.
-   **The UI half** reads the same predicate on the day page: an adult gets no day-role label and a
-   `null` form default ("Not a programmed day"). When the household _does_ program and the athlete is
-   an adult, a muted line explains why the card is empty — `householdProgramsAnything()` exists only
-   to tell that state apart from "this household programs nothing", which says nothing because there
-   is nothing to explain.
    ⚠️ The shared predicate's docblock names **the adult in the household**, not a person — AGENTS.md's no-personal-names rule covers source comments too.
-   ⚠️ **`ASSIGN-READ` DELETES this invariant and both halves**, replacing it with per-athlete
+   ⚠️ **`ASSIGN-READ` DELETES this invariant**, replacing it with per-athlete
    assignments. It is a stopgap with a named end, not a rule of the domain.
 
 ## Traps
 
 - **"B is purely additive" is wrong.** `programDayRows` returns one block by design; an A/B program and
-  a weekday S&C block do not merge into one card. Cost a session to rediscover.
+  a weekday S&C block do not merge into one day. Cost a session to rediscover.
 
 - **Block _creation_ is hard-disabled in V1-22 scope A.** The day's block resolves by `id DESC LIMIT 1`,
-  so creating one would silently hijack every athlete's Today card.
+  so creating one would silently hijack every athlete's program.
 
 - **`.$type<RoutineConfig>()` is a compile-time cast only.** The stored JSONB is untrusted input; every
   read must `resolveRoutine` (which zod-parses). Treating the cast as validation is a hole.
 
-- **`programDayRows` selects `movements.name`, `movements.slug` AND `prescriptions.movement_id`.** The
-  Today card renders the name. ⚠️ _Corrected 2026-11-11:_ this bullet used to say the CSV keys
+- **`programDayRows` selects `movements.name`, `movements.slug` AND `prescriptions.movement_id`.** ⚠️ _Corrected 2026-11-11:_ this bullet used to say the CSV keys
   `prescribed` back to a logged movement by the **slug** (V1-13b) — V1-22 chunk 2 replaced that with
   the `movement_id` key, so the slug's remaining job here is the CSV's **`movement`** column and
   `name`'s is display. The three come from one query so no side converts. See the frozen-`prescribed`
@@ -315,13 +257,12 @@ and complete; this is the one thing it cannot reach.
 
 - **`programDayRows` also carries the MOVEMENT's declaration — and that is not the coach's
   prescription (V1-26 PR-A).** `movementIsBodyweight` / `movementUnitDefault` come off the
-  already-joined `movements` row and ride `ProgramDayDTO` → `ScaffoldRow` → the log form's Unit select.
+  already-joined `movements` row.
 
   ⚠️ **The line this query must never cross is `prescription_targets.load`.** The declaration says what
   KIND of number a movement is measured in; the prescription says WHICH number this athlete should
-  lift. `ScaffoldRow` has no `load` field at all, so "no authored load reaches an input" — AGENTS.md's
-  one inviolable product rule — is enforced by the **type**, not by care. `page.tsx` narrows
-  `ProgramDayDTO` at the boundary for the same reason. Widening either is a product decision, not a
+  lift. The query selects `load` only to render `prescribed`; it must never reach an input, which is
+  AGENTS.md's one inviolable product rule. Widening what it hands a form is a product decision, not a
   plumbing one.
 
 - **`prescribed` is FROZEN at log time — V1-22 chunk 2 closed the trap this bullet used to
@@ -344,7 +285,7 @@ and complete; this is the one thing it cannot reach.
   a 360px log row, and what makes "no vest row" mean "no vest" rather than "not logged".
 
 - **The routine editor's "Routine saved." is a snapshot, not a flag.** It records the saved payload on
-  the render where the action turns `ok` (`useOnActionSuccess`, shared with the log forms since V1-24
+  the render where the action turns `ok` (`useOnActionSuccess`, the shared success hook since V1-24
   PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
   read as persisted. Don't replace it with an effect or a boolean.
 
@@ -377,7 +318,6 @@ and complete; this is the one thing it cannot reach.
 | If you are…                      | Start here                                                                                                                                                                                |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | changing the authored program    | Test databases: `shared/programming.ts` `PROGRAM_SEED`, then re-seed with `SEED_FIXTURES=1`. Production is not re-seeded (D10): a `db:correct` correction until the program builder ships |
-| changing what Today shows        | `queries/program-day.ts` → `lib/dal/programming.ts` → `program-reference.tsx`                                                                                                             |
 | changing the day's section order | `shared/routine.ts` — and remember NULL is meaningful                                                                                                                                     |
 | adding a write path              | V1-22. Both panels required; these are the first config-mutating endpoints.                                                                                                               |
 
@@ -392,8 +332,8 @@ regression that tests will not.
 - [ADR 0005](../decisions/0005-programming-model.md) — workouts become data; the prescription is
   snapshotted on the logged record, not versioned
 - **[ADR 0007](../decisions/0007-scheduling-model.md) — the scheduling model.** Read it before touching
-  invariants 3, 3b or 3c: it decides that the one-block-by-design rule (invariant 3) becomes conditional
-  on an assignment row, that invariant 3b's calendar anchor moves into data **without** changing to
+  invariants 3 or 3c: it decides that the one-block-by-design rule (invariant 3) becomes conditional
+  on an assignment row, that the A/B letter's calendar anchor moves into data **without** changing to
   session-indexing, and that invariant 3c's "temporary" `strength_a`/`strength_b` reuse resolves by
   **naming** (they become the authored workouts' slugs) rather than by a CHECK migration. Nothing in it
   has shipped — it is a decision, and `SCHED-1` implements it.
