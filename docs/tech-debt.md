@@ -31,6 +31,25 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   is a new restriction, with a false-positive risk (a writer handed to a transaction wrapper).
 - **Severity:** low.
 
+### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
+
+- **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at
+  `MAX_HOUSEHOLD_ATHLETES` (25). Specs that add an athlete (`athletes.spec.ts`,
+  `form-before-hydration.spec.ts`, `bodyweight-receipt.spec.ts`, `day-navigation.spec.ts`,
+  `clear-day.spec.ts`, the program-builder specs and others) now spend about 22 of those slots on a
+  fresh run, as lane C counted, and archiving frees none. A retried spec re-adds its athletes, so
+  with about 3 slots left a couple of retries in one run reach the cap. Then `createProfile` answers
+  `full`, and the retry fails looking like the feature under test broke.
+- **Impact:** test-only, but it turns flakes into misattributed failures, and every new add-athlete
+  spec shrinks the margin.
+- **The fix, one of:**
+  - raise the e2e household's cap through the fixture or seed: a test-only household limit, never
+    the production `MAX_HOUSEHOLD_ATHLETES`;
+  - or have specs reuse athletes: one shared per-run athlete per need, created once, instead of one
+    per test.
+- **Trigger:** the next spec that adds an athlete must pick one of the two.
+- **Severity:** low (test-only; the suite fits today).
+
 ### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
 
 - **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
@@ -257,8 +276,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   recorded reasons (a layout cannot read the pathname, cannot pass data to children, and uncached
   data in one blocks navigation). The other option — a route group giving `/p` its own boundary and
   dropping the day-subtree fallback — trades the skeleton away on a slow connection.
-- **Where it belongs:** `PICK-1` PR 4 adds the third grid track and is the next PR to touch this
-  seam; the plan's § For PR 4 is the place to settle it.
+- **Where it belongs:** no PR is scheduled for it now. `PICK-1` PR 4 was to mount into the strength
+  form, which FAM-1 12f deleted (#725), so settle it in the next PR that touches the day page's
+  `loading.tsx` or `AppShell`'s grid.
 
 ### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
 

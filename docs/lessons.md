@@ -175,6 +175,10 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   smoke; the next push skipped it. Every label check in `ci.yml` reads the payload. → **After adding a
   label, push** (an empty commit is fine). Found by DX-5(b)'s panel before its own label shipped
   ([plan](./plans/dx-5b-local-gates-in-ci.md)).
+  ⚠️ **Labelling at creation is the same trap.** `gh pr create --label` applies the label AFTER the
+  `opened` event, so the first run never sees it (#747 and #750, 2026-11-20, both red on the
+  feature-guide guard while carrying `docs-skip-feature-map`). Push once more after creating, or
+  prefer a one-line guide touch over the skip.
 
 - **A stacked PR reports `MERGED` and its code is nowhere on `main`.** → GitHub merges a PR into
   whatever its **base** is, and a stacked PR's base is the parent's branch. Merge the parent first and
