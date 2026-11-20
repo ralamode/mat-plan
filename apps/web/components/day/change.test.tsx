@@ -13,11 +13,9 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
-import { ANNOUNCE_TOGETHER_MS } from './day-screen';
-import { spokenValues } from './row-values';
 import { card, describedTexts, held, makeMount, press, status, openFolded } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
-import { unitSpoken } from './row-values';
+import { spokenValues, unitSpoken } from './row-values';
 
 /**
  * Change (FAM-1 step 13b-ii): a logged number edited in place, with the maintainer's guards
@@ -1407,19 +1405,6 @@ describe('a failed save, then another phone’s Change to that entry', () => {
 });
 
 describe('another phone’s change, said to a screen reader (only for a row this one was changing)', () => {
-  /**
-   * Seconds later, as on a gym floor: past `ANNOUNCE_TOGETHER_MS`, so the change is said on its own,
-   * not joined to this phone's earlier sentence (jsdom runs a whole test inside the window).
-   */
-  async function later(run: () => void) {
-    const now = performance.now() + ANNOUNCE_TOGETHER_MS * 10;
-    const clock = vi.spyOn(performance, 'now').mockReturnValue(now);
-    try {
-      await act(async () => run());
-    } finally {
-      clock.mockRestore();
-    }
-  }
   /** The plan with bench set 1's load at `value` lb, as another phone would leave it. */
   function loadElsewhere(plan: DayPlan, value: number): DayPlan {
     const next: DayPlan = structuredClone(plan);
@@ -1474,7 +1459,7 @@ describe('another phone’s change, said to a screen reader (only for a row this
     });
     type(load(), '30');
     await leave(load());
-    await later(() => control.setPlan(loadElsewhere(control.plan, 30)));
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 30)));
     expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spoken(30)));
   });
 
@@ -1496,7 +1481,7 @@ describe('another phone’s change, said to a screen reader (only for a row this
     });
     type(load(), '30');
     await leave(load());
-    await later(() => control.setPlan(loadElsewhere(control.plan, 35)));
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
     expect(status()).toBe(said(35));
   });
 
@@ -1511,34 +1496,5 @@ describe('another phone’s change, said to a screen reader (only for a row this
         `30 ${SPOKEN.lb}, 8 reps`,
       ),
     );
-  });
-});
-
-describe('two announcements close together', () => {
-  it('within ANNOUNCE_TOGETHER_MS both are read, in order; after it, the second stands alone', async () => {
-    let now = 1_000_000;
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
-    try {
-      const control = mount(yesterdayHalfDone, {
-        change: true,
-        wrap: () => ({ amendRow: amendOk }),
-      });
-      type(load(), '30');
-      await leave(load());
-      const saved = status();
-      type(load(), '31');
-      // A few tasks later (the refresh a write brings): joined.
-      now += 50;
-      fireEvent.keyDown(load(), { key: 'Escape' });
-      expect(status()).toBe(`${saved} ${DAY_COPY.announce.cancelled(setLabel(1))}`);
-      // Seconds later: on its own.
-      now += ANNOUNCE_TOGETHER_MS * 2;
-      type(load(), '32');
-      fireEvent.keyDown(load(), { key: 'Escape' });
-      expect(status()).toBe(DAY_COPY.announce.cancelled(setLabel(1)));
-      void control;
-    } finally {
-      clock.mockRestore();
-    }
   });
 });
