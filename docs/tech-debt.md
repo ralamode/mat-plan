@@ -15,6 +15,20 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
+
+- **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
+  reuses `readProgramList` to tell a foreign program id from the household's own. That read is 2 +
+  one query per live athlete (`athletesOnPrograms`), up to 27, and loads names and assignments only to
+  keep the ids. A one-query id lookup beside `programIn` in `packages/db/src/queries/program/exists.ts`
+  is lane P's file, so 15c PR 2 did not add one.
+- **Impact:** it runs on the writer's `invalid`, which is also its routine stale-list answer (a put on
+  or take off elsewhere, midnight), and is awaited before the refusal returns. Small at household scale.
+- **The fix:** lane P adds `programIdsIn(exec, scope, ids)` (one `select public_id … where
+liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `reportOrderProgramMiss`
+  changes.
+- **Severity:** low.
+
 ### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
 
 - **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in

@@ -4,7 +4,7 @@
   writer runs), today from the active zone, then the new `reorderHouseholdPrograms`, which calls lane
   P's `reorderPrograms` inside the household scope. A foreign athlete id is reported once
   (`reportAthleteMiss`); an `invalid` order reports the first program id that is not the
-  household's (`reportOrderProgramMiss`, one read), and a stale list of its own programs reports
+  household's (`reportOrderProgramMiss`, the Programs list read once), and a stale list of its own programs reports
   nothing. No page passes the action yet, so Program order stays hidden until 15c PR 3; it is a
   public endpoint from this merge, and its boundary matrices and foreign-id test land with it.
   `refreshAssignment` moves, unchanged, to `lib/dal/program/revalidate.ts`, so the builder and the
