@@ -2,12 +2,13 @@
 
 > Backlog: [plan.md](../plan.md) row `CAT-3`. Spec:
 > [cat-3-movement-library](../specs/cat-3-movement-library.md), criteria **E6**, **P12** and **F1**,
-> rules 4 and 6, decisions **K22 to K24**, and the rows **A3**, **Post-R2 cleanup** and **F1** of
+> rules 4, 6 and 7, decisions **K22 to K24**, and the rows **A3**, **Post-R2 cleanup** and **F1** of
 > "Chunks, in order". Branch for this plan: `docs/cat-3-after-the-fresh-start-plan`.
 >
-> **Draft, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
-> (`b6ef8287`) and from notes sent by lane B, lane P and the Native Scaling thread. Not yet
-> panelled. The maintainer approves it before any of its PRs is built.
+> **Draft 2, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
+> (`b6ef8287`) and #770's branch. Panel round 1 (two lenses) and the feasibility checks of lane B,
+> lane P and the Native Scaling thread are applied; the log is at the end. The maintainer approves
+> it before any of its PRs is built.
 
 ## Where this sits
 
@@ -18,10 +19,12 @@
 - **Before it:** A2-ii (the seed's switch, #770), R1 (the runbook, #710) and R2, the fresh start,
   which is a production run by the maintainer and not a code PR. R2's own close-out PR is planned in
   [priv-3-fresh-start-prep.md](./priv-3-fresh-start-prep.md) (D5) and is not repeated here.
-- **Nothing here is on the trial week's path.** After the fresh start production holds no old
-  built-in, so none of the interim code can run there, and a family sees no difference before or
-  after any PR below. The week of real use starts when the fresh start's checks are clean; these PRs
-  run beside it.
+- **What a family sees.** PR 1 and PR 3 change nothing a family sees. PR 2 changes one thing: a
+  typed name that the server already has is added with its unit. PR 4 can change a movement's name,
+  equipment or muscles on the day page and in exports, when its entry was corrected. So the week of
+  real use does not wait for PR 1 to 3, and PR 4 waits for it (Q5).
+- **Until PR 4, an edit to a library entry never reaches production.** The seed inserts and does
+  nothing on a conflict.
 - _Roadmap alignment (2026-11-20): advances `CAT-3`. It adds no column, scope or authority, and no
   feature. Checked against the private roadmap; nothing to add here._
 
@@ -32,59 +35,74 @@ the code on `main` gives a different order.
 
 1. **The interim code cannot go while a test database still holds an old built-in.** After A2-ii a
    fixtures database is seeded with the test library and then with the 35 old built-ins
-   (`seedLibraryOf('fixture')`, `legacyMovements`). The e2e specs lean on them:
-   `program-builder.spec.ts:139` picks "Box Jump" and "Pull-Up", and `day-page.spec.ts:218` reads
-   "Inverted Rows". So the picker's interim paths are still exercised on every CI run after the fresh
-   start, and deleting them first would break the specs or leave old rows that nothing lists.
+   (`seedLibraryOf('fixture')`, `legacyMovements`). `program-builder.spec.ts:139` picks "Box Jump"
+   and "Pull-Up", six items of the fixture world resolve to old built-ins by name, and more than
+   twenty `db:verify` proofs read one. So the picker's interim paths are exercised on every CI run
+   after the fresh start. Deleting them first would break those, or leave old rows nothing lists.
 2. **So F1 is split in two, and its first half goes first.** F1-i makes a test database hold what
    production holds: library rows and a household's own rows, with no old built-in. Then the
-   clean-up can delete the interim code with nothing left to exercise it. F1-ii deletes the old list
-   itself, and still waits for the fresh start's second check, as the spec says.
-3. **P12 lands with the clean-up**, as the row allowed ("which may be this one"). The old groups'
-   last runtime reader is the option read, which the clean-up rewrites anyway.
+   clean-up deletes the interim code with nothing left to exercise it. F1-ii deletes the old list
+   itself, and waits for more than the spec asked (PR 3's gates).
+3. **P12 lands with the clean-up**, as the row allowed ("which may be this one").
 4. **The clean-up is bigger than "four markers".** `main` has nine `TODO(CAT-3 chunk R…)` markers in
-   seven files, and about twenty more interim lines marked only with ⏳. The lists are in PR 2.
+   seven code files, and 39 lines marked ⏳, twelve of which name the fresh start, chunk R or F1.
+5. **F1's row asked for "after B3 and FAM-1's lanes, so no lane is churned mid-step".** Both are
+   done. PR 1 still changes every lane's fixtures database, so the board announces it before merge.
 
 ## The PRs
 
-| PR                                | What                                                                                                                                                                                                                                                   | Waits for                                                                                | Built by                                                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **PR 1 · F1-i**                   | Test databases hold the library only: the fixtures seed stops writing the 35 old built-ins, the legacy program fixture is rebuilt on test-library movements, and the specs use test-library names                                                      | The fresh start, and its first check (R4) clean                                          | Seed and proofs: assigned by the maintainer (Q2). Test library: the contract owner. Specs: their owners    |
-| **PR 2 · the clean-up, with P12** | The interim code goes: the picker's handling of an old built-in, the option read's old-built-in half, `outsideWithoutData`, and the legacy groups                                                                                                      | PR 1                                                                                     | One PR on the contract owner's branch, with lane B's and lane P's commits added from local branches off it |
-| **PR 3 · F1-ii**                  | The old list goes: `MOVEMENT_SEED_ROWS`, `MOVEMENT_SEED_PUBLIC_IDS`, the fresh start's two one-shot corrections, the report's fresh-start lines and the runbook's one-time section. `docs/spec.md` §4 and the architecture page are brought up to date | PR 2; the fresh start's second check clean; production's seed unable to write an old row | The contract owner, with Native Scaling's commits for the corrections and the runbook                      |
-| **PR 4 · A3**                     | The seed keeps a stored library row equal to its entry, writing only what differs                                                                                                                                                                      | PR 3 is not required; the fresh start and FAM-1 12f (done) are                           | Assigned by the maintainer (Q2)                                                                            |
+| PR                                | What                                                                             | Waits for                                                                         | Built by                                                                                                   |
+| --------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **PR 1 · F1-i**                   | Test databases hold the library only                                             | The fresh start, and its first check (R4) clean                                   | Seed and proofs: lane P (Q2). Test library: the contract owner. Specs: their owners                        |
+| **PR 2 · the clean-up, with P12** | The interim code and the legacy groups go                                        | PR 1                                                                              | One PR on the contract owner's branch, with lane B's and lane P's commits added from local branches off it |
+| **PR 3 · F1-ii**                  | The old list, the fresh start's two one-shot corrections and its report lines go | PR 2, and the four gates in its section                                           | The contract owner, with Native Scaling's commits for the corrections and the runbook                      |
+| **PR 4 · A3**                     | The seed keeps a stored library row equal to its entry                           | The fresh start; the trial week's end, or the maintainer's go (Q5). Not PR 1 to 3 | Lane A when it restarts (Q2)                                                                               |
 
-**Count: four PRs.** A3 may split in two (the row update, then the join rows) if it passes about
-600 lines; the plan allows that split and no other. The earlier estimate was "about six".
+**Count: four PRs, none split.** A3 is one PR: a row-only half would leave names updated and
+equipment stale in production. The earlier estimate was "about six". PR 1 and PR 4 both edit the
+seed and `verify/catalog.ts`; whichever lands second rebases.
 
 ## PR 1 · F1-i: test databases hold the library only
 
 **Why first.** It makes CI test the state production is in after the fresh start.
 
-- **The fixtures seed.** `seedLibraryOf('fixture')` loses `legacyMovements`, and the fixtures-side
-  insert of `MOVEMENT_SEED_ROWS` goes (`packages/db/src/seed.ts`, as #770 leaves it). The const
-  itself stays until PR 3: the fresh start's second check and step 5 still read
-  `MOVEMENT_SEED_PUBLIC_IDS`.
-- **The legacy program fixture.** `PROGRAM_SEED` (`packages/shared/src/programming.ts:295`) names
-  old built-ins by slug, and `seedProgram` throws on an unknown slug. It is rebuilt as a generic
-  block over test-library slugs, which is F1's "a generic program built from `CATALOG_FIXTURE`". It
-  stays a fixture of the legacy tables, which the export (`apps/web/lib/dal/export.ts:73`) and the
-  legacy strength writer still read; retiring those is `LEGACY-1`, not this plan.
-- **The specs.** The two that name an old built-in change to names the test library has:
-  `program-builder.spec.ts` (two items, three places) and the comment in `day-page.spec.ts:218`. No
-  old name is added to the test library for a spec's sake (Q3).
-- **The fixture world.** Its 26 items are the accepted prototype's and do not change. Today the
-  seed resolves each by name; the four that the test library also names become library rows on a
-  fixtures database, and the other 22 are the household's own. That already holds after #763.
-- **Proofs to re-cut** (lane P's list): the A2 count `{legacy: 35}`; `verify.ts`'s TEN-2
-  discriminators (`isFixtureLibraryRow`); `(a2)` in `verify/program.ts:1892-1920`, "every old
-  built-in is still listed", which becomes "a fixtures database holds no old built-in". The TEN-2c
-  legacy-slug shadow count, B4 and mutation 329 stay until PR 3.
+- **The fixtures seed.** `legacyMovements` is **deleted** from `SeedLibrary`, not set to false, and
+  the fixtures-side insert of `MOVEMENT_SEED_ROWS` goes. The const itself stays until PR 3. Spec E4's
+  "until F1" becomes "until F1-i".
+- **The legacy program fixture, in the same commit** (`seedProgram` throws on an unknown slug).
+  `PROGRAM_SEED` (`packages/shared/src/programming.ts:295`) is rebuilt as a generic block over
+  test-library slugs and **renamed `LEGACY_PROGRAM_FIXTURE`**, so F1's "nothing imports
+  `PROGRAM_SEED`" holds as written. It stays a fixture of the legacy block tables, which the export
+  (`apps/web/lib/dal/export.ts:73`, through `programDayRows`) and the legacy strength writer still
+  read; retiring those is `LEGACY-1`. No app code is typed on the old slugs.
+- **The fixture world's items.** Its 26 items are the accepted prototype's and do not change. On a
+  fixtures database today 4 resolve to test-library rows, 6 to old built-ins (Push-ups, Pull-up,
+  Hollow-body hold, Inverted row, KB swings, Box jump) and 16 are the household's own. After PR 1 it
+  is 4 and 22: those six become the household's items under the world's own names.
+- **The specs.** `program-builder.spec.ts` (two items, at `:139`, `:168`, `:192`) uses test-library
+  names; the comment at `day-page.spec.ts:218` is corrected. No old name is added to the test
+  library for a spec's sake (Q3).
+- **Proofs and tests re-cut here**, because each needs an old built-in on a fixtures database:
+  - `verify.ts`: `:655-672` (the counts), `:3870-3922` (the old program's block), `:5959` (TEN-1
+    1d), `:6703-6840` (TEN-2a, TEN-2c membership), `:6762-6766`, `:6872-6880` (TEN-2b), and the
+    TEN-2c guard at `:7100-7120`, which says "the seed restores it" and no seed does any more.
+  - `verify/schema.ts:170-290`, `:362`; `verify/seed.ts:170-175`, `:317`; `verify/catalog.ts:479`,
+    and its "one legacy `sled_push` before the seed" pin (`:575-601` on `main`).
+  - `verify/program.ts`: `(a2)` at `:1892-1920`, which becomes "a fixtures database holds no old
+    built-in"; `(a3)` at `:2022`; `:2144`; FAM-1 6a-iii-a at `:2164-2210`, group, alias and
+    `box_jump` asserts included; `:3703`, `:4156`, `:4233`. After this PR none of them reads
+    `MOVEMENT_PICKER_ENTRIES`.
+  - `apps/web/lib/programming/contract.test.ts:145-205`.
+  - Mutations: 45, 326, 327 and 329, which patch the `PROGRAM_SEED` line of `seed()` and prove
+    production's seed writes no program or household; 517 and 598, which need the legacy insert (598
+    retires with `legacyMovements`); 602.
 - **Acceptance.**
   1. After `seed({ fixtures: true })` on a fresh database, no global movement fails
      `movementIsCatalog()`.
   2. The whole e2e suite passes with no old built-in's name in any spec.
-  3. `db:verify` and `db:mutate` pass, with the re-cut proofs each shown to fail on its mutation.
+  3. `db:verify` and `db:mutations` pass, and each re-cut proof is shown to fail on its mutation.
+  4. `seedLibraryOf('catalog')` and production's branch of `seedReference` are unchanged (the diff
+     is shown in the PR), and #770's equality pins still pass.
 
 ## PR 2 · the clean-up, with P12
 
@@ -92,61 +110,71 @@ One PR, because removing `outsideWithoutData` from the contract breaks the picke
 the same compile. It is opened on the contract owner's branch; lane B and lane P add their commits
 from local branches off it, as FAM-1's contract changes C32 and C35 did.
 
-**The check that it is complete:** in the files below, neither `TODO(CAT-3 chunk R` nor `⏳` is left,
-except a ⏳ that names another step. No re-tagging PR is needed first.
+**The check that it is complete:** in the files below and in `docs/features/`, neither
+`TODO(CAT-3 chunk R` nor a `⏳` that names the fresh start, chunk R or F1 is left.
+(`supersets.ts`'s `.group` is the superset's group, an unrelated field.)
 
 **The contract owner's commits.**
 
 - `packages/shared/src/movement-search.ts`: `outsideWithoutData` (`:501`, with `:504`, `:522`,
   `:583`, `:600`), and its tests in `catalog/filters.test.ts` and `catalog/search.test.ts`.
-- `packages/shared/src/catalog/option.ts`: the ⏳ note.
-- P12: `packages/shared/src/movement-picker-catalog.ts` is deleted with its test:
-  `MOVEMENT_PICKER_ENTRIES`, `MOVEMENT_PICKER_GROUPS` and its type, schema and labels,
-  `MOVEMENT_PICKER_ALIASES`, `movementPickerSlugsByGroup`, `pickerEntryOf`. `RECENT_MOVEMENTS_LIMIT`
-  has no reader but its own test, so it is deleted and not moved (the spec said "moves to
-  `movement-search.ts`").
+- `packages/shared/src/catalog/option.ts`: the ⏳ note. `program-contract.md:722`: its ⏳ line.
+- **P12:** `packages/shared/src/movement-picker-catalog.ts` is deleted with its test, and its
+  re-export at `packages/shared/src/index.ts:26`. `RECENT_MOVEMENTS_LIMIT` has no reader but its own
+  test, so it is deleted and not moved. The tests that import `MOVEMENT_PICKER_ALIASES` lose those
+  cases: `catalog/catalog.test.ts:8`, `:455`; `movement-search.test.ts:5-18`;
+  `program/existing-item.test.ts:3`, `:145-152`.
 - `apps/web/app/design/program/picker-options.ts`: `interimGroupOf` goes with `group`.
+- **A shape change (Q6): `newItem`'s success answer gains `owner`, `unitDefault` and
+  `isBodyweight`** (`packages/shared/src/program/actions.ts:113-120`, the schema at
+  `program-shapes.ts:63`, the preview's fake). Additive. It is what lets the picker's fix below work
+  without a new read.
 
-**Lane B's commits** (the picker; lane B's own files).
+**Lane B's commits** (the picker; lane B's own files and guides).
 
 - K24's "Not sorted yet" section: `movement-picker.tsx:1750-1770`, `browse-view.ts:53`, `:69`,
   `:109-118`, `:141`, `:188`; its copy, `movement-picker-copy.ts:88`.
 - The option type `BuiltInWithoutLibrary` (`movement-option.ts:76-80`) and the DTO's `group`
-  (`:63`); `rowMeta`'s branch (`movement-picker.tsx:268-270`); `statusAlreadyListedNoData`
-  (`:681-683`); `outsideLine`'s `bare` parameter (`movement-picker-copy.ts:187-212`, `:226`,
-  `:285`); the built-in copy in `builder-text.ts:517`.
+  (`:61-65`); in `movement-picker.tsx`, `rowMeta`'s branch (`:268-270`), `:528-533`, the
+  `tagNoLibraryData` branch (`:566`) and `statusAlreadyListedNoData` (`:681-683`); `outsideLine`'s
+  `bare` parameter (`movement-picker-copy.ts:187-212`, `:226`, `:285`); `builder-text.ts:517`.
+  `hasLibraryData` stays: it is true of a household's own item too.
 - **A fix, not a deletion:** `item-picker.tsx:283-295`, `made()`. It builds an item the server
-  answered as existing with no unit. After this PR that case is a library row the list did not hold
-  (another phone's seed, or a stale list), so `made()` takes the answer's owner and unit, or
-  re-reads. **Its own test:** Enter on a typed name that matches only a catalog row not in the
+  answered as existing, with no unit. It now maps the answer's `owner`, `unitDefault` and
+  `isBodyweight`. **Its own test:** Enter on a typed name that matches only a catalog row not in the
   list selects that row with its unit.
-- The tests that only make sense before the fresh start (lane B's list): in
-  `movement-picker.test.tsx`, `movement-picker-filters.test.tsx`, `browse-view.test.ts` and
-  `movement-picker-copy.test.ts`; and `withoutLibraryData` in `test/movement-picker-fixtures.ts`.
+- The tests that only make sense before the fresh start, in `movement-picker.test.tsx`,
+  `movement-picker-filters.test.tsx`, `browse-view.test.ts` and `movement-picker-copy.test.ts`; and
+  `withoutLibraryData` in `test/movement-picker-fixtures.ts`.
+- Guides: `movement-picker.md:6` drops the deleted file from `owns:` (`guides:check` fails on a
+  path that does not exist), and its ⏳ lines at `:48`, `:148`, `:150`, `:282`, `:343`;
+  `program-builder.md:437`.
 - No UX panel beyond one reviewer: nothing new appears, and a section that is always empty goes.
 
 **Lane P's commits** (the read).
 
 - `movement-options.ts`: `PICKER_SLUGS` (`:36-38`), the first half of
-  `or(inArray(slug, PICKER_SLUGS), movementIsCatalog())` (`:95`), and `pickerEntryOf(row.slug)`
+  `or(inArray(slug, PICKER_SLUGS), movementIsCatalog())` (`:99`), and `pickerEntryOf(row.slug)`
   (`:156`). The catalog arm becomes `movementIsCatalog()` alone.
 - `catalog-arm-option.ts`: cases 1 and 2 of the four-case table (an old built-in, with and without
-  an entry), the `fromLibrary` taxonomy fallback (`:178-188`), `taxonomy: … | null`, the
-  `pickerEntry` parameter and `joinAliases`' const half. Case 4, a catalog row with no entry in the
-  library given, stays.
+  an entry), the `fromLibrary` fallback (`:178-188`), the `pickerEntry` parameter, `group` and its
+  type (`:12-13`, `:43-44`, `:175`) and `joinAliases`' const half. `tables` becomes required, with a
+  row that has no join rows handled, so `taxonomy` is never `null`. Case 4, a catalog row with no
+  entry in the library given, stays.
+- `newItem` returns the three new fields.
 - `apps/web/lib/dal/program/picker.ts`: the `BuiltInWithoutLibrary` arm (`:24`, `:55-63`).
-- Proofs: FAM-1 6a-iii-a's count assertion becomes library rows only; mutations 592, 593, 595 and
-  397 are re-pointed; `(a2)` is already re-cut by PR 1.
+- Tests and proofs: `picker.test.ts:6`, `:333-335`; `catalog-arm-option.test.ts:5`, `:29` and its ⏳
+  `describe` (`:102`); the import at `verify/program.ts:25`; mutations 592, 593, 595 and 397.
 
 **One alias would be lost, and it needs an entry change first.** Deleting
 `MOVEMENT_PICKER_ENTRIES` removes the aliases the old list gave the 12 slugs that are in both
-lists. Checked on 2026-11-20 against the 587 entries: every one is answered by the library entry's
-own name or aliases except **"BSS"** on `bulgarian_split_squat`. So before this PR an alias is added
-to that entry, through the usual batch review with the maintainer's approval (Q4).
+lists. Recomputed twice on 2026-11-20 against the 587 entries: every one is answered by the library
+entry's own name or aliases except **"BSS"** on `bulgarian_split_squat`. So before this PR an alias
+is added to that entry, through the usual batch review with the maintainer's approval (Q4).
 
 **Acceptance.**
 
-1. Neither marker is left in the listed files, and nothing in `packages/` or `apps/` imports
+1. The completeness check above passes, and nothing in `packages/` or `apps/` imports
    `movement-picker-catalog`.
 2. The picker's browse, search and filters behave as on `main` for a database holding the library
    and a household's own items: the existing tests for those pass unchanged.
@@ -155,72 +183,126 @@ to that entry, through the usual batch review with the maintainer's approval (Q4
 
 ## PR 3 · F1-ii: the old list goes
 
-**Gates, all three:** PR 2 merged; the fresh start's second check (R4, at the start of the trial
-week) clean; and production's seed unable to write an old row, which A2-ii makes true
-(`library.legacyMovements` false in production). The second matters because step 5 is also the
-remedy if old seed code ever writes the rows back.
+**Gates, all four.** The fresh start's two corrections are the only thing that can remove a
+seeded household or an old built-in: `erase-household` refuses a seed id. So they are not retired
+while anything could bring that data back.
 
-- **Deleted:** `MOVEMENT_SEED_ROWS` and `MOVEMENT_SEED_PUBLIC_IDS`
+1. PR 2 merged.
+2. The fresh start's second check (R4, at the start of the trial week) clean.
+3. Production's seed unable to write an old row, which holds by construction once PR 1 deletes
+   `legacyMovements`.
+4. **The fresh start's restore branch deleted, with its date in the ledger, and the database's
+   point-in-time window past step 5.** Until then a restore can reach a point before the fresh
+   start, and the spec says steps 3 to 8 are then run again.
+
+It also merges after R2's close-out PR, which corrects the privacy notice's sentences about the
+procedure this PR removes.
+
+- **Deleted, the old list:** `MOVEMENT_SEED_ROWS` and `MOVEMENT_SEED_PUBLIC_IDS`
   (`packages/shared/src/catalog-movements.ts`), with every reader the import scan finds. On `main`
   those are `seed.ts`, `verify.ts`, `verify/{schema,program,catalog,seed}.ts`,
   `corrections/registry.ts:687-721`, `catalog/catalog.test.ts:443`, `movement-search.test.ts`,
   `test/movement-picker-fixtures.ts:47`, `movement-picker.test.tsx:57`,
-  `lib/dal/program/picker.test.ts:321-359` and `lib/programming/contract.test.ts:183`. The spec's
-  list names one file that no longer exists and leaves six of these out.
-- **Deleted, Native Scaling's:** the two one-shot corrections
-  (`erase-seeded-household-2026-11-19`, `delete-legacy-movements-2026-11-20`) with their mutation
-  rows (336 to 339, 540 to 544, 545 to 561, and 276's context); the fresh-start lines of
-  `movementsOwnershipReport` with their header; the runbook's one-time "Fresh start" section; and
-  the data inventory's "kept until the fresh start's step 5" wording.
-- **Kept:** the ownership report's standing line that every global movement is a catalog row. It is
-  the alarm for the tech-debt item below.
-- **Docs:** `docs/spec.md:76-78` and its diagram (`:142-156`) gain the tracking type, the kind of
-  training, equipment and muscles; `docs/architecture.md:605-626` stops saying the catalog is seeded
-  from the old list; `movement-picker.md:380` and `program-contract.md:657` lose "until F1".
-- **Acceptance.** F1's import scan: nothing in `packages/` or `apps/` imports `PROGRAM_SEED`'s old
-  block, `MOVEMENT_SEED_ROWS` or `MOVEMENT_SEED_PUBLIC_IDS`; `db:verify` and `db:mutate` pass.
+  `lib/dal/program/picker.test.ts:321-359` and `lib/programming/contract.test.ts:183`. The comments
+  that name the old list are corrected: `schema.ts:815`, `movement-ownership.ts:137`,
+  `catalog/fixture.ts:31-33`, `seed-ids.ts:52`, `strength-session-schema.test.ts:234`.
+- **Production's seed changes in one way:** the legacy-slug shadow count (`seed.ts:393-396`), which
+  runs on every push, is retired with the list it reads. Proved by a production-mode seed on a fresh
+  verify database exiting 0 with the same counts less that line; the first deploy's seed log is read
+  after merge.
+- **Deleted, Native Scaling's commits.** The code of the two one-shot corrections
+  (`erase-seeded-household-2026-11-19`, `delete-legacy-movements-2026-11-20`), on the rule change of
+  Q7:
+  - with R0: `seededHouseholdErasureIssue` and `EXPECT_ERASED_ROWS` (`erasure-gates.ts`) and their
+    tests; R0's sections of `verify/erasure.ts`; mutations 336 to 339 and 540 to 544;
+  - with R1: `movement-gates.ts` and its test; R1's additions to `queries/movement-ownership.ts`;
+    R1's sections of `verify/erasure.ts`; mutations 545 to 561;
+  - the report's fresh-start lines with their "0 only after step 7" header.
+  - **Kept:** `parseExpectedRows` if anything still uses it; `correctionTargetUrl({ kind:
+'erasure' })`, which `erase-household` will need; `correctionTargetDatabaseIsUnnamed`;
+    `hasHostOverride`; the older erasure proofs; mutation 276, whose context is only re-checked.
+  - `corrections/README.md`: the two **Applied rows stay, dated, as the record**, and rule 6 gains
+    its one exception.
+- **The alarms that stay:** the report's count of households and profiles whose id is a seed id
+  (`SEED_PUBLIC_IDS`, which this PR does not delete), and its line that every global movement is a
+  catalog row. The count of movements with a seed id reads the list this PR deletes (Q8).
+- **The runbook.** The one-time "Fresh start" section goes. **Its standing rules move to "Restore
+  from a Neon branch" and are not deleted:** never restore to a point before the fresh start's step
+  3, never restore an extract taken before it, and hand-run a seed only from a fresh `origin/main`.
+  If `erase-household` has shipped by then, the restore step's "stop and keep the app disabled"
+  becomes "re-apply each ledger entry".
+- **Privacy documents.** `data-inventory.md` §5 is rewritten where it says a seed id has no removal
+  path and that the erasure "stays the remedy" (`:734-743`): after this PR no procedure removes a
+  seed-id household or an old built-in, and one that came back would need a new dated correction,
+  owned by `PRIV-3`'s owner.
+- **Other docs:** `docs/spec.md:76-78` and its diagram (`:142-156`) gain the tracking type, the kind
+  of training, equipment and muscles; `docs/architecture.md:605-626` stops saying the catalog is
+  seeded from the old list; `movement-picker.md:380` loses "until F1".
+- **Acceptance.** F1's import scan as the spec words it: nothing in `packages/` or `apps/` imports
+  `PROGRAM_SEED`, `MOVEMENT_SEED_ROWS` or `MOVEMENT_SEED_PUBLIC_IDS`. `db:verify` and
+  `db:mutations` pass.
 
 ## PR 4 · A3: the upsert
 
-What E6 asks, with lane P's four points as the design.
+What E6 asks, with lane P's and the panel's points as the design.
 
-1. **Read, compare, write only what differs**, the way `units` is upserted (`seed.ts:279-312`).
-   `migrate.yml` seeds production on every push; a blanket `ON CONFLICT DO UPDATE` would row-lock
-   every library row on each push and rewrite rows that did not change. A push with no entry change
-   writes nothing, and `updated_at` does not move.
-2. **Only catalog rows** (`modality IS NOT NULL`), on the global slug index. `id` and `public_id`
-   never change. Columns kept equal to the entry: name, kind of training, pattern, `unitDefault`,
-   `isBodyweight`.
+1. **Read and compare; write only the rows that differ**, with
+   `onConflictDoUpdate({ target, targetWhere: modality IS NOT NULL })`, as E6 names and as `units`
+   is already written. `migrate.yml` seeds production on every push; a blanket update would lock and
+   rewrite every library row each time. A push with no entry change updates no row. (The insert
+   still advances the identity sequence, as `migrate.yml`'s header says.)
+2. **Only live catalog rows.** `id` and `public_id` never change. Kept equal to the entry: name,
+   kind of training, pattern, `unitDefault`, `isBodyweight`; the update sets `updated_at` itself,
+   since no trigger does. It never writes `deleted_at`, `household_id` or `tracking_type`, and never
+   clears `modality`. A row with `deleted_at` set is skipped and counted. Aliases, the supervision
+   label and the steps are not stored, so nothing here touches them.
 3. **Join rows by difference**, in the same transaction, under the one-primary index: a change of
    primary muscle demotes first, then promotes. This is the first code that deletes a catalog join
    row, so it carries its own proof that it never touches a household's row.
-4. **The tracking type is never updated.** Logged sets and prescriptions are read by it. If a stored
-   type differs from the lockfile's, the row is skipped and counted, as E6 says; a real type change
-   is a new movement.
-5. **No slug is retired here.** The append-only check keeps every shipped slug, so A3 has no path
-   that removes a movement. If one is ever needed it is a correction with its own plan.
-6. **Proofs it re-cuts** (lane P's list): A2-ii's "a second run inserts nothing", which becomes
-   "writes nothing when no entry changed, and exactly the changed rows when one did";
-   `assertOnlyLibraryRowsAdded`, narrowed to "an existing global row changes only where its entry
-   changed"; mutations 598 to 604; and the insert-only pins in `verify/catalog.ts:500-512` and
-   `:575-601` with mutations 502 to 505, 510, 512, 513, 516 and 517.
-7. **The lines that stop being true:** `AGENTS.md:150`; `migrate.yml`'s header; the docstrings in
+4. **It never throws on catalog data** (rule 7). `migrate.yml` has no rollback, and a throw after
+   the migrations leaves every later push red. Each change is checked before it is written: a
+   unit, equipment or muscle code the reference tables lack, or a change that would break
+   `movements_global_row_has_pattern`, is skipped and counted. The library transaction is the only
+   unit. A mutation proves a would-fail row turns `db:verify` red if it is thrown and not skipped.
+5. **The tracking type is never updated.** If a stored type differs from the lockfile's, the row is
+   skipped and counted, as E6 says; a real type change is a new movement.
+6. **No slug is retired here.** The append-only check and the lockfile test (`lockfileIssues`) keep
+   every shipped slug. If one ever must go, that is a correction with its own plan.
+7. **The first production run is not a no-op.** It applies every entry correction merged since the
+   seed's switch, to rows the family logs against. So **before merge the maintainer runs the seed
+   from the PR's head on a child branch of production**: it prints rows updated, join rows added
+   and removed, and rows skipped; a second run prints 0 for each. Only the counts go in the PR. The
+   merge needs the maintainer's go.
+8. **Proofs.** Its own mutation range. It re-cuts A2-ii's "a second run inserts nothing" into
+   "updates nothing when no entry changed, and exactly the changed rows when one did", and
+   `assertOnlyLibraryRowsAdded` into "an existing global row changes only where its entry changed".
+   It keeps mutation 505 and the pins at `verify/catalog.ts:500-512`.
+9. **The lines that stop being true:** `AGENTS.md:150`; `migrate.yml`'s header; the docstrings in
    `seed.ts:433-452`, `scripts/seed.ts:10`, `catalog-movements.ts:34-38` and `schema.ts:127`;
    `movement-catalog.md` invariants 4 and 6; `catalog-data.md:78-80`; `lessons.md:76`;
-   `runbooks.md:532`. A change to `migrate.yml` is a CI workflow change and goes to the maintainer.
+   `runbooks.md:532`. `runbooks.md`'s "Correct wrong data in prod" gains: a catalog row is corrected
+   only by editing its entry through batch review, whose approval hash is what stops a wrong name
+   reaching every household; a hand `UPDATE` is reverted by the next push. A change to
+   `migrate.yml` is a CI workflow change and goes to the maintainer.
+10. **Privacy.** It stores nothing new. A renamed movement changes the name shown on past logs and
+    in exports, so the PR records that the inventory's §1a and the notice's words on movement names
+    were re-read and that neither changes.
 
 **Acceptance.** E6 as written, plus: a seed run after an entry's name, equipment and primary muscle
 change leaves that row and its join rows equal to the entry and every other row's `updated_at`
-unchanged; a household's row on the same name is untouched; a changed type is skipped and counted.
+unchanged; a household's row of the same name is untouched; a changed type, a soft-deleted row and
+a would-fail change are each skipped and counted.
 
 ## Risks
 
-- **A restore after the fresh start.** The runbook's restore says to replay the deletion ledger,
-  and a fresh-start erasure cannot be re-applied until `erase-household` exists (`PRIV-3`). Nothing
-  in this plan leans on a restore; PR 3 deletes the one-shot corrections only after the second check.
+- **After PR 3 no procedure removes a seed-id household or an old built-in.** The four gates are
+  what make that safe. If one ever came back (an old checkout's hand-run seed, an extract from
+  before the fresh start), the remedy is a new dated correction, owned by `PRIV-3`'s owner.
+- **`OPS-3`'s restore drill** cannot replay the fresh-start erasure once PR 3 has merged. Its plan
+  must say so; its owner is told when this plan is approved.
 - **A test database that looks like production.** The tech-debt item "a fixtures seed cannot tell
   production from a fixtures database" closes at the fresh start only because the fresh start
-  erases the household with the seed's id. If that household were ever kept, the gap stays.
+  erases the household with the seed's id.
 - **The bundle gate** (#713) applies to PR 2; deletions should shrink the routes.
 
 ## Not planned here
@@ -230,17 +312,53 @@ unchanged; a household's row on the same name is untouched; a changed type is sk
 
 ## Open questions for the maintainer
 
-- **Q1. The order.** F1's first half before the clean-up, and P12 inside the clean-up, as above.
-  Recommended. The alternative, the spec's order, would delete code that CI still exercises.
-- **Q2. Who builds.** A3 and PR 1's seed work were lane A's, and lane A is retired. Recommended:
-  lane P, which built the seed's two PRs and wrote the proofs these re-cut.
+- **Q1. The order.** F1's first half before the clean-up, and P12 inside the clean-up.
+  Recommended. The spec's order would delete code that CI still exercises.
+- **Q2. Who builds.** PR 1's seed and proofs: lane P, which built the seed's two PRs and wrote the
+  proofs it re-cuts (recommended). A3: lane A when it restarts, as the board reports is intended.
 - **Q3. The specs' names.** Change the two specs to test-library names (recommended), or add the old
-  names to the test library. The first keeps the test library generic; nothing a family sees differs.
+  names to the test library. The first keeps the test library generic.
 - **Q4. "BSS".** Add it as an alias of Bulgarian split squat (recommended), through the usual batch
   review, so typing it still finds the movement after the old list goes.
-- **Q5. Timing.** These PRs run during the trial week, not before it (recommended): none changes what
-  a family sees, and the week should not wait for clean-up.
+- **Q5. Timing.** PR 1 to 3 run during the trial week. PR 4 merges after the week, or sooner on the
+  maintainer's go after its rehearsal (recommended: after the week).
+- **Q6. A shape change.** `newItem`'s success answer gains `owner`, `unitDefault` and `isBodyweight`
+  (recommended; lane B's finding). The alternative is a new action that re-reads one option.
+- **Q7. A rule change.** `corrections/README.md` rule 6 says a correction is kept after it runs.
+  Recommended (Native Scaling's): the two fresh-start corrections' code is deleted once their
+  Applied rows are dated, the rows stay as the record, and rule 6 names that one exception. The
+  alternative keeps both, with a frozen copy of the 35 old ids inside one of them.
+- **Q8. One alarm.** The report's count of movements with a seed id reads the list PR 3 deletes. It
+  is the only check that sees an old built-in on a shared slug that was hand-given a kind of
+  training. Recommended: keep it by a test on the seed ids' own form if they share one (checked
+  when PR 3 is built), and otherwise drop it on the maintainer's go, since gate 4 leaves no path
+  that brings such a row back.
 
 ## Review-response log
 
-_Not yet panelled._
+**Round 1, 2026-11-20.** Two panel lenses (correctness against the code and spec; production data
+safety, operations and privacy) and three feasibility checks. Every finding is accepted.
+
+| #   | From                | Finding                                                                                          | Response                                                      |
+| --- | ------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| 1   | safety, P0          | PR 3 deletes the only remedy while a restore can still bring the data back                       | Gate 4; the Risks entry                                       |
+| 2   | safety, P0          | PR 3 would delete standing rules with the runbook's one-time section                             | They move to the restore procedure                            |
+| 3   | correctness, P0     | PR 2 fails `guides:check`: a guide's `owns:` names the deleted file; ⏳ lines in guides go false | Lane B's guide edits; the check covers `docs/features/`       |
+| 4   | lane P, blocking    | PR 1 could not be green alone: more than twenty proofs read an old built-in                      | The full list is in PR 1                                      |
+| 5   | correctness, P1     | "The other 22 are the household's own" was false: six resolve to old built-ins today             | Corrected, with what PR 1 changes                             |
+| 6   | correctness, P1     | Keeping `PROGRAM_SEED` contradicted F1                                                           | Renamed in PR 1; F1's scan holds as written                   |
+| 7   | correctness, lane P | PR 2's importer list was incomplete                                                              | Completed, each with an owner                                 |
+| 8   | correctness, P1     | The design departed from E6's wording without saying so                                          | Point 1 now satisfies both; `updated_at` is set by the update |
+| 9   | correctness, lane P | A3's mutation list was A2-ii's; the legacy pins belong to PR 1                                   | Moved; A3 gets its own range                                  |
+| 10  | correctness, P1     | F1's "no lane is churned" gate was dropped silently                                              | Item 5 of "What changes"                                      |
+| 11  | safety, P1          | The alarm left after PR 3 missed two cases                                                       | The seed-id household count stays; Q8                         |
+| 12  | safety, P1          | A3's first production run is not a no-op and had no rehearsal or go                              | Point 7                                                       |
+| 13  | safety, lane P      | A3 added throw paths; `migrate.yml` has no rollback                                              | Point 4, with its mutation                                    |
+| 14  | safety, P1          | A soft-deleted catalog row was not covered                                                       | Point 2                                                       |
+| 15  | safety, P2          | "Nothing a family sees" was overstated                                                           | "What a family sees"; Q5                                      |
+| 16  | safety, P2          | PR 1 missed the mutations that prove production's seed writes no program                         | Listed; acceptance 4                                          |
+| 17  | safety, lane P      | PR 3 changes production's seed (the shadow count) without saying so                              | Said, with its proof                                          |
+| 18  | safety, P2          | Inventory §5, the notice's dependency, the hand-correction rule, `OPS-3`                         | PR 3 and PR 4's docs; Risks                                   |
+| 19  | lane B              | `made()` cannot take an owner and unit the answer does not carry                                 | Q6                                                            |
+| 20  | Native Scaling      | Deleting the corrections breaks README rule 6; which helpers stay                                | Q7; the keep and delete lists                                 |
+| 21  | lane P, correctness | Wrong names and line numbers                                                                     | Corrected                                                     |
