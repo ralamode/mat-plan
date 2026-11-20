@@ -1544,9 +1544,10 @@ export const CLEAR_DAY_COPY = {
   /**
    * Clear this day's own `closed_day` line. Not `refused.closed_day`: a clear refused just after
    * midnight is of a day that is now yesterday, still open to every other write and to Restore all, so
-   * "can no longer be changed" would be false. True for the midnight case and the archived one alike.
+   * "can no longer be changed" would be false. Names both causes, since the answer cannot tell them
+   * apart: past midnight, or the athlete archived (the writer's own check, since the archive-race fix).
    */
-  clearClosed: 'Only today can be cleared.',
+  clearClosed: 'This day can’t be cleared now: only today can, and not for an archived athlete.',
   /** The action threw (a dropped connection, a server error): no cause is claimed. */
   failed: 'Couldn’t reach the app. Try again.',
 } as const;

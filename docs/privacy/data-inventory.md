@@ -7,6 +7,10 @@ walking `packages/db/src/schema.ts` and the third-party call sites — **not fro
 only way a notice about minors' health data is worth anything.
 
 > **Derived at `38f62de`, 2026-10-07** (PRIV-1, [plan](../plans/priv-1-privacy-review.md)).
+> 🔴 **§3 re-read 2026-11-19 for `CAT-3` P11-ii-a** ([plan](../plans/cat-3-p11-ii-option-taxonomy.md)): the
+> builder's picker also lists every library row, so it is no longer the same list as the strength form's
+> picker. It is reference data on global rows only (`movementIsCatalog()`, inside the global and live
+> conditions), with no new category, reader, column or retention.
 > 🔴 **§4 / §6 re-read 2026-11-19 for the export becoming the owner's** ([plan](../plans/fam-1-export-owner-only.md)
 > PR B): who receives an export narrows to the household's owners; every login is an owner today, so
 > no one receives less yet. No new column or processor; the refusal's Sentry event is the id-free

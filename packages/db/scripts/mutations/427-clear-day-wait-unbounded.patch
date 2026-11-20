@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index 4ee5cd0e..a1ba74b3 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -572,7 +572,6 @@ export async function clearDay(
+ ): Promise<ClearDayResult> {
+   return exec.transaction(async (tx) => {
+     // A stuck profile writer (an erasure mid-flight) must not hang the request: bound the wait.
+-    await setLocalLockTimeout(tx);
+     // The athlete first, locked against a concurrent archive (see the docblock). A profile outside
+     // the scope reads nothing here and falls through to the entries read, which finds nothing.
+     const [athlete] = await tx

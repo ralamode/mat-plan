@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index ebd554ca..7efb6050 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -84,7 +84,6 @@ export async function movementOptions(
+       // a household row on a picker slug never enters this arm (P11-ii's plan, panel P1-1).
+       and(
+         movementIsGlobal(),
+-        isNull(schema.movements.deletedAt),
+         or(inArray(schema.movements.slug, PICKER_SLUGS), movementIsCatalog()),
+       ),
+     )
