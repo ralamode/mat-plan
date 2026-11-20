@@ -28,6 +28,7 @@ import {
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
+  PROFILE_NOT_FOUND,
   PROFILE_NAME_MAX,
   PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
@@ -5703,7 +5704,7 @@ for (const [label, profilePublicId, ownScope, otherScope, day] of [
       activityTypeId: scLiftActivityId,
       movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
     }),
-    /Profile not found/,
+    { message: PROFILE_NOT_FOUND },
     `TEN-1: …and the other household cannot write it (${label})`,
   );
   assert.equal(
@@ -6119,7 +6120,7 @@ await assert.rejects(
       },
     ],
   }),
-  /Profile not found/,
+  { message: PROFILE_NOT_FOUND },
   'TEN-1 1d: the household seam refuses the cross-household session write (as 1c proves)',
 );
 assert.equal(

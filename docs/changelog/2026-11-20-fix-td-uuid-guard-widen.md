@@ -8,3 +8,6 @@
   with its reason; the Sentry scrubber and two `db:verify` proofs. A stale entry fails.
 - **The id schema's docblock and the write-path guide** now say the case gap shipped in two schemas
   (check-in, strength session). The hide and restore schemas held it with no endpoint yet.
+- **Two TEN-1 cross-household proofs** in `db:verify` match the refusal by the shared
+  `PROFILE_NOT_FOUND` constant, exactly, instead of a `/Profile not found/` pattern (from #747's
+  review).
