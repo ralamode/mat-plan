@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   BUILDER_COPY,
+  COPY_COPY,
   copyTitle,
   copyToLabel,
   EDITOR_COPY,
@@ -98,7 +99,7 @@ test('the Copy dialog meets the a11y bar at 360px', async ({ page }) => {
 
   // The footer: side by side at 360px; stacked, action first, at 200% zoom on a 390px phone (195
   // CSS px), where two columns would clip "Cancel" (`SheetFormFooter`'s container query).
-  const action = dialog.locator('button[type="submit"]');
+  const action = dialog.getByRole('button', { name: COPY_COPY.copy, exact: true });
   const cancel = dialog.getByRole('button', { name: BUILDER_COPY.cancel, exact: true });
   const [a, c] = [await action.boundingBox(), await cancel.boundingBox()];
   expect(a && c && Math.abs(a.y - c.y) < 2, 'the footer buttons sit side by side at 360px').toBe(
