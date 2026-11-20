@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/movement-gates.ts b/packages/db/scripts/corrections/movement-gates.ts
+index 0fcab19b..93838409 100644
+--- a/packages/db/scripts/corrections/movement-gates.ts
++++ b/packages/db/scripts/corrections/movement-gates.ts
+@@ -85,7 +85,7 @@ export function deletedCountIssue(
+   deleted: LegacyMovementCounts,
+ ): string | null {
+   const differ = (Object.keys(LEGACY_COUNT_ENV) as (keyof LegacyMovementCounts)[]).filter(
+-    (k) => deleted[k] !== found[k],
++    (k) => deleted[k] !== found[k] && false,
+   );
+   return differ.length > 0
+     ? `the delete removed ${differ.map((k) => `${deleted[k]} ${k}`).join(', ')}, not the locked ` +

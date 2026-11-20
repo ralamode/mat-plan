@@ -11,7 +11,11 @@
   equipment and muscle rows; catalog rows and a household's own movements are never selected. It reads
   every foreign key into `movements` from the catalog and refuses a reference from any of them (hidden
   rows included), a key it cannot count, and a key that does not abort a delete. `--apply` locks the
-  rows, re-reads the references under the lock, deletes by the locked ids only, and needs the dry run's
-  three counts (`EXPECT_LEGACY_*`). The dry run always prints every count and exits 0. The
-  movements-ownership report gains the fresh start's four counts (`R4 (1)` to `R4 (4)`), each read
-  from the table. Not yet run: it runs at the fresh start's step 5.
+  rows, re-reads the references under the lock, deletes by the locked ids only, rolls back if a delete
+  removes fewer rows than it locked, reads `DATABASE_URL_UNPOOLED` only, and needs the three current
+  counts restated (`EXPECT_LEGACY_*`). The dry run always prints every count and exits 0; when
+  `--apply` would refuse it says so and offers no counts. The movements-ownership report gains the
+  fresh start's four counts (`R4 (1)` to `R4 (4)`), each read from the table (live catalog rows only),
+  printed after its TEN-2c expectation under their own. The runbook's full copy now names its
+  movements and is produced before step 5, and a restore re-applies every removal made after its
+  cut. Not yet run: it runs at the fresh start's step 5.

@@ -1,8 +1,8 @@
 diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
-index 33284875..4ab8d680 100644
+index 5ae24dd7..21546819 100644
 --- a/packages/db/scripts/corrections/registry.ts
 +++ b/packages/db/scripts/corrections/registry.ts
-@@ -1277,7 +1277,7 @@ const legacyMovement = () =>
+@@ -1289,7 +1289,7 @@ const legacyMovement = () =>
    and(
      movementIsGlobal(),
      or(

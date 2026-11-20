@@ -1087,7 +1087,11 @@ production; `OPS-2` PR 1 deployed (§ "A household or athlete with a seed id", t
    here removes another household.
 2. **The household's data, offered first** (K15): each athlete's in-app export is taken, **and** the
    full copy is offered (the in-app export leaves out hidden rows; § "Delete a household", step 1).
-   Either is taken, or the go records that it was declined.
+   Either is taken, or the go records that it was declined. ⚠️ **A full copy is produced before step
+   5, and names its movements**: each `movement_id` on `entries` and `prescriptions` is replaced by
+   the movement's name and slug, or the copy carries those `movements` rows. After step 5 the legacy
+   ids name nothing, here or anywhere. Once it is delivered, delete your local copy and record the
+   date in the ledger.
 3. **The dry run's membership line** (`household_members: live L, hidden H`): an account whose only
    membership is hidden is decided at the go and recorded in the ledger (step 3 deletes that row, and
    step 7 binds only the accounts it is given).
@@ -1155,7 +1159,11 @@ references from each table that points at `movements` (read from the catalog, hi
 and a `would refuse --apply: …` line when `--apply` would refuse. `--apply` refuses while any reference
 is non-zero, on a foreign key into `movements` it cannot count or that does not abort a delete, and
 when `M`, `E` or `U` differs from what it finds under its lock: each rolls back and deletes nothing.
-Copy the three numbers from this sitting's dry run.
+**First read the report's "NOT curated" count** (`movements-ownership-2026-10-11`, the `global rows:`
+line): those rows go too when nothing references them, and one may hold a name a household typed
+before `TEN-2b` (`data-inventory.md` §5). The three numbers are a restatement of the current counts,
+not a binding to one dry run: copy them from the dry run just before `--apply`. `--apply` reads
+`DATABASE_URL_UNPOOLED` only and refuses when it is unset.
 
 _Second run:_ `No legacy movements here; nothing to do.`
 
@@ -1175,7 +1183,8 @@ before the dry run), then `create-household-2026-11-17`'s dry run and `--apply`.
 
 `movements-ownership-2026-10-11` (R4): every `R4 (1)` to `R4 (4)` line reads 0, and so does the line
 "global rows with a modality but no CATALOG_MOVEMENTS slug" (A2-ii's). **A non-zero on any of them is
-a stop**: something wrote a row only the seed should, so investigate at the console before going on;
+a stop**: something wrote a row only the seed should (A2-ii's line is printed once #770 has merged;
+#710 merges after it), so investigate at the console before going on;
 step 5 does not delete those rows (lane P, 2026-11-20). Then `unset PROD_DB`, unfreeze merges, and
 merge the close-out notice PR. **If the run stopped after step 3**, the close-out's athlete and
 household sentences still merge: they became true at step 3.
@@ -1189,6 +1198,10 @@ The household signs in, adds its athletes and builds its program.
 **Production is never restored to any point before step 3** once step 7 has run — not from the step-2
 branch, not by point-in-time restore. If it ever is, steps 3 to 8 run again. Never attach compute to
 the step-2 branch during steps 3 to 8: it passes every gate the erasure has (same name, same rows).
+
+**Never restore an extract taken before the fresh start**, into any database after it: the global
+movements its rows name are gone (step 5), and the erased household's ledger entry, the only record of
+what was removed, expires with its branch.
 
 ## Rotate a secret (Clerk key / Neon password / GitHub Actions secret)
 
@@ -1482,8 +1495,9 @@ throttled. Until then this alert is the consumer.
 
 Before a destructive step (a backfill, a household deletion, the fresh start): in the Neon console,
 **production project → Branches → New branch**, from the default branch at **now**, with **no compute
-attached**. Readable by the project's members only. Record its name and an expiry date (7 days) in the
-ledger, **never in git**.
+attached**. Readable by the project's members only. Record its name and the expiry its procedure sets in
+the ledger (7 days after the apply for a household or an athlete; 3 for a program, workout or item),
+**never in git**.
 
 - **Never attach compute to it while the destructive step's sitting is open**: it holds the same
   database name and rows as production, so it passes every gate a correction has.
@@ -1506,6 +1520,13 @@ migration journal reconcile is needed: the branch's `drizzle.__drizzle_migration
 production's was at the cut, and nothing has migrated since. Check it after the restore:
 `SELECT count(*), max(created_at) FROM drizzle.__drizzle_migrations;` equals the number of entries in
 `packages/db/migrations/meta/_journal.json` on the frozen `main`.
+
+🔴 **Before re-enabling the app, re-apply every removal made after the cut.** A restore brings back
+any household, athlete, program or item removed after the branch was cut, which a family was told
+had gone. List the ledger entries whose apply date is after the cut, and run each removal again from
+its dry run. ⚠️ **Not yet possible for every entry:** the ledger holds no target for a fresh-start
+erasure (it takes none) and the general `erase-household` (`PRIV-3` 2b) is not built. If any entry
+after the cut cannot be re-applied, **stop**: leave the app disabled and decide with the maintainer.
 
 🔴 **After the fresh start's step 7, never restore to a point before its step 3** (§ "The fresh start").
 
@@ -1653,7 +1674,8 @@ it since FAM-1 14b), no per-athlete prescribed targets
 ([data-inventory.md](./privacy/data-inventory.md) §6). The notice promises a full copy on request, so
 **ask whether they want one**, and if they do, produce it by hand **before step 4**, **including
 hidden rows** (`deleted_at IS NOT NULL`: a cleared weigh-in is one, and it is in no export). Handing
-over a partial copy immediately before irreversible destruction is not keeping that promise.
+over a partial copy immediately before irreversible destruction is not keeping that promise. Once
+it is delivered, delete your local copy and record the date in the ledger.
 
 **Deliver it through the channel that verified the request in step 0 — never to whatever address
 asked.** That is the rule: the prohibition is on sending a minor's training history to an

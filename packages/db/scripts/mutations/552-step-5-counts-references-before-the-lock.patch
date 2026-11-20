@@ -1,9 +1,9 @@
 diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
-index 33284875..8944e112 100644
+index 5ae24dd7..fb975dba 100644
 --- a/packages/db/scripts/corrections/registry.ts
 +++ b/packages/db/scripts/corrections/registry.ts
-@@ -1394,6 +1394,10 @@ const deleteLegacyMovements: Correction = {
-       };
+@@ -1416,6 +1416,10 @@ const deleteLegacyMovements: Correction = {
+       const expected = parseExpectedLegacyCounts((name) => process.env[name]);
        return await db.transaction(async (tx) => {
          await setLocalTimeouts(tx, '30s');
 +        const preLock: IdIn = (id) =>
@@ -13,7 +13,7 @@ index 33284875..8944e112 100644
          const locked = (
            await tx
              .select({ id: schema.movements.id })
-@@ -1406,8 +1410,6 @@ const deleteLegacyMovements: Correction = {
+@@ -1428,8 +1432,6 @@ const deleteLegacyMovements: Correction = {
            return [summaryLine('No legacy movements here; nothing to do.')];
          }
          const lockedIds: IdIn = (id) => inArray(id, locked);

@@ -1,8 +1,8 @@
 diff --git a/packages/db/scripts/corrections/movement-gates.ts b/packages/db/scripts/corrections/movement-gates.ts
-index 668f4661..261d398e 100644
+index 0fcab19b..a429b165 100644
 --- a/packages/db/scripts/corrections/movement-gates.ts
 +++ b/packages/db/scripts/corrections/movement-gates.ts
-@@ -73,7 +73,7 @@ export function legacyMovementDeletionIssue({
+@@ -126,7 +126,7 @@ export function legacyMovementDeletionIssue({
        'one column onto movements.id, so its references cannot be counted; nothing deleted'
      );
    }

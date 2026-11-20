@@ -1,8 +1,8 @@
 diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
-index 33284875..83efe018 100644
+index 5ae24dd7..5875b500 100644
 --- a/packages/db/scripts/corrections/registry.ts
 +++ b/packages/db/scripts/corrections/registry.ts
-@@ -688,7 +688,7 @@ async function freshStartCounts(db: Database) {
+@@ -695,7 +695,7 @@ async function freshStartCounts(db: Database) {
      profiles: profiles?.n ?? 0,
      seedMovements: seedMovements?.n ?? 0,
      notCatalog: notCatalog?.n ?? 0,

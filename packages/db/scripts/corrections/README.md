@@ -54,6 +54,11 @@ still needs its own PR. Each correction below names the row that fixes the cause
    export and is offered the full copy, hidden rows included, or the go records that it declined). The go and its date go in the ledger, not the Applied row. ⚠️ `PRIV-3` 2b's `erase-household`, the
    general deletion correction, is **not** a drop-in entry: `Correction.run` takes no target and the runner ignores positional args,
    so it needs a `--household <public_id>` flag — a runner change, with its own plan.
+   **`delete-legacy-movements-2026-11-20` (CAT-3 R1) departs from rules 3 and 5:** it targets by a
+   predicate (`legacyMovement()`: global rows that are not catalog rows, or carry a legacy seed
+   `public_id`) and deletes by the internal ids it locked, never a `public_id` given to it; and, as a
+   deletion, it has no `deleted_at` filter, on its selection or on the references that refuse it, since
+   a hidden row still holds its foreign key. Reasoning: [its plan](../../../../docs/plans/priv-3-fresh-start-prep.md), D2.
 9. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
    privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue
    or commit — replace it with `…`.

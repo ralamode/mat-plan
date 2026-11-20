@@ -446,7 +446,7 @@ Each path exists from its own merge.
 
 This lane's block is 260–289, then 330–339, taken in PR order (`priv-3-guarded-deletion.md:478`). 260–278
 are used. Before R2 come 2a (seven), R0 (five) and R1 (seven), which is 19 against the 21 left. 2b, 3 and
-3b need about six more, so the board is asked for a further block now. _As built (2026-11-20):_ R1 took `545`–`555` from the board's block
+3b need about six more, so the board is asked for a further block now. _As built (2026-11-20):_ R1 took `545`–`561` from the board's block
 `540`–`569` (R0 took `336`–`339` and `540`–`544`).
 
 ## Test plan
