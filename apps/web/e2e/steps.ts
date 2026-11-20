@@ -88,7 +88,10 @@ export async function selectProfile(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
-/** The weigh-in section, by its heading — `Bodyweight` in every state (V1-24 PR 1a). */
+/**
+ * The weigh-in section, by the region's own name, `Bodyweight` in every state (V1-24 PR 1a). Not by
+ * its heading: folded (12c-iii PR 2), the heading holds the line and is named with the weight.
+ */
 export const bodyweightSection = (page: Page) =>
   page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true });
 

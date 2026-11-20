@@ -49,7 +49,13 @@ import {
   SETTINGS_PATH,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso } from '../lib/date';
-import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
+import {
+  changePrefix,
+  logPractice,
+  openIfCollapsed,
+  PRACTICE_MINUTES,
+  SEED_PROFILE_ROUTE,
+} from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
 import {
@@ -336,6 +342,8 @@ const STATES = {
   'already-logged': seedAlreadyLogged,
   // V1-24 PR 1b — the weigh-in's OPEN editor. Interaction-only on top of the already-logged
   // fixture: the open state is transient client state no seeder can produce.
+  'bodyweight-open': seedAlreadyLogged,
+  'sections-folded': seedAlreadyLogged,
   'bodyweight-editing': seedAlreadyLogged,
   // V1-24 PR 1a — the bodyweight receipt's other states (today's single value is `already-logged`).
   // (`bodyweight-duplicates` was removed in PR 1d: two live weigh-ins on one day are now refused by
@@ -710,7 +718,19 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
    * fixture logs a weight, then Change opens the editor beneath it. Worth a state of its own because
    * the LAYOUT is the thing under review (why: `single-value-amend.tsx`).
    */
+  // 12c-iii PR 2: a logged Bodyweight arrives folded to one line; this is it opened, with Collapse.
+  'bodyweight-open': async (page) => {
+    await openBodyweight(page);
+  },
+  // Both sections as they arrive once logged: one line each (12c-iii PR 2). The practice is logged
+  // here, so the reload is the arrival that folds it.
+  'sections-folded': async (page) => {
+    await logPracticeOnce(page);
+    await page.reload();
+    await practiceSection(page).getByRole('heading').getByRole('button').waitFor();
+  },
   'bodyweight-editing': async (page) => {
+    await openBodyweight(page);
     const change = page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) });
     if ((await change.count()) === 0) {
       throw new Error(
@@ -720,6 +740,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await change.click();
   },
   'bodyweight-clear-armed': async (page) => {
+    await openBodyweight(page);
     await page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) }).click();
     await page.getByLabel(/^Weight \(/).fill('');
     await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).waitFor();
@@ -728,6 +749,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   'bodyweight-cleared': async (page) => {
     // Retry-safe across the three widths: only the first finds a Change to clear.
+    await openBodyweight(page);
     const change = page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) });
     if ((await change.count()) > 0) {
       await change.click();
@@ -738,6 +760,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   'bodyweight-editing-refused': async (page) => {
     const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
+    await openBodyweight(page);
     await section
       .getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) })
       .click();
@@ -1225,8 +1248,18 @@ function practiceSection(page: Page) {
 }
 
 /** Type the practice minutes and tap ✓ unless the row is already logged (the three widths share one day). */
+/** A logged Bodyweight arrives folded to one line (12c-iii PR 2): open it before acting on it. */
+async function openBodyweight(page: Page): Promise<void> {
+  await openIfCollapsed(
+    page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true }),
+    BODYWEIGHT_COPY.heading,
+  );
+}
+
 async function logPracticeOnce(page: Page): Promise<void> {
   const life = practiceSection(page);
+  // A practice logged at an earlier width arrives folded after the reload (12c-iii PR 2).
+  await openIfCollapsed(life, LIFE_COPY.heading);
   const tick = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   if ((await tick.count()) > 0) {
     await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill(String(PRACTICE_MINUTES));
