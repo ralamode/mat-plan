@@ -110,11 +110,14 @@ const MODULES: readonly { files: readonly string[]; may: (file: string) => boole
     files: ['apps/web/app/programs/actions.ts', 'apps/web/app/programs/actions.contract.ts'],
     may: (f) =>
       PROGRAM_PAGE.test(f) ||
-      /^apps\/web\/app\/programs\/actions(?:\.registry|\.contract)?\.ts$/.test(f),
+      // The contract assembles the actions (7a-ii), so it imports `./actions`; the module's own
+      // files may name each other. Neither registry imports either module, so neither is listed.
+      /^apps\/web\/app\/programs\/actions(?:\.contract)?\.ts$/.test(f),
   },
   {
     files: ['apps/web/app/p/[profileId]/row-actions.ts'],
-    may: (f) => f === DAY_PAGE || f === 'apps/web/app/p/[profileId]/row-actions.registry.ts',
+    // The day page alone, as `importers.test.ts`'s exact importer set held (lane C, #785).
+    may: (f) => f === DAY_PAGE,
   },
 ];
 
@@ -635,6 +638,19 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           'module: apps/web/app/p/[profileId]/row-actions.ts',
         ]);
         expect(found(DAY_PAGE, "import { a } from './row-actions';")).toEqual([]);
+        // Its registry is not an importer either (lane C, #785).
+        expect(
+          found(
+            'apps/web/app/p/[profileId]/row-actions.registry.ts',
+            "import { a } from './row-actions';",
+          ),
+        ).toEqual(['module: apps/web/app/p/[profileId]/row-actions.ts']);
+      });
+
+      it('neither program registry imports the actions module', () => {
+        expect(
+          found('apps/web/app/programs/actions.registry.ts', "import { a } from './actions';"),
+        ).toEqual(['module: apps/web/app/programs/actions.ts']);
       });
     });
 
