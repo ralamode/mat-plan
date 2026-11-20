@@ -23,7 +23,7 @@ const CARD_TIMEOUT_MS = 20_000;
  * The links in `<main>` on the lit card, counted from production. A change in either direction is
  * drift worth a look (Clerk added a link, or one vanished).
  */
-const EXPECTED_LINKS = 3;
+const EXPECTED_LINKS = 4;
 
 /** The one known violation on every page: zod's JIT probe, from our own bundle (`e2e/csp.ts`). */
 const isZodEvalProbe = (v: string) => /^script-src(-elem)? eval @[^ ]*\/_next\/static\//.test(v);
