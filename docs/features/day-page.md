@@ -177,9 +177,10 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     35 pounds, 8 reps. Yours isn't saved." while a field still differs, else "… is saved as 35
     pounds, 8 reps." (true too when this phone's own write landed with its answer lost). A row
     nobody here is changing, a number typed back, and this phone's own save (`saving`) stay
-    silent. ⚠️ The announcer holds one sentence: a later one replaces it, so in the rare case of
-    this phone's ✓ and another phone's change in the same refresh only the later is read (one node
-    per sentence would fix it; joining them in one node re-reads the earlier ones, #786).
+    silent. **The region holds one keyed node per sentence** (`announcements.ts`, `Announcer`'s
+    `messages`): this phone's own sentences replace each other, so quick ✓s never stack, and
+    another phone's change is said beside them for `ANNOUNCE_TOGETHER_MS`, whichever lands first.
+    An added node is read alone; joining sentences in one node re-read the earlier ones (#786).
 
 17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an

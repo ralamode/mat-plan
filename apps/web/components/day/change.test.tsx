@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
+import { ANNOUNCE_TOGETHER_MS } from './announcements';
 import { DAY_COPY, refusalCopy } from './day-copy';
 import { card, describedTexts, held, makeMount, press, status, openFolded } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
@@ -1413,6 +1414,20 @@ describe('another phone’s change, said to a screen reader (only for a row this
       .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = value;
     return next;
   }
+  /**
+   * Seconds later, as on a gym floor: past `ANNOUNCE_TOGETHER_MS`, so this phone's earlier sentence
+   * is no longer beside the change (jsdom runs a whole test inside the window).
+   */
+  async function later(run: () => void) {
+    const clock = vi
+      .spyOn(performance, 'now')
+      .mockReturnValue(performance.now() + ANNOUNCE_TOGETHER_MS * 10);
+    try {
+      await act(async () => run());
+    } finally {
+      clock.mockRestore();
+    }
+  }
   const spoken = (value: number) => `${value} ${SPOKEN.lb}, 8 reps`;
   const said = (value: number) => DAY_COPY.announce.changedElsewhere(setLabel(1), spoken(value));
 
@@ -1459,7 +1474,7 @@ describe('another phone’s change, said to a screen reader (only for a row this
     });
     type(load(), '30');
     await leave(load());
-    await act(async () => control.setPlan(loadElsewhere(control.plan, 30)));
+    await later(() => control.setPlan(loadElsewhere(control.plan, 30)));
     expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spoken(30)));
   });
 
@@ -1481,7 +1496,7 @@ describe('another phone’s change, said to a screen reader (only for a row this
     });
     type(load(), '30');
     await leave(load());
-    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    await later(() => control.setPlan(loadElsewhere(control.plan, 35)));
     expect(status()).toBe(said(35));
   });
 
@@ -1495,6 +1510,35 @@ describe('another phone’s change, said to a screen reader (only for a row this
         `27.5 ${SPOKEN.lb}, 8 reps`,
         `30 ${SPOKEN.lb}, 8 reps`,
       ),
+    );
+  });
+});
+
+describe('another phone’s change beside this phone’s own sentence (one node each)', () => {
+  it('both are read, the earlier node untouched; this phone’s next sentence replaces its own', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    const region = screen.getByRole('status');
+    const failedNode = region.firstElementChild;
+    const next: DayPlan = structuredClone(control.plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = 35;
+    await act(async () => control.setPlan(next));
+    expect(region.children).toHaveLength(2);
+    expect(region.firstElementChild).toBe(failedNode);
+    expect(region.lastElementChild!.textContent).toContain(
+      DAY_COPY.announce.changedElsewhere(setLabel(1), `35 ${SPOKEN.lb}, 8 reps`),
+    );
+    // This phone's own sentences never stack: Escape here is said beside the other phone's only.
+    fireEvent.keyDown(load(), { key: 'Escape' });
+    expect(region.children).toHaveLength(2);
+    expect(region.lastElementChild!.textContent).toContain(
+      DAY_COPY.announce.cancelled(setLabel(1)),
     );
   });
 });
