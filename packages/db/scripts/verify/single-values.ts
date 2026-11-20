@@ -1451,8 +1451,8 @@ async function verifyClearDay(): Promise<void> {
 
     // 14 · An archived athlete's clear is refused under the clear's own lock (the archive race,
     //      maintainer 2026-11-19): `closed`, nothing hidden, no reason written; restored, it clears.
-    //      PGlite has one connection, so the lock's blocking is the two-`psql` probe's (the PR);
-    //      this proves the check runs inside the writer, not only in the action.
+    //      PGlite has one connection, so no proof here can show the lock's wait: this proves the
+    //      check runs inside the writer, and the source pin below holds the lock's mode and order.
     const D12 = '2026-11-12';
     const w12 = await weighIn(athlete.id, D12, 82);
     await tx
@@ -1474,6 +1474,22 @@ async function verifyClearDay(): Promise<void> {
       .set({ archivedAt: null })
       .where(eq(schema.profiles.id, athlete.id));
     assert.ok('hiddenAt' in (await clear(D12)), 'B2 race proof 14: restored, the same clear runs');
+    // The lock's mode and order, from the source (the erasure's pattern, `verify/erasure.ts`):
+    // `FOR SHARE` on the profile conflicts with an archive's `FOR NO KEY UPDATE`; `KEY SHARE` would
+    // not, and the race would be back with every proof above still green.
+    const hideSrc = readFileSync(new URL('../../src/writers/hide.ts', import.meta.url), 'utf8');
+    const clearDayBody = hideSrc.slice(
+      hideSrc.indexOf('export async function clearDay('),
+      hideSrc.indexOf('export type RestoreClearResult'),
+    );
+    const profileLock = clearDayBody.search(
+      /\.from\(schema\.profiles\)[\s\S]{0,120}?\.for\('share'\)/,
+    );
+    const entriesLock = clearDayBody.indexOf(".for('update', { of: schema.entries })");
+    assert.ok(
+      profileLock !== -1 && entriesLock !== -1 && profileLock < entriesLock,
+      "B2 race proof 14: clearDay locks the profile FOR SHARE before it locks the day's entries",
+    );
 
     // 13 · Scope, both directions, on a day both owners have cleared (D8): another household reads
     //      no events; the owner reads its own.

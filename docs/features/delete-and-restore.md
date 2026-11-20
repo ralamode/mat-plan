@@ -94,7 +94,10 @@ the banner offers is B2's UX panel's call. **`clearDay` checks the archived athl
 lock** (the archive race, maintainer 2026-11-19): it takes the profile row `FOR SHARE` before any
 entry, so a concurrent archive (an UPDATE, which needs a lock `FOR SHARE` blocks) waits for the clear,
 and an archive committed first answers `{ closed: true }`, which the action returns as `closed_day`.
-The action's own check, before the transaction, stays as the cheap first refusal. Proof 14 and
+The action's own check, before the transaction, stays as the cheap first refusal. The lock queues
+the clear with every other profile writer (restore, rename, the routine, Put on / Take off, the
+erasure) but not with an entry insert or hide (`KEY SHARE`); the order stays cycle-free only while no
+writer locks entries and then takes a stronger profile lock, and `db:verify` pins the mode and order. Proof 14 and
 mutation 425 prove the check runs in the writer; PGlite has one connection, so the blocking itself is
 Postgres's documented row-lock conflict, not a proof here.
 
