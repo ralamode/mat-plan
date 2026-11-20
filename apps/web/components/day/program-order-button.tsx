@@ -55,9 +55,12 @@ function prefetch() {
  * and a line under it says so (`orderOpenFailed`), described from the button. A tap retries.
  *
  * **The sheet's cross-route restore needs the dialog mounted**, so when the page mounts onto
- * Program order's own history entry (Back across routes, then Forward) the dialog is loaded at once
- * and mounted shut; the sheet then decides, by its document token and `reopenFromHistory`, whether
- * it reopens.
+ * Program order's own history entry (Back across routes, then Forward) while it can be used, the
+ * dialog is loaded at once and mounted shut; the sheet then decides, by its document token and
+ * `reopenFromHistory`, whether it reopens. The entry is read once, on mount.
+ *
+ * **A tap whose chunk arrives after a re-read hid the button does not open** (`aria-busy` while
+ * it loads).
  */
 export function ProgramOrderButton({
   plan,
@@ -74,17 +77,29 @@ export function ProgramOrderButton({
   const [failures, setFailures] = useState(0);
   const failedId = useId();
   const button = useRef<HTMLButtonElement>(null);
+  /** While a tap waits for the chunk: the button says it is busy. */
+  const [loadingChunk, setLoadingChunk] = useState(false);
+  /** `canOrder` now, for a load that settles after a re-read hid the button. */
+  const canOrderRef = useRef(canOrder);
+  useEffect(() => {
+    canOrderRef.current = canOrder;
+  }, [canOrder]);
+
+  // The history entry is read ONCE, on mount, never on a later `canOrder` flip: a flip is not a
+  // history move, so it must not reopen anything. Mounted shut; the sheet decides, and never
+  // bounces on mount.
+  useEffect(() => {
+    const state = window.history.state as { sheet?: unknown } | null;
+    if (state?.sheet !== PROGRAM_ORDER_SHEET_ID || !canOrderRef.current) return;
+    loadProgramOrderDialog().then(
+      (dialog) => setDialog(() => dialog),
+      // Silent on purpose: nothing was pressed, so there is no button to say it under.
+      () => {},
+    );
+  }, []);
 
   useEffect(() => {
     if (!canOrder) return;
-    const state = window.history.state as { sheet?: unknown } | null;
-    if (state?.sheet === PROGRAM_ORDER_SHEET_ID) {
-      loadProgramOrderDialog().then(
-        (dialog) => setDialog(() => dialog),
-        () => {},
-      );
-      return;
-    }
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(prefetch);
       return () => window.cancelIdleCallback(id);
@@ -102,10 +117,16 @@ export function ProgramOrderButton({
   async function openDialog() {
     if (Dialog) return setOpen(true);
     if (loaded) return show(loaded);
+    setLoadingChunk(true);
     try {
-      show(await loadProgramOrderDialog());
+      const dialog = await loadProgramOrderDialog();
+      // A late load: a re-read hid the button while the chunk came, so the tap no longer stands.
+      if (!canOrderRef.current || !button.current?.isConnected) return;
+      show(dialog);
     } catch {
       setFailures((n) => n + 1);
+    } finally {
+      setLoadingChunk(false);
     }
   }
 
@@ -118,6 +139,7 @@ export function ProgramOrderButton({
             type="button"
             variant="outline"
             aria-describedby={failures > 0 ? failedId : undefined}
+            aria-busy={loadingChunk || undefined}
             onPointerDown={prefetch}
             onFocus={prefetch}
             onClick={() => void openDialog()}
