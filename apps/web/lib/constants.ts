@@ -366,6 +366,22 @@ export const NAV_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3';
 
 /**
+ * A program's name on the day page's programs line, as a link to its page ("Family program ›";
+ * FAM-1 15c, D49, matched to the prototype's `.txt` buttons).
+ *
+ * 🔴 **No underline until hover, because the "›" after each name marks it as a link** (WCAG 1.4.1:
+ * not by colour alone). The name is also the foreground colour on a muted label, so a link never
+ * relies on its colour. Drop the "›" and the underline must come back.
+ *
+ * 🔴 **`min-h-11` and `min-w-11` are load-bearing**: the 44px tap target, on a short name too
+ * ("Am" is narrower than a thumb). `wrap-anywhere` lets a long unbroken name wrap inside the link
+ * instead of overflowing at 360px; it is here rather than `NAME_WRAP_CLASS` because that one's
+ * `min-w-0` would win over `min-w-11` under `cn`.
+ */
+export const PROGRAM_NAME_LINK_CLASS =
+  'text-foreground focus-visible:ring-ring inline-flex min-h-11 min-w-11 items-center rounded-sm px-1 text-sm font-medium wrap-anywhere underline-offset-4 outline-none hover:underline focus-visible:ring-3';
+
+/**
  * A nav ROW — a full-width, bordered, tappable row. `NAV_LINK_CLASS` above is `w-fit` for inline
  * arrow links ("← All athletes"); this is its block-level sibling.
  *

@@ -27,7 +27,12 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { lastDayText } from '@/components/program-builder/builder-text';
 import { sheetStatusId } from '@/components/ui/sheet';
 import { programPath, PROGRAMS_PATH } from '@/components/program-builder/routes';
-import { athletePath, NAME_WRAP_CLASS } from '@/lib/constants';
+import {
+  athletePath,
+  NAME_WRAP_CLASS,
+  PROGRAM_NAME_LINK_CLASS,
+  VALUE_JOINER,
+} from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
@@ -821,7 +826,7 @@ describe('ProgramLine and the Program order dialog', () => {
   });
 
   describe('the names as links (15c, D49)', () => {
-    it('given programHrefFor, each name links to its program; without it, text', () => {
+    const linked = () =>
       render(
         <ProgramLine
           plan={todayTwoPrograms}
@@ -829,17 +834,53 @@ describe('ProgramLine and the Program order dialog', () => {
           programHrefFor={programPath}
         />,
       );
+
+    it('given programHrefFor, each name links to its program; without it, text', () => {
+      linked();
       for (const program of todayTwoPrograms.programs) {
         // The "›" is hidden from a screen reader: the link's name is the program's name alone.
         const link = screen.getByRole('link', { name: program.name });
         expect(link.getAttribute('href')).toBe(programPath(program.programPublicId));
         expect(link.textContent).toBe(`${program.name}›`);
-        expect(link.className).toContain(NAME_WRAP_CLASS);
+        // No tooltip: the name is the whole of what the link says.
+        expect(link.getAttribute('title')).toBeNull();
       }
-      expect(screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: false })).toBeTruthy();
+      expect(screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: true })).toBeTruthy();
       cleanup();
       mountLine(todayTwoPrograms);
       expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('is a muted label, then an unlabelled list of "Name ›" with no commas, as the prototype', () => {
+      linked();
+      const label = screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: true });
+      expect(label.className).toContain('text-muted-foreground');
+      // A `div` holding the label and the list: a `p` cannot hold a `ul`.
+      expect(label.parentElement?.tagName).toBe('DIV');
+      const list = screen.getByRole('list');
+      expect(list.tagName).toBe('UL');
+      expect(list.parentElement).toBe(label.parentElement);
+      expect(list.getAttribute('aria-label')).toBeNull();
+      expect(list.getAttribute('aria-labelledby')).toBeNull();
+      const items = within(list).getAllByRole('listitem');
+      expect(items).toHaveLength(todayTwoPrograms.programs.length);
+      for (const item of items) expect(within(item).getAllByRole('link')).toHaveLength(1);
+      expect(label.parentElement?.textContent).not.toContain(VALUE_JOINER);
+    });
+
+    it('each link is the named class: no underline until hover, a 44px target both ways', () => {
+      linked();
+      const classes = PROGRAM_NAME_LINK_CLASS.split(' ');
+      expect(classes).not.toContain('underline');
+      for (const token of ['hover:underline', 'min-h-11', 'min-w-11', 'font-medium']) {
+        expect(classes).toContain(token);
+      }
+      for (const link of screen.getAllByRole('link')) {
+        expect(link.className).toBe(PROGRAM_NAME_LINK_CLASS);
+        const arrow = link.querySelector('[aria-hidden="true"]');
+        expect(arrow?.textContent).toBe('›');
+        expect(arrow?.className).toContain('ml-1');
+      }
     });
   });
 

@@ -1,8 +1,7 @@
 import { ON_PROGRAM, programsByStay, type DayActions, type DayPlan } from '@mat-plan/shared';
 import Link from 'next/link';
-import { Fragment } from 'react';
 
-import { NAME_WRAP_CLASS, QUIET_LINK_CLASS, VALUE_JOINER } from '@/lib/constants';
+import { NAME_WRAP_CLASS, PROGRAM_NAME_LINK_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 import { PROGRAM_COPY } from './day-copy';
@@ -15,11 +14,13 @@ import { ProgramOrderButton } from './program-order-button';
  * `'use client'`: the sentence renders on the server, and only the button and its dialog are client
  * code.
  *
- * One sentence ("Programs: Family program, Stretching") rather than a row of chips. **Given
- * `programHrefFor`, each name is a link to its program's page**, with the prototype's "›" hidden
- * from a screen reader (D49, maintainer, 2026-11-19). A linked name is one box: a short one moves to
- * the next line whole, and a long one still wraps inside it (`NAME_WRAP_CLASS`).
- * Without it the names are text, as on the preview.
+ * **Given `programHrefFor`, each name is a link to its program's page** (D49, maintainer,
+ * 2026-11-19), laid out as the prototype has it: a muted "Programs:" label, then each name as
+ * "Name ›" with no commas, the "›" hidden from a screen reader so a link's name is the program's
+ * alone (`PROGRAM_NAME_LINK_CLASS` has why it is not underlined). The names are a list (`ul`, not
+ * labelled: the label is beside it), wrapping under one another after the label, 10px apart and 4px
+ * between lines. A short name moves to the next line whole, and a long one wraps inside its link.
+ * Without it the names are one line of text ("Programs: Family program, Stretching").
  *
  * **Program order shows** when the viewed day has two or more programs, the day is writable, the
  * route supplies `reorderPrograms` (plan §6: an undefined action hides its control), and two or more
@@ -50,30 +51,33 @@ export function ProgramLine({
 
   return (
     <div className="flex flex-col items-start gap-1 empty:hidden">
-      {named ? (
+      {named && programHrefFor ? (
+        <div className="flex items-start gap-x-2.5 text-sm">
+          {/* As tall as a link, so the label sits on the first line of names. */}
+          <span className="text-muted-foreground flex min-h-11 shrink-0 items-center">
+            {PROGRAM_COPY.lineLabel(plan.programs.length)}
+          </span>
+          {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
+          <ul role="list" className="flex min-w-0 flex-wrap gap-x-2.5 gap-y-1">
+            {plan.programs.map((program) => (
+              <li key={program.programPublicId}>
+                <Link
+                  href={programHrefFor(program.programPublicId)}
+                  className={PROGRAM_NAME_LINK_CLASS}
+                >
+                  {program.name}
+                  {/* The link lays out as flex items, so the gap is a margin, not a space. */}
+                  <span aria-hidden="true" className="ml-1">
+                    ›
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : named ? (
         <p className={cn('text-muted-foreground text-sm', NAME_WRAP_CLASS)}>
-          {programHrefFor ? (
-            <>
-              {PROGRAM_COPY.lineLabel(plan.programs.length)}{' '}
-              {plan.programs.map((program, index) => (
-                <Fragment key={program.programPublicId}>
-                  {index > 0 ? VALUE_JOINER : null}
-                  <Link
-                    href={programHrefFor(program.programPublicId)}
-                    className={cn(QUIET_LINK_CLASS, NAME_WRAP_CLASS)}
-                  >
-                    {program.name}
-                    {/* The link lays out as flex items, so the gap is a margin, not a space. */}
-                    <span aria-hidden="true" className="ml-1">
-                      ›
-                    </span>
-                  </Link>
-                </Fragment>
-              ))}
-            </>
-          ) : (
-            PROGRAM_COPY.line(plan.programs.map((p) => p.name))
-          )}
+          {PROGRAM_COPY.line(plan.programs.map((p) => p.name))}
         </p>
       ) : null}
       {reorder ? <ProgramOrderButton plan={plan} reorder={reorder} canOrder={canOrder} /> : null}

@@ -330,9 +330,12 @@ const workoutHeadings = (page: Page) =>
   page
     .getByRole('region', { name: DAY_COPY.heading, exact: true })
     .getByRole('heading', { level: 3 });
-/** The programs line ("Programs: A, B"), whose names are links to their program pages (D49). */
+/**
+ * The programs line ("Programs:" then "A ›", "B ›"), whose names are links to their program pages
+ * (D49): the label's container, which holds the list of links.
+ */
 const programsLine = (page: Page) =>
-  page.locator('p', { hasText: new RegExp(`^${escapeRegExp(PROGRAM_COPY.lineLabel(2))}`) });
+  page.getByText(PROGRAM_COPY.lineLabel(2), { exact: true }).locator('..');
 
 test.describe('Program order on real data', () => {
   test.use({ viewport: NARROW_VIEWPORT });
@@ -426,6 +429,9 @@ test.describe('Program order on real data', () => {
       );
     };
     await expectOrder('after the move');
+    // At 360px the line wraps where it must; nothing runs past the screen (where is not asserted).
+    await expectNoOverflowWithin(programsLine(page), 'the programs line');
+    await expectTapTargets(page, 'the day page with its programs line, 360px');
     await page.reload();
     await expectOrder('after a reload');
   });
