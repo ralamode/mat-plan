@@ -164,7 +164,7 @@ export async function movementOptions(
 
 /**
  * 🔴 **The join rows for the listed catalog ids, and only those** (CAT-3 P11-ii-b (b2)). Three reads:
- * the equipment, the primary muscle and the secondaries (never one read ordered "by role"). Unparsed
+ * the equipment, the primary muscle and the secondaries (never one read ordered "by role"), in turn. Unparsed
  * and unordered: `catalogTaxonomyOf` parses, orders, and throws on a row for an id not listed. No ids,
  * no query. Exported so `db:verify` asserts its raw rows.
  */
@@ -186,16 +186,16 @@ export async function catalogTaxonomyRows(
           eq(schema.movementMuscles.role, role),
         ),
       );
-  const [equipment, primaryMuscles, secondaryMuscles] = await Promise.all([
-    exec
-      .select({
-        movementId: schema.movementEquipment.movementId,
-        code: schema.movementEquipment.equipmentCode,
-      })
-      .from(schema.movementEquipment)
-      .where(inArray(schema.movementEquipment.movementId, [...ids])),
-    muscles(MUSCLE_ROLE.primary),
-    muscles(MUSCLE_ROLE.secondary),
-  ]);
+  // One after another, never `Promise.all`: `newItem` passes its transaction's client, and pg warns on
+  // concurrent queries on one client (removed in pg 9); on the pool it would take three connections.
+  const equipment = await exec
+    .select({
+      movementId: schema.movementEquipment.movementId,
+      code: schema.movementEquipment.equipmentCode,
+    })
+    .from(schema.movementEquipment)
+    .where(inArray(schema.movementEquipment.movementId, [...ids]));
+  const primaryMuscles = await muscles(MUSCLE_ROLE.primary);
+  const secondaryMuscles = await muscles(MUSCLE_ROLE.secondary);
   return { equipment, primaryMuscles, secondaryMuscles };
 }
