@@ -247,3 +247,54 @@ export function assertMigrationTarget(
     throw new Error(DB_ENV_MESSAGE.migrationTargetMismatch(target));
   }
 }
+
+/**
+ * 🔴 **`CAT-3` K29: a database the seed may fill with fixtures** — one on this machine, or one whose
+ * name marks it as the preview database. The ONE rule for both sides of K29: `packages/db`'s seed
+ * refuses `SEED_FIXTURES=1` for any other (`assertFixturesTargetAllowed`), and the app reads the
+ * fixture movement library only on one of these (`catalogLibraryNameFor`).
+ *
+ * Accepted limits, shared with the guards above: a production database named `*preview*`, or a
+ * tunnel to production on localhost, passes. `VERCEL_ENV` is the app's second check; the seed's is
+ * that it checks it owns a database before writing any fixture (`seed`).
+ */
+export function isFixturesDatabase(connectionString: string): boolean {
+  return (
+    isLocalDbHost(connectionString) || namesPreviewDatabase(databaseNameOf(connectionString) ?? '')
+  );
+}
+
+/**
+ * The two movement libraries (`CAT-3` K29): `'catalog'` is `CATALOG_MOVEMENTS`, the approved entries;
+ * `'fixture'` is `CATALOG_FIXTURE`, the test library. A name, not the list, so this module and the
+ * seed's options stay free of the library's data; each side maps the name to its list once.
+ */
+export const CATALOG_LIBRARY_NAMES = ['catalog', 'fixture'] as const;
+export type CatalogLibraryName = (typeof CATALOG_LIBRARY_NAMES)[number];
+
+/**
+ * **The movement library an app reads (`CAT-3` K29).** `'fixture'` exactly when the database is one
+ * the seed fills with fixtures AND the deployment is not production; `'catalog'` otherwise. It never
+ * throws: it only chooses, and the default is the real library. The fixture one needs positive proof
+ * (a local host or a preview name), so an unparseable string, a remote database with no name, a
+ * `host=` override and production all read the real library. Decided once, at module scope, by
+ * `apps/web/lib/env.ts`.
+ */
+export function catalogLibraryNameFor(input: {
+  /** `process.env.DATABASE_URL`. */
+  databaseUrl: string | undefined;
+  /** `process.env.VERCEL_ENV`. */
+  vercelEnv: string | undefined;
+}): CatalogLibraryName {
+  if (input.vercelEnv?.trim() === 'production') return 'catalog';
+  if (!input.databaseUrl) return 'catalog';
+  return isFixturesDatabase(input.databaseUrl) ? 'fixture' : 'catalog';
+}
+
+/**
+ * K29 condition 2: the start-up line logged once when an app reads the fixture library, and never
+ * otherwise. Fixed text, pinned by equality: it names the rule and nothing from the URL, because it
+ * lands in CI's public `next build` log.
+ */
+export const CATALOG_LIBRARY_FIXTURE_NOTICE =
+  'catalog library: CATALOG_FIXTURE (isFixturesDatabase(DATABASE_URL), not production; CAT-3 K29)';
