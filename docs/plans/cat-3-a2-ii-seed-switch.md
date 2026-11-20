@@ -334,6 +334,9 @@ includes the Family program, with its Conditioning workout, which Athlete One an
 
 ## Review-response log
 
+**Approved** _(maintainer, 2026-11-20, relayed by the FAM-1 board: "Approve (Recommended)")_, including the
+console rehearsal before the merge and the rollback limits as stated. Build starts once #763 is on main.
+
 Panel on the first draft (2026-11-20): db-safety, correctness, security and privacy, on Opus 5.5 (the author
 on Opus 5.5). No P0 stands: the db-safety P0 is fixed in D3. Every finding is accepted.
 
