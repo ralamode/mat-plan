@@ -360,6 +360,21 @@ export function hasSetRows(type: TrackingType): boolean {
 }
 
 /**
+ * A picker option as `existingItem` matches it: `isCatalog` from `owner`, and a catalog item's aliases
+ * only (a household item's typed name is never an alias). **The one mapping** `newItem` uses over the
+ * read's options, so the server and the picker's search match the same fields (CAT-3 K23).
+ */
+export function matchableOption<
+  O extends { readonly owner: 'catalog' | 'household'; readonly aliases?: readonly string[] },
+>(option: O): O & { readonly isCatalog: boolean; readonly aliases: readonly string[] } {
+  return {
+    ...option,
+    isCatalog: option.owner === 'catalog',
+    aliases: option.owner === 'catalog' ? (option.aliases ?? []) : [],
+  };
+}
+
+/**
  * The item a typed name already names, or `undefined`: **the one definition of "this item exists"
  * for `newItem`**. The preview's fake reads it, and the real writer will (plan step 6a).
  *
@@ -393,21 +408,6 @@ export function hasSetRows(type: TrackingType): boolean {
  * ⚠️ A name whose key is empty (`S`, `s s`: the fold drops a lone `s`) matches nothing, here and in
  * the picker. `newItemSchema` refuses such a name, so `newItem` never reaches this with one.
  */
-/**
- * A picker option as `existingItem` matches it: `isCatalog` from `owner`, and a catalog item's aliases
- * only (a household item's typed name is never an alias). **The one mapping** `newItem` uses over the
- * read's options, so the server and the picker's search match the same fields (CAT-3 K23).
- */
-export function matchableOption<
-  O extends { readonly owner: 'catalog' | 'household'; readonly aliases?: readonly string[] },
->(option: O): O & { readonly isCatalog: boolean; readonly aliases: readonly string[] } {
-  return {
-    ...option,
-    isCatalog: option.owner === 'catalog',
-    aliases: option.owner === 'catalog' ? (option.aliases ?? []) : [],
-  };
-}
-
 export function existingItem<T extends MatchableMovement & { readonly isCatalog: boolean }>(
   options: readonly T[],
   name: string,

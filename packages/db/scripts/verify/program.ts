@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   catalogOptionOf,
+  movementNameKey,
   pickerEntryOf,
   trackingTypeSchema,
   existingItem,
@@ -93,7 +94,7 @@ import { createProgram } from '../../src/writers/program/create-program';
 import { copyWorkout } from '../../src/writers/program/copy-workout';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { newItem } from '../../src/writers/program/new-item';
-import { catalogArmOption, joinAliases } from '../../src/queries/program/catalog-arm-option';
+import { catalogArmOption } from '../../src/queries/program/catalog-arm-option';
 import { seedCatalog } from '../../src/seed';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
@@ -1651,12 +1652,6 @@ async function verifySaveWeek({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
 }
 
 /**
- * `movementOptions` (the picker's read) and `newItem` (FAM-1 6a-iii-a; contract change C8). The read
- * lists every live catalog row the picker map names and every live household item no catalog slug
- * shadows, used or not (maintainer, 2026-11-17). `newItem` selects what that list already names, by
- * name key or alias, and answers with the item's stored name and own type.
- */
-/**
  * CAT-3 P11-ii-a (plan `docs/plans/cat-3-p11-ii-option-taxonomy.md`, (a1)–(a9)): the option read lists
  * every library row through `catalogArmOption`, the old built-ins unchanged at the DTO, nothing another
  * household holds, and `newItem` matches over the same aliases (K23). Library rows are written by A2-i's
@@ -1705,7 +1700,13 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
       ...identity,
       owner: 'catalog',
       ...(picker ? { group: picker.group } : {}),
-      aliases: joinAliases(picker?.aliases ?? [], o?.aliases ?? []),
+      // Written out here, not `joinAliases` (the module under test): each alias once by the picker's
+      // name key, the const's spelling first.
+      aliases: [...(picker?.aliases ?? []), ...(o?.aliases ?? [])].filter(
+        (alias, i, all) =>
+          movementNameKey(alias) !== '' &&
+          all.findIndex((x) => movementNameKey(x) === movementNameKey(alias)) === i,
+      ),
       taxonomy: o
         ? {
             modality: o.modality,
@@ -1793,8 +1794,6 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
     );
 
     // (a6) K23: Enter and newItem pick the same row, because both match over this list.
-    // Pinned literally (not only "the same as existingItem"), so a divergence in WHICH row is picked
-    // shows: OHP is both the old built-in's alias and the library row's; "Overhead press" sorts first.
     // Pinned literally, so a divergence in WHICH row is picked shows. "OHP" is both the old built-in's
     // alias and the library row's; "Overhead press" sorts first. "Dips" and "Dip" share one name key
     // (the fold drops a plural s), so both are exact matches and the tie goes to the name that sorts
@@ -1946,6 +1945,12 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   );
 }
 
+/**
+ * `movementOptions` (the picker's read) and `newItem` (FAM-1 6a-iii-a; contract change C8). The read
+ * lists every live catalog row the picker map names and every live household item no catalog slug
+ * shadows, used or not (maintainer, 2026-11-17). `newItem` selects what that list already names, by
+ * name key or alias, and answers with the item's stored name and own type.
+ */
 async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const exec = asTx(tx);

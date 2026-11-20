@@ -1,4 +1,4 @@
-import { catalogOptionOf, MOVEMENT_PICKER_ENTRIES, TRACKING_TYPE } from '@mat-plan/shared';
+import { catalogOptionOf, pickerEntryOf, TRACKING_TYPE } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { describe, expect, it } from 'vitest';
 
@@ -14,12 +14,7 @@ const entry = (slug: string) => {
   if (!found) throw new Error(`fixture: no library entry ${slug}`);
   return found;
 };
-const picker = (slug: string) =>
-  (
-    MOVEMENT_PICKER_ENTRIES as Readonly<
-      Record<string, { group: never; aliases?: readonly string[] }>
-    >
-  )[slug];
+const picker = pickerEntryOf;
 const row = (over: Partial<CatalogArmRow>): CatalogArmRow => ({
   publicId: '019826b4-0000-7000-8000-00000000e001',
   slug: 'sled_push',

@@ -120,9 +120,6 @@ export async function movementOptions(
     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
   };
   const bySlug = new Map(library.map((entry) => [entry.slug, entry]));
-  const pickerEntries: Readonly<
-    Record<string, (typeof MOVEMENT_PICKER_ENTRIES)[keyof typeof MOVEMENT_PICKER_ENTRIES]>
-  > = MOVEMENT_PICKER_ENTRIES;
   return [
     ...[...catalog]
       .sort(byName)
