@@ -1,10 +1,10 @@
-import { ENTRY_STATUS, SEED_METRIC_KEYS } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, ENTRY_STATUS, SEED_METRIC_KEYS } from '@mat-plan/shared';
 
 import type { EntryDTO } from '@/lib/dal/entries';
 
 /**
- * Two selectors over the day's already-fetched entries: the logged life activities the Life
- * section lists, and the logged bodyweight the weigh-in receipt shows. Pure and route-agnostic
+ * Selectors over the day's already-fetched entries: the logged life activities the Life section
+ * lists (and which of them is a practice), and the logged bodyweight the weigh-in receipt shows. Pure and route-agnostic
  * (no `server-only`, type-only `EntryDTO` import), like `entry-label.ts`. In memory, no query.
  *
  * The file kept its name when 12f deleted the calisthenics totals and the strength-session rows it

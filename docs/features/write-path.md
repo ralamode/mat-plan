@@ -535,8 +535,8 @@ The shapes those lanes agree on, the fakes and the preview route are
      now names this case. Also asserted in the B0 block.
    - **check-ins** → `own_hidden` per item; since `V1-9b` B1-2 (#387) the action names the field
      that did not save.
-   - **life activities** → `own_hidden`; since B1-2 the action refuses with
-     `HIDE_COPY.loggedThenDeleted` rather than reporting success.
+   - **life activities** → `own_hidden`; since B1-2 the action refuses rather than reporting
+     success (the copy was `HIDE_COPY.loggedThenDeleted`, deleted with its last caller at 12f).
      🔴 **All four were a silent TWIN before B0**, which is the defect, so a refusal — even an ugly one
      — is the improvement. Strength and bodyweight keep the throw (the plan's Decision 7 cut a typed
      replay-of-hidden); #387 gave check-ins and life their typed refusals.
