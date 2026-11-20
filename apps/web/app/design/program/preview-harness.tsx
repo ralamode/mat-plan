@@ -213,9 +213,10 @@ function DayPreview({ selection }: { selection: PreviewSelection }) {
           {SETTINGS_COPY.archivedNotice(athlete.name)} {SETTINGS_COPY.heading}.
         </p>
       ) : null}
-      {/* As the page does since 15c PR 3 (invariant 11): each program's name is a link. The page
-          passes `programPath`; the preview has no `/programs/<id>`, so a name opens the preview's
-          Program page for that program, or its Programs list when it has no page for it. */}
+      {/* What the page mounts (invariant 11): each program's name is a link. 15c PR 3 passes
+          `programPath` on the page; the preview has no `/programs/<id>`, so a name opens the
+          preview's Program page for that program, or its Programs list when it has no page for
+          it. */}
       <ProgramLine plan={plan} actions={fake.actions} programHrefFor={programPreviewHref} />
       {/* As the page does since 15 PR 2 (invariant 11): the Programs link under the page's own
           rule, `offersProgramsLink`. The preview has no `/programs`, so here it opens the preview's
