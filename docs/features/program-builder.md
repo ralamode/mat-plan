@@ -349,7 +349,8 @@ flowchart LR
       someone new shares targets (the program has athletes, or two start together),
       `sameTargetsText`, both in the footer (`SheetFormFooter`'s `lead`, which describes the action; the footer lives in
       `components/ui/sheet-form-footer.tsx` since V1-9b B2-prep, shared with Clear this day, and
-      `PENDING_CLASS` in `components/ui/pending-class.ts`, re-exported by `builder-text.ts`),
+      `PENDING_CLASS` in `components/ui/pending-class.ts`, re-exported by `builder-text.ts`; its two
+      buttons stack, action first, below a 20rem column, so 200% zoom on a phone never clips Cancel),
       in view with Start. Start counts only who starts (`startLabel(fresh)`). A last day is
       `lastDayText(day, today)`, one rule with "Who's on it". When only athletes taken off today are
       ticked, the radios give way to `PUT_ON_COPY.stayOnNoGap` and the action is `keepLabel` (their
