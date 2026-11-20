@@ -139,9 +139,13 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     (`changeableFields`; D44, Form 1, maintainer, 2026-11-18; 12d-iii): a weight × reps row offers
     its **reps only**, its load stays text in its own unit (`27.5 lb`) and is sent back unchanged,
     and `readAmend` judges that Change in the logged unit, as the writer does. A distance or count
-    row logged in another unit has no reps, so it stays text. Every such row, logged or un-ticked
-    this visit, carries a line that asks for no conversion (`OtherUnitLine`, `DAY_COPY.otherUnit`;
-    its ✓ and fields point at it only while it shows). Change's reader
+    row logged in another unit has no reps, so it stays text. Every such row is explained, asking for no
+    conversion (`DAY_COPY.otherUnit`): **once per exercise**, by a note under its heading that the
+    logged rows' ✓ and fields point at (`OtherUnitNote`, kept for the visit once seen, D20's rule;
+    #688 follow-up, maintainer, 2026-11-19), and by **a row's own line** (`OtherUnitLine`) only where
+    its copy differs, an un-tick this visit, or where there is no note (the page's data lags on a
+    first render, or the rows are in two other units). One rule, `rowUnitLine`, decides both what
+    renders and what is referenced, so no description dangles. Change's reader
     (`readAmend`) fills nothing from the prescription: a blank, a non-number or an out-of-range
     number keeps **its own field's** logged number, and the row's other fields are still sent.
     🔴 **Nor does a ✓ after an un-tick** (H9, maintainer, 2026-11-18; 12d-ii): a row whose load
