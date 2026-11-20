@@ -28,6 +28,7 @@ import {
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
+  PROFILE_NOT_FOUND,
   PROFILE_NAME_MAX,
   PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
@@ -146,6 +147,7 @@ import {
 import {
   assertGlobalCheckMatchesMigration,
   verifyCatalogMigrationFacts,
+  verifyCatalogSeedOnAFreshDatabase,
   verifyCatalogTables,
 } from './verify/catalog';
 import { verifyDay } from './verify/day';
@@ -154,7 +156,7 @@ import { verifyErasure } from './verify/erasure';
 import {
   asPg,
   assertCheckCoversConst,
-  captureWarnings,
+  captureOutput,
   assertRefTableMatches,
   asTx,
   columnCatalogShape,
@@ -241,6 +243,9 @@ console.log('✓ migration applied to PGlite');
 // V1-1b re-add below. HERE for the same reason as the block above: from the V1-1b simulation on, the
 // constraint in the database is this file's, not the migration's.
 const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
+
+// CAT-3 A2-i E1: the catalog writer on a database with no global movement yet, all rolled back.
+await verifyCatalogSeedOnAFreshDatabase();
 
 // OPS-2 Proof A: production's seed on a fork's first run, before any fixture seed below.
 await verifySeedOnAFreshDatabase();
@@ -2323,7 +2328,8 @@ assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW
 assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
 
 // V1-30: a non-mass set is UNEDITABLE by design. The edit guard keys on a live primary MASS quantity
-// (writers/strength-session.ts), and the form's `isEditableSet` agrees (strength-logging invariant 3).
+// (writers/strength-session.ts). The old strength form, whose `isEditableSet` mirrored it, was retired
+// at FAM-1 12f, so this guard is the whole rule now.
 // This set has no mode flag and one quantity, so the dimension is the ONLY thing refusing it. Since
 // V1-30 the form can save time and distance sets, so this is the population the refusal now covers;
 // recovering a typo in one means writing a correction (docs/features/strength-logging.md).
@@ -5002,8 +5008,8 @@ const [verifyProfileRow] = await db
 // resolver onto `membershipHousehold` — it counts a principal's memberships now, and two live
 // households is the intended Beta 0 end state. A gate asserting a control that no longer exists is
 // worse than no gate, so what this proves is re-stated as what it is: `liveHouseholdIds` keeps its
-// `LIMIT 2` ambiguity probe, and its two surviving callers (this file, and
-// `screenshot-ephemeral.ts`'s fixture scope) both refuse rather than pick when it returns 2.
+// `LIMIT 2` ambiguity probe, and its one surviving caller (this file) refuses rather than picks when
+// it returns 2.
 assert.equal(
   (await liveHouseholdIds(asPg)).length,
   2,
@@ -5699,7 +5705,7 @@ for (const [label, profilePublicId, ownScope, otherScope, day] of [
       activityTypeId: scLiftActivityId,
       movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
     }),
-    /Profile not found/,
+    { message: PROFILE_NOT_FOUND },
     `TEN-1: …and the other household cannot write it (${label})`,
   );
   assert.equal(
@@ -6115,7 +6121,7 @@ await assert.rejects(
       },
     ],
   }),
-  /Profile not found/,
+  { message: PROFILE_NOT_FOUND },
   'TEN-1 1d: the household seam refuses the cross-household session write (as 1c proves)',
 );
 assert.equal(
@@ -7113,7 +7119,7 @@ console.log(
     'TEN-2c guard fixture: at least one curated movement is referenced by nothing, so (b) can delete it and watch the seed restore it',
   );
 
-  // `captureWarnings` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
+  // `captureOutput` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
 
   // (a) 🔴 THE BASELINE, INVERTED — the absorb the guard existed to detect is GONE.
   // Until 0017 this asserted that a global catalog insert whose slug a household already owns is
@@ -7173,7 +7179,7 @@ console.log(
     [],
     'TEN-2c guard fixture: the curated row for the shadowed slug is absent before the seed runs — otherwise "the curated row lands" would hold because it never left',
   );
-  const guardMessage = await captureWarnings(async () => {
+  const guardMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
   assert.deepEqual(
@@ -7188,12 +7194,19 @@ console.log(
   );
   assert.match(
     guardMessage,
-    /ALSO owned by a household/,
+    /share a legacy seed slug/,
     'TEN-2c SHADOW REPORT: …and it still REPORTS the shadowing, as a console.warn rather than a throw — `migrate.yml` seeds PRODUCTION on every push to `main`, where a throw turns the job red on every subsequent push and cannot clear itself by re-running',
   );
+  // CAT-3 A2-i (spec rule 7): the report is COUNTS ONLY. It used to name the seed slug, but that slug
+  // is also the household's own row's slug, which says what they typed. The operator lists the rows
+  // from their own console (docs/runbooks.md → "the seed's shadow guard fired").
   assert.ok(
-    guardMessage.includes(shadowed.slug),
-    'TEN-2b: …and the warning NAMES the seed slug, so the operator knows which catalog row is shadowed',
+    /\b1 household-owned movement\(s\) share a legacy seed slug/.test(guardMessage),
+    'TEN-2c SHADOW REPORT: …it COUNTS the shadowed row (CAT-3 A2-i: counts only)',
+  );
+  assert.ok(
+    !guardMessage.includes(shadowed.slug),
+    'TEN-2b / CAT-3 A2-i: …and the report does NOT name the slug — a slug a household also holds says what that household typed, and this log is public',
   );
   // 🔴 Privacy: the message lands in a WORLD-READABLE Actions log (`migrate.yml` runs `db:seed`
   // against production on every push to `main`, in a public repo). Seed slugs come from a public
@@ -7210,12 +7223,13 @@ console.log(
   await db
     .delete(schema.movements)
     .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'));
-  const quietMessage = await captureWarnings(async () => {
+  const quietMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
-  assert.equal(
-    quietMessage,
-    '',
+  // What the test means, not "prints nothing": since CAT-3 A2-i the seed also prints its catalog
+  // counts, which A2-ii's fixture seed will do on every run.
+  assert.ok(
+    !/share a legacy seed slug|share a library slug/.test(quietMessage),
     'TEN-2c: …and with no shadow the seed warns about NOTHING — the report is a report, not noise on every run',
   );
   assert.equal(
@@ -7232,7 +7246,7 @@ console.log(
   console.log(
     '✓ TEN-2c SEED SHADOW REPORT, three directions: the ABSORB IS GONE (a global catalog insert whose ' +
       'slug a household owns now lands alongside it — TEN-2b’s baseline, inverted), `seed()` INSERTS ' +
-      'the curated row and WARNS instead of throwing (naming the seed slug, never the household’s free ' +
+      'the curated row and WARNS instead of throwing (as counts only, never a slug or the household’s free ' +
       'text, because that log is world-readable), and with no shadow it warns about nothing and stays ' +
       'idempotent. No DDL left in this block',
   );
@@ -8684,6 +8698,33 @@ console.log(
     'PROF-1 a-1w: a REPLAY returns the first row, not a twin — and ignores the new name and kind',
   );
   assert.equal(await countIn(households[0].id), aBefore + 1, 'PROF-1 a-1w: …and still one row');
+
+  // The household row is read FOR KEY SHARE, so an erasure mid-call answers `refused`, never a 23503.
+  // Waiting is unprovable on PGlite's one connection; the lock MODE is not: a locking read takes
+  // RowShareLock on the table and a plain SELECT does not. 🔴 A fresh transaction, and a REPLAY (no
+  // insert): any insert of a row that references `households` runs a foreign-key check that takes
+  // RowShareLock too and would hide a missing lock (mutation 591).
+  await rolledBack(async (tx) => {
+    const again = await createProfile(asTx(tx), A_SCOPE, {
+      name: 'A-1 Athlete Lock Probe',
+      kind: PROFILE_KIND.kid,
+      clientId: A_KEY,
+    });
+    assert.deepEqual(
+      again,
+      { ok: true, publicId: createdId },
+      'PROF-1 a-1w: the lock proof is a replay (no insert takes a foreign-key lock)',
+    );
+    const modes = (
+      await tx.execute(
+        sql`select mode from pg_locks where locktype = 'relation' and relation = 'households'::regclass and pid = pg_backend_pid()`,
+      )
+    ).rows as Array<{ mode: string }>;
+    assert.ok(
+      modes.some((l) => l.mode === 'RowShareLock'),
+      'PROF-1 a-1w: the household row is read FOR KEY SHARE, so an erasure mid-call is refused',
+    );
+  });
 
   // (3) A replay still resolves after the athlete is ARCHIVED — archive is not a delete, and the
   // key is not freed by it.

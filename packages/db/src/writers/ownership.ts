@@ -222,6 +222,16 @@ export function movementIsGlobal() {
   return isNull(schema.movements.householdId);
 }
 
+/**
+ * `household_id IS NULL AND modality IS NOT NULL`: a **library** row (`CAT-3` spec rule 2), written
+ * only by the catalog seed (`seedCatalog`). Not a slug test: the 35 legacy global rows have no
+ * `modality`, and a slug cannot tell the two apart once they share one. The one predicate the seed,
+ * the option read (P11-ii) and the proofs use.
+ */
+export function movementIsCatalog() {
+  return and(movementIsGlobal(), isNotNull(schema.movements.modality));
+}
+
 /** `movements.household_id IS NOT NULL` — any household's own namespace. */
 export function movementIsOwned() {
   return isNotNull(schema.movements.householdId);
@@ -277,9 +287,8 @@ export function movementIsAvailableTo(scope: HouseholdScope) {
  * `scope.householdId`, which is why it belongs in this module — `scope.test.ts` asserts exactly one
  * module does.
  *
- * Its consumers: `householdHasProgram` (whose one caller is the add-athlete form,
- * `apps/web/app/p/new/page.tsx`, wording the Child option by whether the household has a legacy
- * program), `liveTemplateBlockIn` below, and the template-block helpers.
+ * Its consumers: `liveTemplateBlockIn` below and the template-block helpers. (`householdHasProgram`
+ * was one until FAM-1 12f deleted it with its last caller.)
  */
 export function programBlockInHousehold(scope: HouseholdScope) {
   return eq(schema.programBlocks.householdId, scope.householdId);
@@ -565,8 +574,9 @@ export async function insertProfileOwnedBy(
 //
 // The two insert helpers lane P's program writers (steps 6a–6c) call. They live HERE because this is
 // the only module that may unwrap `scope.householdId` (`src/scope.test.ts` → `UNWRAPS_SCOPE`); the
-// writers themselves never hold the tenant id. Nothing calls them yet: `apps/web` has no path to these
-// tables until lane P (`apps/web/test/program-tables-stay-dark.test.ts`).
+// writers themselves never hold the tenant id. Lane P's writers and the `db:verify` scripts
+// (`packages/db/scripts/verify/`) call them; `apps/web` imports neither (their empty `ALLOWED_IN`
+// rows, `apps/web/test/program-imports.test.ts`).
 
 /**
  * 🔴 **THE legacy-block predicate: `program_blocks.kind = 'legacy'`** (FAM-1 5b; ADR 0007 A2 §1). The

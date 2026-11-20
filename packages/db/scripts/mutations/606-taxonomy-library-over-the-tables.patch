@@ -1,0 +1,21 @@
+diff --git a/packages/db/src/queries/program/catalog-arm-option.ts b/packages/db/src/queries/program/catalog-arm-option.ts
+index 723d3238..d4bfca7f 100644
+--- a/packages/db/src/queries/program/catalog-arm-option.ts
++++ b/packages/db/src/queries/program/catalog-arm-option.ts
+@@ -175,7 +175,6 @@ export function catalogArmOption(
+     ...(pickerEntry ? { group: pickerEntry.group } : {}),
+     aliases: joinAliases(pickerEntry?.aliases ?? [], fromLibrary?.aliases ?? []),
+     taxonomy:
+-      tables ??
+       (fromLibrary
+         ? {
+             modality: fromLibrary.modality,
+@@ -184,7 +183,7 @@ export function catalogArmOption(
+             primaryMuscle: fromLibrary.primaryMuscle,
+             secondaryMuscles: fromLibrary.secondaryMuscles,
+           }
+-        : null),
++        : null) ?? tables,
+     supervision: fromLibrary?.supervision ?? null,
+     hasInstructions: fromLibrary?.hasInstructions ?? false,
+   };

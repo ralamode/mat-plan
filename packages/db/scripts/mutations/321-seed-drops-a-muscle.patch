@@ -1,12 +1,13 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 01786f5c..3d392b27 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -289,7 +289,7 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
+@@ -327,7 +327,7 @@ export async function seedReference(
      .onConflictDoNothing({ target: schema.equipment.code });
    await db
      .insert(schema.muscles)
 -    .values(MUSCLES.map((code) => ({ code })))
-+    .values(MUSCLES.slice(1).map((code) => ({ code })))
++    .values([...MUSCLES, 'zz_not_in_const'].map((code) => ({ code })))
      .onConflictDoNothing({ target: schema.muscles.code });
  
    // V1-2: the FULL catalog (activity_types + metric_definitions + movements), sourced from

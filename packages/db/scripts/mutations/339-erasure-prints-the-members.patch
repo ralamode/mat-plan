@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 3b5db3f6..6e5f0fde 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1017,6 +1017,7 @@ function erasureLines(report: ErasureReport, verb: 'would erase' | 'erased'): Co
+   return [
+     ...report.counts.filter((c) => c.rows > 0).map((c) => `${verb} ${c.rows} ${c.table} row(s)`),
+     note(`total: ${report.total} row(s)`),
++    ...report.members.map((m) => note(`member ${m.clerkUserId}`)),
+   ];
+ }
+ 

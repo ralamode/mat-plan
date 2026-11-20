@@ -16,13 +16,13 @@ import { THEME_CHOICES, THEME_COPY, type ThemeChoice } from '@/lib/constants';
  *   this app does not vendor.
  * - **Native radios, not `aria-pressed` buttons.** Three mutually exclusive values IS a radio group:
  *   one tab stop with arrow-key movement, state announced by the platform, and no live region needed
- *   (adding one would double-announce). It is the same argument `set-mode-toggles.tsx` records for
- *   using real checkboxes for two independent booleans.
+ *   (adding one would double-announce). It is the same argument the strength form's set-mode
+ *   toggles (deleted at FAM-1 12f) made for using real checkboxes for two independent booleans.
  *
  * ## It must NOT look like the logging chips
  *
- * The `sr-only`-input-inside-a-`min-h-11`-label construction is borrowed from
- * `app/p/[profileId]/set-mode-toggles.tsx` — that part is right and it is why the a11y gate measures
+ * The `sr-only`-input-inside-a-`min-h-11`-label construction is borrowed from the strength form's
+ * set-mode toggles (deleted at FAM-1 12f) — that part is right and it is why the a11y gate measures
  * the **label** as the tap target (`e2e/a11y.spec.ts`'s `LABEL_MEASURED` path). The *skin* is
  * deliberately different: those chips are filled `bg-secondary` pills that record what was actually
  * lifted, and a theme control that looked identical would read as another logging control (UX panel,

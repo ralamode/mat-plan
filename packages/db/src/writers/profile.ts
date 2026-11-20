@@ -372,10 +372,10 @@ async function addProfile(
  *
  * `addProfile` reads the count and then inserts. Unlocked, N adds at once from one household all read
  * `count < MAX_HOUSEHOLD_ATHLETES` and all insert (the limiter fails open, so it never bounded that).
- * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, exactly as `newItem`
- * does for its items (#605), so a second add at the same moment waits, then counts the first add's
- * committed row; a same-key twin finds its twin's row at the replay step. That is why the replay lookup
- * runs AFTER the lock, not before it.
+ * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, as `newItem` does for
+ * its items (#605), through a household row read `FOR KEY SHARE` (#714 and this fix), so a second
+ * add at the same moment waits, then counts the first add's committed row; a same-key twin finds its
+ * twin's row at the replay step. That is why the replay lookup runs AFTER the lock, not before it.
  *
  * ⚠️ **No `isolationLevel` option.** The default READ COMMITTED gives each read after the lock a fresh
  * snapshot that includes the waited-on add. Under REPEATABLE READ the snapshot would predate the wait
@@ -397,14 +397,26 @@ async function lockedCreate(
   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
   await setLocalLockTimeout(exec);
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
-  // unwrapped here. No row means the household is gone (an erasure mid-call): `refused`, so the
-  // count never runs without the lock.
+  // unwrapped here. No row means the household is gone: `refused`, so the count never runs without
+  // the lock.
+  //
+  // 🔴 **`FOR KEY SHARE` on the household row: an erasure mid-call answers `refused`, never a 23503**
+  // (as `newItem` does, #714). The erasure core holds the household `FOR UPDATE` before it deletes it;
+  // a plain read would see the row, and the profile insert would then fail its foreign key once the
+  // erasure commits. With the row lock this read waits, re-checks under READ COMMITTED and finds no
+  // row. No deadlock: the core never takes this advisory lock, and `profiles` references only
+  // `households`, which this transaction already holds compatibly, so the insert waits on nothing the
+  // core holds. The `client_id` arbiter does not wait on it either: the core's row locks are
+  // lock-only (a dirty-snapshot check ignores them), and the core deletes nothing until it holds the
+  // household row this read keeps in KEY SHARE. The wait is bounded by the `lock_timeout` above
+  // (past it, 55P03).
   const locked = await exec
     .select({
       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
     })
     .from(schema.households)
-    .where(householdRowIs(scope));
+    .where(householdRowIs(scope))
+    .for('key share');
   if (locked.length !== 1) return { ok: false, reason: 'refused' };
   return addProfile(exec, scope, input);
 }

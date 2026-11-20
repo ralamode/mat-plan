@@ -7,7 +7,7 @@ import {
   type RowRefusal,
   type RowValues,
 } from '@mat-plan/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { useDay } from './day-context';
 import { DAY_COPY, refusalCopy } from './day-copy';
@@ -147,6 +147,57 @@ export function useChange(
     setBaseline(null);
     setLine(null);
   }
+  // Another phone's Change to this entry (the same entry, new numbers): a drafted field that
+  // equalled what was stored was not an edit, so it is dropped, field by field, never turned into
+  // one that a blur would send over that phone's number ("Not saved. Was 35 lb" for a "30" nobody
+  // meant). A field really typed stays. Same entry only: a new one already dropped the draft above.
+  // (12c-iii follow-up; the phantom predates the fold, #462.)
+  const values = entry?.values ?? null;
+  const [seenValues, setSeenValues] = useState(values);
+  // What another phone's change does to a row this one was changing, said by the page's announcer
+  // (never by the line: it is not a live region). Set here, during render; said by the effect below.
+  const [elsewhere, setElsewhere] = useState<{ text: string } | null>(null);
+  // This phone's own write, from the call until its draft is cleared: the answer lands (the row's
+  // values move) one render before `setDraft(null)`, and is never another phone's change.
+  const [saving, setSaving] = useState(false);
+  if (values !== seenValues) {
+    setSeenValues(values);
+    if (
+      entryId === seenEntry &&
+      draft !== null &&
+      seenValues &&
+      values &&
+      !sameValues(values, seenValues)
+    ) {
+      // A failed save's "Couldn’t save. Still 27.5 lb" names what is no longer stored: it gives way
+      // to the draft's own "Not saved. Was 35 lb". Only a failed save (`counts`): a Reload notice
+      // leaves no draft, and a failed Undo's draft (typed back) is no edit, so it is dropped below
+      // and the line block clears its message.
+      if (r.error?.write === 'amend' && r.error.counts) r.clearError();
+      const was = textOf(item, seenValues);
+      const drafted = Object.keys(draft) as RowField[];
+      const typed = drafted.filter((f) => draft[f] !== was[f]);
+      // Said only for a row that showed "Not saved" or "Couldn’t save" (a draft typed back is
+      // silent), and never for this phone's own save (its answer is announced by `commit`).
+      if (editable && typed.length > 0 && !r.pending && !saving) {
+        const now = textOf(item, values);
+        // Still typed: a field that still differs and can still be changed (a load whose unit moved
+        // stops being a field, and its draft goes below). Else only what is stored is said, which is
+        // true whether another phone wrote it or this one's own write landed with its answer lost.
+        const stillTyped = typed.some((f) => fields.includes(f) && draft[f] !== now[f]);
+        const to = spokenValues(values);
+        setElsewhere({
+          text: stillTyped
+            ? DAY_COPY.announce.changedElsewhere(name, to)
+            : DAY_COPY.announce.savedAs(name, to),
+        });
+      }
+      if (typed.length === 0) setDraft(null);
+      else if (typed.length < drafted.length) {
+        setDraft(Object.fromEntries(typed.map((f) => [f, draft[f]])) as Partial<RowText>);
+      }
+    }
+  }
   // A row that stops being changeable (the day closed), or whose typed field stops being one (its
   // item's unit changed under it, so the load is text now: 12d-iii), drops what was typed.
   if (draft !== null && (Object.keys(draft) as RowField[]).some((f) => !fields.includes(f))) {
@@ -177,6 +228,23 @@ export function useChange(
   // answer was lost): a failed save's "not saved" no longer says anything true.
   if (!dirty && r.error?.write === 'amend' && r.error.counts) r.clearError();
   const shownLine = editable && !dirty ? line : null;
+
+  // Keyed on the sentence alone: `day` is not a dependency, so a re-render that hands down a new
+  // context value (the announcement's own, say) never says it twice.
+  const announceElsewhere = useEffectEvent((text: string) => day.announce(text));
+  useEffect(() => {
+    if (elsewhere) announceElsewhere(elsewhere.text);
+  }, [elsewhere]);
+
+  // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered). Its
+  // own key: the row's message reports under `rowKey`, and its cleanup must not end this one's.
+  const { setRowBusy } = day;
+  const changeKey = `${r.rowKey}/change`;
+  useEffect(() => {
+    if (!dirty) return;
+    setRowBusy(changeKey, true);
+    return () => setRowBusy(changeKey, false);
+  }, [dirty, changeKey, setRowBusy]);
 
   function clearChangeError() {
     if (r.error?.write === 'amend') r.clearError();
@@ -250,7 +318,10 @@ export function useChange(
       }
       return;
     }
+    setSaving(true);
     const result = await r.amend(send);
+    // Cleared with the draft (same batch), never before it.
+    setSaving(false);
     if (!result.ok) return refused(result.reason, from, 'save');
     setDraft(null);
     const base = baseline ?? from;
@@ -270,7 +341,9 @@ export function useChange(
   async function undo() {
     if (!baseline || !entry || r.pending) return;
     const still = entry.values;
+    setSaving(true);
     const result = await r.amend(baseline);
+    setSaving(false);
     if (!result.ok) return refused(result.reason, still, 'undo');
     setLine({ kind: 'back', to: result.values, kept: null });
     day.announce(DAY_COPY.announce.changedBack(name, spokenValues(result.values)));

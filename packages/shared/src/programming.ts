@@ -264,7 +264,7 @@ function fixed(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
  * every session — so the athlete does a jump *or* a swing daily while each individual movement lands
  * every other session.
  *
- * ⚠️ **The letter is derived from the CALENDAR, not from completed sessions** — `resolveDayRole`.
+ * ⚠️ **The letter is derived from the CALENDAR, not from completed sessions.**
  * The spec is emphatic that it should come from a completed-session count and names the failure mode
  * (`date % 2` doubles up box jumps after a missed day). **Ray accepted that deliberately**
  * (2026-09-24): *"I don't mind if they miss a day and end up doing the same thing twice, that's on

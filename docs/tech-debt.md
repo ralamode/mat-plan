@@ -15,6 +15,41 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The import pins hold names by barrel and by direct import, not by origin (added 2026-11-20, #779)
+
+- **What & why it's debt:** `apps/web/test/program-imports.test.ts` checks each `@mat-plan/db` name
+  by the name imported from `packages/db/src/index.ts`, and the DAL re-export rule by an `export`
+  that names it directly ([plan](./plans/td-program-tables-import-graph.md), § Goal). Two holes the
+  regex guard also had stay open: a lane P writer re-published by another `packages/db` module under
+  a new name, and a DAL passing one on through a local binding (`export { s }` of an aliased import,
+  an object literal, `cache(x)`).
+- **Impact:** code written that way could reach a writer outside the DAL without the guard refusing
+  it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the damage is
+  limited to a path a reviewer must catch.
+- **The fix:** key names by origin, walking `index.ts`'s re-export graph so a writer keeps its
+  identity under any name; and, in the DALs, allow a lane P name only as a direct callee. The second
+  is a new restriction, with a false-positive risk (a writer handed to a transaction wrapper).
+- **Severity:** low.
+
+### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
+
+- **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at
+  `MAX_HOUSEHOLD_ATHLETES` (25). Specs that add an athlete (`athletes.spec.ts`,
+  `form-before-hydration.spec.ts`, `bodyweight-receipt.spec.ts`, `day-navigation.spec.ts`,
+  `clear-day.spec.ts`, the program-builder specs and others) now spend about 22 of those slots on a
+  fresh run, as lane C counted, and archiving frees none. A retried spec re-adds its athletes, so
+  with about 3 slots left a couple of retries in one run reach the cap. Then `createProfile` answers
+  `full`, and the retry fails looking like the feature under test broke.
+- **Impact:** test-only, but it turns flakes into misattributed failures, and every new add-athlete
+  spec shrinks the margin.
+- **The fix, one of:**
+  - raise the e2e household's cap through the fixture or seed: a test-only household limit, never
+    the production `MAX_HOUSEHOLD_ATHLETES`;
+  - or have specs reuse athletes: one shared per-run athlete per need, created once, instead of one
+    per test.
+- **Trigger:** the next spec that adds an athlete must pick one of the two.
+- **Severity:** low (test-only; the suite fits today).
+
 ### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
 
 - **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
@@ -29,23 +64,6 @@ liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `repor
   changes.
 - **Severity:** low.
 
-### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
-
-- **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in
-  `<main>`, all undersized ones collected) and `a11y.spec.ts`'s `expectLinkTapTargets(root, context,
-expected?)` (any root, an optional exact count, fail-fast) measure the same 44px rule for links.
-  #720 merged the control checks but left these, because merging them edits
-  `program-preview-a11y.spec.ts`, which lanes do not edit (the contract's). Separately,
-  `athletes.spec.ts` (about :862-865) loops `main button, main a[href^="/p/"]` with no visibility
-  skip, no label measurement and no zero-match guard.
-- **Impact:** a change to the link rule made in one copy leaves the other on the old rule; the
-  `athletes.spec.ts` loop passes vacuously if its selector ever matches nothing.
-- **The fix:** one exported `expectLinkTargets(root: Locator, context, expected?)` that collects every
-  undersized link and names it with `describeControl`; its 7 call sites move to it (3 of them in the
-  contract's spec, so the roadmap thread makes those). `athletes.spec.ts` calls `expectTapTargets`
-  and the link check instead of its loop.
-- **Severity:** low. Tests only; both copies hold the same 44px bar today.
-
 ### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
 
 - **What & why it's debt:** `getProgramsByAthlete` is one DAL call, but lane P's
@@ -56,20 +74,6 @@ expected?)` (any root, an optional exact count, fail-fast) measure the same 44px
 - **The fix:** if Home's LCP suffers, batch `dayAssignments` with `profile_id IN (...)` and group in
   memory, keeping `currentPrograms`' order rule unchanged (the Programs list shares the read).
 - **Severity:** low.
-
-### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
-
-- **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
-  HELPERS and erasure pins) finds lane P's imports by matching specifier text. #552 tried to harden
-  it, and its security review found that each fix met another spelling: a comment inside an import, a
-  backtick specifier, `require (` with a space, a `../node_modules` path, or an `@/` alias walking out
-  of `apps/web`.
-- **Impact:** an import written that way into a page or the day DAL would not be refused by the
-  guard. Code written in good faith uses the plain forms, which the guard catches.
-- **The fix:** a parser-based check, ESLint `no-restricted-imports` with path patterns per directory
-  (or the TypeScript import graph), so every specifier form, comment and alias resolves in one place.
-  Then the regex guard's directory rules move into it.
-- **Severity:** low. Maintainer, 2026-11-18: "Close; lint check as tech debt".
 
 ### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
 
@@ -206,26 +210,21 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   branch is reset from main afterwards, or stop recommending the branch refresh.
 - **Severity:** low.
 
-### The old log forms are unmounted, not deleted, and older days have no in-app fix (added 2026-11-15)
+### Older days have no in-app fix, and the old forms left callerless code in the packages (added 2026-11-15, 12f half closed 2026-11-20)
 
-- **What & why it's debt:** V1-24 3b-page took the Check-ins form, the Strength section (form,
-  program card, receipts), the "Logged entries" list and the "Calisthenics today" card off the day
-  page, and left their components in the tree: `checkin-form.tsx`, `strength-section.tsx`,
-  `strength-form*.ts(x)`, `strength-session-receipt.tsx`, `program-reference.tsx`,
-  `movement-line.tsx`, `todayRows` / `calisthenicsTotals` in `lib/entries/activity-totals.ts`, and
-  the reads only those used: `getProgramDay` (`lib/dal/programming.ts`), `resolveDayRole`,
-  `checkinFieldsForKeys`, `readsHouseholdProgram`, and `DayNav`'s unused `dayRoleLabel` prop. About a
-  dozen `screenshot-ephemeral.ts` states (`strength-*`, `form-*`, `calisthenics`, `program-collapsed`,
-  `status-badges`) now target surfaces that are not on the page. Their Server Actions stay, tested;
-  `editStrengthSetAction` has no day bound, which is harmless while nothing posts to it. FAM-1 12f deletes them, once 12d and 13b have rebuilt what the
-  new page needs (the PICK-1 PR 3 precedent for an unmounted component).
-- **Impact:** dead code that still type-checks and still costs review attention; PICK-1 PR 4, which
-  mounts into the strength form, waits for FAM-1 13b's surface instead.
+- **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
+  capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
+  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet`;
+  `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
+  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
+  (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
+  `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
+  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user was `lib/checkins`.
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** FAM-1 12f deletes each file and the actions nothing calls. Revisit the older-day recovery path before FAM-1
-  slice 3 opens the new page to the household, or before a second household. **Expiry: FAM-1 12f.**
-- **Severity:** low.
+- **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
+  moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
+  the new page to the household, or before a second household.
 
 ### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
 
@@ -264,20 +263,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   12a's several worlds; the earlier "fold it in at 6c" fix is struck.
 - **Severity:** low. Test-only, one file.
 
-### Two reads of a logged row's live sets and quantities (added 2026-11-16, FAM-1 step 11b)
-
-- **What & why it's debt:** `packages/db/src/queries/day/stored-row-values.ts` (`readRowValues`, the
-  row writer's replay and re-tick answer) and the app DAL's day read
-  (`apps/web/lib/dal/entries.ts`, the live `entry_sets` and then their quantities) are the same two
-  queries with the same load-bearing parent filter. 11b wrote the first in `packages/db` because the
-  writer cannot import the app DAL; folding the DAL onto it changes a lane-S file, so it was left.
-- **Impact:** a change to the parent filter made in one copy (the set-liveness rule) leaves the other
-  reading by the old rule. The writer's copy is guarded by mutation 172; the DAL's is not.
-- **The fix:** the DAL calls `readRowValues` (or a sibling that also returns the set ids and
-  statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
-  one (`queries/day/day-plan.ts`).
-- **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
-
 ### The nav rail unmounts during a switch between athletes (added 2026-11-13)
 
 - **What & why it's debt:** clicking an athlete in `UI-5`'s rail changes the `[profileId]` segment,
@@ -291,8 +276,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   recorded reasons (a layout cannot read the pathname, cannot pass data to children, and uncached
   data in one blocks navigation). The other option — a route group giving `/p` its own boundary and
   dropping the day-subtree fallback — trades the skeleton away on a slow connection.
-- **Where it belongs:** `PICK-1` PR 4 adds the third grid track and is the next PR to touch this
-  seam; the plan's § For PR 4 is the place to settle it.
+- **Where it belongs:** no PR is scheduled for it now. `PICK-1` PR 4 was to mount into the strength
+  form, which FAM-1 12f deleted (#725), so settle it in the next PR that touches the day page's
+  `loading.tsx` or `AppShell`'s grid.
 
 ### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
 
@@ -348,25 +334,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   `write-path.md`.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
-### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
-
-- **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in
-  linear light** — its own docblock says so, and `luminance()` takes linear sRGB. Browsers composite a
-  translucent border in **gamma-encoded** sRGB (and `color-mix(in oklch, …)` in OKLCH). For an opaque
-  token the two agree; for a translucent one they do not, and the error is not in a safe direction:
-  for a 28% foreground mix the helper reports ≈1.36 light / ≈6.03 dark where a browser draws ≈1.93 /
-  ≈2.35 — i.e. it would **pass** a dark border that fails SC 1.4.11.
-- **Why it surfaced:** `PROF-1 a-1`'s plan proposed a dashed add-tile border "at a measured ≥3:1
-  foreground mix". The measurement would have been taken with this helper. a-1 side-steps it by using
-  an **opaque** token, which makes the model moot — so this is recorded, not fixed, and nothing today
-  depends on the translucent answer except the pinned hairline figure below.
-- **Also affected:** `token-sets.test.ts`'s "hairlines miss SC 1.4.11 — 1.26:1 light, **2.69:1 dark**"
-  pins a dark figure computed this way. The assertion (`< 3`) is still correct; the number in its name
-  is not. ⚠️ Verify the arithmetic before editing it — the claim here is structural (read the two
-  docblocks), the specific ratios are a reviewer's calculation.
-- **The fix, when taken:** composite in gamma-encoded sRGB (or match whatever `color-mix` space the
-  token uses), and re-derive the pinned figures.
-
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
 
 - **What & why it's debt:** `app/p/[profileId]/page.tsx` exports no `metadata`, so `document.title`
@@ -399,56 +366,17 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   The cheapest honest version is to render the control **disabled with a reason** when the athlete has
   no months, which the settings page already knows.
 
-### 🔴 PRIORITY — nothing measures how much JavaScript ships, and the CWV budget cannot be measured at all (added 2026-11-06)
+### Nothing measured how much JavaScript ships (added 2026-11-06) — ✅ CLOSED 2026-11-19 for bytes
 
-_(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.)_
-
-- **What & why it's debt:** AGENTS.md commits to a Core Web Vitals budget — **LCP < 2.5s · INP < 200ms
-  · CLS < 0.1, p75 mobile** — and `review-pr`'s rubric dimension 11 already admits "nothing measures
-  the budget". Two separate reasons it is unmeasured, and only one is fixable now:
-  - **The budget is a RUM budget.** p75-over-real-users cannot be produced in CI, and **INP cannot be
-    produced in a lab at all** — it needs real interaction. RUM is blocked behind
-    `OBS-1`'s `connect-src` decision ([plan.md](./plan.md)), and at three households p75 of anything is
-    noise anyway.
-  - **Lab timings in CI measure CI.** LCP on a shared runner swings substantially between identical
-    commits. A gate on it produces alerts you learn to ignore, which is worse than no gate.
-- **What IS deterministic: bytes.** `next build` already prints **First Load JS per route**, and CI
-  runs `pnpm build` (`ci.yml:362`) and **discards the output**. Nothing in the repo tracks bundle size
-  — verified 2026-11-06: no `@next/bundle-analyzer`, no `size-limit`, no Lighthouse, no size
-  assertion anywhere in `.github/workflows` or either `package.json`.
-- **Impact — the three regressions this codebase actually produces, none of which anything catches:**
-  1. **`'use client'` creep** — the mechanism by which an RSC-first app gets slow. ⚠️ **Live example,
-     same day this was filed:** `components/layout/site-footer.tsx` became a client component
-     (`usePathname()`) in `AUTH-1` 1d PR 0. Correct, necessary, reviewed — and the bundle cost was
-     invisible to every gate.
-  2. **A barrel file defeating tree shaking** — `export * from './x'`. A real risk as
-     `packages/shared` grows; nothing flags it.
-  3. **A heavy dependency on a hot route** — Recharts is planned for charts (AGENTS.md → Design), and
-     the `/p/[profileId]` day page is the hottest route in the app.
-     ⚠️ **Tree shaking and per-route code splitting are already ON** (App Router default + ESM; the
-     minimal `next.config.ts` adds nothing that defeats them), so this is not a bundler setting anyone
-     forgot. It is the absence of a _measurement_, and all three regressions above are habits rather than
-     config.
-- **Proposed fix** (sketch; it owes its own plan + panel, and the panel should push on the tolerance):
-  1. Capture `next build`'s per-route **First Load JS** in CI — parse the build output, or
-     `.next/app-build-manifest.json` plus chunk sizes if the printed table proves unstable to parse.
-  2. Commit a baseline (`perf/bundle-baseline.json`), one entry per route.
-  3. A guard fails the PR when a route grows beyond a tolerance, printing **route, before, after,
-     delta**. The number is the deliverable — "this PR adds 48KB to the day page" is actionable in a
-     way "LCP regressed" never is.
-  4. Baseline updates are a **deliberate committed diff**, so growth is approved rather than drifted
-     into — the `ALLOWLIST`-pinned-empty idiom (`pages-need-a-session.test.ts:321`).
-  5. ⚠️ **It needs a self-test and a RED probe before it is trusted** — see
-     [lessons.md](./lessons.md) → "Guards that pass while guarding nothing", where a CI gate silently
-     enforced 3 of 13 paths for two releases because it had no self-test. A size guard that parses
-     build output is exactly the shape that goes quietly vacuous when the output format changes.
-- **Severity:** **medium now, high later.** Nothing is slow today and there is no evidence of a
-  regression — the cost is that the budget AGENTS.md commits to is unfalsifiable, so the first real
-  regression will be found by a person on a gym floor rather than by a gate. It gets worse with every
-  client component and every chart. **Not a Beta 0 blocker** (not in `beta-1.md`'s exit criteria).
-- **Deliberately NOT in scope:** Lighthouse CI, a canary deploy (meaningless at three households), and
-  post-deploy CWV assertions — that last is `OBS-2`'s synthetic-monitoring job ([plan.md](./plan.md)),
-  which answers "is the deploy broken", not "did the baseline move".
+> ✅ **Closed by `PERF-1` (b)** ([plan](./plans/perf-1-bundle-size.md)): the `quality` job's "Bundle
+> size" step measures each route's first-load client JS and the total client chunks, compares them
+> with `.github/bundle-baseline.json`, and fails a move past the tolerance either way. What it
+> measures and does not, and the tolerance, are in `check-bundle-size.mjs`'s header.
+> ⚠️ **The entry's premise changed under it.** It said `next build` prints First Load JS per route;
+> Next 16 removed that column. The guard reads `.next/diagnostics/route-bundle-stats.json`, which is
+> undocumented, so a Next bump that drops or reshapes it makes the step exit 2 and name the file.
+> **Still unmeasured:** the CWV timings themselves (real-user p75 is `PERF-1` (a), lab scores are
+> `PERF-2`).
 
 ### Two runtime auth proofs went with the gate, and the harness cannot replace them (found 2026-11-05, AUTH-1 1d)
 
@@ -699,6 +627,8 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
   prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
   at 15c, which wires that dialog.
+  ✅ **Closed (FAM-1 15c PR 1, 2026-11-20)**: `Sheet` takes `statusKey`, passed to its region as
+  `messageKey`, and the dialog's status is `{ text, n }`. No U+00A0 idiom is left.
 - **Severity:** low.
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)

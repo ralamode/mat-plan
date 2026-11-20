@@ -105,6 +105,15 @@ type CheckinArgs = {
 };
 
 /**
+ * The throw for a `client_id` `lowerCaseUuidSchema` refuses: not hyphenated (braces, bare hex), or
+ * hyphenated with a version or variant digit outside RFC 9562 (zod 4's `z.uuid()`).
+ */
+export const CHECKIN_CLIENT_ID_NOT_UUID = 'check-in client_id is not a hyphenated RFC 9562 uuid';
+
+/** The throw for two items under one `client_id` in one call (they would write one row). */
+export const CHECKIN_CLIENT_IDS_REPEAT = 'check-in client_ids repeat within one submit';
+
+/**
  * Insert the items and say what happened to each, in submit order.
  *
  * 🔴 **One retry, for exactly the items nothing explains** (the tech-debt row "A day-taken insert can
@@ -120,9 +129,9 @@ type CheckinArgs = {
  * braces, no hyphens) used to be written and then missed: a habit threw, and a practice was answered
  * `day_taken` against the row it had just written. `lowerCaseUuidSchema` accepts only the hyphenated
  * form and folds the case, so what the classifier holds is what Postgres prints. And two items under
- * one id write one row, which the per-id maps would report as two `created`. The app's forms mint one
- * lower-case id per item and `logCheckinsAction` parses with the same schema and refuses a repeat as
- * a field error first, so both throws are preconditions, not answers. ⚠️ **A batch caller (the
+ * one id write one row, which the per-id maps would report as two `created`. The app's one caller
+ * (the day page's practice, `logLifeActivitiesAction`) sends one item with a fresh lower-case id, so
+ * both throws are preconditions, not answers. ⚠️ **A batch caller (the
  * unwired `/api/sync`) must collapse identical replays, and refuse different items sharing an id as
  * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages
  * are for tests; `quietDbErrors` logs only the class. Answers carry the parsed id.
@@ -133,11 +142,11 @@ export async function writeCheckinEntries(
 ): Promise<CheckinWriteResult[]> {
   const values = args.values.map((v) => {
     const clientId = lowerCaseUuidSchema.safeParse(v.clientId);
-    if (!clientId.success) throw new Error('check-in client_id is not a hyphenated uuid');
+    if (!clientId.success) throw new Error(CHECKIN_CLIENT_ID_NOT_UUID);
     return { ...v, clientId: clientId.data };
   });
   if (new Set(values.map((v) => v.clientId)).size !== values.length) {
-    throw new Error('check-in client_ids repeat within one submit');
+    throw new Error(CHECKIN_CLIENT_IDS_REPEAT);
   }
 
   const first = await attemptCheckinEntries(exec, { ...args, values });

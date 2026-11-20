@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index ebd554ca..1d70c70d 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -85,7 +85,7 @@ export async function movementOptions(
+       and(
+         movementIsGlobal(),
+         isNull(schema.movements.deletedAt),
+-        or(inArray(schema.movements.slug, PICKER_SLUGS), movementIsCatalog()),
++        inArray(schema.movements.slug, PICKER_SLUGS),
+       ),
+     )
+     .orderBy(asc(schema.movements.id));

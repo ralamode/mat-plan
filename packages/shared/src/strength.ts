@@ -44,7 +44,7 @@ export const numericSetSchema = z.object({
   // trust boundary. The browser form marks the input `required`, so this only guards a crafted body.
   weight: z.preprocess(
     (v) => (typeof v === 'string' && v.trim() === '' ? NaN : v),
-    // The EDIT path's bound. Mass-only until V1-33 (`isEditableSet` refuses a non-mass set), so it is
+    // The EDIT path's bound. Mass-only until V1-33 (the edit path refuses a non-mass set), so it is
     // the same ceiling as `MAX_QUANTITY_BY_UNIT.lb/.kg` and reads it from the one source rather than
     // re-typing it — otherwise lowering the map would leave the edit path accepting what the log path
     // refuses, with nothing red. V1-33 switches this to `quantityCeiling(unit)`.
@@ -139,7 +139,7 @@ export const strengthSetSchema = z
     /**
      * **A set must carry SOME load.** This replaces `parseLoad`'s blank check, which was the first
      * branch it ran and for a load-bearing reason: a set with reps and no load renders `5 × ?` and
-     * `isEditableSet` then refuses to fix it — permanently, because there is no delete action in this
+     * the edit path then refuses to fix it — permanently, because there is no delete action in this
      * app. Splitting the load across three independent fields removed the single-field invariant that
      * made blank unrepresentable, so it has to be restated here or the unrecoverable state returns.
      */
@@ -159,8 +159,8 @@ export type StrengthSetInput = z.infer<typeof strengthSetSchema>;
  * Input contract for editing ONE already-logged strength set (V1-9 fix-a-set). Extends
  * **`numericSetSchema`** — deliberately NOT the log-path schema above, which is a transform and has no
  * `.extend`. The edit path is numeric-only by design: a labeled set's edited `weight_num` would be
- * MASKED at the read seam (`formatSetLine` prefers `weightLabel`), so `isEditableSet` excludes them and
- * `updateStrengthSetById` refuses them at the SQL level.
+ * MASKED at the read seam (`formatSetLine` prefers `weightLabel`), so `updateStrengthSetById` refuses
+ * them at the SQL level.
  */
 export const editStrengthSetSchema = numericSetSchema.extend({
   profileId: uuidSchema,

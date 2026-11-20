@@ -5,33 +5,52 @@ import {
   type DayActions,
   type DayPlan,
   type ProgramResult,
+  programsByStay,
 } from '@mat-plan/shared';
 import {
   archivedAthleteNothingLogged,
+  coachLabelProgramEndingToday,
   closedDayLoggedOnly,
   futurePreview,
   noProgram,
   notOnAProgramThatDay,
   sundayRestStretchOnly,
   todayStretchingFirst,
+  todayThreeProgramsOneEnding,
   todayTwoPrograms,
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
-import { PROGRAMS_PATH } from '@/components/program-builder/routes';
-import { athletePath } from '@/lib/constants';
+import { lastDayText } from '@/components/program-builder/builder-text';
+import { sheetStatusId } from '@/components/ui/sheet';
+import { programPath, PROGRAMS_PATH } from '@/components/program-builder/routes';
+import {
+  athletePath,
+  NAME_WRAP_CLASS,
+  PROGRAM_NAME_LINK_CLASS,
+  VALUE_JOINER,
+} from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
 import { restNotice } from './day-notices';
 import { NotOnAProgram } from './not-on-a-program';
 import { ProgramLine } from './program-line';
+import { loadProgramOrderDialog } from './program-order-button';
+import { PROGRAM_ORDER_SHEET_ID } from './program-order-id';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+
+// The dialog's chunk is loaded on demand (program-order-button.tsx). Loaded up front, a tap opens it
+// in the same act, as it does in a browser once the idle prefetch has run; the lazy path itself is
+// program-order-button.test.tsx's.
+beforeAll(async () => {
+  await loadProgramOrderDialog();
+});
 
 afterEach(() => {
   cleanup();
@@ -482,6 +501,446 @@ describe('ProgramLine and the Program order dialog', () => {
     });
     fireEvent.click(orderButton());
     expect(screen.queryByText(PROGRAM_COPY.orderFailed)).toBeNull();
+  });
+
+  describe('a program ending today (15c, D47)', () => {
+    const plan = todayThreeProgramsOneEnding;
+    const { staying, ending } = programsByStay(plan.currentPrograms);
+    const doneButton = () => screen.getByRole('button', { name: PROGRAM_COPY.done });
+    /** The sheet's polite region (`sheetStatusId`), where "moved to N of M" is said. */
+    const sheetStatusNode = () => document.getElementById(sheetStatusId(PROGRAM_ORDER_SHEET_ID));
+
+    it('the fixture is two staying and one ending, with two programs on the day', () => {
+      expect([staying.length, ending.length]).toEqual([2, 1]);
+      expect(plan.programs.length).toBeGreaterThanOrEqual(2);
+      expect(plan.writable).toBe(true);
+    });
+
+    it('lists the staying ones numbered with arrows, and the ending one under the note with none', () => {
+      mountLine(plan);
+      fireEvent.click(orderButton());
+      const dialog = screen.getByRole('dialog');
+      const numberedList = within(dialog).getAllByRole('list')[0]!;
+      expect(within(numberedList).getAllByRole('listitem')).toHaveLength(2);
+      const endingList = within(dialog).getByRole('list', {
+        name: PROGRAM_COPY.endingNote(1),
+      });
+      const row = within(endingList).getByRole('listitem');
+      expect(row.textContent).toContain(ending[0]!.name);
+      expect(row.textContent).toContain(lastDayText(plan.today, plan.today));
+      expect(row.textContent).not.toMatch(/^\d+\./);
+      expect(within(row).queryAllByRole('button')).toHaveLength(0);
+      expect(
+        screen.queryByRole('button', { name: PROGRAM_COPY.moveUp(ending[0]!.name) }),
+      ).toBeNull();
+      // The last STAYING program's ↓ is the end arrow, though a program follows it in the order.
+      expect(arrow('down', staying[1]!.name).getAttribute('aria-disabled')).toBe('true');
+    });
+
+    it('a move sends all three ids, the ending one last, and counts the staying: "2 of 2"', async () => {
+      const reorder = vi.fn<NonNullable<DayActions['reorderPrograms']>>(async () => ({ ok: true }));
+      mountLine(plan, withReorder(plan, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      expect(reorder.mock.calls[0]![0].programPublicIds).toEqual(
+        [staying[1]!, staying[0]!, ending[0]!].map((p) => p.programPublicId),
+      );
+      expect(sheetStatusNode()?.textContent).toBe(PROGRAM_COPY.moved(staying[0]!.name, 2, 2));
+    });
+
+    it('each announcement is a new node (the sheet’s statusKey)', async () => {
+      const reorder = vi.fn<NonNullable<DayActions['reorderPrograms']>>(async () => ({ ok: true }));
+      mountLine(plan, withReorder(plan, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      const first = sheetStatusNode()?.firstElementChild;
+      await act(async () => {
+        fireEvent.click(arrow('up', staying[0]!.name));
+      });
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      expect(sheetStatusNode()?.textContent).toBe(PROGRAM_COPY.moved(staying[0]!.name, 2, 2));
+      expect(sheetStatusNode()?.firstElementChild).not.toBe(first);
+    });
+
+    it('the note is plural with two ending, and the ending rows wrap a long name', () => {
+      const THIRD = { programPublicId: '00000000-0000-7000-8000-0000000000c3', name: 'Third' };
+      const four = {
+        ...plan,
+        currentPrograms: [...plan.currentPrograms, { ...THIRD, endsToday: true as const }],
+      };
+      mountLine(four, withReorder(four, vi.fn()));
+      fireEvent.click(orderButton());
+      const endingList = screen.getByRole('list', { name: PROGRAM_COPY.endingNote(2) });
+      const rows = within(endingList).getAllByRole('listitem');
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!.firstElementChild!.className).toContain(NAME_WRAP_CLASS);
+    });
+
+    it('one staying and one ending: no button', () => {
+      const { staying: s, ending: e } = programsByStay(
+        coachLabelProgramEndingToday.currentPrograms,
+      );
+      expect([s.length, e.length]).toEqual([1, 1]);
+      mountLine(coachLabelProgramEndingToday, withReorder(coachLabelProgramEndingToday, vi.fn()));
+      expect(screen.queryByRole('button', { name: PROGRAM_COPY.order })).toBeNull();
+    });
+
+    it('three staying and none ending: no note', () => {
+      const none = {
+        ...plan,
+        currentPrograms: plan.currentPrograms.map(({ endsToday: _drop, ...p }) => p),
+      };
+      mountLine(none, withReorder(none, vi.fn()));
+      fireEvent.click(orderButton());
+      expect(within(screen.getByRole('dialog')).getAllByRole('list')).toHaveLength(1);
+      expect(screen.queryByText(PROGRAM_COPY.endingNote(1))).toBeNull();
+    });
+
+    it('two staying with only one on the viewed day: no button', () => {
+      const oneToday = { ...plan, programs: plan.programs.slice(0, 1) };
+      mountLine(oneToday, withReorder(oneToday, vi.fn()));
+      expect(screen.queryByRole('button', { name: PROGRAM_COPY.order })).toBeNull();
+    });
+
+    it('a re-read that ends the focused arrow’s program today puts focus on Done', () => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      const up = arrow('up', staying[1]!.name);
+      act(() => up.focus());
+      const ended = {
+        ...plan,
+        currentPrograms: plan.currentPrograms.map((p) =>
+          p.programPublicId === staying[1]!.programPublicId
+            ? { ...p, endsToday: true as const }
+            : p,
+        ),
+      };
+      view.rerender(<ProgramLine plan={ended} actions={withReorder(ended, vi.fn())} />);
+      expect(document.activeElement).toBe(doneButton());
+      // One staying now: the button behind goes, the open dialog stays, its note now plural.
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.getByText(PROGRAM_COPY.endingNote(2))).toBeTruthy();
+      expect(screen.queryByRole('button', { name: PROGRAM_COPY.order })).toBeNull();
+    });
+
+    it('a stale refusal whose re-read leaves one staying keeps the dialog open with its message', async () => {
+      const view = mountLine(
+        plan,
+        withReorder(plan, async () => ({ ok: false, reason: PROGRAM_REFUSAL.invalid })),
+      );
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      const ended = {
+        ...plan,
+        currentPrograms: plan.currentPrograms.map((p) =>
+          p.programPublicId === staying[0]!.programPublicId
+            ? { ...p, endsToday: true as const }
+            : p,
+        ),
+      };
+      view.rerender(<ProgramLine plan={ended} actions={withReorder(ended, vi.fn())} />);
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+      expect(document.activeElement).toBe(doneButton());
+      expect(doneButton().getAttribute('aria-describedby')).toBeTruthy();
+    });
+  });
+
+  describe('the dialog stays and focus is kept (15c review)', () => {
+    const plan = todayThreeProgramsOneEnding;
+    const { staying } = programsByStay(plan.currentPrograms);
+    const doneButton = () => screen.getByRole('button', { name: PROGRAM_COPY.done });
+    const endsToday = (id: string) => ({
+      ...plan,
+      currentPrograms: plan.currentPrograms.map((p) =>
+        p.programPublicId === id ? { ...p, endsToday: true as const } : p,
+      ),
+    });
+
+    it.each([
+      ['one program left on the day', { ...plan, programs: plan.programs.slice(0, 1) }],
+      ['the day no longer writable', { ...plan, writable: false }],
+      ['the athlete on no program', { ...plan, onProgram: ON_PROGRAM.never, programs: [] }],
+    ])('a re-read with %s keeps an open dialog, and hides the button', (_case, next) => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: PROGRAM_COPY.order })).toBeNull();
+    });
+
+    it('focus left on the dialog itself (the focus trap’s fixup) still goes to Done', () => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      act(() => arrow('up', staying[1]!.name).focus());
+      act(() => screen.getByRole('dialog').focus());
+      const ended = endsToday(staying[1]!.programPublicId);
+      view.rerender(<ProgramLine plan={ended} actions={withReorder(ended, vi.fn())} />);
+      expect(document.activeElement).toBe(doneButton());
+      // Done says why: the note on what cannot move describes it.
+      expect(doneButton().getAttribute('aria-describedby')).toContain(
+        screen.getByText(PROGRAM_COPY.endingNote(2)).id,
+      );
+    });
+
+    it('focus elsewhere in the dialog is not taken when an arrow goes', () => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      act(() => arrow('up', staying[1]!.name).focus());
+      act(() => arrow('down', staying[0]!.name).focus());
+      const ended = endsToday(staying[1]!.programPublicId);
+      view.rerender(<ProgramLine plan={ended} actions={withReorder(ended, vi.fn())} />);
+      expect(document.activeElement).not.toBe(doneButton());
+    });
+
+    it('a revert that removes the arrow to refocus puts focus on Done', async () => {
+      const { reorder, answer } = deferredReorder();
+      const view = mountLine(plan, withReorder(plan, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      // Mid-save the page re-reads: the tapped program now ends today. The refusal puts that order back.
+      const ended = endsToday(staying[0]!.programPublicId);
+      view.rerender(<ProgramLine plan={ended} actions={withReorder(ended, reorder)} />);
+      await answer(0, { ok: false, reason: PROGRAM_REFUSAL.retry });
+      expect(document.activeElement).toBe(doneButton());
+      expect(doneButton().getAttribute('aria-describedby')).toBeTruthy();
+    });
+
+    it('a program marked ending during a save shows under the note once the save settles', async () => {
+      const none = {
+        ...plan,
+        currentPrograms: plan.currentPrograms.map(({ endsToday: _drop, ...p }) => p),
+      };
+      const { reorder, answer } = deferredReorder();
+      const view = mountLine(none, withReorder(none, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', none.currentPrograms[0]!.name));
+      });
+      view.rerender(<ProgramLine plan={plan} actions={withReorder(plan, reorder)} />);
+      await answer(0, { ok: true });
+      expect(screen.getByRole('list', { name: PROGRAM_COPY.endingNote(1) })).toBeTruthy();
+    });
+  });
+
+  it('closed, then its button hidden by a re-read: Forward onto its entry does not reopen it', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    try {
+      const view = mountLine(todayTwoPrograms);
+      fireEvent.click(orderButton());
+      const entry = window.history.state;
+      expect(entry?.sheet).toBe(PROGRAM_ORDER_SHEET_ID);
+      // Done with no arrow tapped: the sheet pops its entry (mocked, so the browser stays on it).
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: PROGRAM_COPY.done }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      const notWritable = { ...todayTwoPrograms, writable: false };
+      view.rerender(
+        <ProgramLine plan={notWritable} actions={createFakeDayActions(notWritable).actions} />,
+      );
+      back.mockClear();
+      await act(async () => {
+        window.history.replaceState(entry, '');
+        window.dispatchEvent(new PopStateEvent('popstate', { state: entry }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      // Bounced off the entry, so Forward is a no-op rather than a dead entry.
+      expect(back).toHaveBeenCalledTimes(1);
+    } finally {
+      back.mockRestore();
+    }
+  });
+
+  describe('nothing left to order (15c follow-up)', () => {
+    const plan = todayThreeProgramsOneEnding;
+    const { staying } = programsByStay(plan.currentPrograms);
+    const doneButton = () => screen.getByRole('button', { name: PROGRAM_COPY.done });
+    const statusNode = () => document.getElementById(sheetStatusId(PROGRAM_ORDER_SHEET_ID));
+    const offEverything: DayPlan = { ...plan, currentPrograms: [] };
+    /** The visible sentence: the sheet's status region says the same words, once. */
+    const shown = (text: string) => {
+      const found = within(screen.getByRole('dialog'))
+        .getAllByText(text)
+        .filter((el) => el.closest('[role="status"]') === null);
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+    const allEnding: DayPlan = {
+      ...plan,
+      currentPrograms: plan.currentPrograms.map((p) => ({ ...p, endsToday: true as const })),
+    };
+
+    const cases = [
+      ['off every program', offEverything, PROGRAM_COPY.orderEmpty(nameOf(plan))],
+      ['every program ending today', allEnding, PROGRAM_COPY.orderAllEnding(nameOf(plan))],
+    ] as const;
+
+    it.each(cases)(
+      '%s, from an arrow: one sentence is the body; focus goes to Done, described by it, and the status says it too',
+      (_case, next, text) => {
+        const view = mountLine(plan, withReorder(plan, vi.fn()));
+        fireEvent.click(orderButton());
+        act(() => arrow('up', staying[1]!.name).focus());
+        view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+        const dialog = screen.getByRole('dialog');
+        const message = shown(text);
+        expect(message.tagName).toBe('P');
+        expect(within(dialog).queryByText(PROGRAM_COPY.orderExplainer)).toBeNull();
+        expect(within(dialog).queryAllByRole('list')).toHaveLength(0);
+        expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(1), { exact: false })).toBeNull();
+        expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(3), { exact: false })).toBeNull();
+        // The arrow that had focus is gone: Done takes it, described by the sentence alone, and the
+        // status says it as well, since a description may be only a hint (iOS VoiceOver).
+        expect(document.activeElement).toBe(doneButton());
+        expect(doneButton().getAttribute('aria-describedby')).toBe(message.id);
+        expect(statusNode()?.textContent).toBe(text);
+      },
+    );
+
+    it.each(cases)(
+      '%s, with focus elsewhere: the status says it once, and a same-sentence re-read is silent',
+      (_case, next, text) => {
+        const view = mountLine(plan, withReorder(plan, vi.fn()));
+        fireEvent.click(orderButton());
+        view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+        expect(document.activeElement).not.toBe(doneButton());
+        expect(statusNode()?.textContent).toBe(text);
+        const said = statusNode()?.firstElementChild;
+        const again = { ...next, currentPrograms: [...next.currentPrograms] };
+        view.rerender(<ProgramLine plan={again} actions={withReorder(again, vi.fn())} />);
+        expect(statusNode()?.firstElementChild).toBe(said);
+      },
+    );
+
+    it('a change of sentence while open is said: all ending, then off every program', () => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      view.rerender(<ProgramLine plan={allEnding} actions={withReorder(allEnding, vi.fn())} />);
+      expect(statusNode()?.textContent).toBe(PROGRAM_COPY.orderAllEnding(nameOf(plan)));
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, vi.fn())} />,
+      );
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(statusNode()?.textContent).toBe(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+    });
+
+    it('a save that succeeds after a re-read emptied the list shows the empty sentence', async () => {
+      const { reorder, answer } = deferredReorder();
+      const view = mountLine(plan, withReorder(plan, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, reorder)} />,
+      );
+      await answer(0, { ok: true });
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(within(screen.getByRole('dialog')).queryAllByRole('list')).toHaveLength(0);
+    });
+
+    it('wins over the stale refusal’s line: one message shows', async () => {
+      const view = mountLine(
+        plan,
+        withReorder(plan, async () => ({ ok: false, reason: PROGRAM_REFUSAL.invalid })),
+      );
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, vi.fn())} />,
+      );
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(screen.queryByText(PROGRAM_COPY.orderStale)).toBeNull();
+    });
+  });
+
+  describe('the names as links (15c, D49)', () => {
+    const linked = () =>
+      render(
+        <ProgramLine
+          plan={todayTwoPrograms}
+          actions={createFakeDayActions(todayTwoPrograms).actions}
+          programHrefFor={programPath}
+        />,
+      );
+
+    it('given programHrefFor, each name links to its program; without it, text', () => {
+      linked();
+      for (const program of todayTwoPrograms.programs) {
+        // The "›" is hidden from a screen reader: the link's name is the program's name alone.
+        const link = screen.getByRole('link', { name: program.name });
+        expect(link.getAttribute('href')).toBe(programPath(program.programPublicId));
+        expect(link.textContent).toBe(`${program.name}›`);
+        // No tooltip: the name is the whole of what the link says.
+        expect(link.getAttribute('title')).toBeNull();
+      }
+      expect(screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: true })).toBeTruthy();
+      cleanup();
+      mountLine(todayTwoPrograms);
+      expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('is a muted label, then an unlabelled list of "Name ›" with no commas, as the prototype', () => {
+      linked();
+      const label = screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: true });
+      expect(label.className).toContain('text-muted-foreground');
+      // A `div` holding the label and the list: a `p` cannot hold a `ul`.
+      expect(label.parentElement?.tagName).toBe('DIV');
+      const list = screen.getByRole('list');
+      expect(list.tagName).toBe('UL');
+      expect(list.parentElement).toBe(label.parentElement);
+      expect(list.getAttribute('aria-label')).toBeNull();
+      expect(list.getAttribute('aria-labelledby')).toBeNull();
+      const items = within(list).getAllByRole('listitem');
+      expect(items).toHaveLength(todayTwoPrograms.programs.length);
+      for (const item of items) expect(within(item).getAllByRole('link')).toHaveLength(1);
+      // No joiner of any kind: not the shared ", ", and no bare comma either.
+      expect(label.parentElement?.textContent).not.toContain(VALUE_JOINER.trim());
+      expect(label.parentElement?.textContent).not.toContain(',');
+      // One wrapping row, the prototype's: the label is its first item, and the list's items flow
+      // in the same inline run after it, so a wrapped name comes back under the label.
+      expect(label.parentElement?.firstElementChild).toBe(label);
+      expect(label.className.split(' ')).toContain('inline-flex');
+      expect(list.className.split(' ')).toContain('inline');
+      for (const item of items) expect(item.className.split(' ')).toContain('inline-flex');
+    });
+
+    it('each link is the named class: no underline until hover, a 44px target both ways', () => {
+      linked();
+      const classes = PROGRAM_NAME_LINK_CLASS.split(' ');
+      expect(classes).not.toContain('underline');
+      for (const token of [
+        'hover:underline',
+        'min-h-11',
+        'min-w-11',
+        'font-medium',
+        'wrap-anywhere',
+      ]) {
+        expect(classes).toContain(token);
+      }
+      // The prototype's line buttons have no padding (`padding:0`): the row's gaps space them.
+      expect(classes.some((token) => /^p[xylrtb]?-/.test(token))).toBe(false);
+      for (const link of screen.getAllByRole('link')) {
+        expect(link.className).toBe(PROGRAM_NAME_LINK_CLASS);
+        const arrow = link.querySelector('[aria-hidden="true"]');
+        expect(arrow?.textContent).toBe('›');
+        expect(arrow?.className).toContain('ml-1');
+      }
+    });
   });
 
   it('Done closes the dialog and returns focus to Program order', async () => {

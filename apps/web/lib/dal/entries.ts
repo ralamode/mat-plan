@@ -13,6 +13,7 @@ import {
   insertBodyweightEntry,
   lastBodyweightBefore,
   isLiveProfile,
+  readLiveSets,
   resolveSessionMovements,
   restoreClear,
   schema,
@@ -26,6 +27,7 @@ import {
 import {
   type ClearEvent,
   ENTRY_KIND,
+  PROFILE_NOT_FOUND,
   ENTRY_STATUS,
   RESTORE_REASON,
   uuidSchema,
@@ -43,7 +45,7 @@ import {
   type Unit,
   type UnitDimension,
 } from '@mat-plan/shared';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import {
   assertMetricKeyExists,
@@ -83,7 +85,7 @@ export type SetDTO = {
   isBand: boolean;
   quantities: SetQuantityDTO[];
   // GAP-1 P1-1b. Carried so the read seam can tell a `sub_failure` set from a `done` one — WITHOUT it
-  // per-set status is unrenderable and `isEditableSet` can't refuse to edit one. Typed as the full
+  // per-set status is unrenderable and the set-edit path can't refuse one. Typed as the full
   // `EntryStatus` (not the narrower SetStatus) because this is a READ of whatever the column holds,
   // including a value written before the boundary narrowed; the write path is where the subset applies.
   status: EntryStatus;
@@ -211,67 +213,17 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     // order, and the asc(id) tiebreak is unchanged from before.
     .orderBy(asc(schema.entries.createdAt), asc(schema.entries.id));
 
-  // Fetch sets for the set-bearing (strength) entries in one query, then group by entry. Dispatch on
+  // Read sets for the set-bearing (strength) entries only, then group by entry. Dispatch on
   // `movement_id !== null` (not `kind === 'strength'`): V1-8 session members are written kind=NULL, so
   // the old dispatch would fetch zero sets for them. Only sc_lift entries carry a movement_id (metric
   // rows have it NULL by the at-most-one CHECK), so this catches new session members AND legacy strength.
   const strengthIds = rows.filter((r) => r.movementId !== null).map((r) => r.id);
-  const setRows = strengthIds.length
-    ? await db
-        .select({
-          entryId: schema.entrySets.entryId,
-          publicId: schema.entrySets.publicId,
-          idx: schema.entrySets.idx,
-          reps: schema.entrySets.reps,
-          isBodyweight: schema.entrySets.isBodyweight,
-          isBand: schema.entrySets.isBand,
-          status: schema.entrySets.status,
-          id: schema.entrySets.id,
-        })
-        .from(schema.entrySets)
-        .where(
-          and(inArray(schema.entrySets.entryId, strengthIds), isNull(schema.entrySets.deletedAt)),
-        )
-        .orderBy(asc(schema.entrySets.idx))
-    : [];
-
-  // GAP-3: the quantities, in a second query keyed on the set ids we just proved live. ⚠️ The parent
-  // filter is LOAD-BEARING — `ON DELETE CASCADE` on entry_set_quantities is HARD-delete only, and this
-  // app only ever SOFT-deletes, so quantities whose set is soft-deleted are still `deleted_at IS NULL`.
-  // Selecting by these ids (rather than scanning the child table) is what keeps them out.
-  const setIds = setRows.map((s) => s.id);
-  const quantityRows = setIds.length
-    ? await db
-        .select({
-          entrySetId: schema.entrySetQuantities.entrySetId,
-          slot: schema.entrySetQuantities.slot,
-          dimension: schema.entrySetQuantities.dimension,
-          unit: schema.entrySetQuantities.unit,
-          valueNum: schema.entrySetQuantities.valueNum,
-        })
-        .from(schema.entrySetQuantities)
-        .where(
-          and(
-            inArray(schema.entrySetQuantities.entrySetId, setIds),
-            isNull(schema.entrySetQuantities.deletedAt),
-          ),
-        )
-    : [];
-
-  const quantitiesBySet = new Map<number, SetQuantityDTO[]>();
-  for (const q of quantityRows) {
-    const list = quantitiesBySet.get(q.entrySetId) ?? [];
-    list.push({
-      slot: q.slot as QuantitySlot,
-      dimension: q.dimension as UnitDimension,
-      unit: q.unit as Unit,
-      value: Number(q.valueNum),
-    });
-    quantitiesBySet.set(q.entrySetId, list);
-  }
-
+  // The live sets and their live quantities, through the one read the program row's `readRowValues`
+  // shares (`@mat-plan/db`'s `readLiveSets`): the load-bearing parent filter lives there, mutation 172
+  // guards it, and `entries.test.ts` pins that this read calls it. The ids are the owned entries' own
+  // (the read above).
   const setsByEntry = new Map<number, SetDTO[]>();
-  for (const s of setRows) {
+  for (const s of await readLiveSets(db, strengthIds)) {
     const list = setsByEntry.get(s.entryId) ?? [];
     list.push({
       publicId: s.publicId,
@@ -279,8 +231,8 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       reps: s.reps,
       isBodyweight: s.isBodyweight,
       isBand: s.isBand,
-      quantities: quantitiesBySet.get(s.id) ?? [],
-      status: s.status as EntryStatus,
+      quantities: s.quantities,
+      status: s.status,
     });
     setsByEntry.set(s.entryId, list);
   }
@@ -335,14 +287,14 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodywei
   // ownership through `getProfileByPublicId` first, so reaching here with no scope is already a
   // caller bug, and the throw says the one true thing without naming a household.
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
 
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(isLiveProfile(args.profilePublicId, scope))
     .limit(1);
-  if (!profile) throw new Error('Profile not found');
+  if (!profile) throw new Error(PROFILE_NOT_FOUND);
 
   // A weigh-in is a single_metric activity carrying the `bodyweight` metric (no movement), so the
   // writer sets metric_key and leaves movement_id NULL (the at-most-one CHECK). Asserted here so a
@@ -419,14 +371,14 @@ export async function logCheckinEntries(args: {
   // household. Pinned by the emitted-SQL proof in `entries.test.ts` (the app DAL cannot run under
   // `db:verify`), and the predicate itself is proved against a real database by the TEN-1 matrix.
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
 
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(isLiveProfile(args.profilePublicId, scope))
     .limit(1);
-  if (!profile) throw new Error('Profile not found');
+  if (!profile) throw new Error(PROFILE_NOT_FOUND);
 
   // Resolve the catalog rows OUTSIDE the insert — cached reads of immutable reference
   // data. This is also the DB-truth guard: a key that exists in the shared const but not
@@ -519,7 +471,7 @@ export async function logStrengthSession(
   // must carry the V1-22 chunk-2 snapshot read with it (see that row); `entries.test.ts` pins the
   // current order deliberately.
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
 
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
   // PICK-1 PR 2: ids before inserts, in `packages/db` so `db:verify` runs this exact function rather
@@ -751,7 +703,7 @@ export async function restoreClearedDay(args: {
   hiddenAt: string;
 }): Promise<RestoreClearedDayResult> {
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
   const result = await quietDbErrors('restoreClearedDay', () =>
     restoreClear(db, { ...args, scope }),
   );
@@ -765,8 +717,11 @@ export async function restoreClearedDay(args: {
   return { restored, keptHidden };
 }
 
-/** What Clear this day did, as a count: the DTO the action maps, with no token or value in it. */
-export type ClearDayEntriesResult = { count: number };
+/**
+ * What Clear this day did, as a count: the DTO the action maps, with no token or value in it.
+ * `closed`: the athlete was archived when the clear took its lock (the writer's own check).
+ */
+export type ClearDayEntriesResult = { count: number } | { closed: true };
 
 /**
  * Clear this day (V1-9b B2): hide every live entry of one athlete's day as one event (`clearDay`,
@@ -787,8 +742,9 @@ export async function clearDayEntries(args: {
   day: string;
 }): Promise<ClearDayEntriesResult> {
   const scope = await getHouseholdScope();
-  if (!scope) throw new Error('Profile not found');
+  if (!scope) throw new Error(PROFILE_NOT_FOUND);
   const result = await quietDbErrors('clearDayEntries', () => clearDay(db, { ...args, scope }));
+  if ('closed' in result) return { closed: true };
   if ('notFound' in result) return { count: 0 };
   return { count: result.count };
 }

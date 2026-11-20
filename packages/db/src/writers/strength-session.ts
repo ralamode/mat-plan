@@ -2,6 +2,7 @@ import {
   ENTRY_STATUS,
   newId,
   type MovementStatus,
+  PROFILE_NOT_FOUND,
   QUANTITY_SLOT,
   type StrengthSetInput,
   type Unit,
@@ -391,7 +392,7 @@ export async function writeStrengthSession(
       .from(schema.profiles)
       .where(isLiveProfile(args.profilePublicId, args.scope))
       .limit(1);
-    if (!profile) throw new Error('Profile not found');
+    if (!profile) throw new Error(PROFILE_NOT_FOUND);
 
     await assertMovementsAreAvailable(tx, args.scope, args.movements);
 
@@ -466,13 +467,14 @@ export async function writeStrengthSession(
  * profile so a soft-deleted set/entry/profile (post-V1-9b) is never edited. Only `reps` + `weight_num`
  * change; `idx` (the `uq_entry_sets_entry_idx` slot) is untouched, so no unique/CHECK is disturbed.
  *
- * The WHERE also enforces, server-side, the SAME "numeric AND done set only" invariant the client's
- * `isEditableSet` uses — never trusting the client. Without the numeric half a crafted POST could set a
- * weight on a bodyweight/band or duration set, producing a bogus read line. Without the **status** half
+ * The WHERE enforces, server-side, the "numeric AND done set only" invariant — never trusting the
+ * client (the old form's matching guard, `isEditableSet`, was deleted at FAM-1 12f). Without the
+ * numeric half a crafted POST could set a weight on a bodyweight/band or duration set, producing a
+ * bogus read line. Without the **status** half
  * (GAP-1 P1-1b) it could edit a `sub_failure` set's reps and leave the status behind, so the row would
  * export as `sub-failure` while claiming reps it never achieved. Such a set matches no row → `null` →
- * typed error, exactly like a wrong-owner id. **Keep these guards identical to `isEditableSet`'s** —
- * that is the whole contract; the client half is advisory, this one is the boundary.
+ * typed error, exactly like a wrong-owner id. This WHERE is the boundary; no client guard is
+ * left to mirror it.
  *
  * ⚠️ **GAP-3 made this a TRANSACTION, and that is a real change to this function's contract.** It was
  * "a single atomic UPDATE — NO `db.transaction`", which was true while the weight lived in a column on
@@ -523,8 +525,8 @@ export async function updateStrengthSetById(
   // D20's window, refuses an off-week, hidden or purged workout or prescription, and stamps the
   // entry. This older path checks none of that, so it takes only a set whose entry is NOT a program
   // row (`programRow()`, `prescription_set`, which a purge leaves set). No screen offers it for a
-  // program row; a crafted POST answers `null`, like every guard here. Deliberately NOT mirrored in
-  // the client's `isEditableSet`: no client renders a program row through this path.
+  // program row; a crafted POST answers `null`, like every guard here. No client renders a program
+  // row through this path.
   const notProgramRowEntryIds = exec
     .select({ id: schema.entries.id })
     .from(schema.entries)
@@ -541,8 +543,8 @@ export async function updateStrengthSetById(
         and(
           eq(schema.entrySets.publicId, args.setId),
           isNull(schema.entrySets.deletedAt),
-          // Server-side "numeric set only" guard — mirrors the client's isEditableSet, so a
-          // bodyweight/band or non-mass set can't be edited into an inconsistent shape by a crafted POST.
+          // Server-side "numeric set only" guard, so a bodyweight/band or non-mass set can't be
+          // edited into an inconsistent shape by a crafted POST.
           eq(schema.entrySets.isBodyweight, false),
           eq(schema.entrySets.isBand, false),
           isNotNull(schema.entrySets.reps),
@@ -551,8 +553,8 @@ export async function updateStrengthSetById(
           // passes it: editing its reps 3 → 5 would silently leave `status = 'sub_failure'` behind, and
           // the row would still export as `sub-failure` while claiming reps it no longer had. Correcting
           // a sub-failure set means changing its STATUS, which this endpoint cannot do — so it refuses
-          // the row rather than half-editing it. Mirrors `isEditableSet`; the client guard is advisory
-          // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
+          // the row rather than half-editing it. A crafted POST is the real threat, so this guard
+          // holds whatever a client offers.
           eq(schema.entrySets.status, ENTRY_STATUS.done),
           inArray(schema.entrySets.entryId, owned),
           inArray(schema.entrySets.entryId, notProgramRowEntryIds),

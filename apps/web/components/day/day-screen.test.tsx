@@ -38,6 +38,7 @@ import {
   tick,
   makeMount,
   workout,
+  openFolded,
 } from './day-test-utils';
 import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
 
@@ -63,6 +64,8 @@ describe('DayScreen: a section of the day page', () => {
     'renders %s: one <h3> per workout, one <h4> per item',
     (_name, plan) => {
       show(plan);
+      // A finished workout arrives as one line (12c-iii): opened, its headings are as before.
+      openFolded();
       const workouts = screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
       expect(workouts).toEqual(plan.workouts.map((w) => w.name));
       const items = plan.workouts.reduce((sum, w) => sum + w.items.length, 0);
@@ -81,6 +84,7 @@ describe('the workout card', () => {
     expect(within(workout('Morning habits')).getByText(DAY_COPY.progress(2, 10))).toBeTruthy();
     cleanup();
     show(yesterdayHalfDone);
+    openFolded();
     expect(within(workout('Morning habits')).getByText(DAY_COPY.doneMark)).toBeTruthy();
     cleanup();
     show(empty);
@@ -234,6 +238,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
     ['yesterday', yesterdayHalfDone],
   ])('un-tick leaves no tomb; re-tick restores the row, on %s', async (_day, plan) => {
     const control = mount(plan);
+    openFolded();
     const grip = card('Morning habits', 'Grip: rice bucket');
     await press(tick(grip));
     expect(tick(grip).getAttribute('aria-pressed')).toBe('false');
@@ -252,6 +257,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
 
   it('after an un-tick the field keeps the number: unchanged re-ticks, changed logs a new entry', async () => {
     const control = mount(yesterdayHalfDone);
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
     expect(field(splits).value).toBe('5');
@@ -274,6 +280,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
         },
       }),
     });
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
     fireEvent.change(field(splits), { target: { value: '7' } });
@@ -286,6 +293,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
 
   it('after an un-tick, an emptied field is a new ✓ of the prescription, not a re-tick', async () => {
     const control = mount(yesterdayHalfDone);
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
     fireEvent.change(field(splits), { target: { value: '' } });
@@ -296,6 +304,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
 
   it('an untouched field re-ticks, even when the item’s unit changed since', async () => {
     const control = mount(yesterdayHalfDone);
+    openFolded();
     await press(tick(card('Morning habits', 'Vest weight')));
     const plan = structuredClone(control.plan);
     const vest = plan.workouts[0]!.items.find((i) => i.name === 'Vest weight')!;
@@ -309,6 +318,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
 
   it('after an un-tick, the same number typed again (5.0 for 5) re-ticks the same entry', async () => {
     const control = mount(yesterdayHalfDone);
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
     fireEvent.change(field(splits), { target: { value: '5.0' } });
@@ -320,6 +330,7 @@ describe('a single row: ✓, un-tick and re-tick', () => {
   it('a re-tick whose token is gone logs the row as a new ✓', async () => {
     const notFound: RowResult = { ok: false, reason: ROW_REFUSAL.not_found };
     const control = mount(yesterdayHalfDone, { wrap: () => ({ retickRow: async () => notFound }) });
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     await press(tick(splits));
     await press(tick(splits));
@@ -634,6 +645,7 @@ describe('a day that cannot be written', () => {
 
   it('a set-type card looks done only when every set is logged', () => {
     show(yesterdayHalfDone);
+    openFolded();
     // DB bench press: 2 of 4 logged. Neck bridge: 3 of 3.
     const half = card('Heavy A', 'DB bench press');
     expect(half.classList.contains(LOGGED_CARD_CLASS)).toBe(false);

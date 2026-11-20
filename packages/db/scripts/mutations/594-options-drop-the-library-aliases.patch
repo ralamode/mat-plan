@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/catalog-arm-option.ts b/packages/db/src/queries/program/catalog-arm-option.ts
+index 723d3238..08225c1d 100644
+--- a/packages/db/src/queries/program/catalog-arm-option.ts
++++ b/packages/db/src/queries/program/catalog-arm-option.ts
+@@ -173,7 +173,7 @@ export function catalogArmOption(
+     trackingType: row.trackingType,
+     owner: 'catalog',
+     ...(pickerEntry ? { group: pickerEntry.group } : {}),
+-    aliases: joinAliases(pickerEntry?.aliases ?? [], fromLibrary?.aliases ?? []),
++    aliases: joinAliases(pickerEntry?.aliases ?? []),
+     taxonomy:
+       tables ??
+       (fromLibrary

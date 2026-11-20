@@ -8,9 +8,10 @@ import {
   MOVEMENT_SEED_PUBLIC_IDS,
   newId,
   SEED_METRIC_KEYS,
+  SEED_PUBLIC_IDS,
   type Unit,
 } from '@mat-plan/shared';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, notInArray, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { SEED_FULL_ROUTINE, SEED_HOUSEHOLD_PUBLIC_ID } from '../../src/seed';
@@ -31,10 +32,34 @@ import {
   parseAccountList,
 } from './accounts';
 import { CorrectionRefusal, redactedFailure } from './redact';
-import { note, type CorrectionLine } from './summary';
-import { correctionTargetIsPreview, seedHouseholdClaimIsAllowed } from './target-url';
-import { setLocalTimeouts } from '../../src/writers/executor';
-import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
+import { note, summaryLine, type CorrectionLine } from './summary';
+import {
+  correctionTargetDatabaseIsUnnamed,
+  correctionTargetIsPreview,
+  correctionTargetUrl,
+  seedHouseholdClaimIsAllowed,
+} from './target-url';
+import {
+  eraseHousehold,
+  ErasureCountMismatch,
+  ErasureForeignRow,
+  ErasurePreflightRefused,
+  ErasureTargetNotFound,
+  type ErasureReport,
+} from '../../src/erasure/erase';
+import { ownerScope, type OwnerScope } from '../../src/scope';
+import { rowsOf, setLocalTimeouts, type Executor } from '../../src/writers/executor';
+import {
+  EXPECT_ERASED_ROWS,
+  parseExpectedRows,
+  seededHouseholdErasureIssue,
+} from './erasure-gates';
+import {
+  householdMemberInHousehold,
+  inHousehold,
+  insertHouseholdMember,
+  isLiveProfile,
+} from '../../src/writers/ownership';
 
 /**
  * One guarded, idempotent correction to live data.
@@ -121,8 +146,8 @@ async function requireLiveHouseholdScope(db: Database, publicId: string): Promis
  *
  * Two app bugs produced it, both V1-24: the strength form offered a BW toggle on a movement the
  * catalog declares as loaded (`kb_swings` is seeded `isBodyweight: false, unitDefault: 'lb'`), and
- * `isEditableSet` refuses to edit a bodyweight set — which, with no delete action anywhere in the
- * app, made it **unrecoverable through the UI**. Hence a correction.
+ * `isEditableSet` (the form's, retired at FAM-1 12f) refused to edit a bodyweight set — which, with
+ * no delete action anywhere in the app, made it **unrecoverable through the UI**. Hence a correction.
  *
  * The fix, per set: `reps 20 → 10`, clear `is_bodyweight`, and add the `primary` mass quantity of
  * 20 lb that should have been there. Note the quantity is an INSERT, not an update — a bodyweight set
@@ -677,7 +702,19 @@ const movementsOwnershipReport: Correction = {
     // (4) What `TEN-2d`'s `VALIDATE` will hit. `NOT VALID` scanned nothing, so TEN-2c cannot fail on
     // a pre-existing violation — it would wedge 2d with a `23514`, and `db:verify` cannot see it
     // because it never runs against production.
-    const checkViolations = global.filter((r) => r.pattern === null);
+    // CAT-3 A2-i: counted by the CHECK's OWN predicate (the schema's exported fragment), not by
+    // `pattern IS NULL`: since A1 a non-strength catalog row with no pattern is legal, and a copy of the
+    // rule here had already drifted from the constraint once.
+    const [blockers] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.movements)
+      .where(
+        and(
+          isNull(schema.movements.householdId),
+          sql`NOT (${schema.movementGlobalRowHasPattern(schema.movements)})`,
+        ),
+      );
+    const checkViolations = blockers?.n ?? 0;
 
     return [
       `movements rows: ${rows.length} total — ${global.length} global (household_id IS NULL), ${rows.length - global.length} household-owned`,
@@ -685,7 +722,7 @@ const movementsOwnershipReport: Correction = {
       `TEN-2c-1 input (the read leak's residual): ${residual.length} — of which ${residualShared.length} referenced by MORE THAN ONE household (clone + split), ${residualSingle.length} by exactly one (repoint), ${residualOrphan.length} referenced by NO household`,
       `TEN-2b-2 input (global, non-curated, unreferenced): ${residualOrphan.length}`,
       `runbooks.md pre-flight (d) — references crossing a household boundary: ${crossRefs.total} (${crossRefs.entries} entries, ${crossRefs.prescriptions} prescriptions)`,
-      `TEN-2d blocker — global rows with pattern IS NULL (movements_global_row_has_pattern would reject on VALIDATE): ${checkViolations.length}`,
+      `TEN-2d blocker — global rows movements_global_row_has_pattern rejects (no pattern, and not a non-strength catalog row): ${checkViolations}`,
       'EXPECTED, every line: zero in every residual/blocker count. A non-zero count blocks TEN-2c’s merge (ten-2a measured zero on 2026-10-09, and a dated zero is not an invariant).',
     ];
   },
@@ -897,6 +934,13 @@ const createHousehold: Correction = {
             'account; nothing written',
         );
       }
+      // A URL with no database name connects wherever `$PGDATABASE` points, which may BE the preview:
+      // the refusal above cannot see it, so this one refuses it (CAT-3 R0, D1).
+      if (correctionTargetDatabaseIsUnnamed()) {
+        throw new CorrectionRefusal(
+          'the target URL names no database, so which one would be written is unknown; nothing written',
+        );
+      }
       const ids = parseAccountList(process.env[CREATE_HOUSEHOLD_ACCOUNTS_ENV]);
       const n = ids.length;
       ids.forEach((id, i) => {
@@ -955,6 +999,199 @@ const createHousehold: Correction = {
   },
 };
 
+/**
+ * A household's scope by `public_id`, **live or hidden**: the one-shot erasure erases a soft-deleted
+ * household too (CAT-3 R0, D1). PRIV-3 2b reuses it. It returns the scope, never the id (TEN-1 1d).
+ */
+async function householdScopeByPublicId(
+  db: Database,
+  publicId: string,
+): Promise<HouseholdScope | null> {
+  const [row] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, publicId))
+    .limit(1);
+  return row ? householdScopeForScript(row.id) : null;
+}
+
+/** Households whose `public_id` is not a seed constant, live and hidden: printed, never a refusal. */
+async function otherHouseholdsNote(db: Database): Promise<CorrectionLine> {
+  const rows = await db
+    .select({ deletedAt: schema.households.deletedAt })
+    .from(schema.households)
+    .where(notInArray(schema.households.publicId, [...SEED_PUBLIC_IDS]));
+  const live = rows.filter((r) => r.deletedAt === null).length;
+  return note(`households not in SEED_PUBLIC_IDS: live ${live}, hidden ${rows.length - live}`);
+}
+
+function asOwnerScope(scope: HouseholdScope): OwnerScope {
+  const owner = ownerScope(scope);
+  if (!owner) throw new CorrectionRefusal('the script scope is not an owner scope; nothing erased');
+  return owner;
+}
+
+/**
+ * The seeded household's memberships, live and hidden: counts only. A hidden membership is the only
+ * database record of an account that was removed from the household; the erasure deletes it, and
+ * step 7 binds only the accounts it is given, so the operator must see that such an account exists
+ * (privacy lens, #708).
+ */
+async function seedMembersNote(db: Database, scope: HouseholdScope): Promise<CorrectionLine> {
+  const rows = await db
+    .select({ deletedAt: schema.householdMembers.deletedAt })
+    .from(schema.householdMembers)
+    .where(householdMemberInHousehold(scope));
+  const live = rows.filter((r) => r.deletedAt === null).length;
+  return note(`household_members: live ${live}, hidden ${rows.length - live}`);
+}
+
+/** The pre-flights that would refuse `--apply`: letters and counts only. */
+function preflightNotes(report: ErasureReport): CorrectionLine[] {
+  const failing = Object.entries(report.preflights).filter(([, n]) => n > 0);
+  return failing.length === 0
+    ? []
+    : [
+        note(
+          `pre-flight ${failing.map(([c, n]) => `(${c}) ${n}`).join(', ')}: --apply WILL refuse ` +
+            'until another household stops depending on these rows',
+        ),
+      ];
+}
+
+const tablesWithRows = (report: ErasureReport) => report.counts.filter((c) => c.rows > 0).length;
+
+/** Counts only: one CHANGE per table that has rows, then the total as a note. No id of any kind. */
+function erasureLines(report: ErasureReport, verb: 'would erase' | 'erased'): CorrectionLine[] {
+  return [
+    ...report.counts.filter((c) => c.rows > 0).map((c) => `${verb} ${c.rows} ${c.table} row(s)`),
+    note(`total: ${report.total} row(s)`),
+  ];
+}
+
+/** The one-shot erasure's selector (CAT-3 R0). `db:verify` finds it by this. */
+export const ERASE_SEEDED_HOUSEHOLD_NAME = 'erase-seeded-household-2026-11-19';
+
+/**
+ * CAT-3 R0 — the fresh start's step 3: erase the SEEDED household, and everything in it, once
+ * (spec K7; plan `docs/plans/priv-3-fresh-start-prep.md`, D1).
+ *
+ * ```
+ * DATABASE_URL_UNPOOLED=… pnpm --filter @mat-plan/db db:correct erase-seeded-household-2026-11-19
+ * EXPECT_ERASED_ROWS=<the dry run's total> DATABASE_URL_UNPOOLED=… … --apply
+ * ```
+ *
+ * - **No target input.** It resolves `SEED_HOUSEHOLD_PUBLIC_ID` itself, live or hidden, and erases
+ *   through 2a's core (`src/erasure/erase.ts`): the same pre-flights (a)–(h), locks and order as every
+ *   household deletion. Not a second walk.
+ * - **Production by elimination** (`erasure-gates.ts`): refused when the direct string is unset, local,
+ *   the preview's, names no database or carries a host override; then, on the connection that writes,
+ *   unless `current_database()` is the database the URL names and not the preview.
+ * - **`--apply` restates the dry run's total:** it needs `EXPECT_ERASED_ROWS`, the current total. The
+ *   core runs inside this entry's transaction (a savepoint), and a different total throws, which rolls
+ *   back everything. A stale number that still equals the count passes: it is a confirmation of the
+ *   size, not a binding to one dry run.
+ * - **Once the target is gone:** a dry run notes it and exits 0; `--apply` refuses.
+ * - **Counts only:** no Clerk id and no `public_id` in any line, though the core's report carries
+ *   Clerk ids (for 2b). The core's typed errors become refusals from their fixed fields; anything else
+ *   goes through `redactedFailure`.
+ * - **Accounts are kept (K15):** the core deletes the `household_members` rows and never calls Clerk;
+ *   step 7 (`create-household-…`) binds the same accounts to the new household.
+ * - It does NOT call `erase-household`'s seed-id refusal (2b's, unchanged) and adds no `kind`.
+ */
+const eraseSeededHousehold: Correction = {
+  name: ERASE_SEEDED_HOUSEHOLD_NAME,
+  what: 'the fresh start deletes the seeded household and everything in it (K7), which the app cannot',
+  issue: 'PRIV-3 · CAT-3 R0',
+  async run(db, apply) {
+    try {
+      const url = correctionTargetUrl({ kind: 'erasure' });
+      const before = seededHouseholdErasureIssue(url, null);
+      if (before) throw new CorrectionRefusal(before);
+
+      if (!apply) {
+        const others = await otherHouseholdsNote(db);
+        const scope = await householdScopeByPublicId(db, SEED_HOUSEHOLD_PUBLIC_ID);
+        if (!scope) return [note('the seeded household is not here; nothing to erase'), others];
+        const report = await eraseHousehold(db as Executor, asOwnerScope(scope), { apply: false });
+        return [
+          ...erasureLines(report, 'would erase'),
+          ...preflightNotes(report),
+          await seedMembersNote(db, scope),
+          summaryLine(
+            `${tablesWithRows(report)} table(s), ${report.total} row(s) would be erased. To apply, ` +
+              `re-run with ${EXPECT_ERASED_ROWS}=${report.total} and --apply.`,
+          ),
+          others,
+        ];
+      }
+
+      const expected = parseExpectedRows(process.env[EXPECT_ERASED_ROWS]);
+      if (expected === null) {
+        throw new CorrectionRefusal(
+          `--apply needs ${EXPECT_ERASED_ROWS}, the total this sitting's dry run printed; nothing erased`,
+        );
+      }
+      return await db.transaction(async (tx) => {
+        // First, before the entry's own reads: a concurrent ACCESS EXCLUSIVE on `households` must
+        // not leave them waiting unbounded (README rule 7; the core sets the same values again).
+        await setLocalTimeouts(tx, '60s');
+        const txDb = tx as unknown as Database;
+        const [{ name } = { name: '' }] = rowsOf<{ name: string }>(
+          await tx.execute(sql`SELECT current_database() AS name`),
+        );
+        const during = seededHouseholdErasureIssue(url, name);
+        if (during) throw new CorrectionRefusal(during);
+        const scope = await householdScopeByPublicId(txDb, SEED_HOUSEHOLD_PUBLIC_ID);
+        if (!scope) {
+          throw new CorrectionRefusal(
+            'the seeded household is not here: already erased; nothing to do',
+          );
+        }
+        const report = await eraseHousehold(tx as unknown as Executor, asOwnerScope(scope), {
+          apply: true,
+        });
+        if (report.total !== expected) {
+          throw new CorrectionRefusal(
+            `the erasure removed ${report.total} row(s) but ${EXPECT_ERASED_ROWS} is ${expected}: ` +
+              'rolled back, nothing erased; re-run the dry run',
+          );
+        }
+        return [
+          ...erasureLines(report, 'erased'),
+          note(
+            'erased. Do NOT delete the Clerk users step 7 binds: those accounts are kept (K15). An ' +
+              'account whose only membership was hidden is decided at the go and recorded in the ledger.',
+          ),
+          await otherHouseholdsNote(txDb),
+          summaryLine(`✓ erased ${tablesWithRows(report)} table(s), ${report.total} row(s).`),
+        ];
+      });
+    } catch (err) {
+      if (err instanceof ErasurePreflightRefused) {
+        throw new CorrectionRefusal(
+          `pre-flight (${err.check}) found ${err.count} row(s) another household depends on; nothing erased`,
+        );
+      }
+      if (err instanceof ErasureCountMismatch) {
+        throw new CorrectionRefusal(
+          `aborted: ${err.table} expected ${err.expected} row(s), got ${err.actual} (rows changed ` +
+            'during the erasure); rolled back, nothing erased; re-run the dry run',
+        );
+      }
+      if (err instanceof ErasureForeignRow) {
+        throw new CorrectionRefusal(
+          `aborted: a deleted ${err.table} row was not the seeded household's; rolled back, nothing erased`,
+        );
+      }
+      if (err instanceof ErasureTargetNotFound) {
+        throw new CorrectionRefusal('the seeded household is not here; nothing erased');
+      }
+      throw redactedFailure(ERASE_SEEDED_HOUSEHOLD_NAME, err);
+    }
+  },
+};
+
 export const CORRECTIONS: readonly Correction[] = [
   kbSwingsLoadRepsSwap,
   bodyweightDuplicates,
@@ -962,4 +1199,5 @@ export const CORRECTIONS: readonly Correction[] = [
   movementsOwnershipReport,
   householdClaim,
   createHousehold,
+  eraseSeededHousehold,
 ];
