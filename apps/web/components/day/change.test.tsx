@@ -1338,6 +1338,20 @@ describe('another phone’s Change over a draft that was not an edit (12c-iii fo
     expect(control.actions.amendRow).not.toHaveBeenCalled();
   });
 
+  it('weight × reps: only the field typed back is dropped; the typed reps go with the other phone’s load', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    type(reps(), '9');
+    await act(async () => control.setPlan(amendedElsewhere(control.plan, 35)));
+    expect(load().value).toBe('35');
+    await leave(reps());
+    expect(control.actions.amendRow.mock.calls[0]![0]).toMatchObject({
+      values: { quantities: [{ value: 35 }], reps: 9 },
+    });
+  });
+
   it('a real edit stays, and says what is stored now', async () => {
     const control = mount(yesterdayHalfDone, { change: true });
     type(load(), '40');

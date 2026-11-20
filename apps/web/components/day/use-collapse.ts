@@ -58,12 +58,24 @@ export function useCollapse(finished: boolean, held = false) {
    * stays true exactly then.
    */
   const collapseHadFocus = useRef(false);
+  // A tap anywhere else is the person leaving it, even where it moves no focus (Safari focuses no
+  // tapped button; text takes none), so a later hold never pulls focus or the page back here.
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
       collapseHadFocus.current = event.target === collapseButton.current;
     };
+    const onPointerDown = (event: PointerEvent) => {
+      const button = collapseButton.current;
+      if (!button || !(event.target instanceof Node) || !button.contains(event.target)) {
+        collapseHadFocus.current = false;
+      }
+    };
     document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    };
   }, []);
   // "Collapse" held (busy, or not finished) while it had focus: the name takes focus, whether the
   // button still holds it (jsdom) or a browser dropped it to the page when it was disabled.

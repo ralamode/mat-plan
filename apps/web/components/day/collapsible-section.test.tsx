@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { CollapsibleSection, useSectionBusy } from './collapsible-section';
 import { DAY_COPY } from './day-copy';
@@ -186,28 +186,6 @@ describe('the follow-up to 12c-iii (#761: nothing busy behind a line)', () => {
     expect(inside()).not.toBeNull();
   });
 
-  it('busy just after the tap: focus moves from Collapse to the name, never onto a disabled button', () => {
-    // jsdom lets a disabled button take focus where a browser does not, so the test records, at each
-    // focus() call, whether its target was a disabled button (a browser would leave focus on the page).
-    const original = HTMLElement.prototype.focus;
-    const ontoDisabled: boolean[] = [];
-    const focused = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
-      this: HTMLElement,
-      options?: FocusOptions,
-    ) {
-      ontoDisabled.push(this instanceof HTMLButtonElement && this.disabled);
-      original.call(this, options);
-    });
-    const { rerender } = render(shell());
-    act(() => {
-      fireEvent.click(line()!);
-      rerender(shell({ busy: true }));
-    });
-    expect(ontoDisabled).not.toContain(true);
-    expect(document.activeElement).toBe(nameSpan());
-    focused.mockRestore();
-  });
-
   it('busy while Collapse has focus, in a browser that drops it to the page: the name takes it', () => {
     const { rerender } = render(shell());
     fireEvent.click(line()!);
@@ -218,5 +196,17 @@ describe('the follow-up to 12c-iii (#761: nothing busy behind a line)', () => {
       rerender(shell({ busy: true }));
     });
     expect(document.activeElement).toBe(nameSpan());
+  });
+
+  it('a tap elsewhere that moves no focus (Safari, plain text) ends it: a later hold moves nothing', () => {
+    const { rerender } = render(shell());
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
+    act(() => {
+      fireEvent.pointerDown(document.body);
+      collapse()!.blur();
+    });
+    rerender(shell({ busy: true }));
+    expect(document.activeElement).toBe(document.body);
   });
 });

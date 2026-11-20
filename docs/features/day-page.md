@@ -165,10 +165,11 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     30 lb." with a ✕ (cancel); a failed save keeps the typed number, says "Couldn't save. Still
     30 lb." with Try again and the ✕, and counts as not saved (a failed Undo does not count: nothing typed
     is lost). A saved Change shows its numbers until the page's data shows them too (the `amended`
-    override in `use-row.ts`), and another phone's Change retires the line and its Undo. **A draft
-    that equals what is stored is not an edit:** when another phone changes that entry, the draft
-    is dropped (`useChange`), never left to read "Not saved" over a number nobody meant, where a
-    blur or ✓ would send it over that phone's (12c-iii follow-up).
+    override in `use-row.ts`), and another phone's Change retires the line and its Undo. **A drafted
+    field that equals what is stored is not an edit:** when another phone changes that entry, each
+    such field is dropped (`useChange`; a field really typed stays), never left to read "Not saved"
+    over a number nobody meant, where a blur or ✓ would send it over that phone's (12c-iii
+    follow-up). A tap elsewhere ends Collapse's claim on focus, even one that moves none (Safari).
 
 17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an
