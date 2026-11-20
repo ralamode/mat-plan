@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   BUILDER_COPY,
+  COPY_COPY,
   copyTitle,
   copyToLabel,
   EDITOR_COPY,
@@ -95,6 +96,20 @@ test('the Copy dialog meets the a11y bar at 360px', async ({ page }) => {
   await expectTapTargets(page, 'Copy dialog');
   // The sheet is fixed: the document-level check cannot see inside it.
   await expectNoOverflowWithin(dialog, 'Copy dialog');
+
+  // The footer: side by side at 360px; stacked, action first, at 200% zoom on a 390px phone (195
+  // CSS px), where two columns would clip "Cancel" (`SheetFormFooter`'s container query).
+  const action = dialog.getByRole('button', { name: COPY_COPY.copy, exact: true });
+  const cancel = dialog.getByRole('button', { name: BUILDER_COPY.cancel, exact: true });
+  const [a, c] = [await action.boundingBox(), await cancel.boundingBox()];
+  expect(a && c && Math.abs(a.y - c.y) < 2, 'the footer buttons sit side by side at 360px').toBe(
+    true,
+  );
+  await page.setViewportSize({ width: 195, height: 422 });
+  const [a2, c2] = [await action.boundingBox(), await cancel.boundingBox()];
+  expect(a2 && c2 && c2.y >= a2.y + a2.height, 'Cancel sits under the action at 195px').toBe(true);
+  await expectNoOverflowWithin(dialog, 'Copy dialog at 195px');
+  await page.setViewportSize(NARROW_VIEWPORT);
 });
 
 test('the Put-on dialog meets the a11y bar at 360px, with the longest program name', async ({

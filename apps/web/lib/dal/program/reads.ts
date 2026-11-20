@@ -2,7 +2,13 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import { readProgramList, readProgramView, readWorkoutDraft } from '@mat-plan/db';
+import {
+  readProgramList,
+  readProgramsByAthlete,
+  readProgramView,
+  readWorkoutDraft,
+  type AthleteProgram,
+} from '@mat-plan/db';
 import {
   uuidSchema,
   type ProgramList,
@@ -98,4 +104,22 @@ export const getProgramEntry = cache(async function getProgramEntry(
   const entry = (await getProgramList(today))?.find((program) => program.programPublicId === id);
   if (!entry) await reportProgramMiss(await getHouseholdScope(), { programPublicId });
   return entry ?? null;
+});
+
+/** A program an athlete is on, as Home's tile names it: id, name and the first day it applies. */
+export type AthleteProgramDTO = AthleteProgram;
+
+/**
+ * Each live, not archived athlete's programs, by their public id, as of the household's `today`
+ * (FAM-1 15 PR 3, Home's tiles): ONE read for the whole page, not one per tile. An athlete on no
+ * program maps to `[]`; an archived athlete is not a key, as Home shows them no tile. `null` with no
+ * household: Home shows its no-household state and asks for nothing. No id names anything, so a
+ * missing scope reports nothing. A primitive argument, because `cache()` compares by identity.
+ */
+export const getProgramsByAthlete = cache(async function getProgramsByAthlete(
+  today: string,
+): Promise<ReadonlyMap<string, readonly AthleteProgramDTO[]> | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+  return quietDbErrors('readProgramsByAthlete', () => readProgramsByAthlete(db, scope, today));
 });

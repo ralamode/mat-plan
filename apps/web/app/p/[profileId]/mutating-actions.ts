@@ -54,7 +54,8 @@ import { keyBySelf, type TRANSPORT_REFUSALS } from '@mat-plan/shared';
  * bytes and no write, and the writer's refusal is proved in `db:verify` against two households
  * (`docs/features/write-path.md` invariants 2 and 13).
  *
- * Two existing modules follow this: `./actions.ts` and `app/p/profile-actions.ts`.
+ * Every Server Action module follows this layout; the modules are listed, one per line, in
+ * `app/pages-need-a-session.test.ts`, so no count here goes stale.
  */
 
 /**
@@ -64,11 +65,13 @@ import { keyBySelf, type TRANSPORT_REFUSALS } from '@mat-plan/shared';
  * repo (`packages/db/src/scope.ts`; `docs/features/write-path.md` invariant 2). This field says
  * nothing about who may do what — it says which refusal matrices can drive the action:
  *
- * - `profile` — the body carries a `profileId`, so the wrong-household matrix can hand it a foreign
- *   one and assert the refusal.
- * - `household` — there is no `profileId` to make foreign (adding an athlete, renaming a movement),
- *   so that matrix structurally cannot cover it and a household matrix drives a DAL scope miss
- *   instead.
+ * - `profile` — the action resolves the athlete its body names (`getProfileByPublicId`), so the
+ *   wrong-household matrix can hand it a foreign one and assert the refusal.
+ * - `household` — the action resolves no athlete itself, so that matrix structurally cannot cover
+ *   it and a household matrix drives a DAL scope miss instead. Either there is no athlete id to
+ *   make foreign (adding an athlete, renaming a movement), or the body carries one and the WRITER
+ *   makes the one check of that athlete inside the household scope (Put on, Take off, Program
+ *   order: FAM-1 15 and 15c). Such an action owes the foreign-id proof the module docblock above sets out.
  *
  * Four sibling plans already write `scope:` for this, so the name stays; this docblock is the
  * disambiguation.

@@ -46,16 +46,19 @@ describe('the program builder’s sentences (the prototype’s wording)', () => 
 
   it('an athlete’s line: since or starts, last day, also on', () => {
     const [one] = familyProgram.athletes;
-    expect(athleteHint(one!, familyProgram.today)).toBe('since Mon, Nov 9 · also on Stretching');
+    expect(athleteHint(one!, familyProgram.today)).toBe(
+      'since Mon,\u00a0Nov\u00a09 · also on Stretching',
+    );
     const two = familyProgramAfterTakeOff.athletes[1]!;
     expect(athleteHint(two, familyProgramAfterTakeOff.today)).toBe(
-      'since Mon, Nov 9 · last day today',
+      'since Mon,\u00a0Nov\u00a09 · last day today',
     );
     // The one rule: a last day that is not today (no writer makes one) is its date.
     expect(lastDayText('2026-11-14', '2026-11-14')).toBe('last day today');
-    expect(lastDayText('2026-11-15', '2026-11-14')).toBe('last day Sun, Nov 15');
+    // No-break spaces inside the date (15 PR 3): a wrapping line never splits it.
+    expect(lastDayText('2026-11-15', '2026-11-14')).toBe('last day Sun,\u00a0Nov\u00a015');
     expect(athleteHint({ ...two, since: '2026-11-15', lastDay: null }, '2026-11-14')).toBe(
-      'starts Sun, Nov 15',
+      'starts Sun,\u00a0Nov\u00a015',
     );
   });
 
