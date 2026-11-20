@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   changeableFields,
+  itemOtherUnit,
   changedText,
   fieldText,
   formatRowValues,
@@ -369,5 +370,35 @@ describe('H9 (12d-ii): a load logged in another unit is typed again, never fille
 
   it('a Check is unaffected by the flag', () => {
     expect(readTyped(grip, { quantity: '', reps: '' }, { fillQuantity: false }).ok).toBe(true);
+  });
+});
+
+describe('itemOtherUnit (#688 follow-up)', () => {
+  const run: DayItem = {
+    ...splits,
+    name: 'Easy run',
+    trackingType: 'distance',
+    unit: 'm',
+    target: { reps: null, quantities: [{ slot: QUANTITY_SLOT.distance, unit: 'm', value: 400 }] },
+    rows: [],
+  };
+  const row = (set: number, unit: 'm' | 'yd' | 'mi', value: number) => ({
+    set,
+    previous: null,
+    logged: {
+      entryPublicId: `00000000-0000-7000-8000-00000000000${set}`,
+      values: { quantities: [{ slot: QUANTITY_SLOT.distance, unit, value }] },
+      prescribedText: '400 m',
+    },
+  });
+
+  it('names the one other unit the logged rows hold; none when all are in the item’s unit', () => {
+    expect(itemOtherUnit({ ...run, rows: [row(1, 'yd', 400), row(2, 'yd', 440)] })).toBe('yd');
+    expect(itemOtherUnit({ ...run, rows: [row(1, 'm', 400)] })).toBeNull();
+    expect(itemOtherUnit({ ...run, rows: [] })).toBeNull();
+  });
+
+  it('two other units: none, so each row keeps its own line (one sentence names one unit)', () => {
+    expect(itemOtherUnit({ ...run, rows: [row(1, 'yd', 400), row(2, 'mi', 1)] })).toBeNull();
   });
 });

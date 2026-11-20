@@ -85,6 +85,23 @@ export function otherUnitOf(item: DayItem, values: RowValues): Unit | null {
   return quantity && quantity.unit !== item.unit ? quantity.unit : null;
 }
 
+/**
+ * The one other unit the item's logged rows hold (the page's data), for the note under its heading
+ * (#688 follow-up; maintainer, 2026-11-19: once per exercise). `null` when no logged row is in
+ * another unit, or when they are in **two** other units (a distance edited twice): one sentence
+ * could name only one of them, so each row keeps its own line instead.
+ */
+export function itemOtherUnit(item: DayItem): Unit | null {
+  if (!item.unit) return null;
+  const units = new Set(
+    item.rows.flatMap((row) => {
+      const unit = row.logged ? otherUnitOf(item, row.logged.values) : null;
+      return unit ? [unit] : [];
+    }),
+  );
+  return units.size === 1 ? [...units][0]! : null;
+}
+
 /** That quantity as the row writes it ("25 lb"), or `null` when it is in the item's unit. */
 export function otherUnitLoad(item: DayItem, values: RowValues): string | null {
   const quantity = slotQuantity(item, values.quantities);

@@ -115,15 +115,16 @@ describe('Change: where it applies', () => {
     // One field, the reps; the load is text with its own unit, never a kg field.
     expect(within(rowOne).getAllByRole('textbox')).toEqual([reps()]);
     expect(rowOne.textContent).toContain('27.5 lb');
-    // The line says why, asks for no conversion, and the ✓ and the reps field point at it.
-    // Every set logged in pounds has its own line; set 1's is the one its ✓ and field point at.
+    // The note says why, once for the exercise under its heading, and asks for no conversion; every
+    // logged set's ✓ and reps field point at it (#688 follow-up; maintainer, 2026-11-19).
     const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
       noun: DAY_COPY.otherUnitNoun.load,
       unticked: null,
     });
-    expect(within(bench()).getAllByText(said).length).toBeGreaterThan(1);
+    expect(within(bench()).getAllByText(said)).toHaveLength(1);
     expect(describedTexts(benchTick())).toContain(said);
     expect(describedTexts(reps())).toContain(said);
+    expect(describedTexts(benchTick(2))).toContain(said);
     // The load cell says the unit's word, not its code, to a screen reader (plan U2.5).
     const cell = within(rowOne).getByText(unitSpoken('lb'));
     expect(cell.className).toContain('sr-only');
@@ -1200,5 +1201,64 @@ describe('Change: a row logged in another unit (12d-iii)', () => {
     expect(within(item).queryAllByRole('textbox')).toHaveLength(0);
     const tick = within(item).getByRole('button', { name: DAY_COPY.logLabel('Vest weight') });
     expect(describedTexts(tick)).toContain(said);
+  });
+});
+
+describe('the other-unit note, once per exercise (#688 follow-up)', () => {
+  /** `yesterdayHalfDone` with the bench in kg, and only the given sets still logged (in lb). */
+  function inKg(keep: readonly number[] = []): DayPlan {
+    const kg: DayPlan = structuredClone(yesterdayHalfDone);
+    const item = kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!;
+    item.unit = 'kg';
+    if (keep.length) for (const row of item.rows) if (!keep.includes(row.set)) row.logged = null;
+    return kg;
+  }
+  const said = () =>
+    DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.load,
+      unticked: null,
+    });
+  /** Every description in the card resolves: none points at an element that is not there. */
+  const noDangling = () => {
+    for (const el of within(bench())
+      .queryAllByRole('button')
+      .concat(within(bench()).queryAllByRole('textbox'))) {
+      expect(describedTexts(el).join(' | ')).not.toContain('(missing #');
+    }
+  };
+
+  it('the note stays for the visit when its last set is un-ticked; the row says its own line', async () => {
+    mount(inKg([1]), { change: true });
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    noDangling();
+    await press(benchTick());
+    // Un-ticked: the row's own line, with its own copy; the note above has not moved.
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    expect(describedTexts(benchTick()).some((t) => t.includes('Tap ✓'))).toBe(true);
+    noDangling();
+  });
+
+  it('an un-tick in flight keeps the note and adds no row line', async () => {
+    const gate = held();
+    mount(inKg([1]), {
+      change: true,
+      wrap: (a) => ({ untickRow: (input) => gate.after(() => a.untickRow(input)) }),
+    });
+    await act(async () => {
+      fireEvent.click(benchTick());
+    });
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    expect(describedTexts(benchTick())).toContain(said());
+    noDangling();
+    await gate.resolve();
+  });
+
+  it('no description dangles in any state: logged, un-ticked, re-ticked', async () => {
+    mount(inKg(), { change: true });
+    noDangling();
+    await press(benchTick());
+    noDangling();
+    await press(benchTick());
+    noDangling();
   });
 });
