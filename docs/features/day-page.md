@@ -315,6 +315,8 @@ Program order journey in `e2e/day-page.spec.ts` builds its own two programs and 
 fixture world's, so a reorder never changes what another spec reads.
 A test that acts on a workout finished in its fixture opens it first: `openFolded()` in
 `day-test-utils.tsx` for component tests, `openCollapsed(region, name)` in `e2e/steps.ts` for e2e
-(12c-iii), since such a workout arrives as one line.
+(12c-iii), since such a workout arrives as one line. A refused write's message also counts as busy
+(`use-row.ts`), so Collapse is never offered over it; a busy part's Collapse stays in place, held
+(`invisible`, disabled, hidden), so the heading row never changes height.
 The device's today (`pinDayBeforeWrite`'s check) is `deviceToday()` from `lib/date.ts`, shared
 with the builder's Put-on dialog since FAM-1 15.

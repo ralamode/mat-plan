@@ -16,9 +16,10 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
  * is not offered because the part is busy); after "Collapse", to the line. Moved by one counter per
  * target, bumped in the tap's handler, and an effect that lists only that counter: so it runs after a
  * tap and never after a change the data caused, and a mount (or StrictMode's second run) moves none.
- * When a control goes **by itself** while it holds focus, the open part's name takes it: at once if
- * it is mounted ("Collapse" went), else when it mounts (the line went). The island's pattern
- * (`single-value-live.tsx`): a ref cleanup that sees its node still focused leaves a claim.
+ * When a control goes **by itself** while it holds focus, the open part's name takes it. Decided
+ * after the commit, not in the ref cleanup: a cleanup also runs for StrictMode's simulated detach in
+ * development, where the node stays connected, so only a node that has really left (and taken focus
+ * with it) hands focus on.
  */
 export function useCollapse(finished: boolean) {
   const [folded, setFolded] = useState(finished);
@@ -29,10 +30,8 @@ export function useCollapse(finished: boolean) {
   const line = useRef<HTMLButtonElement | null>(null);
   const collapseButton = useRef<HTMLButtonElement | null>(null);
   const name = useRef<HTMLElement | null>(null);
-  /** A tap is moving focus itself: a control that leaves now does not leave a claim. */
+  /** A tap is moving focus itself: a control that leaves now hands nothing on. */
   const tapping = useRef(false);
-  /** A control left by itself while it held focus: the open part's name takes it when it can. */
-  const claim = useRef(false);
 
   const [toCollapse, setToCollapse] = useState(0);
   const [toLine, setToLine] = useState(0);
@@ -44,10 +43,14 @@ export function useCollapse(finished: boolean) {
   useEffect(() => {
     if (toLine === 0) return;
     tapping.current = false;
-    line.current?.focus();
+    // The workout may have stopped being finished in the same moment: no line, so its name.
+    (line.current ?? name.current)?.focus();
   }, [toLine]);
 
-  /** A control's ref: kept, and when it goes while focused and no tap moved focus, a claim. */
+  /**
+   * A control's ref: kept, and when it goes while focused and no tap moved focus, the open name
+   * takes focus once the commit is done, if the node really left and focus fell to the page.
+   */
   const watched = useCallback(
     (slot: { current: HTMLElement | null }) => (node: HTMLElement | null) => {
       if (!node) return;
@@ -55,9 +58,12 @@ export function useCollapse(finished: boolean) {
       return () => {
         if (slot.current === node) slot.current = null;
         if (tapping.current || document.activeElement !== node) return;
-        // The open name, if it is already mounted ("Collapse" went), takes focus now.
-        if (name.current?.isConnected && name.current !== node) name.current.focus();
-        else claim.current = true;
+        queueMicrotask(() => {
+          if (node.isConnected) return; // StrictMode's simulated detach: it never left
+          const active = document.activeElement;
+          if (active && active !== document.body) return; // focus is somewhere on purpose
+          name.current?.focus();
+        });
       };
     },
     [],
@@ -71,10 +77,6 @@ export function useCollapse(finished: boolean) {
   const nameRef = useCallback((node: HTMLElement | null) => {
     if (!node) return;
     name.current = node;
-    if (claim.current) {
-      claim.current = false;
-      node.focus();
-    }
     return () => {
       if (name.current === node) name.current = null;
     };

@@ -483,11 +483,20 @@ test.describe('A finished workout on real data', () => {
 
     // 3. Coming back (a reload): one line, the region still named for the workout, at 360px.
     await page.reload();
+    const line = region.getByRole('heading').getByRole('button', { expanded: false });
+    // Named "name, label, count" in a real browser too; and the folded body's ✓s are not reachable.
+    // The slot's label (if the copy has one) sits between; the parts are joined by ", " exactly.
+    await expect(line).toHaveAccessibleName(
+      new RegExp(
+        `^${escapeRegExp(daily.name)}(, [^,]+)?, ${escapeRegExp(DAY_COPY.progress(rows, rows))}$`,
+      ),
+    );
+    await expect(region.getByRole('button', { pressed: true })).toHaveCount(0);
     await openCollapsed(region, daily.name);
     await expectNoAxeViolations(page, 'a finished workout, opened, 360px');
     await expectTapTargets(page, 'a finished workout, opened, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, opened, 360px');
     await collapse.click();
-    const line = region.getByRole('heading').getByRole('button', { expanded: false });
     await expect(line).toBeFocused();
     await expectNoAxeViolations(page, 'a finished workout, folded, 360px');
     await expectTapTargets(page, 'a finished workout, folded, 360px');

@@ -265,7 +265,8 @@ export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g
  *
  * ⚠️ **The athlete budget is shared.** Archiving does not free a slot, and a fresh e2e run spends
  * about 20 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
- * 4 seeded, about 10 in `athletes.spec.ts`, one each in six more), leaving about 5 for retries. A new
+ * 4 seeded, about 10 in `athletes.spec.ts`, one each in seven more, the day page's fold journey
+ * included since FAM-1 12c-iii), leaving about 4 for retries. A new
  * spec that adds athletes counts itself here first.
  */
 export async function addAthlete(

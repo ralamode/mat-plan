@@ -43,7 +43,6 @@ import {
   programRowTick,
   putOnFromToday,
   settled,
-  openCollapsed,
 } from './steps';
 
 /**
@@ -374,11 +373,6 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await tick.click();
   await settled(tick, true);
   await page.reload();
-  // FAM-1 12c-iii: a workout finished when the page loads arrives as one line; open it to read the ✓.
-  await openCollapsed(
-    page.getByRole('region', { name: CHECK_WORKOUT.name, exact: true }),
-    CHECK_WORKOUT.name,
-  );
   await expect(tick, 'the ✓ was saved').toHaveAttribute('aria-pressed', 'true');
 
   // 5. Take off: they had logged today, so they come off after today, and the line says so.

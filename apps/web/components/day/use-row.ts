@@ -242,6 +242,16 @@ export function useRow(workout: DayWorkout, workoutKey: string, item: DayItem, r
   const shownError = canWrite ? error : null;
   const notSaved = shownError?.counts === true;
 
+  // 12c-iii: any message on the row (a refused un-tick's Reload, a failed ✓) keeps its workout from
+  // offering "Collapse": nothing failed is ever behind a line.
+  const { setRowBusy } = day;
+  const hasMessage = shownError !== null;
+  useEffect(() => {
+    if (!hasMessage) return;
+    setRowBusy(rowKey, true);
+    return () => setRowBusy(rowKey, false);
+  }, [hasMessage, rowKey, setRowBusy]);
+
   // The workout's "N not saved" counts this row while its ✓ has failed, and stops when the row
   // succeeds, is reloaded, goes read-only or leaves the page.
   const { setRowFailed } = day;

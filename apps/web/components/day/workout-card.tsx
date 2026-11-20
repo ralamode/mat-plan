@@ -94,7 +94,8 @@ export const WorkoutCard = memo(function WorkoutCard({
               {workout.name}
             </span>
           </h3>
-          <div className="flex items-center gap-x-1">
+          {/* 44px tall on any day that can be logged, so "Collapse" coming never moves the rows. */}
+          <div className={cn('flex items-center gap-x-1', !readOnly && !future && 'min-h-11')}>
             {progress || notSaved > 0 ? (
               <p className="text-muted-foreground text-sm">
                 {progress}
@@ -106,12 +107,13 @@ export const WorkoutCard = memo(function WorkoutCard({
                 ) : null}
               </p>
             ) : null}
-            {finished && !busy ? (
+            {finished ? (
               <CollapseButton
                 name={workout.name}
                 bodyId={bodyId}
                 collapseRef={collapseRef}
                 onCollapse={collapse}
+                held={busy}
               />
             ) : null}
           </div>

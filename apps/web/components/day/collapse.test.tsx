@@ -6,12 +6,14 @@ import {
   futurePreview,
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 
 import { DAY_COPY } from './day-copy';
+import { DayScreen } from './day-screen';
 import { card, held, makeMount, press, workout } from './day-test-utils';
 
 /**
@@ -64,7 +66,6 @@ describe('arrival', () => {
     for (const w of done) {
       const l = line(w.name)!;
       expect(l.getAttribute('aria-expanded')).toBe('false');
-      expect(l).toHaveProperty('textContent');
       expect(
         within(workout(w.name)).getByRole('button', { name: lineName(yesterdayHalfDone, w) }),
       ).toBe(l);
@@ -96,11 +97,19 @@ describe('arrival', () => {
     ).toBeTruthy();
   });
 
+  /** The plan with its first countable workout finished, so only read-only can keep it open. */
+  const withFinished = (plan: DayPlan): DayPlan => {
+    const next: DayPlan = structuredClone(plan);
+    const w = next.workouts.find((x) => x.items.length > 0)!;
+    const n = Math.max(1, w.progress.total);
+    w.progress = { done: n, total: n };
+    return next;
+  };
   it.each([
     ['a closed day', closedDayLoggedOnly],
-    ['an archived athlete', archivedAthleteToday],
-    ['a future day', futurePreview],
-  ])('%s shows no line and no Collapse', (_case, plan) => {
+    ['an archived athlete', withFinished(archivedAthleteToday)],
+    ['a future day', withFinished(futurePreview)],
+  ])('%s shows no line and no Collapse, even with a finished workout', (_case, plan) => {
     show(plan);
     expect(
       screen.queryAllByRole('button', { expanded: false }).filter((b) => b.closest('h3')),
@@ -220,26 +229,36 @@ describe('focus when a control goes by itself', () => {
     return next;
   }
 
-  it('the line goes while focused (another phone’s un-tick): the workout opens, focus on its name', () => {
+  it('the line goes while focused (another phone’s un-tick): the workout opens, focus on its name', async () => {
     const name = finished(yesterdayHalfDone)[0]!.name;
     const control = mount(yesterdayHalfDone);
     act(() => line(name)!.focus());
-    act(() => control.setPlan(unfinish(control.plan, name)));
+    await act(async () => control.setPlan(unfinish(control.plan, name)));
     expect(line(name)).toBeNull();
     expect(document.activeElement?.textContent).toBe(name);
     expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
   });
 
-  it('Collapse goes while focused: focus on the name; elsewhere, focus is left where it is', () => {
+  it('Collapse goes while focused: focus on the name', async () => {
     const name = finished(yesterdayHalfDone)[0]!.name;
     const control = mount(yesterdayHalfDone);
     act(() => {
       fireEvent.click(line(name)!);
     });
     expect(document.activeElement).toBe(collapseButton(name));
-    act(() => control.setPlan(unfinish(control.plan, name)));
+    await act(async () => control.setPlan(unfinish(control.plan, name)));
     expect(collapseButton(name)).toBeNull();
     expect(document.activeElement?.textContent).toBe(name);
+  });
+
+  it('when focus is elsewhere, a control that goes leaves it there', async () => {
+    const name = finished(yesterdayHalfDone)[0]!.name;
+    const control = mount(yesterdayHalfDone);
+    const elsewhere = line(finished(yesterdayHalfDone)[1]!.name)!;
+    act(() => elsewhere.focus());
+    await act(async () => control.setPlan(unfinish(control.plan, name)));
+    expect(line(name)).toBeNull();
+    expect(document.activeElement).toBe(elsewhere);
   });
 
   it('a closed_day opens every line', async () => {
@@ -251,5 +270,84 @@ describe('focus when a control goes by itself', () => {
     expect(line(other.name)).not.toBeNull();
     await press(within(workout(name)).getAllByRole('button', { pressed: false })[0]!);
     expect(line(other.name)).toBeNull();
+    // The notice takes focus, as before 12c-iii.
+    expect(document.activeElement?.textContent).toContain(DAY_COPY.closed);
+  });
+});
+
+describe('more of the plan’s rules (12c-iii review)', () => {
+  it('a folded name has no tab stop; open, it is the focus target', () => {
+    const name = finished(yesterdayHalfDone)[0]!.name;
+    show(yesterdayHalfDone);
+    const folded = within(line(name)!).getByText(name);
+    expect(folded.getAttribute('tabindex')).toBeNull();
+    act(() => {
+      fireEvent.click(line(name)!);
+    });
+    expect(within(workout(name)).getByText(name).getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('a change of day and back is coming back: a workout finished during the visit folds', async () => {
+    const { plan, name } = oneShort();
+    const control = mount(plan);
+    await press(within(workout(name)).getAllByRole('button', { pressed: false })[0]!);
+    expect(line(name)).toBeNull();
+    const now = control.plan;
+    await act(async () => control.setPlan({ ...now, day: '2000-01-01' }));
+    await act(async () => control.setPlan(now));
+    expect(line(name)).not.toBeNull();
+  });
+
+  it('a refused un-tick’s message keeps Collapse away (nothing failed behind a line)', async () => {
+    const w = finished(yesterdayHalfDone)[0]!;
+    mount(yesterdayHalfDone, {
+      wrap: () => ({ untickRow: async () => ({ ok: false, reason: 'not_found' as const }) }),
+    });
+    act(() => {
+      fireEvent.click(line(w.name)!);
+    });
+    await press(within(workout(w.name)).getAllByRole('button', { pressed: true })[0]!);
+    expect(collapseButton(w.name)).toBeNull();
+  });
+
+  it('Collapse comes back when a typed Change is typed back to what is stored', () => {
+    const w = finished(yesterdayHalfDone).find((x) =>
+      x.items.some((i) => i.rows.some((r) => r.logged && r.logged.values.quantities.length > 0)),
+    )!;
+    mount(yesterdayHalfDone, { change: true });
+    act(() => {
+      fireEvent.click(line(w.name)!);
+    });
+    const field = within(workout(w.name)).getAllByRole('textbox')[0]!;
+    const stored = (field as HTMLInputElement).value;
+    act(() => {
+      field.focus();
+      fireEvent.change(field, { target: { value: '99' } });
+    });
+    expect(collapseButton(w.name)).toBeNull();
+    act(() => {
+      fireEvent.change(field, { target: { value: stored } });
+    });
+    expect(collapseButton(w.name)).not.toBeNull();
+  });
+
+  it('under StrictMode a tap still puts focus on Collapse, and a later self-open steals nothing', async () => {
+    const name = finished(yesterdayHalfDone)[0]!.name;
+    render(
+      <StrictMode>
+        <DayScreen
+          plan={yesterdayHalfDone}
+          actions={createFakeDayActions(yesterdayHalfDone, () => {}).actions}
+        />
+      </StrictMode>,
+    );
+    await act(async () => {
+      fireEvent.click(line(name)!);
+    });
+    expect(document.activeElement).toBe(collapseButton(name));
+    await act(async () => {
+      fireEvent.click(collapseButton(name)!);
+    });
+    expect(document.activeElement).toBe(line(name));
   });
 });
