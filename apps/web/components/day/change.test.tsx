@@ -1352,6 +1352,22 @@ describe('another phone’s Change over a draft that was not an edit (12c-iii fo
     });
   });
 
+  it('a new entry with new numbers keeps no part of the draft', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    type(reps(), '9');
+    const next: DayPlan = structuredClone(control.plan);
+    const row = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!;
+    row.logged!.entryPublicId = ENTRY_3;
+    row.logged!.values.quantities[0]!.value = 35;
+    await act(async () => control.setPlan(next));
+    await leave(reps());
+    expect(control.actions.amendRow).not.toHaveBeenCalled();
+  });
+
   it('a real edit stays, and says what is stored now', async () => {
     const control = mount(yesterdayHalfDone, { change: true });
     type(load(), '40');
