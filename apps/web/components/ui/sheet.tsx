@@ -84,6 +84,12 @@ export type SheetProps = {
   /** A polite live region INSIDE the sheet (criterion 46). Pass a settled value. */
   status?: string;
   /**
+   * A new number re-announces `status` even when its text is the same, passed to the region as
+   * `Announcer`'s `messageKey` (FAM-1 15c: "Morning moved to 1 of 2" twice in a row). Omitted, the
+   * region renders as before.
+   */
+  statusKey?: number;
+  /**
    * Where focus goes when the sheet OPENS. Defaults to the title.
    *
    * 🔴 **Added at PICK-1 PR 3, the first consumer that needs it — and the default is what makes this
@@ -423,6 +429,7 @@ export function Sheet({
   headerExtra,
   footer,
   status,
+  statusKey,
   initialFocus,
   onEscapeKeyDown,
   onReturned,
@@ -627,7 +634,7 @@ export function Sheet({
           {/* Criterion 46. INSIDE the content, because Radix `aria-hidden`s every sibling of the
               portal while this is open, so a page-level region is dropped by a screen reader.
               `Announcer` rather than a fifth hand-rolled `<p role="status">` — see its docblock. */}
-          <Announcer id={sheetStatusId(id)} message={status ?? ''} />
+          <Announcer id={sheetStatusId(id)} message={status ?? ''} messageKey={statusKey} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -51,7 +51,7 @@ import {
 import { isIanaTimeZone, localDayIso } from '../lib/date';
 import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
-import { DAY_COPY } from '../components/day/day-copy';
+import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
 import {
   BUILDER_COPY,
   EDITOR_COPY,
@@ -368,6 +368,9 @@ const STATES = {
   // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
   // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
   'day-look-ahead': null,
+  // FAM-1 15c PR 1: the Program order dialog OPEN, on the preview route
+  // (`/design/program?screen=day&fixture=today-three-programs-one-ending`): it exists only after a tap.
+  'program-order-open': null,
   // FAM-1 12d — Change on a set row, typed over and not yet saved ("Not saved. Was …" and the ✕),
   // in today's superset. Interaction-only: the state exists only between typing and leaving the row.
   'day-change-typed-over': null,
@@ -683,6 +686,10 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     const load = superset.getByRole('textbox', { name: /set 1, in (?!reps$)/ }).first();
     await load.fill(String(Number(await load.inputValue()) + 5));
     await superset.getByText(/^Not saved\. Was /).waitFor();
+  },
+  'program-order-open': async (page) => {
+    await page.getByRole('button', { name: PROGRAM_COPY.order, exact: true }).click();
+    await page.getByRole('dialog').waitFor();
   },
   'day-look-ahead': async (page) => {
     await page

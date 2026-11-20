@@ -27,6 +27,7 @@ function Harness({
   variant,
   footer,
   status,
+  statusKey,
   withLink,
   consumerClose,
   onReturned,
@@ -36,6 +37,7 @@ function Harness({
   variant?: 'sheet' | 'dialog';
   footer?: React.ReactNode;
   status?: string;
+  statusKey?: number;
   withLink?: boolean;
   consumerClose?: boolean;
   onReturned?: () => void;
@@ -69,6 +71,7 @@ function Harness({
           )
         }
         status={status}
+        statusKey={statusKey}
         onReturned={onReturned}
         onEscapeKeyDown={onEscapeKeyDown}
       >
@@ -205,6 +208,17 @@ describe('Sheet — the frame', () => {
     expect(region?.id).toBe('test-sheet-status');
     // …and the helper agrees with it, which is what makes a consumer safe to use the helper.
     expect(sheetStatusId('test-sheet')).toBe(region?.id);
+  });
+
+  it('`statusKey`: the same status text with a new key is a new node, so it is read again (FAM-1 15c)', () => {
+    const view = render(<Harness status="Moved to 2 of 2" statusKey={1} />);
+    openAndCapture();
+    const region = () => dialog().querySelector('[role="status"]')!;
+    const first = region().firstElementChild;
+    expect(region().textContent).toBe('Moved to 2 of 2');
+    view.rerender(<Harness status="Moved to 2 of 2" statusKey={2} />);
+    expect(region().textContent).toBe('Moved to 2 of 2');
+    expect(region().firstElementChild).not.toBe(first);
   });
 
   it('renders an overlay even for the full-screen sheet — the scroll lock lives on it', () => {
