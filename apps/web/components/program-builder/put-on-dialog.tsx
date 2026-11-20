@@ -13,6 +13,7 @@ import { useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { SheetFormFooter } from '@/components/ui/sheet-form-footer';
 import {
   APP_HOME_PATH,
   FOCUS_TARGET_CLASS,
@@ -41,7 +42,6 @@ import {
   switchHintText,
 } from './builder-text';
 import { BuilderLink } from './route-link';
-import { SheetFormFooter } from './sheet-form-footer';
 import { useAttempt } from './use-attempt';
 
 const SHEET_ID = 'put-on';
