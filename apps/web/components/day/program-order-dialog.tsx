@@ -2,6 +2,7 @@
 
 import {
   PROGRAM_REFUSAL,
+  programsByStay,
   type DayActions,
   type DayPlan,
   type ProgramResult,
@@ -11,6 +12,7 @@ import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { lastDayText } from '@/components/program-builder/builder-text';
 import { Sheet } from '@/components/ui/sheet';
 import { NAME_WRAP_CLASS } from '@/lib/constants';
 import { moveDown, moveUp } from '@/lib/routine/editor';
@@ -22,7 +24,8 @@ type Program = DayPlan['currentPrograms'][number];
 type Move = -1 | 1;
 type Reorder = NonNullable<DayActions['reorderPrograms']>;
 
-const SHEET_ID = 'program-order';
+/** The dialog's sheet id: its status region's id is derived from it (`sheetStatusId`). */
+export const PROGRAM_ORDER_SHEET_ID = 'program-order';
 
 /** Refusals that mean the athlete's programs changed elsewhere: retrying cannot help, re-reading can. */
 const STALE_REFUSALS: readonly string[] = [PROGRAM_REFUSAL.invalid, PROGRAM_REFUSAL.not_found];
@@ -30,15 +33,29 @@ const STALE_REFUSALS: readonly string[] = [PROGRAM_REFUSAL.invalid, PROGRAM_REFU
 /**
  * The Program order button and its dialog (FAM-1 step 13d). The client half of `ProgramLine`, so the
  * line itself renders on the server and the dialog's code loads only where it can be used.
+ *
+ * `canOrder` false (fewer than two programs stay, D47) hides the button, **never the dialog**: a
+ * re-read that leaves one staying while the dialog is open keeps it up with its message, and Done
+ * then returns focus through the sheet's fallback (15c plan, UX-B1).
  */
-export function ProgramOrderButton({ plan, reorder }: { plan: DayPlan; reorder: Reorder }) {
+export function ProgramOrderButton({
+  plan,
+  reorder,
+  canOrder,
+}: {
+  plan: DayPlan;
+  reorder: Reorder;
+  canOrder: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <Button ref={button} type="button" variant="outline" onClick={() => setOpen(true)}>
-        {PROGRAM_COPY.order}
-      </Button>
+      {canOrder ? (
+        <Button ref={button} type="button" variant="outline" onClick={() => setOpen(true)}>
+          {PROGRAM_COPY.order}
+        </Button>
+      ) : null}
       <ProgramOrderDialog
         plan={plan}
         reorder={reorder}
@@ -65,7 +82,12 @@ export function ProgramOrderButton({ plan, reorder }: { plan: DayPlan; reorder: 
  *
  * **Focus stays on the arrow last tapped**, through a move and through a revert (a moved node can
  * lose focus when the browser re-inserts it). An end arrow is `aria-disabled`: still focusable, so
- * focus never drops, and it does nothing.
+ * focus never drops, and it does nothing. **When that arrow no longer exists** (its program now ends
+ * today, after a re-read or a revert), focus goes to Done, which the error line describes.
+ *
+ * **A program ending today** (D47, contract C37's `endsToday`) is listed below the movable ones,
+ * under a note, with no number and no arrows, and is not counted in "N of M". The order sent is
+ * still the whole list, the ending ones last (`programsByStay`, the contract's one split).
  */
 export function ProgramOrderDialog({
   plan,
@@ -84,7 +106,8 @@ export function ProgramOrderDialog({
   const errorId = useId();
   const [order, setOrder] = useState<Program[]>(plan.currentPrograms);
   const [pending, setPending] = useState(false);
-  const [status, setStatus] = useState('');
+  /** The sheet's announcement; `n` re-announces the same sentence (`statusKey`). */
+  const [status, setStatus] = useState({ text: '', n: 0 });
   const [error, setError] = useState('');
 
   /** The last order the server took: what a failed save puts back. Read and written in handlers. */
@@ -95,6 +118,9 @@ export function ProgramOrderDialog({
   const lastTapped = useRef<string | null>(null);
   /** Set by a move or a revert: the next list render puts focus back on the last arrow tapped. */
   const refocus = useRef(false);
+  const done = useRef<HTMLButtonElement>(null);
+  /** The arrow that last had focus: if it goes while the dialog holds focus nowhere, Done takes it. */
+  const focusedArrow = useRef<string | null>(null);
   /** The page's latest order, and whether one arrived while a save was in flight. */
   const latest = useRef<Program[]>(plan.currentPrograms);
   const arrivedMidSave = useRef(false);
@@ -105,7 +131,7 @@ export function ProgramOrderDialog({
     setWasOpen(open);
     if (open) {
       setError('');
-      setStatus('');
+      setStatus((was) => ({ text: '', n: was.n + 1 }));
     }
   }
 
@@ -129,17 +155,28 @@ export function ProgramOrderDialog({
     else saved.current = plan.currentPrograms;
   }, [plan.currentPrograms]);
 
-  // After a move or a revert, the arrow last tapped keeps focus. Only then: a re-read of the page
-  // that happens to re-render the list must not pull focus from wherever it is now.
+  // After a move or a revert, the arrow last tapped keeps focus; Done, when that arrow is gone (its
+  // program ends today now). Only then: a re-read of the page that happens to re-render the list
+  // must not pull focus from wherever it is now, unless it removed the arrow that had it.
   useEffect(() => {
-    if (!refocus.current) return;
-    refocus.current = false;
-    const key = lastTapped.current;
-    if (open && key) arrows.current.get(key)?.focus();
+    if (!open) return;
+    if (refocus.current) {
+      refocus.current = false;
+      const key = lastTapped.current;
+      if (key) (arrows.current.get(key) ?? done.current)?.focus();
+      return;
+    }
+    const had = focusedArrow.current;
+    const dialog = done.current?.closest('[role="dialog"]');
+    if (had && !arrows.current.has(had) && !dialog?.contains(document.activeElement)) {
+      focusedArrow.current = null;
+      done.current?.focus();
+    }
   }, [order, open]);
 
-  // The same sentence twice is silent in a live region; a no-break space makes it a change.
-  const announce = (next: string) => setStatus((was) => (was === next ? `${next} ` : next));
+  // Each announcement is a new node, so the same sentence twice is still read (the sheet's
+  // `statusKey`, Announcer's `messageKey`).
+  const announce = (next: string) => setStatus((was) => ({ text: next, n: was.n + 1 }));
 
   async function save(next: Program[], moved: Program) {
     if (inFlight.current) {
@@ -186,21 +223,28 @@ export function ProgramOrderDialog({
       return;
     }
     setPending(false);
-    announce(PROGRAM_COPY.moved(moved.name, next.indexOf(moved) + 1, next.length));
+    // "N of M" counts the programs that stay: the ending ones cannot move, and are a list of their own.
+    const { staying: settled } = programsByStay(next);
+    announce(PROGRAM_COPY.moved(moved.name, settled.indexOf(moved) + 1, settled.length));
   }
 
   function move(program: Program, by: Move) {
-    const from = order.indexOf(program);
-    const next = by === -1 ? moveUp(order, from) : moveDown(order, from);
-    if (next.every((p, i) => p === order[i])) return;
+    const from = staying.indexOf(program);
+    const moved = by === -1 ? moveUp(staying, from) : moveDown(staying, from);
+    if (moved.every((p, i) => p === staying[i])) return;
+    // The whole list is sent, the ending programs last, as the writer keeps them.
+    const next = [...moved, ...ending];
     refocus.current = true;
     setOrder(next);
     setError('');
     void save(next, program);
   }
 
+  const { staying, ending } = programsByStay(order);
+  const endingNoteId = `${errorId}-ending`;
+
   const arrow = (program: Program, by: Move, index: number) => {
-    const end = by === -1 ? index === 0 : index === order.length - 1;
+    const end = by === -1 ? index === 0 : index === staying.length - 1;
     const key = `${program.programPublicId}:${by}`;
     return (
       <Button
@@ -214,6 +258,9 @@ export function ProgramOrderDialog({
         aria-label={(by === -1 ? PROGRAM_COPY.moveUp : PROGRAM_COPY.moveDown)(program.name)}
         aria-disabled={end || undefined}
         aria-describedby={error ? errorId : undefined}
+        onFocus={() => {
+          focusedArrow.current = key;
+        }}
         onClick={() => {
           lastTapped.current = key;
           if (!end) move(program, by);
@@ -231,15 +278,22 @@ export function ProgramOrderDialog({
 
   return (
     <Sheet
-      id={SHEET_ID}
+      id={PROGRAM_ORDER_SHEET_ID}
       variant="dialog"
       open={open}
       onOpenChange={onOpenChange}
       title={PROGRAM_COPY.orderTitle(athleteNameOf(plan))}
       returnFocusTo={returnFocusTo}
-      status={status}
+      status={status.text}
+      statusKey={status.n}
       footer={
-        <Button type="button" className="w-full" onClick={() => onOpenChange(false)}>
+        <Button
+          ref={done}
+          type="button"
+          className="w-full"
+          aria-describedby={error ? errorId : undefined}
+          onClick={() => onOpenChange(false)}
+        >
           {PROGRAM_COPY.done}
         </Button>
       }
@@ -247,7 +301,7 @@ export function ProgramOrderDialog({
       <p className="text-muted-foreground text-sm">{PROGRAM_COPY.orderExplainer}</p>
       {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
       <ol role="list" className="mt-3 flex flex-col gap-2">
-        {order.map((program, index) => (
+        {staying.map((program, index) => (
           <li
             key={program.programPublicId}
             className="flex items-center gap-1 rounded-lg border py-1 pr-1 pl-3"
@@ -262,6 +316,31 @@ export function ProgramOrderDialog({
           </li>
         ))}
       </ol>
+      {ending.length > 0 ? (
+        <>
+          <p id={endingNoteId} className="text-muted-foreground mt-4 text-sm">
+            {PROGRAM_COPY.endingNote(ending.length)}
+          </p>
+          {/* A list of its own, named by the note: no number, no arrows, never counted in N of M. */}
+          <ul role="list" aria-labelledby={endingNoteId} className="mt-2 flex flex-col gap-2">
+            {ending.map((program) => (
+              <li
+                key={program.programPublicId}
+                className="flex min-h-11 items-center rounded-lg border py-1 pr-3 pl-3"
+              >
+                <span className={cn('min-w-0', NAME_WRAP_CLASS)}>
+                  {program.name}
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    <span aria-hidden="true"> · </span>
+                    <span className="sr-only">, </span>
+                    {lastDayText(plan.today, plan.today)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
       {/* Mounted before it has text, so a failure is announced (announcer.tsx rule 1). */}
       <Announcer id={errorId} message={error} className="text-destructive mt-2 min-h-5 text-sm" />
     </Sheet>
