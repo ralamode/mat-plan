@@ -62,6 +62,7 @@ export function ProgramOrderButton({
         open={open}
         onOpenChange={setOpen}
         returnFocusTo={button}
+        canOrder={canOrder}
       />
     </>
   );
@@ -95,12 +96,15 @@ export function ProgramOrderDialog({
   open,
   onOpenChange,
   returnFocusTo,
+  canOrder,
 }: {
   plan: DayPlan;
   reorder: Reorder;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusTo: RefObject<HTMLElement | null>;
+  /** Whether the page still offers Program order. False, Forward does not bring a closed dialog back. */
+  canOrder: boolean;
 }) {
   const router = useRouter();
   const errorId = useId();
@@ -299,6 +303,8 @@ export function ProgramOrderDialog({
       onOpenChange={onOpenChange}
       title={PROGRAM_COPY.orderTitle(athleteNameOf(plan))}
       returnFocusTo={returnFocusTo}
+      // Its button hidden (fewer than two stay), Forward must not reopen it (15c follow-up).
+      reopenFromHistory={canOrder}
       status={status.text}
       statusKey={status.n}
       footer={

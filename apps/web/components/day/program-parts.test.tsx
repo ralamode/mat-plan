@@ -720,6 +720,35 @@ describe('ProgramLine and the Program order dialog', () => {
     });
   });
 
+  it('closed, then its button hidden by a re-read: Forward onto its entry does not reopen it', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    try {
+      const view = mountLine(todayTwoPrograms);
+      fireEvent.click(orderButton());
+      const entry = window.history.state;
+      expect(entry?.sheet).toBe(PROGRAM_ORDER_SHEET_ID);
+      // Done with no arrow tapped: the sheet pops its entry (mocked, so the browser stays on it).
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: PROGRAM_COPY.done }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      const notWritable = { ...todayTwoPrograms, writable: false };
+      view.rerender(
+        <ProgramLine plan={notWritable} actions={createFakeDayActions(notWritable).actions} />,
+      );
+      back.mockClear();
+      await act(async () => {
+        window.history.replaceState(entry, '');
+        window.dispatchEvent(new PopStateEvent('popstate', { state: entry }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      // Bounced off the entry, so Forward is a no-op rather than a dead entry.
+      expect(back).toHaveBeenCalledTimes(1);
+    } finally {
+      back.mockRestore();
+    }
+  });
+
   describe('the names as links (15c, D49)', () => {
     it('given programHrefFor, each name links to its program; without it, text', () => {
       render(
