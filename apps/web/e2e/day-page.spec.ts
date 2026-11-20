@@ -16,6 +16,7 @@ import {
   createProgram,
   escapeRegExp,
   isoDaysAgo,
+  openCollapsed,
   openPrograms,
   programRowTick,
   putOnFromToday,
@@ -445,5 +446,82 @@ test.describe('Program order on real data', () => {
     }
     await page.reload();
     await expectOrder('after a reload');
+  });
+});
+
+// ── A finished workout folds to one line (FAM-1 12c-iii) ─────────────────────────────────────────
+//
+// On this run's own athlete and program, as Program order's journey is: finishing a workout changes
+// what every later visit to that day shows, so it never touches a seeded athlete.
+
+test.describe('A finished workout on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('finished during a visit it stays open; coming back it is one line; it opens and folds, at 360px', async ({
+    page,
+  }, info) => {
+    test.setTimeout(180_000);
+    const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
+    const athlete = `E2E fold athlete ${stamp}`;
+    const program = `E2E fold ${stamp}`;
+
+    // 1. A program with the daily stretch on every weekday; a new athlete on it from today.
+    await openPrograms(page);
+    await createProgram(page, program);
+    const programPage = new URL(page.url()).pathname;
+    await copyOntoEveryWeekday(page, { from: stretching.name, workout: daily.name, to: program });
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    // The add has landed on their day page before its URL is read, or Put on finds no such athlete.
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    await page.goto(programPage);
+    await putOnFromToday(page, program, athlete);
+    await page.goto(dayPage);
+
+    // 2. Every row ticked during this visit: the workout stays open, now offering Collapse.
+    const region = page.getByRole('region', { name: daily.name, exact: true });
+    const collapse = region.getByRole('button', { name: DAY_COPY.collapseLabel(daily.name) });
+    // The first ✓ not yet pressed, each time: the query's matches shrink as rows are ticked.
+    // `count()` does not wait: the day page may still be streaming in behind its skeleton.
+    await expect(region).toBeVisible();
+    const open = region.getByRole('button', { pressed: false });
+    await expect(open.first()).toBeVisible();
+    const rows = await open.count();
+    expect(rows, 'the daily stretch has rows to tick').toBeGreaterThan(0);
+    for (let left = rows; left > 0; left--) {
+      await open.first().click();
+      await expect(open).toHaveCount(left - 1);
+    }
+    await expect(collapse).toBeVisible();
+    await expect(region.getByRole('heading').getByRole('button', { expanded: false })).toHaveCount(
+      0,
+    );
+
+    // 3. Coming back (a reload): one line, the region still named for the workout, at 360px.
+    await page.reload();
+    const line = region.getByRole('heading').getByRole('button', { expanded: false });
+    // Named "name, label, count" in a real browser too; and the folded body's ✓s are not reachable.
+    // The slot's label (if the copy has one) sits between; the parts are joined by ", " exactly.
+    await expect(line).toHaveAccessibleName(
+      new RegExp(
+        `^${escapeRegExp(daily.name)}(, [^,]+)?, ${escapeRegExp(DAY_COPY.progress(rows, rows))}$`,
+      ),
+    );
+    await expect(region.getByRole('button', { pressed: true })).toHaveCount(0);
+    await openCollapsed(region, daily.name);
+    await expectNoAxeViolations(page, 'a finished workout, opened, 360px');
+    await expectTapTargets(page, 'a finished workout, opened, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, opened, 360px');
+    await collapse.click();
+    await expect(line).toBeFocused();
+    await expectNoAxeViolations(page, 'a finished workout, folded, 360px');
+    await expectTapTargets(page, 'a finished workout, folded, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, folded, 360px');
   });
 });

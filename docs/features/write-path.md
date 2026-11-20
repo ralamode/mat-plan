@@ -583,8 +583,9 @@ The shapes those lanes agree on, the fakes and the preview route are
      repeated id**: two items under one id write one row. That is a precondition every caller keeps
      (the day page's one-item practice cannot send one; the unwired `/api/sync` **must**
      collapse identical replays and refuse different items sharing an id per item before calling;
-     nothing does yet), not an answer. The writer also refuses an id that is not hyphenated
-     (`lowerCaseUuidSchema`), since Postgres would read braces or bare hex as the same uuid. The day decides before `own_hidden`, as
+     nothing does yet), not an answer. The writer also refuses an id that is not a hyphenated RFC 9562
+     uuid (`lowerCaseUuidSchema`, `CHECKIN_CLIENT_ID_NOT_UUID`): Postgres would read braces or bare
+     hex as the same uuid, and zod 4 also refuses a version or variant digit outside the RFC. The day decides before `own_hidden`, as
      bodyweight's slot does. The bodyweight and strength inserts cannot hit this index (their metric
      is never `practice_minutes`). Since 3b-life-b, `logLifeActivitiesAction` (typed minutes, practice only)
      refuses `day_taken`, `conflict` and `own_hidden`, each with its own copy, and the form mints a new

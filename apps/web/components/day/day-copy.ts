@@ -50,6 +50,9 @@ export const DAY_COPY = {
   },
   /** What the other-unit line asks to have fixed, by the row's type (12d-iii). */
   otherUnitNoun: { load: 'load', distance: 'distance', number: 'number' },
+  /** 12c-iii (D38): a finished part's word for folding to one line, and its name. */
+  collapse: 'Collapse',
+  collapseLabel: (name: string) => `Collapse ${name}`,
   done: 'Done',
   doneMark: 'Done ✓',
   lastTime: 'Last time',
