@@ -330,6 +330,8 @@ tech-debt about 12, plan/roadmap/status about 6, changelog about 10, `package.js
 `(all client chunks)` row (step 4's second half, its three test cases and the `dynamic()` probe
 variant, about 40 lines) into a follow-up PR. That leaves the per-route gate whole.
 
+_Approved (maintainer, 2026-11-19, relayed by the board)._
+
 ## Review-response log (adversarial panel)
 
 > Panel cost: not recorded in the relay. Models: high-stakes no (a CI step; no auth/schema) ·

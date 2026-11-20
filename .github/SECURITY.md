@@ -395,6 +395,11 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
     freezes them at that commit. CI runs the PR's own copy of the guard, so it catches mistakes, not a
     hostile author (deliberately crafted YAML can also get past its line scanner): **a diff touching
     the guard, its step, or a workflow's YAML in an unusual shape is itself a review flag**.
+- **The bundle-size guard is PR-controlled too** (PERF-1 (b), [plan](../docs/plans/perf-1-bundle-size.md)):
+  `check-bundle-size.mjs`, `.github/bundle-baseline.json` and its `ci.yml` step all run as the PR wrote
+  them, the same residual the pin checker accepts, so **a diff to any of the three is a review flag**.
+  A changed baseline is warned per route and must equal the run's measurement. Whether the build runs
+  is not the PR's to decide: `run_build` comes from the base's copy of `changed-scopes.mjs`.
 - **Committed Claude Code settings** (`.claude/settings.json`): stricter than "only hooks that no-op
   under CI". The file is **hash-pinned**, so ANY change, even a CI-no-op hook, fails the review
   workflow until the pin is re-read and updated. See "CI / Actions secrets" above; it is the one
