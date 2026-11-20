@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 
 import {
   catalogOptionOf,
+  equipmentInOrder,
   movementNameKey,
+  MUSCLE_ROLE,
+  musclesInOrder,
   pickerEntryOf,
   trackingTypeSchema,
   existingItem,
@@ -95,6 +98,7 @@ import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { newItem } from '../../src/writers/program/new-item';
 import { catalogArmOption, matchableOption } from '../../src/queries/program/catalog-arm-option';
+import { catalogTaxonomyRows } from '../../src/queries/program/movement-options';
 import { seedCatalog } from '../../src/seed';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
@@ -165,6 +169,9 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifySaveWeek(ctx);
   await verifyWorkoutInHousehold(ctx);
   await verifyMovementOptionsAndNewItem(ctx);
+  // P11-ii-b's proofs first, so a mutation of the table read fails on its own (b) assertion, not on
+  // (a1)'s whole-option comparison.
+  await verifyCatalogTaxonomyFromTables(ctx);
   await verifyCatalogRowsListed(ctx);
   await verifyCopyWorkout(ctx);
   await verifyPutOn(ctx);
@@ -1662,6 +1669,140 @@ async function verifySaveWeek({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
 }
 
 /**
+ * CAT-3 P11-ii-b (plan `docs/plans/cat-3-p11-ii-option-taxonomy.md`, (b1)–(b4)): a catalog row's taxonomy
+ * is read from `movements`, `movement_equipment` and `movement_muscles`, for the listed catalog ids
+ * only, in the vocabulary's order, parsed. Library rows are written by `seedCatalog` inside `rolledBack`,
+ * so the shared database never holds one, and the household join row (b2) plants is rolled back too.
+ */
+async function verifyCatalogTaxonomyFromTables({ A_SCOPE }: VerifyContext): Promise<void> {
+  const libraryEntry = (slug: string) => CATALOG_MOVEMENTS.find((e) => e.slug === slug)!;
+  // Authored out of the vocabulary's order on both lists: equipment dip_bars, weight_belt, plates;
+  // secondary muscles chest, shoulders (the vocabulary lists shoulders first).
+  const WDIP = libraryEntry('weighted_dip');
+  const FOAM = libraryEntry('foam_rolling');
+  const idOf = async (tx: VerifyTx, slug: string) =>
+    (
+      await tx
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(and(movementIsGlobal(), eq(schema.movements.slug, slug)))
+    )[0]!.id;
+  const optionOf = async (tx: VerifyTx, name: string) => {
+    const option = (await movementOptions(asTx(tx), A_SCOPE, CATALOG_MOVEMENTS)).find(
+      (o) => o.owner === 'catalog' && o.name === name,
+    );
+    assert.ok(option && option.owner === 'catalog', `CAT-3 P11-ii-b: ${name} is listed`);
+    return option;
+  };
+
+  // (b3) Order: the vocabulary's, as catalogOptionOf lists the entry's, not the order authored.
+  assert.notDeepEqual(
+    [...WDIP.equipment],
+    equipmentInOrder(WDIP.equipment),
+    'CAT-3 P11-ii-b (b3) anti-vacuity: weighted_dip’s equipment is authored out of the vocabulary’s order',
+  );
+  assert.notDeepEqual(
+    [...WDIP.secondaryMuscles],
+    musclesInOrder(WDIP.secondaryMuscles),
+    'CAT-3 P11-ii-b (b3) anti-vacuity: weighted_dip’s secondary muscles are authored out of order',
+  );
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), [WDIP]);
+    const { taxonomy } = await optionOf(tx, WDIP.name);
+    const expected = catalogOptionOf(WDIP, 'x');
+    assert.deepEqual(
+      taxonomy && [taxonomy.equipment, taxonomy.secondaryMuscles],
+      [equipmentInOrder(WDIP.equipment), musclesInOrder(WDIP.secondaryMuscles)],
+      'CAT-3 P11-ii-b (b3): equipment and secondary muscles are in the vocabulary’s order',
+    );
+    assert.deepEqual(
+      taxonomy && [taxonomy.equipment, taxonomy.secondaryMuscles],
+      [expected.equipment, expected.secondaryMuscles],
+      'CAT-3 P11-ii-b (b3): the read lists them as catalogOptionOf does',
+    );
+  });
+
+  // (b1) The taxonomy is the tables': edit one row's join rows and its option follows.
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), [WDIP]);
+    const id = await idOf(tx, WDIP.slug);
+    // A different pattern (still non-null: a strength row needs one) and a new primary muscle, as well
+    // as new equipment and secondaries, so the library cannot be the source of any of them.
+    const pattern = WDIP.pattern === 'core' ? 'carry' : 'core';
+    assert.notEqual(
+      WDIP.primaryMuscle,
+      'lats',
+      'CAT-3 P11-ii-b (b1) anti-vacuity: lats is a new primary',
+    );
+    await tx.update(schema.movements).set({ pattern }).where(eq(schema.movements.id, id));
+    await tx.delete(schema.movementEquipment).where(eq(schema.movementEquipment.movementId, id));
+    await tx.insert(schema.movementEquipment).values({ movementId: id, equipmentCode: 'bench' });
+    // Every muscle row goes first, then the new ones: the one-primary index is checked row by row.
+    await tx.delete(schema.movementMuscles).where(eq(schema.movementMuscles.movementId, id));
+    await tx.insert(schema.movementMuscles).values([
+      { movementId: id, muscleCode: 'lats', role: MUSCLE_ROLE.primary },
+      { movementId: id, muscleCode: 'biceps', role: MUSCLE_ROLE.secondary },
+    ]);
+    const { taxonomy } = await optionOf(tx, WDIP.name);
+    assert.deepEqual(
+      taxonomy,
+      {
+        modality: WDIP.modality,
+        pattern,
+        equipment: ['bench'],
+        primaryMuscle: 'lats',
+        secondaryMuscles: ['biceps'],
+      },
+      'CAT-3 P11-ii-b (b1): a catalog row’s pattern, equipment and muscles are the tables’, not its library entry’s',
+    );
+  });
+
+  // (b2) The join reads take the listed catalog ids only. A household join row, planted by hand here
+  // and rolled back, is never read, and the assembly never sees it.
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), [WDIP, FOAM]);
+    const made = await newItem(
+      asTx(tx),
+      A_SCOPE,
+      { name: 'P11-ii-b planted item', trackingType: TRACKING_TYPE.reps },
+      CATALOG_MOVEMENTS,
+    );
+    assert.ok(made.ok, 'CAT-3 P11-ii-b (b2): the planted household item was made');
+    const [planted] = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(eq(schema.movements.publicId, made.itemPublicId));
+    await tx
+      .insert(schema.movementEquipment)
+      .values({ movementId: planted!.id, equipmentCode: 'bench' });
+    await tx
+      .insert(schema.movementMuscles)
+      .values({ movementId: planted!.id, muscleCode: 'chest', role: MUSCLE_ROLE.primary });
+    await tx
+      .insert(schema.movementMuscles)
+      .values({ movementId: planted!.id, muscleCode: 'biceps', role: MUSCLE_ROLE.secondary });
+    const ids = [await idOf(tx, WDIP.slug), await idOf(tx, FOAM.slug)];
+    const rows = await catalogTaxonomyRows(asTx(tx), ids);
+    const read = [...rows.equipment, ...rows.primaryMuscles, ...rows.secondaryMuscles];
+    assert.ok(read.length > 0, 'CAT-3 P11-ii-b (b2) anti-vacuity: the listed ids have join rows');
+    assert.deepEqual(
+      read.filter((r) => !ids.includes(r.movementId)),
+      [],
+      'CAT-3 P11-ii-b (b2): catalogTaxonomyRows returns no join row outside the ids it is given',
+    );
+    // With the planted rows present, the whole read still assembles (no unlisted id reaches it).
+    await movementOptions(asTx(tx), A_SCOPE, CATALOG_MOVEMENTS);
+  });
+
+  // (b4) is not re-proved here: `catalogTaxonomyOf`'s parse throws are its vitest cases, and what makes
+  // them unreachable (every code a join row can hold is in the shared vocabulary, both ways) is
+  // `verify/catalog.ts`'s S1 parity, which mutation 321 pins.
+  console.log(
+    '✓ CAT-3 P11-ii-b: a catalog row’s taxonomy is read from the tables, for listed ids only, in the vocabulary’s order',
+  );
+}
+
+/**
  * CAT-3 P11-ii-a (plan `docs/plans/cat-3-p11-ii-option-taxonomy.md`, (a1)–(a9)): the option read lists
  * every library row through `catalogArmOption`, the old built-ins unchanged at the DTO, nothing another
  * household holds, and `newItem` matches over the same aliases (K23). Library rows are written by A2-i's
@@ -1950,10 +2091,22 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
     await writeLibrary(tx, [FOAM]);
     const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
     const listed = (await listedOn(tx, A_SCOPE, without)).find((o) => o.name === FOAM.name);
+    const o = catalogOptionOf(FOAM, 'x');
     assert.deepEqual(
       listed && listed.owner === 'catalog' && [listed.aliases, listed.taxonomy, listed.supervision],
-      [[], null, null],
-      'CAT-3 P11-ii-a (a9): a library row with no entry in the library given is listed bare',
+      [
+        [],
+        // P11-ii-b: bare of the library's fields, but its taxonomy is the tables'.
+        {
+          modality: o.modality,
+          pattern: o.pattern,
+          equipment: o.equipment,
+          primaryMuscle: o.primaryMuscle,
+          secondaryMuscles: o.secondaryMuscles,
+        },
+        null,
+      ],
+      'CAT-3 P11-ii-a (a9): a library row with no entry in the library given is listed bare, with the tables’ taxonomy (P11-ii-b)',
     );
   });
 

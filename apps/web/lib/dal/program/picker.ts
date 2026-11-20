@@ -23,11 +23,13 @@ import { quietDbErrors } from '../quiet-db-errors';
  *   without an entry is `BuiltInWithoutLibrary`: no taxonomy, no "How to", passes no filter.
  *   TODO(CAT-3 chunk R, the fresh start): the library replaces the old catalog; list only rows the
  *   library has, and drop that arm.
- * - **A listed row is the library's taxonomy on the DATABASE ROW's identity**, built by the read
- *   (`catalogArmOption`, `packages/db`, CAT-3 P11-ii-a): its name, tracking type, unit and bodyweight
+ * - **A listed row is the DATABASE ROW's identity with the library's metadata**, built by the read
+ *   (`catalogArmOption`, `packages/db`, CAT-3 P11-ii-a/b): its name, tracking type, unit and bodyweight
  *   flag are the row's, because the row is what a save, a log and `newItem` use (board, 2026-11-17:
- *   Sled push and Pallof press disagree today). This module only copies the option, so `newItem`
- *   and the picker match over the same aliases (K23).
+ *   Sled push and Pallof press disagree today). A library row's taxonomy comes from its own columns
+ *   and join rows (P11-ii-b); an old built-in's from the library entry on its slug, or none. Aliases,
+ *   the supervision label and "How to" come from the library entry. This module only copies the
+ *   option, so `newItem` and the picker match over the same aliases (K23).
  * - 🔴 **The slug stops here**: it is how the entry is found, and no option carries it
  *   (`picker.test.ts` pins the keys).
  *

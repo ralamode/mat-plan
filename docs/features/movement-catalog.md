@@ -28,13 +28,18 @@ lane N's ([catalog-data.md](./catalog-data.md)).
 Since A2-ii production's seed writes `CATALOG_MOVEMENTS` and no legacy rows; a fixtures database gets
 `CATALOG_FIXTURE`, then the 35 legacy rows ([plan](../plans/cat-3-a2-ii-seed-switch.md), E4). The app
 reads the library that database holds (K29: `catalogLibraryNameFor`, `apps/web/lib/env.ts`).
+Since CAT-3 P11-ii-b the picker's read reads the two join tables (`catalogTaxonomyRows` in
+`queries/program/movement-options.ts`); the stays-dark scan that held them unread until then is retired,
+and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutations `605`–`609`, and (b4)'s parse throws in `catalog-arm-option.test.ts`.
 
 ## Invariants
 
 1. **A join row has no `household_id`.** It belongs to whoever owns its movement, and erasure finds it
    through `movement_id` (`erasure/graph.ts` → `movementsOf`). Never denormalise it.
 2. **A join row is read only through a movement the scope may see** (`movementIsAvailableTo`), never
-   selected by code alone. Otherwise a muscle or equipment filter crosses households once households
+   selected by code alone. The picker's read meets this by reading join rows for the ids its catalog
+   arm listed (global, live, catalog rows) and nothing else, and its assembly throws on a row for any
+   other id (P11-ii-b (b2)). Otherwise a muscle or equipment filter crosses households once households
    have taxonomy of their own.
 3. **A household's own movement has no modality and no join rows in Beta 0.** The database refuses the
    modality (`movements_household_row_has_no_modality`); the join rows are held by `db:verify` (S4). A

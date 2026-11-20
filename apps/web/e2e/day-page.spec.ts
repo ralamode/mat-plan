@@ -215,8 +215,8 @@ test('more than the look-ahead ahead renders today', async ({ page }) => {
 // ── Change (FAM-1 12d) ─────────────────────────────────────────────────────────────────────────
 //
 // On Athlete Two, whose program rows no other spec writes. The workout is found by its superset
-// list ("Superset A"), not by name: the page shows the movement library's names ("Inverted Rows"), not the
-// fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
+// list ("Superset A"), not by name: the page shows the movement names ("Inverted Rows", the old
+// built-in), not the fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
 // Saturday, so today or yesterday always has one.
 
 /** The superset itself: its own list, named "Superset A" (`workout-card.tsx`), holding its two items. */
