@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-19. This is a beta.**
+**Last updated: 2026-11-20. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -41,8 +41,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
   signed in to your household can create and rename a program, write and change its workouts, add
-  a movement of your own, set its week and copy a workout, and put an athlete on a program or take
-  them off it. What is
+  a movement of your own, set its week and copy a workout, put an athlete on a program or take
+  them off it, and, from an athlete's page, change the order their programs show in. What is
   stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
