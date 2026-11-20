@@ -1,7 +1,6 @@
 import {
   catalogHowToOf,
   catalogOptionOf,
-  equipmentInOrder,
   MOVEMENT_SEED_ROWS,
   pickerEntryOf,
   TRACKING_TYPE,
