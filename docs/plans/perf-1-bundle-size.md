@@ -267,6 +267,18 @@ RECURRING ONE"):
    has to go red. **Record which routes actually moved**, rather than asserting "every route". Revert,
    go green, and link all three runs.
 
+   **Ran 2026-11-20** (baseline re-measured on that day's main first, run 44744155380, green):
+   - **2a, the literal in the footer** (run 44745876501): RED. **Every** route moved, `/sign-in`
+     included, so the footer ships in a chunk every route loads, whether or not the route mounts it.
+     The 16 KiB literal cost +32.1 KiB (`/`, `/privacy`, `/sign-in`, `/design/tokens`), +48.1 KiB
+     (`/settings`, `/design/program`) and +64.1 KiB (the `/p` and `/programs` routes) per route, and
+     +128.3 KiB across all client chunks: it is copied into several chunks.
+   - **2b, the literal behind `dynamic()`** (run 44747564440): RED, but not as predicted. The routes
+     still moved +9.5 to +19.1 KiB: importing `next/dynamic` puts its loader in the footer's shared
+     chunk. The literal itself went lazy: `(all client chunks)` moved +54.7 KiB, well past any route.
+     So the all-chunks row is what sees lazy code, as intended, and `dynamic()` is not free.
+   - **Reverted** (run 44750499622): green, with no diff under `apps/web` from the pre-probe commit.
+
 **Locally:** run only `bash .github/scripts/check-bundle-size.test.sh`, which is light. Do not build
 to get numbers: the baseline comes from CI (R2), and `pnpm build` uses the one heavy slot.
 
