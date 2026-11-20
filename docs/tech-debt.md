@@ -132,8 +132,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 > ✅ **Closed (2026-11-19):** `pnpm --filter @mat-plan/db db:check` runs first in `ci.yml`'s DB step
 > and in `pnpm verify` (`db:check`). Checked on drizzle-kit as pinned: a snapshot given its
 > neighbour's `prevId` makes it exit 1 ("… are pointing to a parent snapshot … which is a
-> collision"), and a clean tree exits 0. ⚠️ It passes a snapshot whose `prevId` is its own `id` (#139);
-> only the forward-only guard's inline chain check catches that, on PRs only, so both stay. The entry
+> collision"), and a clean tree exits 0. ⚠️ It passes a snapshot whose `prevId` is its own `id` (#139).
+> Since 2026-11-19 `snapshots:check` catches that on every event and in `pnpm verify`
+> ([plan](./plans/dx-snapshot-chain-script.md)); before, only the PR-only forward-only guard did. The entry
 > is kept for its history (its Fix line's `check` script is named `db:check`).
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit

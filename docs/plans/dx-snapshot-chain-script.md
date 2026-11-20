@@ -112,6 +112,9 @@ zero-snapshot refusal to exit 0 (`--expect "✗ no snapshots"`).
 
 ## Review-response log
 
+_Approved (maintainer, 2026-11-19, relayed by the board): both deviations from the brief accepted, a
+pre-install step and no new tech-debt entry._
+
 ### Engineering panel (round 1)
 
 > Models: correctness, scope, reuse, security: opus.
