@@ -23,6 +23,7 @@ import {
   SETTINGS_COPY,
   SETTINGS_PATH,
 } from '../lib/constants';
+import { expectLinkTargets, expectTapTargets } from './a11y-checks';
 import { addAthlete, archiveAdded, SEED_PROFILE_2_ROUTE } from './steps';
 import { expectNoHorizontalOverflow, MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
 
@@ -859,10 +860,11 @@ test('the callout fits 360px with a 40-character name, and its choices clear the
   // callout. `h-auto whitespace-normal` is what lets it wrap instead of pushing the page sideways.
   await expectNoHorizontalOverflow(page, 'the add screen with a duplicate callout at 360px');
 
-  for (const control of await page.locator('main button, main a[href^="/p/"]').all()) {
-    const box = await control.boundingBox();
-    if (box) expect(box.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
-  }
+  await expectTapTargets(page, 'the add screen with a duplicate callout at 360px');
+  await expectLinkTargets(
+    page.getByRole('main'),
+    'the add screen with a duplicate callout at 360px',
+  );
 });
 
 /**
