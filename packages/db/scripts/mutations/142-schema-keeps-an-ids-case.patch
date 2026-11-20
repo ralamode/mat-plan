@@ -1,13 +1,10 @@
-diff --git a/packages/shared/src/program/pieces.ts b/packages/shared/src/program/pieces.ts
-index 506729ab..eda4564a 100644
---- a/packages/shared/src/program/pieces.ts
-+++ b/packages/shared/src/program/pieces.ts
-@@ -62,7 +62,7 @@ import {
-  * It changes nothing for an id the app made: `newId`, `crypto.randomUUID` and Postgres all write
-  * lower case.
+diff --git a/packages/shared/src/id.ts b/packages/shared/src/id.ts
+index 49a98d3b..fb76b61b 100644
+--- a/packages/shared/src/id.ts
++++ b/packages/shared/src/id.ts
+@@ -26,4 +26,4 @@ export function newId(): string {
+  * ⚠️ A reader of the RAW input after the parse still sees the spelling it was sent, so it must fold
+  * for itself.
   */
--export const lowerCaseUuidSchema = uuidSchema.toLowerCase();
-+export const lowerCaseUuidSchema = uuidSchema;
- 
- const ONE_LINE = 'one line of text, with no control characters';
- /**
+-export const uuidSchema = z.uuid().toLowerCase();
++export const uuidSchema = z.uuid();
