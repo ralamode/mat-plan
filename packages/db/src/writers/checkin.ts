@@ -127,13 +127,19 @@ type CheckinArgs = {
  * per-item refusals, before calling**, or the whole batch throws; nothing does that yet. The messages
  * are for tests; `quietDbErrors` logs only the class. Answers carry the parsed id.
  */
+/**
+ * The throw for a `client_id` `lowerCaseUuidSchema` refuses: not hyphenated (braces, bare hex), or
+ * hyphenated with a version or variant digit outside RFC 9562 (zod 4's `z.uuid()`).
+ */
+export const CHECKIN_CLIENT_ID_NOT_UUID = 'check-in client_id is not a hyphenated RFC 9562 uuid';
+
 export async function writeCheckinEntries(
   exec: Executor,
   args: CheckinArgs,
 ): Promise<CheckinWriteResult[]> {
   const values = args.values.map((v) => {
     const clientId = lowerCaseUuidSchema.safeParse(v.clientId);
-    if (!clientId.success) throw new Error('check-in client_id is not a hyphenated uuid');
+    if (!clientId.success) throw new Error(CHECKIN_CLIENT_ID_NOT_UUID);
     return { ...v, clientId: clientId.data };
   });
   if (new Set(values.map((v) => v.clientId)).size !== values.length) {
