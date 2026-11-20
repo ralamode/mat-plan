@@ -21,7 +21,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
  * development, where the node stays connected, so only a node that has really left (and taken focus
  * with it) hands focus on.
  */
-export function useCollapse(finished: boolean) {
+export function useCollapse(finished: boolean, held = false) {
   const [folded, setFolded] = useState(finished);
   // Unfinished now (an un-tick arrived, the day closed): open for the rest of the visit.
   if (folded && !finished) setFolded(false);
@@ -46,6 +46,14 @@ export function useCollapse(finished: boolean) {
     // The workout may have stopped being finished in the same moment: no line, so its name.
     (line.current ?? name.current)?.focus();
   }, [toLine]);
+
+  // "Collapse" held (busy, or not finished) while it has focus: the name takes focus, so it never
+  // drops to the page from a button that stays in place but cannot be used.
+  useEffect(() => {
+    if (held && collapseButton.current && document.activeElement === collapseButton.current) {
+      name.current?.focus();
+    }
+  }, [held]);
 
   /**
    * A control's ref: kept, and when it goes while focused and no tap moved focus, the open name

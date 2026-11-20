@@ -55,7 +55,14 @@ export const WorkoutCard = memo(function WorkoutCard({
   const { readOnly } = useDay();
   const { done, total } = workout.progress;
   const finished = !readOnly && total > 0 && done >= total && notSaved === 0;
-  const { folded, bodyId, lineRef, collapseRef, nameRef, open, collapse } = useCollapse(finished);
+  // "Collapse" keeps its slot on any workout that can be logged and has rows, held (in place but
+  // unusable) until finished and while busy: so it never comes or goes under a thumb (12c-iii review).
+  const slot = !readOnly && !future && total > 0;
+  const held = busy || !finished;
+  const { folded, bodyId, lineRef, collapseRef, nameRef, open, collapse } = useCollapse(
+    finished,
+    held,
+  );
   const progress = future
     ? itemCountText(workout.items.length)
     : total === 0
@@ -95,7 +102,7 @@ export const WorkoutCard = memo(function WorkoutCard({
             </span>
           </h3>
           {/* 44px tall on any day that can be logged, so "Collapse" coming never moves the rows. */}
-          <div className={cn('flex items-center gap-x-1', !readOnly && !future && 'min-h-11')}>
+          <div className={cn('flex items-center gap-x-1', slot && 'min-h-11')}>
             {progress || notSaved > 0 ? (
               <p className="text-muted-foreground text-sm">
                 {progress}
@@ -107,13 +114,13 @@ export const WorkoutCard = memo(function WorkoutCard({
                 ) : null}
               </p>
             ) : null}
-            {finished ? (
+            {slot ? (
               <CollapseButton
                 name={workout.name}
                 bodyId={bodyId}
                 collapseRef={collapseRef}
                 onCollapse={collapse}
-                held={busy}
+                held={held}
               />
             ) : null}
           </div>
