@@ -1,7 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { MIN_TAP_TARGET_PX, SIGN_IN_COPY, SIGN_IN_PATH } from '../lib/constants';
-import { expectLinkTargets, expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import {
+  expectLinkTargets,
+  expectNoAxeViolations,
+  expectTapTargets,
+  type LinkTargetException,
+} from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 import { cspViolations, recordCspViolations } from './csp';
 
@@ -24,6 +29,22 @@ const CARD_TIMEOUT_MS = 20_000;
  * drift worth a look (Clerk added a link, or one vanished).
  */
 const EXPECTED_LINKS = 4;
+
+/**
+ * Clerk's own links that miss the 44px bar, measured on production 2026-11-20 (the first live runs of
+ * this check). Both are vendor DOM inside the card; neither is sized by `SIGN_IN_APPEARANCE`.
+ */
+const VENDOR_LINK_EXCEPTIONS: readonly LinkTargetException[] = [
+  {
+    name: 'Clerk logo',
+    reason:
+      '"Secured by Clerk", 14px tall; removing the mark is a paid-plan feature (docs/tech-debt.md)',
+  },
+  {
+    name: 'Join waitlist',
+    reason: "Clerk's waitlist footer link, 18px tall; sizing it needs an appearance key of its own",
+  },
+];
 
 /** The one known violation on every page: zod's JIT probe, from our own bundle (`e2e/csp.ts`). */
 const isZodEvalProbe = (v: string) => /^script-src(-elem)? eval @[^ ]*\/_next\/static\//.test(v);
@@ -94,7 +115,9 @@ test('the lit card renders, keeps its styles, and meets the a11y bar under the p
   await expect.soft(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expectNoHorizontalOverflow(page, 'sign-in drift');
   await expectTapTargets(page, 'sign-in drift');
-  await expectLinkTargets(page.getByRole('main'), 'sign-in drift', EXPECTED_LINKS);
+  await expectLinkTargets(page.getByRole('main'), 'sign-in drift', EXPECTED_LINKS, {
+    exceptions: VENDOR_LINK_EXCEPTIONS,
+  });
 });
 
 test('the lit card passes the axe A/AA scan', async ({ page }) => {
