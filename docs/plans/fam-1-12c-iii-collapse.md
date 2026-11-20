@@ -8,6 +8,9 @@
 > area, so they are lane B's guest edits: lane S and lane C each read their hunks, and Q1's clearance for
 > PR 2's edits in lane S's files passes to lane B.
 >
+> ✅ **Both PRs are merged** (2026-11-20): PR 1 as #761 and PR 2 as #765. They were the last of FAM-1's 72. Owed after them: the by-hand screen-reader pass in the test plan (the maintainer's, after merge by their
+> choice), and a small follow-up from #761's review.
+>
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes. Panel round 1 is applied; its log is at the end.
 
@@ -280,7 +283,8 @@ to `owed.test.ts` for the reader, which PR 1 deletes.
 **Walked and needing no edit**, because the helpers above open first: `e2e/global.setup.ts:48` (it
 logs a warm-up weight on Athlete Two's today, so later visits there arrive with Bodyweight
 collapsed), `export-full-day.spec.ts:126`, `:132`, `log-bodyweight.spec.ts:69-117` (one visit; its
-reload at `:183` reads only the date) and `a11y.spec.ts:369-372` (the helper leaves the receipt open,
+reload at `:183` reads only the date; _as built_, its heading checks at `:55-57` and `:205-207` did
+need an edit: a folded heading is named "Bodyweight, 72.5 lb", so both find the region instead) and `a11y.spec.ts:369-372` (the helper leaves the receipt open,
 so the scan at `:374` still sees it).
 
 Neither PR edits `page.tsx`, `packages/shared/src/program/` or `apps/web/app/design/program/`. Each
@@ -310,6 +314,8 @@ chart in its description, and screenshots of both states at three widths.
 - **e2e at 360px:** the new tests, each with axe, tap targets and no sideways scroll in both states,
   as `day-page.spec.ts:258-260` does, and the builder journey's 30-character name. The preview walk
   covers the collapsed card (§6). By hand, before each merge: one pass with a phone's screen reader.
+  _As it went: the maintainer chose one pass after both had merged ("Merge, I'll check both after
+  (Recommended)", 2026-11-20, relayed by the board). It is owed, covering #761 and #765._
 - **`components/day/owed.test.ts`:** this step adds no line and deletes none. An opened finished part
   is reached by a tap, which the preview walk cannot load (`program-preview-a11y.spec.ts:18-22`);
   each PR's own e2e checks it. If an e2e slips out of its PR, that PR adds an `it.todo` for "12c-iii:

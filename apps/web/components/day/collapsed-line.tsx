@@ -9,7 +9,8 @@ import { DAY_COPY } from './day-copy';
 
 /**
  * A finished part folded to one line (FAM-1 12c-iii, D38; plan §3): the filled tick, the name, a
- * detail (the slot's label, else the program on a two-program day, or Life's summary) and a count,
+ * detail (the slot's label, else the program on a two-program day, or Life's summary, which wraps)
+ * and a count (none for Life),
  * as one `<button>` inside the part's own heading, so a tap opens it. Not `Button`, which never wraps:
  * a long name or label wraps here and the line grows taller.
  *
@@ -30,7 +31,8 @@ export function CollapsedLine({
   name: string;
   nameId: string;
   detail: string | null;
-  count: string;
+  /** Never wraps (`whitespace-nowrap`): a short count or value only. */
+  count?: string | null;
   bodyId: string;
   lineRef: (node: HTMLButtonElement | null) => void;
   onOpen: () => void;
@@ -67,9 +69,11 @@ export function CollapsedLine({
           </>
         ) : null}
       </span>
-      <span className="text-done-muted-foreground shrink-0 text-sm font-normal whitespace-nowrap">
-        {count}
-      </span>
+      {count ? (
+        <span className="text-done-muted-foreground shrink-0 text-sm font-normal whitespace-nowrap">
+          {count}
+        </span>
+      ) : null}
       {/* Closed points right, as the app's other disclosures (the movement picker) and the prototype. */}
       <span aria-hidden="true" className="text-done-muted-foreground shrink-0 text-sm">
         ▸

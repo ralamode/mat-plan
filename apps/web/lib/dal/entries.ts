@@ -13,6 +13,7 @@ import {
   insertBodyweightEntry,
   lastBodyweightBefore,
   isLiveProfile,
+  readLiveSets,
   resolveSessionMovements,
   restoreClear,
   schema,
@@ -43,7 +44,7 @@ import {
   type Unit,
   type UnitDimension,
 } from '@mat-plan/shared';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import {
   assertMetricKeyExists,
@@ -211,67 +212,17 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     // order, and the asc(id) tiebreak is unchanged from before.
     .orderBy(asc(schema.entries.createdAt), asc(schema.entries.id));
 
-  // Fetch sets for the set-bearing (strength) entries in one query, then group by entry. Dispatch on
+  // Read sets for the set-bearing (strength) entries only, then group by entry. Dispatch on
   // `movement_id !== null` (not `kind === 'strength'`): V1-8 session members are written kind=NULL, so
   // the old dispatch would fetch zero sets for them. Only sc_lift entries carry a movement_id (metric
   // rows have it NULL by the at-most-one CHECK), so this catches new session members AND legacy strength.
   const strengthIds = rows.filter((r) => r.movementId !== null).map((r) => r.id);
-  const setRows = strengthIds.length
-    ? await db
-        .select({
-          entryId: schema.entrySets.entryId,
-          publicId: schema.entrySets.publicId,
-          idx: schema.entrySets.idx,
-          reps: schema.entrySets.reps,
-          isBodyweight: schema.entrySets.isBodyweight,
-          isBand: schema.entrySets.isBand,
-          status: schema.entrySets.status,
-          id: schema.entrySets.id,
-        })
-        .from(schema.entrySets)
-        .where(
-          and(inArray(schema.entrySets.entryId, strengthIds), isNull(schema.entrySets.deletedAt)),
-        )
-        .orderBy(asc(schema.entrySets.idx))
-    : [];
-
-  // GAP-3: the quantities, in a second query keyed on the set ids we just proved live. ⚠️ The parent
-  // filter is LOAD-BEARING — `ON DELETE CASCADE` on entry_set_quantities is HARD-delete only, and this
-  // app only ever SOFT-deletes, so quantities whose set is soft-deleted are still `deleted_at IS NULL`.
-  // Selecting by these ids (rather than scanning the child table) is what keeps them out.
-  const setIds = setRows.map((s) => s.id);
-  const quantityRows = setIds.length
-    ? await db
-        .select({
-          entrySetId: schema.entrySetQuantities.entrySetId,
-          slot: schema.entrySetQuantities.slot,
-          dimension: schema.entrySetQuantities.dimension,
-          unit: schema.entrySetQuantities.unit,
-          valueNum: schema.entrySetQuantities.valueNum,
-        })
-        .from(schema.entrySetQuantities)
-        .where(
-          and(
-            inArray(schema.entrySetQuantities.entrySetId, setIds),
-            isNull(schema.entrySetQuantities.deletedAt),
-          ),
-        )
-    : [];
-
-  const quantitiesBySet = new Map<number, SetQuantityDTO[]>();
-  for (const q of quantityRows) {
-    const list = quantitiesBySet.get(q.entrySetId) ?? [];
-    list.push({
-      slot: q.slot as QuantitySlot,
-      dimension: q.dimension as UnitDimension,
-      unit: q.unit as Unit,
-      value: Number(q.valueNum),
-    });
-    quantitiesBySet.set(q.entrySetId, list);
-  }
-
+  // The live sets and their live quantities, through the one read the program row's `readRowValues`
+  // shares (`@mat-plan/db`'s `readLiveSets`): the load-bearing parent filter lives there, mutation 172
+  // guards it, and `entries.test.ts` pins that this read calls it. The ids are the owned entries' own
+  // (the read above).
   const setsByEntry = new Map<number, SetDTO[]>();
-  for (const s of setRows) {
+  for (const s of await readLiveSets(db, strengthIds)) {
     const list = setsByEntry.get(s.entryId) ?? [];
     list.push({
       publicId: s.publicId,
@@ -279,8 +230,8 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       reps: s.reps,
       isBodyweight: s.isBodyweight,
       isBand: s.isBand,
-      quantities: quantitiesBySet.get(s.id) ?? [],
-      status: s.status as EntryStatus,
+      quantities: s.quantities,
+      status: s.status,
     });
     setsByEntry.set(s.entryId, list);
   }
