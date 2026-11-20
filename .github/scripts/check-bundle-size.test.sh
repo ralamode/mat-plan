@@ -101,7 +101,7 @@ BASE_SHA_GREEN="$(g rev-parse HEAD)"
 # fresh: a copy of the template in $p (cwd for the guard), with the default env reset.
 fresh() {
   n=$((n + 1)); p="$tmp/c$n"; cp -R "$t" "$p"; c="$p/apps/web/.next/static/chunks"
-  BO=success; BS="$BASE_SHA_GREEN"; CI=
+  BO=success; BS="$BASE_SHA_GREEN"; CI=; XARGS=()
 }
 # setb <route> <bytes|delete> : edit the PR's working-tree baseline
 setb() {
@@ -116,7 +116,7 @@ json() {
 # expect <name> <exit> <text> : run the guard in $p; a text starting with ! must NOT appear
 expect() {
   out="$(cd "$p" && env -u GITHUB_ACTIONS -u GITHUB_STEP_SUMMARY BUILD_OUTCOME="$BO" BASE_SHA="$BS" \
-    ${CI:+GITHUB_ACTIONS=true} node "$guard" --summary "$p/summary.md" 2>&1)"
+    ${CI:+GITHUB_ACTIONS=true} node "$guard" --summary "$p/summary.md" ${XARGS[@]+"${XARGS[@]}"} 2>&1)"
   code=$?
   if [ "${3#!}" != "$3" ]; then grep -qF -- "${3#!}" <<<"$out" && hit=0 || hit=1
   else { [ -z "$3" ] || grep -qF -- "$3" <<<"$out"; } && hit=1 || hit=0; fi
@@ -142,10 +142,10 @@ fresh; head -c 1808 /dev/zero >"$c/$PROFILE_CHUNK"; expect "-8192 is on the boun
 
 # ── Over budget, either way ───────────────────────────────────────────────────────────────────────
 fresh; grow "$PROFILE_CHUNK" 8193
-expect "+8193 on /p/[profileId] fails" 1 '::error::bundle: /p/[profileId] +8.0 KiB (10,600 → 18,793); budget ±8.0 KiB'
+expect "+8193 on /p/[profileId] fails" 1 '::error::bundle: /p/[profileId] +8.0 KiB (+8,193 B; 10,600 → 18,793); budget ±8.0 KiB'
 fresh; head -c 1807 /dev/zero >"$c/$PROFILE_CHUNK"; expect "-8193 fails: re-baseline" 1 're-baseline'
 fresh; grow app/lazy.js 8193
-expect "dynamic()-only chunk grows 8193, no route moves" 1 '::error::bundle: (all client chunks) +8.0 KiB (16,700 → 24,893)'
+expect "dynamic()-only chunk grows 8193, no route moves" 1 '::error::bundle: (all client chunks) +8.0 KiB (+8,193 B; 16,700 → 24,893)'
 fresh; grow app/lazy.js 8193; expect "dynamic()-only growth moves no route" 1 '!::error::bundle: /p/'
 
 # ── Cannot measure: stats, shape, paths, count, inputs ────────────────────────────────────────────
@@ -208,13 +208,47 @@ fresh; BO=; expect "BUILD_OUTCOME empty locally: measures" 0 '| / | 1000 | 1000 
 fresh; BO=; CI=1; expect "BUILD_OUTCOME empty on CI: miswired step" 2 'BUILD_OUTCOME is empty on CI'
 fresh; CI=1; expect "on CI with an outcome: measures" 0 '| / | 1000 | 1000 | 0 |'
 
-# ── Escaping: a route name reaches the summary and ::error:: escaped ──────────────────────────────
+# ── The baseline's next stamp ─────────────────────────────────────────────────────────────────────
+fresh; json "$p/.github/bundle-baseline.json" 'x.next = "16.4.6"'
+expect "a changed next stamp is warned" 1 "baseline's next stamp changed: 16.4.5 → 16.4.6"
+expect "a changed next stamp must be the build's version" 1 "baseline's next is 16.4.6 but this build is 16.4.5"
+
+# ── More shape refusals ───────────────────────────────────────────────────────────────────────────
+fresh; json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push(x[0])'
+expect "a duplicate route" 2 'repeats the route /'
+fresh; json "$p/apps/web/.next/build-manifest.json" 'delete x.polyfillFiles'
+expect "polyfillFiles missing" 2 'polyfillFiles'
+fresh; json "$p/apps/web/.next/build-manifest.json" 'x.polyfillFiles = "static/chunks/polyfill.js"'
+expect "polyfillFiles not an array" 2 'polyfillFiles'
+fresh; json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x[0].firstLoadChunkPaths = []'
+expect "an empty firstLoadChunkPaths" 2 'must be a non-empty string[]'
+fresh; printf '{"name":"Next.js","version":16}' >"$p/apps/web/.next/diagnostics/framework.json"
+expect "a non-string framework version" 2 'framework.json has no string version'
+fresh; setb "/" -1; expect "a negative baseline value" 2 'is not a byte count'
+fresh; setb "/" 1.5; expect "a non-integer baseline value" 2 'is not a byte count'
+fresh; json "$p/apps/web/.next/server/app-paths-manifest.json" 'x["/k/page"] = "x"'
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "constructor", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
+expect "a route named constructor is refused" 2 'must be a string that starts with /'
+fresh; json "$p/apps/web/.next/server/app-paths-manifest.json" 'x["/k/page"] = "x"'
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "(all client chunks)", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
+expect "a route cannot overwrite the (all client chunks) row" 2 'must be a string that starts with /'
+fresh; BS=; setb constructor 5; expect "a baseline entry named constructor is not taken as measured" 1 'constructor is in .github/bundle-baseline.json but was not measured; remove it'
+fresh; setb constructor 5; expect "a changed baseline's constructor entry is not compared with an inherited value" 1 '!measured function'
+fresh; XARGS=(--next-dir); expect "--next-dir with no value" 2 '--next-dir needs a value'
+
+# ── Escaping: a route name reaches the table and the annotations escaped ─────────────────────────
+# Both routes have a baseline entry, so each reaches a TABLE ROW (not only the "new row" error).
 fresh; json "$p/apps/web/.next/server/app-paths-manifest.json" 'x["/a|b%0A/page"] = "x"; x["/c/page"] = "y"'
-json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "a|b%0A", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]}, {route: "c\n::warning::injected", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
-expect "a route named a|b%0A is escaped" 1 'a\|b%250A'
-expect "a route with a newline cannot start a workflow command" 1 'c%0A::warning::injected'
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "/a|b%0A", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]}, {route: "/c\n::warning::injected", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
+setb "/a|b%0A" 600; setb $'/c\n::warning::injected' 600
+expect "a route named /a|b%0A is escaped in its table row" 0 '| /a\|b%250A | 600 | 600 | 0 |'
+expect "a route named /a|b%0A is escaped in its annotation" 0 '::warning::bundle: baseline for /a\|b%250A added in this PR'
+expect "a route with a newline cannot start a workflow command" 0 '/c%0A::warning::injected'
 grep -q '^::warning::injected' <<<"$out" && { printf '✗ a newline in a route reached the log raw\n'; fails=$((fails + 1)); } \
   || printf '✓ no raw workflow command from a route name\n'
+fresh; json "$p/apps/web/.next/server/app-paths-manifest.json" 'x["/t/page"] = "x"'
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "/t```x", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
+setb '/t```x' 600; expect "a backtick run in a route cannot close the <details> fence" 0 '````json'
 
 # ── Contract: the tolerance, imported (the literal once, here) ────────────────────────────────────
 out="$(node --input-type=module -e "import * as G from '$guard'; console.log(G.TOLERANCE_BYTES)" 2>&1)"

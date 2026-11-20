@@ -120,7 +120,11 @@ function readRoutes(nextDir) {
     const at = `route-bundle-stats.json[${i}]`;
     if (!row || typeof row !== 'object' || Array.isArray(row)) fail(`${at} is not an object`);
     exactKeys(row, STATS_KEYS, at);
-    if (typeof row.route !== 'string' || !row.route) fail(`${at}.route is not a string`);
+    // A route starts with `/`: that keeps inherited names (`constructor`) out, and keeps a row from
+    // overwriting the synthetic `(all client chunks)` one.
+    if (typeof row.route !== 'string' || !row.route.startsWith('/')) {
+      fail(`${at}.route must be a string that starts with /`);
+    }
     const paths = row.firstLoadChunkPaths;
     if (!Array.isArray(paths) || !paths.length || !paths.every((p) => typeof p === 'string')) {
       fail(`${at}.firstLoadChunkPaths must be a non-empty string[]`);
@@ -300,13 +304,13 @@ function run({ nextDir, buildOutcome, baseSha, onCi }) {
     for (const line of changed) warnings.push(`::warning::bundle: ${line}`);
     if (changed.length) {
       for (const [route, bytes] of Object.entries(before)) {
-        if (route in after.routes && after.routes[route] !== bytes) {
+        if (Object.hasOwn(after.routes, route) && after.routes[route] !== bytes) {
           errors.push(
             `::error::bundle: baseline for ${esc(route)} is ${commas(bytes)} but this run measured ${commas(after.routes[route])}; a baseline changed in this PR must equal this run's measurement (paste the <details> block)`,
           );
         }
       }
-      if (prBaseline.next !== after.next) {
+      if (after.next !== prBaseline.next) {
         errors.push(
           `::error::bundle: baseline's next is ${esc(prBaseline.next)} but this build is ${esc(after.next)}; a baseline changed in this PR must equal this run's measurement`,
         );
@@ -317,7 +321,7 @@ function run({ nextDir, buildOutcome, baseSha, onCi }) {
   // 6: compare each row with the PR's baseline.
   const rows = [];
   for (const [route, bytes] of Object.entries(after.routes)) {
-    if (!(route in before)) {
+    if (!Object.hasOwn(before, route)) {
       errors.push(
         `::error::bundle: ${esc(route)} is new (${commas(bytes)} B); add it to ${BASELINE_FILE}`,
       );
@@ -327,12 +331,12 @@ function run({ nextDir, buildOutcome, baseSha, onCi }) {
     rows.push({ route, before: before[route], after: bytes, delta });
     if (Math.abs(delta) > TOLERANCE_BYTES) {
       errors.push(
-        `::error::bundle: ${esc(route)} ${kib(delta)} (${commas(before[route])} → ${commas(bytes)}); budget ±${(TOLERANCE_BYTES / 1024).toFixed(1)} KiB${delta < 0 ? '; re-baseline: headroom would hide later growth' : ''}`,
+        `::error::bundle: ${esc(route)} ${kib(delta)} (${delta > 0 ? '+' : '-'}${commas(Math.abs(delta))} B; ${commas(before[route])} → ${commas(bytes)}); budget ±${(TOLERANCE_BYTES / 1024).toFixed(1)} KiB${delta < 0 ? '; re-baseline: headroom would hide later growth' : ''}`,
       );
     }
   }
   for (const route of Object.keys(before)) {
-    if (!(route in after.routes)) {
+    if (!Object.hasOwn(after.routes, route)) {
       errors.push(
         `::error::bundle: ${esc(route)} is in ${BASELINE_FILE} but was not measured; remove it`,
       );
@@ -362,13 +366,21 @@ function run({ nextDir, buildOutcome, baseSha, onCi }) {
   }
   if (changed.length)
     out.push('', '### Baseline changed in this PR', '', ...changed.map((l) => `- ${l}`));
+  const measuredJson = JSON.stringify(
+    { next: after.next, routes: sortRoutes(after.routes) },
+    null,
+    2,
+  );
+  // Longer than any backtick run in the JSON, so a route name cannot close the fence.
+  const longestRun = Math.max(0, ...(measuredJson.match(/`+/g) ?? []).map((m) => m.length));
+  const fence = '`'.repeat(Math.max(3, longestRun + 1));
   out.push(
     '',
     `<details><summary>Measured baseline: paste into ${BASELINE_FILE} to re-baseline</summary>`,
     '',
-    '```json',
-    JSON.stringify({ next: after.next, routes: sortRoutes(after.routes) }, null, 2),
-    '```',
+    `${fence}json`,
+    measuredJson,
+    fence,
     '',
     '</details>',
   );
@@ -383,14 +395,15 @@ function run({ nextDir, buildOutcome, baseSha, onCi }) {
 function main(argv) {
   const flag = (name, dflt) => {
     const i = argv.indexOf(name);
-    return i === -1 ? dflt : argv[i + 1];
+    if (i === -1) return dflt;
+    return argv[i + 1] ?? fail(`${name} needs a value`);
   };
-  const nextDir = resolve(flag('--next-dir', 'apps/web/.next'));
-  const summaryFile = flag('--summary', process.env.GITHUB_STEP_SUMMARY);
+  let summaryFile = process.env.GITHUB_STEP_SUMMARY;
   let result;
   try {
+    summaryFile = flag('--summary', summaryFile);
     result = run({
-      nextDir,
+      nextDir: resolve(flag('--next-dir', 'apps/web/.next')),
       buildOutcome: process.env.BUILD_OUTCOME ?? '',
       baseSha: process.env.BASE_SHA ?? '',
       onCi: Boolean(process.env.GITHUB_ACTIONS),
