@@ -3,7 +3,7 @@ import { addDays, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
 import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
-import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
+import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS, MIN_TAP_TARGET_PX } from '../lib/constants';
 
 import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
@@ -330,9 +330,12 @@ const workoutHeadings = (page: Page) =>
   page
     .getByRole('region', { name: DAY_COPY.heading, exact: true })
     .getByRole('heading', { level: 3 });
-/** The programs line ("Programs: A, B"), whose names are links to their program pages (D49). */
+/**
+ * The programs line ("Programs:" then "A ›", "B ›"), whose names are links to their program pages
+ * (D49): the label's container, which holds the list of links.
+ */
 const programsLine = (page: Page) =>
-  page.locator('p', { hasText: new RegExp(`^${escapeRegExp(PROGRAM_COPY.lineLabel(2))}`) });
+  page.getByText(PROGRAM_COPY.lineLabel(2), { exact: true }).locator('..');
 
 test.describe('Program order on real data', () => {
   test.use({ viewport: NARROW_VIEWPORT });
@@ -426,6 +429,20 @@ test.describe('Program order on real data', () => {
       );
     };
     await expectOrder('after the move');
+    // At 360px nothing on the line runs past the screen. Only the ordinary wrap: this run's names
+    // are short, so the long-unbroken-name case is the unit tests' (`wrap-anywhere`, `min-w-11`).
+    await expectNoOverflowWithin(programsLine(page), 'the programs line');
+    await expectTapTargets(page, 'the day page with its programs line, 360px');
+    // The links themselves: `expectTapTargets` leaves links out, so each name is measured here.
+    for (const link of await programsLine(page).getByRole('link').all()) {
+      const box = await link.boundingBox();
+      expect(box?.height ?? 0, 'a program link is 44px tall').toBeGreaterThanOrEqual(
+        MIN_TAP_TARGET_PX,
+      );
+      expect(box?.width ?? 0, 'a program link is 44px wide').toBeGreaterThanOrEqual(
+        MIN_TAP_TARGET_PX,
+      );
+    }
     await page.reload();
     await expectOrder('after a reload');
   });
