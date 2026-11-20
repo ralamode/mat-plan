@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { PROFILE_KIND, TRACKING_TYPE, WEEKDAYS } from '@mat-plan/shared';
+import { PROFILE_KIND, PROFILE_KIND_LABELS, TRACKING_TYPE, WEEKDAYS } from '@mat-plan/shared';
 import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -16,6 +16,7 @@ import {
   ITEM_PICKER_COPY,
   keepLabel,
   lastDayText,
+  NO_PROGRAM_YET_LINE,
   PUT_ON_COPY,
   putOnTitle,
   renameLabel,
@@ -32,7 +33,7 @@ import {
   workoutPath,
 } from '../components/program-builder/routes';
 import { PROGRAM_COPY } from '../components/day/day-copy';
-import { APP_HOME_PATH, MIN_TAP_TARGET_PX, NOT_FOUND_COPY } from '../lib/constants';
+import { APP_HOME_PATH, MIN_TAP_TARGET_PX, NOT_FOUND_COPY, SETTINGS_COPY } from '../lib/constants';
 import { expectNoOverflowWithin } from './a11y-checks';
 import { NARROW_VIEWPORT } from './contexts';
 import { addAthlete, archiveAdded, isoDaysAgo, programRowTick, settled } from './steps';
@@ -264,6 +265,15 @@ const programsLink = (page: Page, athlete: string) =>
     .locator('p', { hasText: PROGRAM_COPY.notYetPutOn(athlete) })
     .getByRole('link', { name: PROGRAM_COPY.programs, exact: true });
 
+/**
+ * A kid's Home tile, by its accessible name: the name and kind only (`aria-labelledby`, 15 PR 3),
+ * so the programs line, its description, never changes what the link is called.
+ */
+const homeTile = (page: Page, athlete: string) =>
+  page
+    .getByRole('list', { name: SETTINGS_COPY.athletes })
+    .getByRole('link', { name: `${athlete} ${PROFILE_KIND_LABELS.kid}`, exact: true });
+
 /** This run's athletes, archived after each test so the picker does not fill with them. */
 const added: string[] = [];
 
@@ -318,6 +328,10 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await expect(page).toHaveURL(PROGRAMS_PATH);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(BUILDER_COPY.programs);
 
+  // Home's tile says they are on no program yet (15 PR 3).
+  await page.goto(APP_HOME_PATH);
+  await expect(homeTile(page, athlete)).toHaveAccessibleDescription(NO_PROGRAM_YET_LINE);
+
   // 3. Put them on from today. The dialog names who is starting.
   await page.goto(mine);
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();
@@ -326,6 +340,12 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await expect(putOn.getByText(startingNamesText([athlete]))).toBeVisible();
   await putOn.getByRole('button', { name: startLabel(1, program) }).click();
   await expect(putOn).toBeHidden();
+
+  // 3b. Home's tile now names the program, in the day page's words, with no overflow at 360px (15 PR 3).
+  await page.goto(APP_HOME_PATH);
+  await expect(homeTile(page, athlete)).toHaveAccessibleDescription(PROGRAM_COPY.line([program]));
+  await expectNoOverflowWithin(homeTile(page, athlete), 'Home tile with its programs line');
+  await page.goto(mine);
 
   // 4. Their name under "Who's on it" opens their day page, which shows the program's workout.
   const who = page.getByRole('region', { name: BUILDER_COPY.whosOnIt });
@@ -344,6 +364,12 @@ test('a parent puts a new athlete on a program, the athlete logs it, then off an
   await expect(who.getByRole('button', { name: takeOffLabel(athlete) })).toHaveCount(0);
   const lastDayToday = lastDayText(isoDaysAgo(0), isoDaysAgo(0));
   await expect(who.getByText(lastDayToday, { exact: false })).toBeVisible();
+  // Home's tile says the same: the program is still named, with its last day (15 PR 3).
+  await page.goto(APP_HOME_PATH);
+  await expect(homeTile(page, athlete)).toHaveAccessibleDescription(
+    PROGRAM_COPY.line([`${program} (${lastDayToday})`]),
+  );
+  await page.goto(mine);
 
   // 6. Put them back on before midnight: the same stretch, no last day, and Take off is back.
   await page.getByRole('button', { name: PUT_ON_COPY.open }).click();

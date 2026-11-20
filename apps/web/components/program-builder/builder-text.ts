@@ -22,7 +22,7 @@ import {
   type Weekday,
 } from '@mat-plan/shared';
 
-import { HOME_LINK, itemCountText } from '@/lib/constants';
+import { AMEND_COPY, HOME_LINK, itemCountText } from '@/lib/constants';
 import { formatDayShort, onDayText } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -49,7 +49,8 @@ export const BUILDER_COPY = {
   createProgramForm: 'Create a program',
   create: 'Create',
   creating: 'Creating…',
-  cancel: 'Cancel',
+  /** The app's one Cancel word (`AMEND_COPY.cancel`), also `SheetFormFooter`'s default. */
+  cancel: AMEND_COPY.cancel,
   programName: 'Program name',
   programNamePlaceholder: 'e.g. Family program',
   /**
@@ -90,11 +91,8 @@ export const SAVE_FAILED = 'Couldn’t save. Try again.';
  */
 export const cleanName = (raw: string) => collapseWhitespace(raw).trim();
 
-/**
- * A pending button: `aria-disabled` (a disabled one drops focus to <body>), which `Button` does
- * not style, so it is dimmed here.
- */
-export const PENDING_CLASS = 'aria-disabled:opacity-60';
+/** A pending button's class; defined in `components/ui/pending-class.ts`, re-exported for the builder. */
+export { PENDING_CLASS } from '@/components/ui/pending-class';
 
 /** What a refused name write says, under the field. */
 export function nameRefusal(reason: ProgramRefusal): string {
@@ -130,16 +128,25 @@ export const takeOffLabel = (athlete: string) => `${BUILDER_COPY.takeOff} ${athl
 export const takingOffLabel = (athlete: string) => `${BUILDER_COPY.takingOff} ${athlete}`;
 
 /**
+ * A short day with no-break spaces inside it, "Fri,\u00a0Nov\u00a020", so a wrapping line (Home's
+ * tile, the Put-on dialog) never splits the date across two lines (15 PR 3's UX review).
+ */
+export const unbrokenDay = (day: string) => formatDayShort(day).replace(/ /g, '\u00a0');
+
+/**
  * An athlete's last day, the one rule for "Who's on it" and the Put-on dialog: "last day today" when
  * it is today (as recorded, C15; Take off only ever writes today), else the date.
  */
 export const lastDayText = (day: string, today: string) =>
-  `last day ${day === today ? 'today' : formatDayShort(day)}`;
+  `last day ${day === today ? 'today' : unbrokenDay(day)}`;
+
+/** A start after today, "starts Fri, Nov 20": the program page's athlete line and Home's tile. */
+export const startsText = (day: string) => `starts ${unbrokenDay(day)}`;
 
 /** An athlete's line on the program page: "since Mon, Nov 9 · last day today · also on Stretching". */
 export function athleteHint(athlete: ProgramView['athletes'][number], today: string): string {
   const parts = [
-    `${hasStarted(athlete, today) ? 'since' : 'starts'} ${formatDayShort(athlete.since)}`,
+    hasStarted(athlete, today) ? `since ${unbrokenDay(athlete.since)}` : startsText(athlete.since),
   ];
   if (athlete.lastDay) parts.push(lastDayText(athlete.lastDay, today));
   if (athlete.alsoOn.length) parts.push(`also on ${formatList(athlete.alsoOn)}`);
@@ -649,6 +656,12 @@ export const PUT_ON_COPY = {
   dayChanged: 'The day has changed since this page loaded. It now shows today; no one was started.',
 } as const;
 
+/**
+ * `noProgramYet` as a line of its own, capitalised (Home's tile, FAM-1 15 PR 3): the one exported
+ * form, so the dialog's "keeps no program yet" and Home's "No program yet" cannot drift apart.
+ */
+export const NO_PROGRAM_YET_LINE = `${PUT_ON_COPY.noProgramYet.charAt(0).toUpperCase()}${PUT_ON_COPY.noProgramYet.slice(1)}`;
+
 export const putOnTitle = (program: string) => `Put someone on ${program}`;
 export const keepsText = (programs: readonly string[]) =>
   programs.length ? `keeps ${formatList(programs)}` : PUT_ON_COPY.noProgramYet;
@@ -688,11 +701,13 @@ export function startEffectText(
 }
 
 /**
- * Shown when someone ticked keeps another program: where this one goes in their day's order. A Put
- * on puts it last until lane P's 6d-iii places it, and the day page's Program order control is 15c's.
+ * Shown when someone NEW ticked keeps another program: where this one goes in their day's order.
+ * Since 6d-iii (#641) a Put on places a new row by the household's Programs-list order (D41) and
+ * keeps the athlete's own order of the others; someone ticked back on returns to their old place, so
+ * this line is not shown for them. The day page's Program order control is 15c's.
  */
 export const orderHintText = (program: string) =>
-  `${program} goes after their other programs on their day page.`;
+  `On their day page, ${program} goes in by the order of your Programs list. Their other programs keep their order.`;
 /** Shown when someone ticked keeps another program and Take off is wired: how to switch instead. */
 export const switchHintText = (programs: readonly string[]) =>
   `To switch instead, start tomorrow, then take them off ${formatList(programs)} from that program’s page.`;

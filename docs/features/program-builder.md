@@ -19,13 +19,13 @@ Where a parent builds the household's program: the Programs list, a program's pa
 its workouts, its week), and the workout editor with its item picker. The lane builds each screen
 against fixtures and fakes on the preview route first, then wires it to real data.
 
-🚧 **Built through step 10b and wired through 15 PR 2.** The Programs list, a program's page and the
+🚧 **Built through step 10b and wired through 15 PR 3.** The Programs list, a program's page and the
 workout editor are real pages (`/programs`, `/programs/[programId]`, `…/workouts/[workoutId]` and
 `…/workouts/new`), opened from Home's Programs row, on the household's own data; every builder
 action is registered, Put on and Take off included (15 PR 1). The add-athlete form says a new
-athlete starts with no program, and an athlete on none, if live, gets a
-Programs link (on any day; maintainer, 2026-11-19) from their day page (15 PR 2). Home's program lines (15 PR 3) are still to come. Each
-step below adds its files and its invariants here.
+athlete starts with no program, and an athlete on none, if live, gets a Programs link (on any day;
+maintainer, 2026-11-19) from their day page (15 PR 2). Home's tiles name each athlete's programs
+(15 PR 3). Each step below adds its files and its invariants here.
 
 ## The map
 
@@ -40,6 +40,7 @@ step below adds its files and its invariants here.
 | 7b-i  | `app/programs/page.tsx`, `[programId]/page.tsx`, `not-found.tsx`, `loading.tsx`; the list and view reads; Home and rail rows. |
 | 7b-ii | The two workout pages, `getProgramEntry`, the editor's client-minted id and its cap words.                                    |
 | 15    | 15 PR 1: Put on and Take off, wired (`putOnAction`, `takeOffAction`, their DAL and miss report); the dialog on real data.     |
+| 15    | 15 PR 3: `getProgramsByAthlete`, Home's one read for its tiles' programs lines (`components/profiles/profile-tile.tsx`).      |
 
 ### How a screen is put together (8a)
 
@@ -96,14 +97,15 @@ flowchart LR
 | `apps/web/components/program-builder/owed.test.ts`                      | The lane's `it.todo` list: the tests its steps still owe the contract. Delete a line in the PR that writes its test.                                                                                                                                                                                                                                                                                                                               |
 | `apps/web/app/programs/actions.ts`                                      | The builder's Server Actions (7a-i: create, rename, save a workout; 7a-ii: week, copy, new item; 15: Put on, Take off); each one's steps are in the module's header. Only a page under `app/programs/` imports it (since 7b-i).                                                                                                                                                                                                                    |
 | `apps/web/app/programs/actions.registry.ts`                             | Each action's refusal set and scope, read by the boundary matrices ([write-path.md](./write-path.md) invariant 1).                                                                                                                                                                                                                                                                                                                                 |
-| `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through its `report-miss.ts` report. Put on and Take off take `today` from their action.                                                                                                                                                                                                                   |
+| `apps/web/lib/dal/program/writes.ts`                                    | One function per write: the caller's scope, then lane P's writer inside `quietDbErrors`. A `not_found` for an id the input carries goes through its `report-miss.ts` report. Put on and Take off take `today` from their action, and so does `reorderHouseholdPrograms` (15c PR 2, called by the day page's `reorderProgramsAction`).                                                                                                              |
 | `apps/web/lib/dal/program/new-item-lock.test.ts`                        | Through the recording pool, the order `newItem` emits: `begin`, then the transaction-local `lock_timeout` (`set_config(…, true)`, bound to `LOCK_TIMEOUT`), then the household-items lock. `db:verify` proves the setting is set; only the emitted SQL shows it comes first.                                                                                                                                                                       |
 | `apps/web/app/programs/page.tsx`                                        | The Programs list (7b-i): `requireSession`, `getProgramList(today)`, `ProgramsListScreen` with `PROGRAM_ACTIONS`; no household goes Home.                                                                                                                                                                                                                                                                                                          |
 | `apps/web/app/programs/[programId]/page.tsx`                            | A program's page (7b-i): `getProgramView(id, today, tz)`, `ProgramScreen`; a miss is `notFound()`. Title "Program", never its name.                                                                                                                                                                                                                                                                                                                |
 | `apps/web/app/programs/not-found.tsx` · `loading.tsx` · `layout.tsx`    | The builder's 404 ("← Programs", its own `AppShell`, since `notFound()` replaces the page) its busy frame, and its `ClerkRoot` (#626: Clerk loads per segment, never in the root layout).                                                                                                                                                                                                                                                          |
 | `apps/web/e2e/program-builder.spec.ts` · `program-builder.a11y.spec.ts` | From `/p`: create, rename, copy a seeded workout, Copy at 360px, a random id's 404; a new workout with two items, Save, then Back (7b-ii); another program's workout is a 404; a new athlete's day page linking to Programs, then put on this run's program, a ✓ logged, Take off and back on (15); the four routes' a11y walk at 360px, the Copy and Put-on dialogs (in-sheet overflow, `expectNoOverflowWithin`), and one desktop axe pass each. |
-| `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`), `getProgramEntry` (7b-ii: one entry of the list, by the id lower-cased) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                                                                                                |
-| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                                                                                                                                                                                                                                                          |
+| `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`), `getProgramEntry` (7b-ii: one entry of the list, by the id lower-cased), `getProgramsByAthlete` (15 PR 3: Home's tiles, `null` with no household) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                      |
+| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15), `reportAthleteMiss` (15c, the athlete alone; the same athlete probe as Put on's), `reportOrderProgramMiss` (15c, an `invalid` order's first foreign program; the Programs list read once, 2 + one query per live athlete): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                               |
+| `apps/web/lib/dal/program/revalidate.ts`                                | `refreshPrograms` and `refreshAssignment`: what a program write revalidates (15c PR 2 moved them out of `app/programs/actions.ts`, unchanged). The builder's actions and the day page's Program order both call them, after a success only.                                                                                                                                                                                                        |
 
 ## Invariants
 
@@ -345,7 +347,10 @@ flowchart LR
       removes it when nothing is logged (C15).
     - **Put on on real data** (15 PR 1; the 15 plan's UX panel): `startingNamesText` and, when
       someone new shares targets (the program has athletes, or two start together),
-      `sameTargetsText`, both in the footer (`SheetFormFooter`'s `lead`, which describes the action),
+      `sameTargetsText`, both in the footer (`SheetFormFooter`'s `lead`, which describes the action; the footer lives in
+      `components/ui/sheet-form-footer.tsx` since V1-9b B2-prep, shared with Clear this day, and
+      `PENDING_CLASS` in `components/ui/pending-class.ts`, re-exported by `builder-text.ts`; its two
+      buttons stack, action first, below a 20rem column, so 200% zoom on a phone never clips Cancel),
       in view with Start. Start counts only who starts (`startLabel(fresh)`). A last day is
       `lastDayText(day, today)`, one rule with "Who's on it". When only athletes taken off today are
       ticked, the radios give way to `PUT_ON_COPY.stayOnNoGap` and the action is `keepLabel` (their
@@ -355,7 +360,7 @@ flowchart LR
       trigger becomes the line and focus returns to it in the same render as the close, not when the
       refresh lands. The success line names the start's day against the **device's** today
       (`deviceToday`), since the page's `today` is stale past midnight and Put on answers no day.
-      `orderHintText` says the program goes after their other programs (last, until 6d-iii).
+      `orderHintText` says a new start goes in by the Programs list's order and the others keep theirs (6d-iii, D41); it is not shown for someone ticked back on, who returns to their old place.
     - Differences from v12, each a decision above: To has no default; who will see a copy; the
       double-workout warning; the label only after a day; Starting as radios with what it changes;
       the hints shown only when they apply; Start's count; "last day …", tickable, in place of "on it";
@@ -377,6 +382,14 @@ flowchart LR
       `cache()` compares by identity. The view keeps `getWorkoutDraft`'s order: a non-uuid id is
       `null` with no report; no scope or a miss is reported once. The list names no id, so a missing
       scope reports nothing and the page sends the caller Home.
+    - **Home's programs lines are ONE read for the page** (`getProgramsByAthlete(today)`, 15 PR 3),
+      never one per tile; Home skips it with no household or no athletes. A tile with no entry
+      shows no line rather than "No program yet". The line uses the day page's words
+      (`PROGRAM_COPY.line`), `startsText` for a program that has not begun (`hasStarted`, the
+      program page's rule), `lastDayText` for one taken off today (dates with no-break spaces,
+      `unbrokenDay`) and `NO_PROGRAM_YET_LINE` for none. The tile's link is named by
+      `aria-labelledby` (name and kind) and described by the line, so a program named after an
+      athlete never changes what the link is called.
     - **The real `ProgramActions` is `PROGRAM_ACTIONS`** (`actions.contract.ts`, 7a-ii), the six
       required members, and `putOn` and `takeOff` since step 15. Not in `actions.ts`: a
       `'use server'` module exports only async functions.
@@ -387,6 +400,14 @@ flowchart LR
       reports the program, then the first athlete id (input order) not among the household's
       athletes, archived ones included (`reportAssignMiss`, one `listHouseholdAthletes` read): an
       archived athlete of this household names nothing outside it, so it is not reported.
+    - **Program order** (15c PR 2) is the one action outside `app/programs/` that reaches
+      `lib/dal/program/`: the day page's `reorderProgramsAction` (`app/p/[profileId]/row-actions.ts`,
+      lane C's module) calls `reorderHouseholdPrograms` and, on success, `refreshAssignment`
+      (`lib/dal/program/revalidate.ts`, shared with Put on and Take off). Today comes from the action,
+      as for Put on. A `not_found` reports the athlete alone (`reportAthleteMiss`, the same athlete
+      probe); an `invalid` reports the first program id that is not the household's
+      (`reportOrderProgramMiss`, `readProgramList` read once: 2 + one query per live athlete, on a refusal only), and a stale list of its own programs
+      reports nothing. The answer is the writer's either way.
     - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
       DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
       editor reads it as a stale page.

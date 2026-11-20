@@ -69,25 +69,36 @@ export async function readProgramList(
 }
 
 /**
- * Each athlete's current programs, keyed by their public id (for the Home tiles, step 7b): every
- * live, not archived athlete of the household is a key, in the order they were made; the value is
- * the programs they are on as of `today` (on it now or starting later), in their own order, by the
- * day page's own rule (`athletesOnPrograms`). An athlete on no program maps to `[]`.
+ * A program an athlete is on, for Home's tile: the contract's ref, and the first and last day of the
+ * row that places it (`CurrentProgram.activeFrom` / `activeTo`), so the tile can say "starts {day}"
+ * for one that begins after today, and "last day today" for one taken off today (FAM-1 15 PR 3),
+ * without a second read. `activeTo` is `null` for an open stretch.
+ */
+export type AthleteProgram = ProgramRef & { activeFrom: string; activeTo: string | null };
+
+/**
+ * Each athlete's current programs, keyed by their public id (for the Home tiles, step 15 PR 3):
+ * every live, not archived athlete of the household is a key, in the order they were made; the value
+ * is the programs they are on as of `today` (on it now or starting later), in their own order, by the
+ * day page's own rule (`athletesOnPrograms`), each with its first and last day. An athlete on no program maps
+ * to `[]`.
  */
 export async function readProgramsByAthlete(
   exec: Executor,
   scope: HouseholdScope,
   today: string,
-): Promise<Map<string, ProgramRef[]>> {
+): Promise<Map<string, AthleteProgram[]>> {
   if (!isoDaySchema.safeParse(today).success) {
     throw new Error('readProgramsByAthlete needs today as an ISO day');
   }
   return new Map(
     (await athletesOnPrograms(exec, scope, today)).map((athlete) => [
       athlete.publicId,
-      athlete.current.map((p) =>
-        programRefSchema.parse({ programPublicId: p.programPublicId, name: p.name }),
-      ),
+      athlete.current.map((p) => ({
+        ...programRefSchema.parse({ programPublicId: p.programPublicId, name: p.name }),
+        activeFrom: p.activeFrom,
+        activeTo: p.activeTo,
+      })),
     ]),
   );
 }

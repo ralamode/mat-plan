@@ -2,7 +2,9 @@
 
 > Backlog: [plan.md](../plan.md) row FAM-1, step 12f of [the FAM-1 plan](./fam-1-family-program.md)
 > (row 12f, `fam-1-family-program.md:633`). Branch for this plan: `docs/fam-1-12f-retire-old-forms-plan`.
-> Lane C builds it. Five code PRs, named **12f PR 1 to 5** here.
+> Five code PRs, named **12f PR 1 to 5** here. **Lane E builds PR 1 and PR 4, lane B builds PR 2, lane S builds PR 3, and
+> lane C builds PR 5** _(lane C's offers, cleared by the board on 2026-11-19 under the maintainer's rule,
+> relayed by the board: "If we get to a point where lanes are sitting dormant, distribute some of the remaining work to them"; PR 2 went to lane B in a second hand-over that night; until then lane C built all five)_.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at the
 > maintainer's request, from lane C's notes. Panelled the same day by four lenses; every finding is
@@ -177,11 +179,36 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 
 ## File-by-file changes
 
-Lane C builds every PR. Files outside lane C's area are marked. Each PR carries its changelog
+**Lane E builds PR 1 and PR 4, lane B builds PR 2, lane S builds PR 3, and lane C builds PR 5** (the
+hand-overs above). The tables below were written with lane C as the builder of all five, and their marks stand
+with one change of reading:
+
+- **PR 1 and PR 4 (lane E).** Every unmarked app file (`app/p/[profileId]/`, `components/`, `lib/`,
+  `test/`) is lane E's guest edit, which lane C reviews. Lane E takes over two clearances the board
+  gave lane C: Q2's, to edit the token preview in PR 1, and Q1's, for PR 4's comment in
+  `ownership.ts` (the board's hand-over, 2026-11-19). PR 4's `packages/db` hunks are still reviewed
+  by lane P.
+- **PR 2 (lane B).** Its files (`lib/entries/activity-totals*`, `app/p/[profileId]/day-nav.tsx`,
+  `lib/constants*`, `scripts/screenshot-ephemeral.ts`, the comment in `use-on-action-success.ts`) are
+  lane B's guest edits, which lane C reviews. Q1's clearance for the comment-only sweeps (the
+  comment in `components/ui/sheet.tsx` among them) passes to lane B with the PR, each owner still
+  reading its hunk. The plan's note on PR 2 meeting lane C's #688 follow-up (Risks) still holds:
+  different lines in the capture script, a plain merge.
+- **PR 3 (lane S).** Its files (`actions.ts`, `actions.registry.ts`, `actions.test.ts`) are lane S's
+  guest edits, which lane C reviews. The table asks lane S to read the `actions.ts` diff, because
+  lane S's four actions share the file: lane S building it meets that. Lane S builds it after its
+  own B2, which adds no gate to the plan but does set when PR 3, and so PR 5, can start.
+
+Files outside lane C's area are marked. Each PR carries its changelog
 fragment, its `docs/status.md` and `docs/roadmap.md` move, and the milestone chart in its description.
 The 400-line target is for code a reviewer must read; each PR says below why its size is acceptable.
 
-### 12f PR 1: the unmounted components and the reads only they used (about 5,600 lines of code deleted)
+### 12f PR 1: the unmounted components and the reads only they used (about 5,600 lines of code deleted; lane E builds it)
+
+**As built (lane E):** merged as #725 (2026-11-19): 28 whole files (5,484 lines) deleted by the plan's
+list, plus the forced edits to the token preview, the containment test and the strength-logging,
+programming and write-path guides. Beyond the plan's wording, `programming.md` also dropped invariants
+3b and 3e, whose only code (`day-role-schedule.ts`) is deleted; the A/B decision stays in ADR 0007.
 
 Waits for a turn in three guides. Starting before B2 merges is cleared by the board (2026-11-19), Q3, if no file
 overlaps B2's. 5,484 of its lines
@@ -196,7 +223,7 @@ files. It cannot be cut finer: the components import each other in one chain.
 | `apps/web/test/prescribed-snapshot-is-contained.test.ts`                 | EDIT   | Forced: one case reads `strength-form-scaffold.ts` (`:41-54`). Delete it. The two scans stay (`:34-39`, `:63` on): they cover every file under `app/` and `components/`, the new day components included.                                                                                                                                                                                                                                                          |
 | `docs/features/strength-logging.md` · `programming.md` · `write-path.md` | EDIT   | Forced: `guides:check` fails on an `owns:` entry that no longer exists (`check-feature-guides.mjs:318-330`). `strength-logging.md` drops eleven `owns:` lines and its form sections and keeps the schemas and the writer; `programming.md` drops `program-reference.tsx`, section 3d (`:136-140`) and the sentence that names `StrengthForm` (`:87`); `write-path.md` owns `lib/dal/` by prefix and drops `getProgramDay`.                                         |
 
-### 12f PR 2: what the forms left behind in surviving files (about 1,260 lines deleted, about 30 added)
+### 12f PR 2: what the forms left behind in surviving files (about 1,260 lines deleted, about 30 added; lane B builds it)
 
 Waits for PR 1. Runs beside PR 3: the two share no file. Nearly all of it is whole functions, whole
 test blocks and whole capture states.
@@ -209,7 +236,7 @@ test blocks and whole capture states.
 | `apps/web/scripts/screenshot-ephemeral.ts`                   | EDIT   | Delete the states for surfaces gone since #418: `calisthenics`, `strength-session`, `strength-amend`, `strength-log-more`, `form-skipped`, `form-sub-failure`, `status-badges`, `form-scaffolded`, `program-collapsed`, `form-bw-warning` (`:397-417`), `form-partial-sets`, `form-partial-blocked`, `form-time-card`, `history-spelled-units` (`:460-468`), with their seeders and interactions. `seedCalisthenics` is the tree's last writer of a ramp target (`:1294-1296`). The script has no test; lane C runs one kept state after. |
 | Comments that name deleted files                             | EDIT   | Lane C's: `app/p/[profileId]/use-on-action-success.ts:14-15`. **Guest edits, comment only, cleared by the board (2026-11-19), Q1:** `components/ui/sheet.tsx:140` (lane B's; it names `STRENGTH_COPY.close`), `bodyweight-section.test.tsx:7` (lane S's), `components/ui/announcer.tsx:8`, `components/theme/theme-toggle.tsx:25` and `.claude/skills/add-server-action/SKILL.md:120` (no lane's). `lib/routine/editor.ts:7` waits for PR 5: `programming.md` owns that folder, and PR 5 already takes that guide's turn.                 |
 
-### 12f PR 3: the three actions (about 1,350 lines deleted, about 45 added)
+### 12f PR 3: the three actions (about 1,350 lines deleted, about 45 added; lane S builds it)
 
 Waits for PR 1 (the forms import the actions). Runs beside PR 2. All of it is in surviving,
 security-relevant files, which is why it is its own PR. About 1,000 of its lines are test cases
@@ -222,21 +249,21 @@ deleted whole.
 | `app/p/[profileId]/actions.test.ts`                    | EDIT   | Three `bindings` and three `validBody` entries (`:216-241`); the helpers `strengthForm`, `checkinForm`, `editForm`; the describes at `:416`, `:751`, `:1020`, `:1114`, `:1185`, `:1412`, `:1448`, `:1492`; the DAL mocks only they used. **Kept and widened:** "declared-day ±1 bound (shared across writers)" (`:1229-1270`) keeps its bodyweight assertions and gains the life form in the same three cases. `logLifeActivitiesAction` bounds the day too (`actions.ts:467`) and has no future-day case today, so the describe would otherwise hold one writer. |
 | `docs/features/write-path.md` · `docs/architecture.md` | EDIT   | The action count and table (`write-path.md:94`, `:741`, `:910-915`); the note at `architecture.md:158-159`.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
-### 12f PR 4: the "This week" card and `householdHasProgram` (about 315 lines deleted, about 15 added)
+### 12f PR 4: the "This week" card and `householdHasProgram` (about 315 lines deleted, about 15 added; lane E builds it)
 
-Waits for PR 1 (`householdHasProgram`'s caller), for B2 on `page.tsx`, and for lane P's review of the
+Waits for PR 1 (`householdHasProgram`'s caller), for B2 on `page.tsx` (B2-ii, since B2 became three PRs in #727), and for lane P's review of the
 `packages/db` hunks. Two of those files are on lane A's list (`fam-1-family-program.md:545-546`); lane
 A's chain is merged, and the board named lane P. Its description records Q5's first read.
 
-| Path                                                                                | Change     | What & why                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/p/[profileId]/page.tsx`                                                        | EDIT       | Drop the two imports (`:17`, `:46`), `localWeekStartIso` from the import at `:15`, `weekStart`, the `Promise.all` (the entries read stands alone) and the card. Its turn on `page.tsx` is after B2 (`fam-1-family-program.md:730`).                                                                                                                                                                                                |
-| `weekly-adherence.tsx` · `lib/dal/adherence.ts` · `lib/entries/adherence.ts` + test | DELETE     | 209 lines. `weeklyAdherenceRows` stays in `packages/db` with its proofs (`verify.ts:1418-1529`): not in the grant.                                                                                                                                                                                                                                                                                                                 |
-| `packages/db/src/queries/program-day.ts`                                            | GUEST EDIT | Delete `householdHasProgram` (`:188-212`) and `programBlockInHousehold` from the import (`:7`). Reword the header (`:9-16`: one read, mutation 55). Patches 03, 11 and 55 hold hunks at lines 1-4, 72 and 103-104 of this file, all above the deletion. Lane P reviews.                                                                                                                                                            |
-| `packages/db/scripts/verify/schema.ts`                                              | GUEST EDIT | Two imports: `:69` loses `householdHasProgram` (`programDayRows` stays), and `:70` goes whole (`householdScopeForScript` is used only inside the deleted proof, at `:1240`). The docblock line (`:127-128`). The proof (`:1232-1279`). Eleven patches hold hunks below it (66, 67, 73, 106, 107, 201 to 206; the first at `:1575`): their lines move up by about 50, and `git apply` places a hunk by its context. Lane P reviews. |
-| `packages/db/scripts/mutations/56-*.{patch,expect}` · `mutations/README.md:107`     | GUEST EDIT | Delete both files. The README row becomes a retired marker in the form of the `120` row at `:165`: `_56`, the same dash, `retired (FAM-1 12f)_`. `mutations-readme.test.ts` reads only rows whose first cell is a patch name in backticks (`:16`), so "every patch file has a row" and "every row names a patch that exists" (`:25-31`) both pass. Lane P reviews.                                                                 |
-| `packages/db/src/writers/ownership.ts`                                              | GUEST EDIT | Comment only (`:280-282`): `programBlockInHousehold`'s consumers no longer include `householdHasProgram`.                                                                                                                                                                                                                                                                                                                          |
-| `docs/features/programming.md` · `write-path.md` · `day-page.md`                    | EDIT       | `programming.md:102-111` and `write-path.md:374` (one legacy read is left); `write-path.md` for the deleted DAL file; `day-page.md:39`.                                                                                                                                                                                                                                                                                            |
+| Path                                                                                | Change     | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/p/[profileId]/page.tsx`                                                        | EDIT       | Drop the two imports (`:17`, `:46`), `localWeekStartIso` from the import at `:15`, `weekStart`, the weekly-card read (`getWeeklyAdherence`) from the `Promise.all`, and the card. **The `Promise.all` itself stays** (lane S's B2 panel, through the board, 2026-11-19): B2 adds a read to it (`dayClearEvents`, the read B1-2 built for B2's banner), and this PR is built on B2's version of the file. Until that correction this row said to drop the `Promise.all` because the entries read would stand alone. Its turn on `page.tsx` is after B2 (the `page.tsx` queue in `fam-1-family-program.md`). |
+| `weekly-adherence.tsx` · `lib/dal/adherence.ts` · `lib/entries/adherence.ts` + test | DELETE     | 209 lines. `weeklyAdherenceRows` stays in `packages/db` with its proofs (`verify.ts:1418-1529`): not in the grant.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `packages/db/src/queries/program-day.ts`                                            | GUEST EDIT | Delete `householdHasProgram` (`:188-212`) and `programBlockInHousehold` from the import (`:7`). Reword the header (`:9-16`: one read, mutation 55). Patches 03, 11 and 55 hold hunks at lines 1-4, 72 and 103-104 of this file, all above the deletion. Lane P reviews.                                                                                                                                                                                                                                                                                                                                    |
+| `packages/db/scripts/verify/schema.ts`                                              | GUEST EDIT | Two imports: `:69` loses `householdHasProgram` (`programDayRows` stays), and `:70` goes whole (`householdScopeForScript` is used only inside the deleted proof, at `:1240`). The docblock line (`:127-128`). The proof (`:1232-1279`). Eleven patches hold hunks below it (66, 67, 73, 106, 107, 201 to 206; the first at `:1575`): their lines move up by about 50, and `git apply` places a hunk by its context. Lane P reviews.                                                                                                                                                                         |
+| `packages/db/scripts/mutations/56-*.{patch,expect}` · `mutations/README.md:107`     | GUEST EDIT | Delete both files. The README row becomes a retired marker in the form of the `120` row at `:165`: `_56`, the same dash, `retired (FAM-1 12f)_`. `mutations-readme.test.ts` reads only rows whose first cell is a patch name in backticks (`:16`), so "every patch file has a row" and "every row names a patch that exists" (`:25-31`) both pass. Lane P reviews.                                                                                                                                                                                                                                         |
+| `packages/db/src/writers/ownership.ts`                                              | GUEST EDIT | Comment only (`:280-282`): `programBlockInHousehold`'s consumers no longer include `householdHasProgram`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `docs/features/programming.md` · `write-path.md` · `day-page.md`                    | EDIT       | `programming.md:102-111` and `write-path.md:374` (one legacy read is left); `write-path.md` for the deleted DAL file; `day-page.md:39`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### 12f PR 5: the routine trim, and `lib/checkins` (about 490 lines deleted, about 165 added)
 

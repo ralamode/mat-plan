@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 01786f5c..858a39ee 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -396,13 +396,13 @@ export async function seedReference(
+ 
+   // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
+   // DO NOTHING skips it (the order A2-ii's fixtures need, spec E4).
+-  const written = await seedCatalog(db, catalog);
+ 
+   // No filter: every seeded movement is offered to the arbiter, which is the whole fix.
+   await db
+     .insert(schema.movements)
+     .values([...MOVEMENT_SEED_ROWS])
+     .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
++  const written = await seedCatalog(db, catalog);
+ 
+   return { ...written, householdRowsOnCatalogSlugs, householdRowsOnSeedSlugs };
+ }

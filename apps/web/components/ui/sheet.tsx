@@ -97,8 +97,8 @@ export type SheetProps = {
    *
    * ⚠️ **A consumer must not point this at a text input on touch.** Focusing a field raises the
    * on-screen keyboard over the list the sheet exists to show (criterion 18). The picker passes its
-   * search ref only when `matchMedia('(pointer: coarse)')` is false, and leaves the default on a
-   * phone.
+   * search ref only when `prefersFineFocus()` (`lib/a11y/pointer.ts`) is true, and leaves the
+   * default on a phone.
    */
   initialFocus?: RefObject<HTMLElement | null>;
   /**
@@ -137,8 +137,7 @@ let openSheets = 0;
  * `Close` was written out three times: the header's ✕ `aria-label`, `FooterFallback`'s button, and
  * the picker's own copy module. A consumer that passes its own `footer` still has to end it with
  * Close (panel 2 · 7), so it needs the same word this file uses, and "the same word" is a constant,
- * not a coincidence. ⚠️ `STRENGTH_COPY.close` in `lib/constants.ts` is a DIFFERENT control — an open
- * toggle whose own docblock explains why it says Close and not Cancel — and stays where it is.
+ * not a coincidence.
  */
 export const SHEET_COPY = { close: 'Close' } as const;
 
