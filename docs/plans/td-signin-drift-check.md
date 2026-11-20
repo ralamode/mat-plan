@@ -1,8 +1,7 @@
 # A weekly check that the live sign-in screen still renders, styled and usable
 
 _Tech debt: "Clerk's browser runtime is fetched from a CDN at a floating major, so nothing in CI sees
-it" (`docs/tech-debt.md`). Status: **plan, reshaped by a five-lens panel (round 1), awaiting the
-maintainer's answers to § Open questions.** No implementation is committed before they are answered._
+it" (`docs/tech-debt.md`). Status: **plan approved** (the maintainer, 2026-11-20; § Decisions), after a five-lens panel._
 
 ## Where this sits
 
@@ -86,7 +85,7 @@ Find out within a week, without anyone having to look, when a new Clerk CDN buil
   - `retries: 1`, with the reason in the config: one network read of a third party.
   - `trace: 'off'` and `screenshot: 'only-on-failure'`, because a trace would carry Clerk's
     `Set-Cookie` for the minted client.
-  - `launchOptions: { chromiumSandbox: true }`, if it launches on the runner (§ Open questions 5).
+  - `launchOptions: { chromiumSandbox: true }`, if it launches on the runner (§ Decisions 5).
 - **The workflow is `.github/workflows/signin-drift.yml`**, with a "NOT A PULL-REQUEST CHECK" header
   like `codeql.yml`'s. It notes GitHub's 60-day auto-disable of schedules on an inactive public repo.
   - **Triggers:**
@@ -209,15 +208,19 @@ Estimated at about 300 lines, plus this plan.
   `script-src-elem`, which would make those two guards vacuous. Unverified; offered to the Tech Debt
   lane with the reviewers' probe.
 
-## Open questions (for the maintainer, through the board)
+## Decisions (the maintainer, 2026-11-20, relayed by the board)
 
-1. **The target:** production, `https://mat-plan.dev` (recommended), with a per-run override?
-2. **The alert:** a GitHub issue on a red run (recommended, as the mutation gate does)?
-3. **How often:** weekly (recommended) or daily?
-4. **AGENTS.md says "never tests against production".** Do you accept this weekly, read-only load of
-   the public sign-in page as a named exception? If yes, that sentence gains it in this PR.
-5. **If Chromium's sandbox will not launch on the runner,** do you accept the unsandboxed browser as a
-   recorded residual in `.github/SECURITY.md`?
+All five went as recommended:
+
+1. **Target:** production, `https://mat-plan.dev`, weekly, with a per-run override ("Production,
+   weekly").
+2. **Alert:** a GitHub issue on a red run ("Open a GitHub issue"), through the bot-author-filtered
+   script.
+3. **Frequency:** weekly.
+4. **Testing production:** AGENTS.md's "never tests against production" gains this weekly read-only
+   `/sign-in` load as its one named exception ("Yes, named exception").
+5. **The sandbox:** if Chromium's sandbox will not launch on the runner, the unsandboxed browser is
+   recorded as a residual in `.github/SECURITY.md` ("Yes, record it").
 
 ## Review-response log (adversarial panel)
 
@@ -236,16 +239,16 @@ Estimated at about 300 lines, plus this plan.
 | S1  | Security (BLOCKING)                     | Third-party text could flow into the write-token job, as shell, outputs or markdown.                                   | **accepted**            | A fixed-text body (run URL plus triage). Nothing leaves the check job. Every value goes through `env:` and `--body-file`.                                                  |
 | S2  | Security (BLOCKING)                     | The extracted lookup is jq-injectable and squattable by title.                                                         | **accepted**            | `--arg` title, bot-author filter, a stubbed self-test with the squat case.                                                                                                 |
 | S3  | Security/Arch                           | A checkout in the write job; unstated permissions; a branch could supply the script.                                   | **accepted**            | Top-level `{}`, per-job least privilege, the default branch's script, sparse, `persist-credentials: false`.                                                                |
-| S4  | Security                                | "Zero risk" overstated: an unsandboxed browser, Clerk mints a client, the 60-day auto-disable.                         | **accepted**            | Stated in Acceptance 6 and Risks. The sandbox is attempted, with Open question 5 if it fails.                                                                              |
+| S4  | Security                                | "Zero risk" overstated: an unsandboxed browser, Clerk mints a client, the 60-day auto-disable.                         | **accepted**            | Stated in Acceptance 6 and Risks. The sandbox is attempted, with § Decisions 5 if it fails.                                                                                |
 | S5  | Security/Privacy                        | The trace artefact could carry Clerk's client cookie on a public repo.                                                 | **accepted**            | `trace: 'off'`, screenshots and text only, 7-day retention, the first artefact grepped.                                                                                    |
 | S6  | Security/Arch/Scope                     | A repo variable hides nothing and removes review from the target.                                                      | **accepted**            | A committed default with a per-run dispatch override.                                                                                                                      |
 | S7  | Security                                | Printed third-party strings can forge workflow commands.                                                               | **accepted**            | `JSON.stringify` on print.                                                                                                                                                 |
 | A1  | Arch/Scope/Security                     | `workflow_dispatch` cannot run before merge; the issue path is unproven.                                               | **accepted**            | A path-filtered `pull_request` trigger runs the check pre-merge. The issue path is proven by the self-test, and after merge by one forced-red dispatch.                    |
 | A2  | Arch/Scope                              | The `ci.yml` edit contradicts "stays out of that queue", can't be exercised, and #724 holds the file.                  | **accepted**            | `ci.yml` is not touched. Adoption is a follow-up.                                                                                                                          |
-| A3  | Arch                                    | AGENTS.md "never tests against production".                                                                            | **open → maintainer**   | Open question 4.                                                                                                                                                           |
+| A3  | Arch                                    | AGENTS.md "never tests against production".                                                                            | **accepted**            | The maintainer approved a named exception (§ Decisions 4), written into that sentence.                                                                                     |
 | A4  | Arch/Reuse                              | Stale "nothing measures the lit card" statements.                                                                      | **accepted (narrowed)** | The comments in `a11y.spec.ts` and `clerk.ts`, plus the tech-debt entry. The runbooks, status and theme.spec mentions are left: they are historical and held by other PRs. |
 | A5  | Arch                                    | SEC-5b's scheduled-workflow conventions (concurrency, `cancel-in-progress: false`, header, `timeout-minutes`).         | **accepted**            | In Design.                                                                                                                                                                 |
-| P1  | Scope                                   | A runbook section and an AGENTS.md CI-checks line cost more than they buy.                                             | **accepted**            | Triage goes in the issue body. AGENTS.md changes only if Open question 4 says so.                                                                                          |
+| P1  | Scope                                   | A runbook section and an AGENTS.md CI-checks line cost more than they buy.                                             | **accepted**            | Triage goes in the issue body. AGENTS.md gains the exception (§ Decisions 4).                                                                                              |
 | P2  | Scope                                   | The branch type and size: about 590 lines as drafted.                                                                  | **accepted**            | Re-cut as `chore/td-signin-drift-check`, at about 300 lines.                                                                                                               |
 | P3  | Scope                                   | Acceptance quoted a row wording that is not in the tree.                                                               | **accepted**            | Marked as relayed. This PR writes the decision into the entry.                                                                                                             |
 | R1  | Reuse                                   | A fourth hand-written CSP directive filter.                                                                            | **accepted**            | There is no directive filter at all (the full list minus one), so there is nothing to extract.                                                                             |

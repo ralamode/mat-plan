@@ -127,7 +127,8 @@ export const CLERK_IMG_ORIGIN = 'https://img.clerk.com';
  *
  * ⚠️ A bare `@layer clerk;` satisfies neither: it makes this the LOWEST layer, which is what shipped
  * from 1a until the card was measured on 2026-11-05. `lib/clerk.test.ts` pins the relative order and
- * was probed RED both ways; nothing else tests that file, and no CI run renders the lit card.
+ * was probed RED both ways; nothing else tests that file. The lit card renders only in the weekly
+ * `signin-drift.yml` run against production, which checks Clerk's styles arrived.
  */
 export const CLERK_CSS_LAYER = 'clerk';
 
@@ -160,7 +161,8 @@ export const CLERK_CSS_LAYER = 'clerk';
  *
  * 🔴 **This pins our INPUT, not the rendered outcome.** clerk-js ships from a CDN at a floating major
  * and is absent from the lockfile (`docs/tech-debt.md`), so a build that changes the button's box
- * model is caught by nothing here — the 32px reading is dated, not guarded.
+ * model is caught by nothing here. `e2e/signin.drift.ts` checks the RENDERED button weekly against
+ * production (`signin-drift.yml`); the 32px reading is dated, not guarded.
  */
 export const SIGN_IN_APPEARANCE = {
   elements: {

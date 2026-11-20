@@ -454,6 +454,14 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 
 ### Clerk's browser runtime is fetched from a CDN at a floating major, so nothing in CI sees it (found 2026-10-16, AUTH-1 1a)
 
+- **Decided, and now checked weekly** _(maintainer, 2026-11-19: "Don't pin; check it periodically")_.
+  Pinning rolled production back five releases and would end Clerk's automatic security fixes, so
+  sign-in UI drift is **accepted**. `.github/workflows/signin-drift.yml` loads production `/sign-in`
+  every week with the production CSP live (`apps/web/e2e/signin.drift.ts`): the card renders, the
+  CSP refuses nothing, Clerk's styles arrived, our 44px key still wins, one `<h1>`, no overflow at
+  360px, 44px controls and links, axe A/AA. A red run opens one issue. Plan:
+  [td-signin-drift-check.md](./plans/td-signin-drift-check.md). The supply-chain half below stands:
+  the check sees the screen, not the code.
 - **What & why:** `@clerk/nextjs@7.9.22` is pinned in `pnpm-lock.yaml`, but the code that actually
   renders the sign-in screen is **not in the lockfile at all**. `@clerk/shared`'s
   `clerkJSScriptUrl` / `clerkUIScriptUrl` build
