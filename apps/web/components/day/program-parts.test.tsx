@@ -21,7 +21,7 @@ import {
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { lastDayText } from '@/components/program-builder/builder-text';
@@ -34,10 +34,18 @@ import { athleteNameOf, PROGRAM_COPY } from './day-copy';
 import { restNotice } from './day-notices';
 import { NotOnAProgram } from './not-on-a-program';
 import { ProgramLine } from './program-line';
-import { PROGRAM_ORDER_SHEET_ID } from './program-order-dialog';
+import { loadProgramOrderDialog } from './program-order-button';
+import { PROGRAM_ORDER_SHEET_ID } from './program-order-id';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+
+// The dialog's chunk is loaded on demand (program-order-button.tsx). Loaded up front, a tap opens it
+// in the same act, as it does in a browser once the idle prefetch has run; the lazy path itself is
+// program-order-button.test.tsx's.
+beforeAll(async () => {
+  await loadProgramOrderDialog();
+});
 
 afterEach(() => {
   cleanup();

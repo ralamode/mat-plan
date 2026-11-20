@@ -6,7 +6,7 @@ import { NAME_WRAP_CLASS, QUIET_LINK_CLASS, VALUE_JOINER } from '@/lib/constants
 import { cn } from '@/lib/utils';
 
 import { PROGRAM_COPY } from './day-copy';
-import { ProgramOrderButton } from './program-order-dialog';
+import { ProgramOrderButton } from './program-order-button';
 
 /**
  * The programs of the viewed day, and Program order (FAM-1 step 13d; plan D8; 15c, D47 and D49).

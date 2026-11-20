@@ -19,57 +19,20 @@ import { moveDown, moveUp } from '@/lib/routine/editor';
 import { cn } from '@/lib/utils';
 
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
+import { PROGRAM_ORDER_SHEET_ID } from './program-order-id';
 
 type Program = DayPlan['currentPrograms'][number];
 type Move = -1 | 1;
 type Reorder = NonNullable<DayActions['reorderPrograms']>;
 
-/** The dialog's sheet id: its status region's id is derived from it (`sheetStatusId`). */
-export const PROGRAM_ORDER_SHEET_ID = 'program-order';
-
 /** Refusals that mean the athlete's programs changed elsewhere: retrying cannot help, re-reading can. */
 const STALE_REFUSALS: readonly string[] = [PROGRAM_REFUSAL.invalid, PROGRAM_REFUSAL.not_found];
 
 /**
- * The Program order button and its dialog (FAM-1 step 13d). The client half of `ProgramLine`, so the
- * line itself renders on the server and the dialog's code loads only where it can be used.
- *
- * `canOrder` false (fewer than two programs stay, D47) hides the button, **never the dialog**: a
- * re-read that leaves one staying while the dialog is open keeps it up with its message, and Done
- * then returns focus through the sheet's fallback (15c plan, UX-B1).
- */
-export function ProgramOrderButton({
-  plan,
-  reorder,
-  canOrder,
-}: {
-  plan: DayPlan;
-  reorder: Reorder;
-  canOrder: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  return (
-    <>
-      {canOrder ? (
-        <Button ref={button} type="button" variant="outline" onClick={() => setOpen(true)}>
-          {PROGRAM_COPY.order}
-        </Button>
-      ) : null}
-      <ProgramOrderDialog
-        plan={plan}
-        reorder={reorder}
-        open={open}
-        onOpenChange={setOpen}
-        returnFocusTo={button}
-        canOrder={canOrder}
-      />
-    </>
-  );
-}
-
-/**
  * The athlete's program order (plan D8: the order is the author's, never a label's).
+ *
+ * **Loaded on demand** by `ProgramOrderButton` (`program-order-button.tsx`), so nothing imports this
+ * module eagerly; its sheet id lives in `program-order-id.ts` for that reason.
  *
  * ↑ and ↓ per program, as the week editor has (UX panel: drag fights the sheet's scroll lock). **Each
  * tap saves**, with the whole order at once (`ProgramOrder` is a permutation of `currentPrograms`);
