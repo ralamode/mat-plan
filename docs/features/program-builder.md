@@ -438,8 +438,9 @@ flowchart LR
       (maintainer, 2026-11-17: "Show all 35 until reset", which suspends "only ones with library
       data": hidden built-ins made search say a movement did not exist that `newItem` then
       selected), and since CAT-3 P11-ii-a every library row. Lane P's read builds each one
-      (`catalogArmOption`): the library's taxonomy on the DATABASE ROW's name, tracking type, unit and
-      bodyweight flag, since the row is what a save and a log use (board, 2026-11-17), and its aliases
+      (`catalogArmOption`): the taxonomy on the DATABASE ROW's name, tracking type, unit and
+      bodyweight flag (a library row's from `movement_equipment` and `movement_muscles` since P11-ii-b,
+      an old built-in's from its library entry), since the row is what a save and a log use (board, 2026-11-17), and its aliases
       joined with the library's, so `newItem` matches over exactly the aliases the picker shows (K23).
       `pickerOptionOf` only copies the option field by field. One without an entry is `BuiltInWithoutLibrary`
       (`lib/movements/movement-option.ts`): the row with no taxonomy at all, so no filter passes it
@@ -447,6 +448,10 @@ flowchart LR
       rows the library has, and drop that arm.
 
 ## Traps
+
+- **Links on the builder's screens are measured by the suite's one link check**,
+  `expectLinkTargets(page.getByRole('main'), context)` in `e2e/a11y-checks.ts`, which
+  `program-builder.a11y.spec.ts` calls; there is no builder-local copy.
 
 - **The sheet pops its history entry on close, and in jsdom that `popstate` lands in the next
   test**, closing its sheet. A test file that opens a sheet stubs `history.back` (as

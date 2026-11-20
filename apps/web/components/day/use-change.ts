@@ -147,6 +147,36 @@ export function useChange(
     setBaseline(null);
     setLine(null);
   }
+  // Another phone's Change to this entry (the same entry, new numbers): a drafted field that
+  // equalled what was stored was not an edit, so it is dropped, field by field, never turned into
+  // one that a blur would send over that phone's number ("Not saved. Was 35 lb" for a "30" nobody
+  // meant). A field really typed stays. Same entry only: a new one already dropped the draft above.
+  // (12c-iii follow-up; the phantom predates the fold, #462.)
+  const values = entry?.values ?? null;
+  const [seenValues, setSeenValues] = useState(values);
+  if (values !== seenValues) {
+    setSeenValues(values);
+    if (
+      entryId === seenEntry &&
+      draft !== null &&
+      seenValues &&
+      values &&
+      !sameValues(values, seenValues)
+    ) {
+      // A failed save's "Couldn’t save. Still 27.5 lb" names what is no longer stored: it gives way
+      // to the draft's own "Not saved. Was 35 lb". Only a failed save (`counts`): a Reload notice
+      // leaves no draft, and a failed Undo's draft (typed back) is no edit, so it is dropped below
+      // and the line block clears its message.
+      if (r.error?.write === 'amend' && r.error.counts) r.clearError();
+      const was = textOf(item, seenValues);
+      const drafted = Object.keys(draft) as RowField[];
+      const typed = drafted.filter((f) => draft[f] !== was[f]);
+      if (typed.length === 0) setDraft(null);
+      else if (typed.length < drafted.length) {
+        setDraft(Object.fromEntries(typed.map((f) => [f, draft[f]])) as Partial<RowText>);
+      }
+    }
+  }
   // A row that stops being changeable (the day closed), or whose typed field stops being one (its
   // item's unit changed under it, so the load is text now: 12d-iii), drops what was typed.
   if (draft !== null && (Object.keys(draft) as RowField[]).some((f) => !fields.includes(f))) {
@@ -178,14 +208,15 @@ export function useChange(
   if (!dirty && r.error?.write === 'amend' && r.error.counts) r.clearError();
   const shownLine = editable && !dirty ? line : null;
 
-  // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered).
+  // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered). Its
+  // own key: the row's message reports under `rowKey`, and its cleanup must not end this one's.
   const { setRowBusy } = day;
-  const { rowKey } = r;
+  const changeKey = `${r.rowKey}/change`;
   useEffect(() => {
     if (!dirty) return;
-    setRowBusy(rowKey, true);
-    return () => setRowBusy(rowKey, false);
-  }, [dirty, rowKey, setRowBusy]);
+    setRowBusy(changeKey, true);
+    return () => setRowBusy(changeKey, false);
+  }, [dirty, changeKey, setRowBusy]);
 
   function clearChangeError() {
     if (r.error?.write === 'amend') r.clearError();

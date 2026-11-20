@@ -55,7 +55,7 @@ test('the program preview lists every screen × fixture, as tappable links', asy
   expect(await links.evaluateAll((all) => all.map((a) => a.getAttribute('href')))).toEqual(
     entries.map(previewHref),
   );
-  await expectLinkTargets(page, 'program preview index');
+  await expectLinkTargets(page.getByRole('main'), 'program preview index');
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByRole('main')).toHaveCount(1);
   await expectNoAxeViolations(page, 'program preview index');
@@ -81,7 +81,7 @@ test('every program preview state renders and meets the a11y bar at 360px', asyn
         await expectNoAxeViolations(page, label);
         // A stub has no controls yet; a filled-in screen's are measured from the day it has them.
         await expectTapTargets(page, label, { expectControls: false });
-        await expectLinkTargets(page, label);
+        await expectLinkTargets(page.getByRole('main'), label);
         await expectNoHorizontalOverflow(page, label);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
