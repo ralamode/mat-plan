@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { DoneTick } from '@/components/ui/done-tick';
 import { LOGGED_ROW_CLASS, LOGGED_SR_LABEL } from '@/lib/constants';
 
 /**
@@ -27,12 +28,7 @@ export function LoggedValueRow({
     <div className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${LOGGED_ROW_CLASS}`}>
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-base font-medium tabular-nums">
-          <span
-            aria-hidden="true"
-            className="bg-done text-done-foreground inline-flex size-6 shrink-0 items-center justify-center rounded-full text-sm"
-          >
-            ✓
-          </span>
+          <DoneTick />
           <span className="sr-only">{LOGGED_SR_LABEL} </span>
           {children}
         </p>
