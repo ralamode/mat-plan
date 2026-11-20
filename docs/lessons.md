@@ -774,6 +774,13 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   wrongly anyway. When a convention keeps failing, the next version of it is a script with a
   self-test, not a better-worded paragraph.
 
+  ⚠️ **`pnpm probe` cannot restore an UNTRACKED file** (FAM-1 15c follow-up, 2026-11-20). Its
+  snapshot, `git stash create`, holds tracked paths only, so a probe aimed at a new file never
+  `git add`ed mutates it and has nothing to read it back from: five mutations stayed in a new
+  component, and the probes after them reported red baselines and missing literals. → **Commit a new
+  file (or at least `git add` it) before probing it**, and after a probe batch check `git status`
+  for the probed file before trusting the next result.
+
 ## Guards that pass while guarding nothing
 
 - 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
