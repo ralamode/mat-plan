@@ -1,6 +1,12 @@
 import {
   catalogOptionOf,
+  equipmentInOrder,
+  equipmentSchema,
+  modalitySchema,
   movementNameKey,
+  movementPatternSchema,
+  muscleSchema,
+  musclesInOrder,
   type CatalogMovement,
   type CatalogOptionTaxonomy,
   type MovementPickerEntry,
@@ -10,10 +16,11 @@ import {
 } from '@mat-plan/shared';
 
 /**
- * The library's taxonomy on a catalog-arm option (CAT-3 P11): from the library entry on the row's slug
- * in P11-ii-a, from the tables in P11-ii-b. **Present exactly when the row has a library entry**, and
- * `null` otherwise, never a placeholder: an empty `equipment` MEANS "No equipment"
- * (`apps/web/lib/movements/movement-option.ts`'s 🔴).
+ * The taxonomy on a catalog-arm option (CAT-3 P11). **A catalog row's comes from the tables**
+ * (P11-ii-b: `modality` and `pattern` from `movements`, the rest from `movement_equipment` and
+ * `movement_muscles`, assembled by `catalogTaxonomyOf`). **An old built-in's comes from the library
+ * entry on its slug**, or it has none. `null` means none, never a placeholder: an empty `equipment`
+ * MEANS "No equipment" (`apps/web/lib/movements/movement-option.ts`'s 🔴).
  */
 export type CatalogArmTaxonomy = Pick<
   CatalogOptionTaxonomy,
@@ -51,6 +58,84 @@ export function joinAliases(...lists: readonly (readonly string[])[]): string[] 
   });
 }
 
+/** One join row as `catalogTaxonomyRows` returns it: the movement's internal id and a code, unparsed. */
+export type CatalogJoinRow = { readonly movementId: number; readonly code: string };
+
+/**
+ * The raw join rows for the listed catalog ids (`catalogTaxonomyRows`, P11-ii-b (b2)). The primary
+ * muscle and the secondaries are separate reads, never one read ordered "by role".
+ */
+export type CatalogTaxonomyRows = {
+  readonly equipment: readonly CatalogJoinRow[];
+  readonly primaryMuscles: readonly CatalogJoinRow[];
+  readonly secondaryMuscles: readonly CatalogJoinRow[];
+};
+
+/** A listed catalog row's own taxonomy columns, unparsed, with the internal id the joins key on. */
+export type CatalogTaxonomyRow = {
+  readonly id: number;
+  readonly modality: string | null;
+  readonly pattern: string | null;
+};
+
+/**
+ * 🔴 **A catalog row's taxonomy, from the tables** (CAT-3 P11-ii-b; plan
+ * `docs/plans/cat-3-p11-ii-option-taxonomy.md`, (b1)–(b4)). Pure: the read hands it the listed catalog
+ * rows and their join rows, and it returns each row's taxonomy by internal id.
+ *
+ * - **(b2) A join row for an id not listed THROWS.** `catalogTaxonomyRows` reads listed ids only, so a
+ *   stray row means the read's filter broke, and is never attached to an option or silently dropped.
+ * - **(b3) Order:** equipment and secondary muscles in the vocabulary's order (`equipmentInOrder`,
+ *   `musclesInOrder`; spec K31), as `catalogOptionOf` lists an entry's. The tables keep no order.
+ * - **(b4) Every value is parsed** (`modalitySchema`, `movementPatternSchema`, `equipmentSchema`,
+ *   `muscleSchema`), as the read parses a unit. The foreign keys and the modality CHECK hold every code,
+ *   so a failure means a code left the shared vocabulary while rows still hold it, which A3 must not do.
+ *   A second primary muscle throws too (the one-primary index forbids it).
+ */
+export function catalogTaxonomyOf(
+  listed: readonly CatalogTaxonomyRow[],
+  rows: CatalogTaxonomyRows,
+): Map<number, CatalogArmTaxonomy> {
+  const ids = new Set(listed.map((row) => row.id));
+  const byId = <T>(join: readonly CatalogJoinRow[], what: string, parse: (code: string) => T) => {
+    const out = new Map<number, T[]>();
+    for (const row of join) {
+      if (!ids.has(row.movementId))
+        throw new Error(
+          `catalogTaxonomyOf: a ${what} row for movement ${row.movementId}, which the read did not list`,
+        );
+      out.set(row.movementId, [...(out.get(row.movementId) ?? []), parse(row.code)]);
+    }
+    return out;
+  };
+  const equipment = byId(rows.equipment, 'movement_equipment', (c) => equipmentSchema.parse(c));
+  const primary = byId(rows.primaryMuscles, 'primary movement_muscles', (c) =>
+    muscleSchema.parse(c),
+  );
+  const secondary = byId(rows.secondaryMuscles, 'secondary movement_muscles', (c) =>
+    muscleSchema.parse(c),
+  );
+  return new Map(
+    listed.map((row) => {
+      const primaries = primary.get(row.id) ?? [];
+      if (primaries.length > 1)
+        throw new Error(
+          `catalogTaxonomyOf: movement ${row.id} has ${primaries.length} primary muscles`,
+        );
+      return [
+        row.id,
+        {
+          modality: modalitySchema.parse(row.modality),
+          pattern: row.pattern === null ? null : movementPatternSchema.parse(row.pattern),
+          equipment: equipmentInOrder(equipment.get(row.id) ?? []),
+          primaryMuscle: primaries[0] ?? null,
+          secondaryMuscles: musclesInOrder(secondary.get(row.id) ?? []),
+        },
+      ];
+    }),
+  );
+}
+
 /**
  * 🔴 **The one mapping from a catalog-arm row to its option** (CAT-3 P11-ii-a; plan
  * `docs/plans/cat-3-p11-ii-option-taxonomy.md`, Amendment 1, A1.2). Pure, so its four cases are tested
@@ -60,8 +145,11 @@ export function joinAliases(...lists: readonly (readonly string[])[]): string[] 
  * | --- | --- | --- |
  * | old built-in | yes | the row's identity; the const's aliases joined with the entry's; the entry's taxonomy, supervision and `hasInstructions`; the const's `group` |
  * | old built-in | no | the row's identity; the const's aliases; no taxonomy (K22); the const's `group` |
- * | catalog row | yes | `catalogOptionOf(entry)` with the row's identity written over it; no `group` |
- * | catalog row | no | the row's identity; no aliases, no supervision, no instructions, no taxonomy; listed, never dropped (K22) |
+ * | catalog row | yes | `catalogOptionOf(entry)` with the row's identity written over it, and **the tables' taxonomy**; no `group` |
+ * | catalog row | no | the row's identity; no aliases, no supervision, no instructions; **the tables' taxonomy**; listed, never dropped (K22) |
+ *
+ * **Which rows are catalog rows is the read's call** (`movementIsCatalog()`, selected as a column): it
+ * passes `tables` for exactly those, so an old built-in is never given the tables' (empty) answer.
  *
  * **The row's identity always wins** (name, tracking type, unit, bodyweight flag): the row is what a
  * save, a log and `newItem` use, so the picker must never promise a type the save then reads
@@ -72,6 +160,8 @@ export function catalogArmOption(
   row: CatalogArmRow,
   pickerEntry: MovementPickerEntry | undefined,
   libraryEntry: CatalogMovement | undefined,
+  /** A catalog row's taxonomy from the tables (`catalogTaxonomyOf`); `undefined` for an old built-in. */
+  tables?: CatalogArmTaxonomy,
 ): CatalogArmOption {
   const fromLibrary = libraryEntry && catalogOptionOf(libraryEntry, row.publicId);
   return {
@@ -84,15 +174,17 @@ export function catalogArmOption(
     owner: 'catalog',
     ...(pickerEntry ? { group: pickerEntry.group } : {}),
     aliases: joinAliases(pickerEntry?.aliases ?? [], fromLibrary?.aliases ?? []),
-    taxonomy: fromLibrary
-      ? {
-          modality: fromLibrary.modality,
-          pattern: fromLibrary.pattern,
-          equipment: fromLibrary.equipment,
-          primaryMuscle: fromLibrary.primaryMuscle,
-          secondaryMuscles: fromLibrary.secondaryMuscles,
-        }
-      : null,
+    taxonomy:
+      tables ??
+      (fromLibrary
+        ? {
+            modality: fromLibrary.modality,
+            pattern: fromLibrary.pattern,
+            equipment: fromLibrary.equipment,
+            primaryMuscle: fromLibrary.primaryMuscle,
+            secondaryMuscles: fromLibrary.secondaryMuscles,
+          }
+        : null),
     supervision: fromLibrary?.supervision ?? null,
     hasInstructions: fromLibrary?.hasInstructions ?? false,
   };
