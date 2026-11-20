@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 
 import {
   existingItem,
-  MAX_HOUSEHOLD_ITEMS,
+  householdItemsFull,
   movementSlug,
   newItemSchema,
   PROGRAM_REFUSAL,
@@ -80,14 +80,23 @@ async function addOrSelect(
   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
   await setLocalLockTimeout(exec);
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
-  // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
-  // count below never runs without the lock.
+  // unwrapped here. No row means the household is gone: `not_found`, so the count below never runs
+  // without the lock.
+  //
+  // 🔴 **`FOR KEY SHARE` on the household row: an erasure mid-call answers `not_found`, never a 23503.**
+  // The erasure core locks the household `FOR UPDATE` before it deletes it (`erasure/erase.ts`). A plain
+  // read would see the row the erasure is about to delete, and the insert below would then fail its
+  // foreign key once the erasure commits. With the row lock this read waits for the erasure; under READ
+  // COMMITTED it re-checks the row, finds it gone, and returns nothing. No deadlock: the core never takes
+  // the advisory lock below, and this holds nothing the core waits on. The wait is bounded by the
+  // `lock_timeout` above, so an erasure slower than that answers `55P03` instead.
   const locked = await exec
     .select({
       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdItems}, hashint8(${schema.households.id}))`,
     })
     .from(schema.households)
-    .where(householdRowIs(scope));
+    .where(householdRowIs(scope))
+    .for('key share');
   if (locked.length !== 1) return refuse(PROGRAM_REFUSAL.not_found);
 
   const options = await movementOptions(exec, scope, library);
@@ -126,8 +135,7 @@ async function addOrSelect(
 
   // The household's own items, as the picker lists them (live, not shadowed by a catalog item):
   // the fake's count, from the list already read under the lock.
-  const own = options.filter((option) => option.owner !== 'catalog').length;
-  if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+  if (householdItemsFull(options)) return refuse(PROGRAM_REFUSAL.limit_reached);
 
   const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);
   const [row] = await exec
