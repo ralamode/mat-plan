@@ -262,7 +262,11 @@ describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to
   it('hairlines miss SC 1.4.11 (3:1) in both themes — 1.26:1 light, 1.32:1 dark', () => {
     // Non-text contrast, which axe does not check at all. Recorded because "the dark palette passed
     // axe" must not be read as "the dark palette is fine".
-    expect(ratioOf(root['border']!, root['background']!)!).toBeLessThan(AA_LARGE);
-    expect(ratioOf(dark['border']!, dark['card']!, dark['background']!)!).toBeLessThan(AA_LARGE);
+    const light = ratioOf(root['border']!, root['background']!)!;
+    const darkRatio = ratioOf(dark['border']!, dark['card']!, dark['background']!)!;
+    expect(light).toBeCloseTo(1.26, 1);
+    expect(darkRatio).toBeCloseTo(1.32, 1);
+    expect(light).toBeLessThan(AA_LARGE);
+    expect(darkRatio).toBeLessThan(AA_LARGE);
   });
 });

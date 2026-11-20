@@ -169,5 +169,5 @@ text-destructive-foreground`, 4.76:1 light / 6.19:1 dark) is for the one button 
   browser composites them (gamma-encoded sRGB); they are not restated here.
 
 ⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`, **except
-`contrast.ts` and `css-block.ts`**, which `app/done-tokens.test.ts` imports; that PR moves them to
-`lib/` rather than deleting the pins with them.
+`contrast.ts` (with its `contrast.test.ts`) and `css-block.ts`**, which `app/done-tokens.test.ts`
+imports; that PR moves them to `lib/` rather than deleting the pins with them.
