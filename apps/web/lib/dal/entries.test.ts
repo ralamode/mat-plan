@@ -1,4 +1,4 @@
-import { ENTRY_STATUS, TRACKING_TYPE } from '@mat-plan/shared';
+import { ENTRY_STATUS, PROFILE_NOT_FOUND, TRACKING_TYPE } from '@mat-plan/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
@@ -154,7 +154,7 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
     // The profile resolve is the FIRST query after the households probe, and the only one that can
     // run: the recording pool answers it with zero rows, so the writer throws before the INSERT.
     await expect(logCheckinEntries({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS })) //
-      .rejects.toThrow('Profile not found');
+      .rejects.toThrow(PROFILE_NOT_FOUND);
     const resolve = queryMatching(recording, /from "profiles"/);
     const where = whereOf(resolve);
     expect(where).toContain('"profiles"."public_id" = $');
@@ -175,7 +175,7 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
     const { logCheckinEntries: scoped } = await import('./entries');
     await expect(
       scoped({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS }),
-    ).rejects.toThrow('Profile not found');
+    ).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(dark.queries.filter((q) => /from "profiles"/.test(q.text))).toEqual([]);
     vi.doUnmock('./db');
     vi.resetModules();

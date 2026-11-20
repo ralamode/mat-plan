@@ -186,10 +186,10 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
      * ⚠️ **Nothing else measures this.** axe has no non-text-contrast rule, so neither the
      * `/design/tokens` scan nor the route scans in `e2e/a11y.spec.ts` would notice.
      *
-     * ⚠️ **An alpha token is rejected outright rather than measured**, because `contrast.ts`'s
-     * `over()` composites alpha in **linear light** while a browser composites in gamma-encoded sRGB
-     * (`docs/tech-debt.md`) — so a measured answer for a translucent border would not be the one a
-     * browser draws. An opaque token makes that model moot, which is why the tile uses one.
+     * ⚠️ **An alpha token is rejected outright rather than measured.** `contrast.ts`'s `over()` now
+     * composites as a browser does, in gamma-encoded sRGB (it reproduces the 1.93:1 / 2.35:1 above), so
+     * a translucent border could be measured honestly; the tile keeps an opaque token anyway, so its
+     * contrast does not depend on the surface it sits on.
      */
     it('the add-athlete tile border clears the non-text bar, with the token taken from its source', () => {
       const source = readFileSync(
@@ -204,7 +204,7 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
       expect(token, 'add-athlete-tile.tsx names no border token beside border-dashed').toBeTruthy();
       expect(
         token,
-        `a translucent border cannot be measured honestly — see this test's docblock`,
+        `the tile's border must be an opaque token, so its contrast does not depend on its surface — see this test's docblock`,
       ).not.toContain('/');
       const value = t[token as never];
       expect(value, `${token} is not a palette token`).toBeTruthy();
@@ -227,9 +227,10 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
  * has been a solid fill since V1-9b B2-prep, pinned in `app/destructive-tokens.test.ts`), and none
  * puts `text-muted-foreground` on `bg-muted`.
  *
- * ⚠️ The two tint figures may be wrong: `withAlpha` blends in linear light, browsers in gamma space,
- * where the same pair measures about 3.99 light / 4.63 dark (`status-line.tsx` records a measured
- * 3.97:1). UI-3 re-measures them; nothing restates them elsewhere. The preview page deliberately does NOT render either pair — rendering them would
+ * The tint figure is composited as a browser draws it (`over()`, gamma-encoded sRGB; `status-line.tsx`
+ * records a measured 3.97:1 for the same red). The dark-mode 20% tint pinned here until 2026-11-20 was
+ * an artefact of blending in linear light: drawn as a browser draws it, it clears AA at 4.63:1, so its
+ * row is gone. The preview page deliberately does NOT render either pair — rendering them would
  * redden the gate over a pre-existing defect this PR is not allowed to fix (changing `--destructive`
  * or `--muted` would change the live app's appearance, which UI-4 promised not to do).
  *
@@ -246,7 +247,7 @@ describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to
     expect(ratio).toBeLessThan(AA_NORMAL);
   });
 
-  it('red text on a 10% red tint is 4.39:1 in light mode (needs 4.5)', () => {
+  it('red text on a 10% red tint is 3.99:1 in light mode (needs 4.5)', () => {
     // The old `destructive` button's look (`bg-destructive/10 text-destructive`), no longer the
     // button: the text sits on a 10% tint of itself over the page background. A UI-3 input.
     const ratio = ratioOf(
@@ -254,23 +255,18 @@ describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to
       withAlpha(root['destructive']!, 10),
       root['background']!,
     )!;
-    expect(ratio).toBeCloseTo(4.39, 1);
+    expect(ratio).toBeCloseTo(3.99, 1);
     expect(ratio).toBeLessThan(AA_NORMAL);
   });
 
-  it('…and on a 20% tint, 3.04:1 in dark mode, on a card', () => {
-    const ratio = ratioOf(
-      dark['destructive']!,
-      withAlpha(dark['destructive']!, 20),
-      dark['card']!,
-    )!;
-    expect(ratio).toBeLessThan(AA_NORMAL);
-  });
-
-  it('hairlines miss SC 1.4.11 (3:1) in both themes — 1.26:1 light, 2.69:1 dark', () => {
+  it('hairlines miss SC 1.4.11 (3:1) in both themes — 1.26:1 light, 1.32:1 dark', () => {
     // Non-text contrast, which axe does not check at all. Recorded because "the dark palette passed
     // axe" must not be read as "the dark palette is fine".
-    expect(ratioOf(root['border']!, root['background']!)!).toBeLessThan(AA_LARGE);
-    expect(ratioOf(dark['border']!, dark['card']!, dark['background']!)!).toBeLessThan(AA_LARGE);
+    const light = ratioOf(root['border']!, root['background']!)!;
+    const darkRatio = ratioOf(dark['border']!, dark['card']!, dark['background']!)!;
+    expect(light).toBeCloseTo(1.26, 1);
+    expect(darkRatio).toBeCloseTo(1.32, 1);
+    expect(light).toBeLessThan(AA_LARGE);
+    expect(darkRatio).toBeLessThan(AA_LARGE);
   });
 });
