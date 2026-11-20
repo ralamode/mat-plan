@@ -3,14 +3,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import { movementOptions, type MovementOption } from '@mat-plan/db';
-import {
-  catalogHowToOf,
-  catalogOptionOf,
-  movementNameKey,
-  uuidSchema,
-  type CatalogHowTo,
-  type CatalogMovement,
-} from '@mat-plan/shared';
+import { catalogHowToOf, uuidSchema, type CatalogHowTo } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 
 import type { MovementOptionDTO, MovementPickerData } from '@/lib/movements/movement-option';
@@ -30,12 +23,11 @@ import { quietDbErrors } from '../quiet-db-errors';
  *   without an entry is `BuiltInWithoutLibrary`: no taxonomy, no "How to", passes no filter.
  *   TODO(CAT-3 chunk R, the fresh start): the library replaces the old catalog; list only rows the
  *   library has, and drop that arm.
- * - **A listed built-in is the library's taxonomy on the DATABASE ROW's identity**
- *   (`pickerOptionOf`): its name, tracking type, unit and bodyweight flag are the row's, because the
- *   row is what a save, a log and `newItem` use; the screen must never promise a type the save then
- *   reads differently (board, 2026-11-17: Sled push and Pallof press disagree today). The library
- *   gives what P11-i names: the taxonomy, the supervision label, whether it has instructions, and
- *   its aliases, joined with the row's own.
+ * - **A listed row is the library's taxonomy on the DATABASE ROW's identity**, built by the read
+ *   (`catalogArmOption`, `packages/db`, CAT-3 P11-ii-a): its name, tracking type, unit and bodyweight
+ *   flag are the row's, because the row is what a save, a log and `newItem` use (board, 2026-11-17:
+ *   Sled push and Pallof press disagree today). This module only copies the option, so `newItem`
+ *   and the picker match over the same aliases (K23).
  * - 🔴 **The slug stops here**: it is how the entry is found, and no option carries it
  *   (`picker.test.ts` pins the keys).
  *
@@ -43,26 +35,10 @@ import { quietDbErrors } from '../quiet-db-errors';
  * `getWorkoutDraft` is.
  */
 
-/** The library's entries by slug, built once. */
-const LIBRARY: ReadonlyMap<string, CatalogMovement> = new Map(
-  CATALOG_MOVEMENTS.map((entry) => [entry.slug, entry]),
-);
-
-/** Every alias once, by the picker's "same name" key, the row's first. */
-function joinAliases(...lists: readonly (readonly string[])[]): string[] {
-  const seen = new Set<string>();
-  return lists.flat().filter((alias) => {
-    const key = movementNameKey(alias);
-    if (key === '' || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 /**
- * One row as the picker's option. Built
- * field by field, so a field `catalogOptionOf` or the read gains later does not reach the client
- * by accident.
+ * One row as the picker's option: a field-by-field copy of what the read built (`catalogArmOption` in
+ * `packages/db`, which owns the mapping since CAT-3 P11-ii-a), so a field the read gains later does not
+ * reach the client by accident, and the slug never does.
  */
 export function pickerOptionOf(row: MovementOption): MovementOptionDTO {
   const identity = {
@@ -73,24 +49,24 @@ export function pickerOptionOf(row: MovementOption): MovementOptionDTO {
     isBodyweight: row.isBodyweight,
   };
   if (row.owner === 'household') return { ...identity, owner: 'household' };
-  const entry = LIBRARY.get(row.slug);
-  // ⏳ Until the fresh start: the row as it is, with no taxonomy (never a placeholder one).
-  if (!entry) return { ...identity, owner: 'catalog', group: row.group, aliases: [...row.aliases] };
-  const fromLibrary = catalogOptionOf(entry, row.publicId);
+  const group = row.group === undefined ? {} : { group: row.group };
+  // ⏳ Until the fresh start: a row with no library entry is listed with no taxonomy (never a
+  // placeholder one), so it shows how it is logged and passes no filter (K22).
+  if (row.taxonomy === null) {
+    return { ...identity, owner: 'catalog', ...group, aliases: [...row.aliases] };
+  }
   return {
     ...identity,
     owner: 'catalog',
-    group: row.group,
-    // The row's aliases are the server's (`newItem` matches over them); the library's join them, so
-    // what the picker withholds is always at least what the server would select.
-    aliases: joinAliases(row.aliases, fromLibrary.aliases),
-    modality: fromLibrary.modality,
-    pattern: fromLibrary.pattern,
-    equipment: fromLibrary.equipment,
-    primaryMuscle: fromLibrary.primaryMuscle,
-    secondaryMuscles: fromLibrary.secondaryMuscles,
-    supervision: fromLibrary.supervision,
-    hasInstructions: fromLibrary.hasInstructions,
+    ...group,
+    aliases: [...row.aliases],
+    modality: row.taxonomy.modality,
+    pattern: row.taxonomy.pattern,
+    equipment: [...row.taxonomy.equipment],
+    primaryMuscle: row.taxonomy.primaryMuscle,
+    secondaryMuscles: [...row.taxonomy.secondaryMuscles],
+    supervision: row.supervision,
+    hasInstructions: row.hasInstructions,
   };
 }
 
