@@ -60,7 +60,8 @@ export async function setLocalTimeouts(tx: Reads, statementTimeout: '30s' | '60s
 
 /**
  * `lock_timeout` alone, for a request write that waits on an advisory lock (`ADVISORY_LOCK`) before
- * it counts: `newItem` and `createProfile`. Without it a second request queued behind a lock that is
+ * it counts: `newItem` and `createProfile`; and for `clearDay`, which waits on a row lock (the
+ * profile `FOR SHARE`, then the day's entries). Without it a second request queued behind a lock that is
  * never released (a stuck transaction) waits until the platform kills the function; with it, the
  * wait ends after `LOCK_TIMEOUT` as a thrown 55P03, which reaches `error.tsx` like any other throw.
  * ⚠️ It bounds every LATER lock wait in the same transaction too, not only the advisory lock: the
@@ -70,10 +71,10 @@ export async function setLocalTimeouts(tx: Reads, statementTimeout: '30s' | '60s
  * 55P03 past `LOCK_TIMEOUT`.
  * Inside a caller's own transaction it lasts to that transaction's end (no real caller passes one).
  *
- * No read-back, unlike `setLocalTimeouts`: both callers run it as the first statement of their own
- * `exec.transaction`, which the xact lock right after it needs anyway. The order is pinned from the
+ * No read-back, unlike `setLocalTimeouts`: every caller runs it as the first statement of their own
+ * `exec.transaction`, which the lock right after it needs anyway. The order is pinned from the
  * emitted SQL (`apps/web/lib/dal/profiles.test.ts`, `program/new-item-lock.test.ts`), and
- * `db:verify` checks that each writer sets it (`lockTimeoutSetBy`, mutations 447 and 448).
+ * `db:verify` checks that each writer sets it (`lockTimeoutSetBy`, mutations 447, 448 and 427).
  */
 export async function setLocalLockTimeout(tx: Reads): Promise<void> {
   await tx.execute(sql`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true)`);

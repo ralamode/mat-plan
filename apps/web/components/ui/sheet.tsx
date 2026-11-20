@@ -127,6 +127,17 @@ export type SheetProps = {
    * surface carries the palette it is demonstrating.
    */
   dataTokens?: string;
+  /**
+   * Whether landing on this sheet's history entry reopens it: Forward after a close, or the restore
+   * on mount after a cross-route Back. Default `true`, the Android convention below.
+   *
+   * `false` is for a sheet whose trigger the page has since hidden (Program order, once fewer than
+   * two programs stay: FAM-1 15c follow-up). Reopening it would put a dialog on screen that the page
+   * no longer offers. **On `popstate` the entry is bounced with `history.back()`**, so Forward is a
+   * no-op and leaves no dead entry above the page; **on mount it simply stays shut** and never
+   * bounces, since a mount is not a history move the person made.
+   */
+  reopenFromHistory?: boolean;
 };
 
 /**
@@ -283,7 +294,12 @@ function useFooterHeight(node: HTMLElement | null): void {
  * landed-on entry LACKS `__NA` (`:61-72`) — which Next's own entry does not. An earlier plan called
  * this "unverified on Next 16.4"; it is verified by source, and the e2e asserts no `load` fired.
  */
-function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean) => void): void {
+function useBackGesture(
+  open: boolean,
+  id: string,
+  onOpenChange: (open: boolean) => void,
+  reopenFromHistory: boolean,
+): void {
   /**
    * One definition of "the top entry is mine", so the four call sites below cannot drift apart.
    *
@@ -324,8 +340,9 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    if (!open && isOurEntry()) onOpenChange(true);
-  }, [open, isOurEntry, onOpenChange]);
+    // A refused reopen stays shut, and never bounces: a mount is not a history move.
+    if (!open && reopenFromHistory && isOurEntry()) onOpenChange(true);
+  }, [open, isOurEntry, onOpenChange, reopenFromHistory]);
 
   /**
    * 🔴 **Where this sheet pushed its entry, so a close can still pop it after Next rewrites it.** A
@@ -359,15 +376,18 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     const sync = () => {
       const isOurs = isOurEntry();
-      if (isOurs && !open) onOpenChange(true);
-      else if (!isOurs && open) {
+      if (isOurs && !open) {
+        // Refused (`reopenFromHistory` false): step back off the entry, so Forward does nothing.
+        if (reopenFromHistory) onOpenChange(true);
+        else window.history.back();
+      } else if (!isOurs && open) {
         pushedAt.current = null;
         onOpenChange(false);
       }
     };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
-  }, [open, isOurEntry, onOpenChange]);
+  }, [open, isOurEntry, onOpenChange, reopenFromHistory]);
 
   useEffect(() => {
     if (!open) return;
@@ -434,6 +454,7 @@ export function Sheet({
   onEscapeKeyDown,
   onReturned,
   dataTokens,
+  reopenFromHistory = true,
 }: SheetProps) {
   // 🔴 A callback ref, NOT `useRef` — `useVisualViewport`'s docblock has the reason, and it is the
   // difference between the keyboard geometry running and silently doing nothing.
@@ -446,7 +467,7 @@ export function Sheet({
   // The footer's measured height, for the scroller's `scroll-padding-bottom` (see the render).
   const [footerNode, setFooterNode] = useState<HTMLDivElement | null>(null);
   useFooterHeight(footerNode);
-  useBackGesture(open, id, onOpenChange);
+  useBackGesture(open, id, onOpenChange, reopenFromHistory);
 
   useEffect(() => {
     if (!open) return;

@@ -131,3 +131,20 @@ export function describedTexts(el: Element): string[] {
     .filter(Boolean)
     .map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`);
 }
+
+/**
+ * Opens every part folded on arrival (FAM-1 12c-iii: a workout finished when the page mounts shows as
+ * one line), then moves focus off "Collapse", so a test acts on the workout as it did before the
+ * fold. Only for tests that act on a finished workout; the fold itself is `collapse.test.tsx`'s.
+ */
+export function openFolded() {
+  for (const line of screen.queryAllByRole('button', { expanded: false })) {
+    if (!line.getAttribute('aria-controls')) continue;
+    act(() => {
+      fireEvent.click(line);
+    });
+  }
+  act(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
+}

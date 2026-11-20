@@ -765,8 +765,11 @@ export async function restoreClearedDay(args: {
   return { restored, keptHidden };
 }
 
-/** What Clear this day did, as a count: the DTO the action maps, with no token or value in it. */
-export type ClearDayEntriesResult = { count: number };
+/**
+ * What Clear this day did, as a count: the DTO the action maps, with no token or value in it.
+ * `closed`: the athlete was archived when the clear took its lock (the writer's own check).
+ */
+export type ClearDayEntriesResult = { count: number } | { closed: true };
 
 /**
  * Clear this day (V1-9b B2): hide every live entry of one athlete's day as one event (`clearDay`,
@@ -789,6 +792,7 @@ export async function clearDayEntries(args: {
   const scope = await getHouseholdScope();
   if (!scope) throw new Error('Profile not found');
   const result = await quietDbErrors('clearDayEntries', () => clearDay(db, { ...args, scope }));
+  if ('closed' in result) return { closed: true };
   if ('notFound' in result) return { count: 0 };
   return { count: result.count };
 }

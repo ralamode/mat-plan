@@ -178,6 +178,15 @@ export function useChange(
   if (!dirty && r.error?.write === 'amend' && r.error.counts) r.clearError();
   const shownLine = editable && !dirty ? line : null;
 
+  // 12c-iii: a Change typed and not saved keeps its workout open ("Collapse" is not offered).
+  const { setRowBusy } = day;
+  const { rowKey } = r;
+  useEffect(() => {
+    if (!dirty) return;
+    setRowBusy(rowKey, true);
+    return () => setRowBusy(rowKey, false);
+  }, [dirty, rowKey, setRowBusy]);
+
   function clearChangeError() {
     if (r.error?.write === 'amend') r.clearError();
   }

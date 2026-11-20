@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/hide.ts b/packages/db/src/writers/hide.ts
+index 3218ee1b..bf36800d 100644
+--- a/packages/db/src/writers/hide.ts
++++ b/packages/db/src/writers/hide.ts
+@@ -568,7 +568,7 @@ export async function clearDay(
+       .from(schema.profiles)
+       .where(isLiveProfile(args.profilePublicId, args.scope))
+       .for('share');
+-    if (athlete && athlete.archivedAt !== null) return { closed: true };
++    void athlete;
+ 
+     const live = await tx
+       .select({ publicId: schema.entries.publicId })

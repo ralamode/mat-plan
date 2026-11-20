@@ -32,8 +32,10 @@ function Harness({
   consumerClose,
   onReturned,
   onEscapeKeyDown,
+  reopenFromHistory,
 }: {
   onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  reopenFromHistory?: boolean;
   variant?: 'sheet' | 'dialog';
   footer?: React.ReactNode;
   status?: string;
@@ -74,6 +76,7 @@ function Harness({
         statusKey={statusKey}
         onReturned={onReturned}
         onEscapeKeyDown={onEscapeKeyDown}
+        reopenFromHistory={reopenFromHistory}
       >
         <p>Body</p>
         {withLink ? <a href="/elsewhere">Create a program</a> : null}
@@ -666,6 +669,73 @@ describe('Sheet — the back gesture', () => {
       window.dispatchEvent(new PopStateEvent('popstate', { state: { __NA: true } })),
     );
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+});
+
+/**
+ * `reopenFromHistory` (FAM-1 15c follow-up): a sheet whose trigger the page has hidden must not come
+ * back on Forward. Each case first opens and closes the sheet, so its entry is real, then stands on
+ * that entry again as Forward would.
+ */
+describe('Sheet — reopenFromHistory', () => {
+  /** Open, close through the consumer, and return the entry the sheet wrote. */
+  async function openCloseAndTakeEntry(back: ReturnType<typeof vi.spyOn>) {
+    openAndCapture();
+    const entry = window.history.state;
+    expect(entry?.sheet).toBe('test-sheet');
+    await closeVia(() => fireEvent.click(screen.getByRole('button', { name: 'Use as typed' })));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    back.mockClear();
+    return entry;
+  }
+
+  async function forwardOnto(entry: unknown) {
+    await closeVia(() => {
+      window.history.replaceState(entry, '');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: entry }));
+    });
+  }
+
+  it('refused: Forward onto its entry bounces back once and stays closed', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    render(<Harness consumerClose reopenFromHistory={false} />);
+    const entry = await openCloseAndTakeEntry(back);
+    await forwardOnto(entry);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(back).toHaveBeenCalledTimes(1);
+    // The bounce lands on the entry below (the page's): that popstate does nothing further, so no
+    // Back press is left dead and nothing else is popped.
+    await closeVia(() => {
+      window.history.replaceState({ page: true }, '');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: true } }));
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+  });
+
+  it('refused: the restore on mount stays shut and never calls back()', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const { unmount } = render(<Harness reopenFromHistory={false} />);
+    openAndCapture();
+    const entry = window.history.state;
+    unmount();
+    back.mockClear();
+    window.history.replaceState(entry, '');
+    render(<Harness reopenFromHistory={false} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
+  it('by default, Forward onto its entry reopens it and does not call back()', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    render(<Harness consumerClose />);
+    const entry = await openCloseAndTakeEntry(back);
+    await forwardOnto(entry);
+    expect(screen.getByRole('dialog')).toBeTruthy();
     expect(back).not.toHaveBeenCalled();
     back.mockRestore();
   });
