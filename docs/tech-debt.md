@@ -327,6 +327,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **The fix, when taken:** restore the a-1d envelope seed (`typed`, `chosenKind`) for the add and
   the rename, each with an unhydrated e2e of its refusal. `profile-actions.ts` is owned by
   `write-path.md`.
+- **Planned and parked (2026-11-20).** A v1 plan went through a correctness and a UX lens:
+  [plan](./plans/td-unhydrated-refusal.md), with its review log. Seeding the form from an echoed
+  `typed` works on the native re-render, but the full fix also needs native `autofocus` so the
+  refusal is seen before hydration, no focus theft at hydration, Restore's unhydrated answer, and the
+  byte-identical refusal matrix kept. The log lists v2's shape.
+- **Trigger:** a report of a blank form after a refusal on a slow phone, or the next PR that
+  changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
 ### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
@@ -361,7 +368,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
   edit and belongs to whichever chunk next touches that file deliberately.
 
-### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
+### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08) — ✅ CLOSED 2026-11-20
+
+> **Closed by decision** (maintainer, 2026-11-20: "Accept as is, close the row"). PROF-1 b's N3
+> already shipped the control half: `ExportControl` shows "Nothing logged yet, so there is nothing to
+> export." and no link when an athlete has no history, in Household settings and on the day page. A
+> direct hit on the export route (a stale tab, a bookmark after Clear this day) still downloads an
+> empty zip, and that is accepted. The text below is the original record.
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
   athlete with none yields `buildZip([])`, which is a valid but **EOCD-only** archive — iOS Files
