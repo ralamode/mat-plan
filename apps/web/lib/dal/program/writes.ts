@@ -26,6 +26,7 @@ import {
   type WorkoutDraft,
 } from '@mat-plan/shared';
 
+import { CATALOG_LIBRARY } from '../catalog-library';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { quietDbErrors } from '../quiet-db-errors';
@@ -124,7 +125,8 @@ export async function copyHouseholdWorkout(
 export async function newHouseholdItem(input: NewItem): Promise<ProgramAnswer<'newItem'>> {
   const scope = await getHouseholdScope();
   if (!scope) return NOT_FOUND;
-  return quietDbErrors('newItem', () => newItem(db, scope, input));
+  // The same library the picker's read gets (`picker.ts`), so they match the same aliases (K23).
+  return quietDbErrors('newItem', () => newItem(db, scope, input, CATALOG_LIBRARY));
 }
 
 /**

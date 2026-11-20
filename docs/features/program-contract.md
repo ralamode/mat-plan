@@ -249,6 +249,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     for every day fixture, a live athlete's and an archived one's. The rule today: a live athlete,
     on any day (plan D48, #683). The switcher's links
     come from `dayPreviewHrefFor`, which reads the fixture list, so each is a state the route lists.
+    **`ProgramLine` gets `programHrefFor`** (plan D49; 15c PR 3 passes `programPath` on the page):
+    the preview passes `programPreviewHref`, which opens the Program page fixture for that program,
+    or the preview's Programs list when the fixtures hold no page for it. So each name is a link to
+    a state the route lists, and the preview walk measures it as a 44px target
+    (`preview-registry.test.ts` holds it for every program a day fixture names).
     The parts are lane C's; their props are a contract with the page and this harness.
 12. **The workout-editor case passes the draft's own program** (`program`, a `ProgramListEntry`), read
     from the fake's Programs list by the draft's `programPublicId`, as the real page will load it
@@ -743,7 +748,11 @@ under its own CAT-3 heading).
     miss or a some-words row, 🔴 and a filter does not change that: a custom item set apart
     under a filter counts as something to pick only if it MATCHED. One filtered match beside
     one custom match is two to choose from.
-19. **One mapping from an entry to an option** (`catalogOptionOf`, spec P11). The option read is
+19. **One mapping from an entry to an option** (`catalogOptionOf`, spec P11). The option read
+    applies it through `catalogArmOption` (`packages/db/src/queries/program/catalog-arm-option.ts`,
+    since P11-ii-a): this mapping's fields on the database row's identity, in the four cases that
+    file tables, and the web DAL copies the result. The read, "How to" and `newItem` take one
+    library, `CATALOG_LIBRARY` in `apps/web/lib/dal/catalog-library.ts`. The option read is
     compared with it, the preview's options are built with it (`CATALOG_FIXTURE_OPTIONS`), and it
     never carries the instructions: an option says `hasInstructions`, and `catalogHowToOf` reads
     the steps by slug when "How to" is opened, 🔴 always with the supervision label (K17).

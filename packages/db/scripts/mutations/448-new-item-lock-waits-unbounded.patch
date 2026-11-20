@@ -1,9 +1,9 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index c3b16c61..6fe2cd3b 100644
+index 10198006..6e073206 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -75,7 +75,7 @@ async function addOrSelect(
-   trackingType: TrackingType,
+@@ -78,7 +78,7 @@ async function addOrSelect(
+   library: readonly CatalogMovement[],
  ): Promise<NewItemResult> {
    // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
 -  await setLocalLockTimeout(exec);
