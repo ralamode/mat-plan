@@ -169,7 +169,9 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     field that equals what is stored is not an edit:** when another phone changes that entry, each
     such field is dropped (`useChange`; a field really typed stays), never left to read "Not saved"
     over a number nobody meant, where a blur or ✓ would send it over that phone's (12c-iii
-    follow-up). A tap elsewhere ends Collapse's claim on focus, even one that moves none (Safari).
+    follow-up). A tap elsewhere ends Collapse's claim on focus, even one that moves none (Safari). A failed
+    save's "Couldn't save. Still 27.5 lb" gives way, on such a change, to the draft's own "Not
+    saved. Was 35 lb", which names what is stored now; the typed number stays.
 
 17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an

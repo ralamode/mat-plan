@@ -163,6 +163,10 @@ export function useChange(
       values &&
       !sameValues(values, seenValues)
     ) {
+      // A failed save's "Couldn’t save. Still 27.5 lb" names what is no longer stored: it gives way
+      // to the draft's own "Not saved. Was 35 lb". Only a failed save (`counts`): a failed Undo or a
+      // Reload notice leaves no draft, so never reaches here, and is the line block's below.
+      if (r.error?.write === 'amend' && r.error.counts) r.clearError();
       const was = textOf(item, seenValues);
       const drafted = Object.keys(draft) as RowField[];
       const typed = drafted.filter((f) => draft[f] !== was[f]);
