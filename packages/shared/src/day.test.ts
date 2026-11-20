@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addDays,
+  clearDayOpenFor,
   dayOpenFor,
   localWeekday,
   MONDAY_FIRST,
@@ -147,5 +148,28 @@ describe('dayOpenFor: the writable window, and never for an archived athlete (C3
   it('is exported from the root barrel', async () => {
     const barrel = await import('./index');
     expect(barrel.dayOpenFor).toBe(dayOpenFor);
+  });
+});
+
+describe('clearDayOpenFor: today only, and never for an archived athlete (V1-9b B2)', () => {
+  const TODAY = '2026-09-30';
+  const DAYS = ['2026-09-28', '2026-09-29', TODAY, '2026-10-01'];
+
+  it('is open today and on no other day, yesterday included', () => {
+    expect(DAYS.filter((day) => clearDayOpenFor({ archived: false }, day, TODAY))).toEqual([TODAY]);
+  });
+
+  it('is never open for an archived athlete', () => {
+    for (const day of DAYS) expect(clearDayOpenFor({ archived: true }, day, TODAY)).toBe(false);
+  });
+
+  it('is never open where dayOpenFor is closed (Restore all reaches every day a clear can)', () => {
+    for (const archived of [false, true]) {
+      for (const day of DAYS) {
+        if (clearDayOpenFor({ archived }, day, TODAY)) {
+          expect(dayOpenFor({ archived }, day, TODAY)).toBe(true);
+        }
+      }
+    }
   });
 });
