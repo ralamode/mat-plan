@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import {
+  trackingTypeSchema,
+  existingItem,
   ACTIVITY_TYPE_KEYS,
   addDays,
   localWeekday,
@@ -52,7 +54,7 @@ import {
   type World,
 } from '@mat-plan/shared/program/fixtures';
 import type { TrackingType, WeekDraft, WorkoutDraft } from '@mat-plan/shared';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
@@ -61,6 +63,7 @@ import type { HouseholdScope } from '../../src/scope';
 import {
   insertMovementOwnedBy,
   insertProfileOwnedBy,
+  movementIsGlobal,
   profileByClientId,
   insertProgramBlockOwnedBy,
   movementInHousehold,
@@ -85,7 +88,10 @@ import {
 } from '../../src/writers/program/seed-fixtures';
 import { createProgram } from '../../src/writers/program/create-program';
 import { copyWorkout } from '../../src/writers/program/copy-workout';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { newItem } from '../../src/writers/program/new-item';
+import { catalogArmOption, joinAliases } from '../../src/queries/program/catalog-arm-option';
+import { seedCatalog } from '../../src/seed';
 import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
 import {
@@ -147,6 +153,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifySaveWeek(ctx);
   await verifyWorkoutInHousehold(ctx);
   await verifyMovementOptionsAndNewItem(ctx);
+  await verifyCatalogRowsListed(ctx);
   await verifyCopyWorkout(ctx);
   await verifyPutOn(ctx);
   await verifySeedFixtures(ctx);
@@ -1646,6 +1653,194 @@ async function verifySaveWeek({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void
  * shadows, used or not (maintainer, 2026-11-17). `newItem` selects what that list already names, by
  * name key or alias, and answers with the item's stored name and own type.
  */
+/**
+ * CAT-3 P11-ii-a (plan `docs/plans/cat-3-p11-ii-option-taxonomy.md`, (a1)–(a9)): the option read lists
+ * every library row through `catalogArmOption`, the old built-ins unchanged at the DTO, nothing another
+ * household holds, and `newItem` matches over the same aliases (K23). Library rows are written by A2-i's
+ * `seedCatalog`, inside `rolledBack`, so the shared database never holds one.
+ */
+async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
+  const libraryEntry = (slug: string) => CATALOG_MOVEMENTS.find((e) => e.slug === slug)!;
+  const OHP = libraryEntry('overhead_press'); // aliases OHP, Strict press: OHP is also the old built-in's
+  const DIP = libraryEntry('dip'); // beside the old built-in "Dips"
+  const FOAM = libraryEntry('foam_rolling'); // alias "Foam roll"
+  const LIB = [OHP, DIP, FOAM];
+  const listedOn = async (tx: VerifyTx, scope: typeof A_SCOPE, library = CATALOG_MOVEMENTS) =>
+    movementOptions(asTx(tx), scope, library);
+  const catalogRowsOf = async (tx: VerifyTx) =>
+    tx
+      .select({
+        publicId: schema.movements.publicId,
+        slug: schema.movements.slug,
+        name: schema.movements.name,
+        unitDefault: schema.movements.unitDefault,
+        isBodyweight: schema.movements.isBodyweight,
+        trackingType: schema.movements.trackingType,
+      })
+      .from(schema.movements)
+      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)));
+
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), LIB);
+    const options = await listedOn(tx, A_SCOPE);
+
+    // (a1) Every library row is listed, through the one mapping, on the database row's identity.
+    for (const r of await catalogRowsOf(tx)) {
+      const listed = options.find((o) => o.publicId === r.publicId);
+      assert.deepEqual(
+        listed,
+        catalogArmOption(
+          {
+            ...r,
+            unitDefault: r.unitDefault as never,
+            trackingType: trackingTypeSchema.parse(r.trackingType),
+          },
+          undefined,
+          libraryEntry(r.slug),
+        ),
+        `CAT-3 P11-ii-a (a1): the library row ${r.slug} is listed through catalogArmOption`,
+      );
+    }
+
+    // (a2) The old built-ins: still every one, with the const's group, and the library's taxonomy and
+    // aliases where it has an entry on the slug (the DTO the picker showed before; picker.test.ts).
+    const legacy = options.filter(
+      (o) => o.owner === 'catalog' && Object.hasOwn(MOVEMENT_PICKER_ENTRIES, o.slug),
+    );
+    assert.equal(
+      legacy.length,
+      Object.keys(MOVEMENT_PICKER_ENTRIES).length,
+      'CAT-3 P11-ii-a (a2): every old built-in is still listed (K22)',
+    );
+    for (const o of legacy) {
+      if (o.owner !== 'catalog') continue;
+      const entry = CATALOG_MOVEMENTS.find((e) => e.slug === o.slug);
+      const picker = MOVEMENT_PICKER_ENTRIES[o.slug as keyof typeof MOVEMENT_PICKER_ENTRIES];
+      assert.deepEqual(
+        [o.group, o.aliases, o.taxonomy === null],
+        [
+          picker.group,
+          joinAliases(picker.aliases ?? [], entry?.aliases ?? []),
+          entry === undefined,
+        ],
+        `CAT-3 P11-ii-a (a2): the old built-in ${o.slug} keeps its group, joins the library's aliases, and has taxonomy exactly when the library has an entry`,
+      );
+    }
+
+    // (a8) The internal id never reaches an option.
+    assert.ok(
+      options.every((o) => !('id' in o)),
+      'CAT-3 P11-ii-a (a8): no option carries the internal movements.id',
+    );
+
+    // (a5) newItem selects a library row by its alias, at step 1, and makes nothing.
+    const foam = options.find((o) => o.name === FOAM.name)!;
+    const byAlias = await newItem(asTx(tx), A_SCOPE, {
+      name: FOAM.aliases[0]!,
+      trackingType: TRACKING_TYPE.check,
+    });
+    assert.deepEqual(
+      byAlias.ok && [byAlias.existed, byAlias.itemPublicId],
+      [true, foam.publicId],
+      'CAT-3 P11-ii-a (a5): newItem selects a library row by its library alias',
+    );
+
+    // (a6) K23: Enter and newItem pick the same row, because both match over this list.
+    for (const typed of ['OHP', 'Strict press', 'Dips', 'Dip', 'Hex-bar deadlift']) {
+      const hit = existingItem(
+        options.map((o) => ({
+          ...o,
+          isCatalog: o.owner === 'catalog',
+          aliases: o.owner === 'catalog' ? o.aliases : [],
+        })),
+        typed,
+      );
+      const answer = await newItem(asTx(tx), A_SCOPE, {
+        name: typed,
+        trackingType: TRACKING_TYPE.check,
+      });
+      assert.deepEqual(
+        answer.ok && [answer.existed, answer.itemPublicId],
+        [true, hit?.publicId],
+        `CAT-3 P11-ii-a (a6): "${typed}" — newItem selects the row the picker's search does (K23)`,
+      );
+    }
+    const trapBar = options.find((o) => o.owner === 'catalog' && o.slug === 'trap-bar_deadlift');
+    const hexBar = await newItem(asTx(tx), A_SCOPE, {
+      name: 'Hex-bar deadlift',
+      trackingType: TRACKING_TYPE.check,
+    });
+    assert.deepEqual(
+      hexBar.ok && hexBar.itemPublicId,
+      trapBar?.publicId,
+      'CAT-3 P11-ii-a (a6): an alias only the library entry of an old built-in has selects that built-in',
+    );
+  });
+
+  // (a3) Nothing another household holds changes what A sees: B's items on a picker slug, a
+  // library-only slug and a library alias. (a4) A household item a library row shadows is left out.
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), LIB);
+    const before = await listedOn(tx, A_SCOPE);
+    for (const [slug, name] of [
+      ['box_jump', 'B box jump'],
+      [DIP.slug, 'B dip'],
+      ['parallel-bar_dip', DIP.aliases[0]!],
+    ] as const) {
+      await insertMovementOwnedBy(asTx(tx), B_SCOPE, {
+        publicId: newId(),
+        slug,
+        name,
+        isBodyweight: false,
+      });
+    }
+    assert.deepEqual(
+      await listedOn(tx, A_SCOPE),
+      before,
+      "CAT-3 P11-ii-a (a3): another household's items on a picker slug, a library slug or a library alias change nothing A sees",
+    );
+    const shadowed = newId();
+    await insertMovementOwnedBy(asTx(tx), A_SCOPE, {
+      publicId: shadowed,
+      slug: OHP.slug,
+      name: 'A overhead press',
+      isBodyweight: false,
+    });
+    assert.ok(
+      !(await listedOn(tx, A_SCOPE)).some((o) => o.publicId === shadowed),
+      'CAT-3 P11-ii-a (a4): a household item a library row shadows is left out',
+    );
+  });
+
+  // (a9) A library row with no entry in the library given: listed bare, never dropped (K22).
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), [FOAM]);
+    const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
+    const listed = (await listedOn(tx, A_SCOPE, without)).find((o) => o.name === FOAM.name);
+    assert.deepEqual(
+      listed && listed.owner === 'catalog' && [listed.aliases, listed.taxonomy, listed.supervision],
+      [[], null, null],
+      'CAT-3 P11-ii-a (a9): a library row with no entry in the library given is listed bare',
+    );
+  });
+
+  // The catalog arm's live conjunct: a soft-deleted library row is not listed.
+  await rolledBack(async (tx) => {
+    await seedCatalog(asDb(tx), [FOAM]);
+    await tx
+      .update(schema.movements)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(schema.movements.slug, FOAM.slug), movementIsGlobal()));
+    assert.ok(
+      !(await listedOn(tx, A_SCOPE)).some((o) => o.name === FOAM.name),
+      'CAT-3 P11-ii-a: a soft-deleted library row is not listed (the catalog arm is live-only)',
+    );
+  });
+  console.log(
+    '✓ CAT-3 P11-ii-a: the picker’s read lists every library row, and newItem matches the same aliases',
+  );
+}
+
 async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const exec = asTx(tx);
@@ -1712,17 +1907,21 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     const { publicId: _boxId, ...boxOption } = catalog.find((o) => o.name === boxJump.name)!;
     assert.deepEqual(
       boxOption,
-      {
-        name: boxJump.name,
-        unitDefault: boxJump.unitDefault,
-        isBodyweight: boxJump.isBodyweight,
-        trackingType: boxJump.trackingType,
-        owner: 'catalog',
-        group: MOVEMENT_PICKER_ENTRIES.box_jump.group,
-        aliases: MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? [],
-        slug: boxJump.slug,
-      },
-      "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases",
+      (({ publicId: _id, ...rest }) => rest)(
+        catalogArmOption(
+          {
+            publicId: '',
+            slug: boxJump.slug,
+            name: boxJump.name,
+            unitDefault: boxJump.unitDefault,
+            isBodyweight: boxJump.isBodyweight,
+            trackingType: boxJump.trackingType,
+          },
+          MOVEMENT_PICKER_ENTRIES.box_jump,
+          CATALOG_MOVEMENTS.find((e) => e.slug === boxJump.slug),
+        ),
+      ),
+      "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases (CAT-3 P11-ii-a: and the library's by slug, through catalogArmOption)",
     );
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
     assert.ok(
