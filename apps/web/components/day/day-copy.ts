@@ -119,9 +119,14 @@ export const DAY_COPY = {
     cancelled: (name: string) => `${name}: change cancelled`,
     unticked: (name: string) => `${name} un-checked`,
     failed: (name: string, message: string) => `${name}: ${message}`,
-    /** Another phone (or tab) changed a row this one was changing: said only for a row "Not saved". */
-    changedElsewhere: (name: string, to: string, stillTyped: boolean) =>
-      `${name} was changed elsewhere to ${to}.${stillTyped ? ' Yours isn’t saved.' : ''}`,
+    /** Another phone (or tab) changed a row this one was changing, and what was typed still differs. */
+    changedElsewhere: (name: string, to: string) =>
+      `${name} was changed elsewhere to ${to}. Yours isn’t saved.`,
+    /**
+     * The stored number caught up with a row that showed "Not saved" or "Couldn't save", and nothing
+     * typed differs any more: true whether another phone wrote it or this one's answer was lost.
+     */
+    savedAs: (name: string, to: string) => `${name} is saved as ${to}.`,
   },
 } as const;
 

@@ -77,6 +77,12 @@ export function DayScreen({ plan, actions }: DayScreenProps) {
   return <DayBody key={`${plan.profilePublicId}/${plan.day}`} plan={plan} actions={actions} />;
 }
 
+/**
+ * How long after an announcement a second one joins it rather than replacing it: long enough for a
+ * write's answer and the refresh it brings, short enough that unrelated taps are read on their own.
+ */
+export const ANNOUNCE_TOGETHER_MS = 1500;
+
 function DayBody({ plan, actions }: DayScreenProps) {
   const router = useRouter();
   const headingId = useId();
@@ -85,7 +91,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
   // `n` counts announcements: each one is a new node in the live region, so the same sentence twice
   // in a row is read twice (`Announcer`'s `messageKey`).
   const [message, setMessage] = useState({ text: '', n: 0 });
-  const announcing = useRef(false);
+  const groupStarted = useRef(-Infinity);
   const closedRef = useRef<HTMLDivElement>(null);
 
   // A row's effect depends on these, so each keeps one identity for the life of the day.
@@ -137,13 +143,18 @@ function DayBody({ plan, actions }: DayScreenProps) {
       day: viewedDay,
       actions: pinned(actions, { day: viewedDay, today }),
       readOnly,
-      // Two in one task (a ✓ here and another phone's change landing in the same refresh) are both
-      // said, in order: a second call before the next task appends instead of replacing.
+      // Two close together (a ✓ here, and another phone's change in the refresh it brings, a few
+      // tasks apart) are both said, in order: within `ANNOUNCE_TOGETHER_MS` of the first, a call
+      // appends instead of replacing. Measured from the group's first, so a run never grows it.
       announce: (text) => {
-        const together = announcing.current;
-        announcing.current = true;
-        if (!together) setTimeout(() => (announcing.current = false), 0);
-        setMessage((was) => ({ text: together ? `${was.text} ${text}` : text, n: was.n + 1 }));
+        const now = performance.now();
+        const together = now - groupStarted.current < ANNOUNCE_TOGETHER_MS;
+        if (!together) groupStarted.current = now;
+        // The same sentence again (a ✓ that fails twice) is said again, never doubled in one line.
+        setMessage((was) => ({
+          text: together && !was.text.endsWith(text) ? `${was.text} ${text}` : text,
+          n: was.n + 1,
+        }));
       },
       setRowFailed,
       setRowPending,

@@ -181,12 +181,15 @@ export function useChange(
       // silent), and never for this phone's own save (its answer is announced by `commit`).
       if (editable && typed.length > 0 && !r.pending && !saving) {
         const now = textOf(item, values);
+        // Still typed: a field that still differs and can still be changed (a load whose unit moved
+        // stops being a field, and its draft goes below). Else only what is stored is said, which is
+        // true whether another phone wrote it or this one's own write landed with its answer lost.
+        const stillTyped = typed.some((f) => fields.includes(f) && draft[f] !== now[f]);
+        const to = spokenValues(values);
         setElsewhere({
-          text: DAY_COPY.announce.changedElsewhere(
-            name,
-            spokenValues(values),
-            typed.some((f) => draft[f] !== now[f]),
-          ),
+          text: stillTyped
+            ? DAY_COPY.announce.changedElsewhere(name, to)
+            : DAY_COPY.announce.savedAs(name, to),
         });
       }
       if (typed.length === 0) setDraft(null);
@@ -319,8 +322,7 @@ export function useChange(
     const result = await r.amend(send);
     // Cleared with the draft (same batch), never before it.
     setSaving(false);
-    // "Still …" names what is stored when the answer comes, not when the save began.
-    if (!result.ok) return refused(result.reason, latest.current.stored ?? from, 'save');
+    if (!result.ok) return refused(result.reason, from, 'save');
     setDraft(null);
     const base = baseline ?? from;
     setBaseline(base);
@@ -342,7 +344,7 @@ export function useChange(
     setSaving(true);
     const result = await r.amend(baseline);
     setSaving(false);
-    if (!result.ok) return refused(result.reason, latest.current.stored ?? still, 'undo');
+    if (!result.ok) return refused(result.reason, still, 'undo');
     setLine({ kind: 'back', to: result.values, kept: null });
     day.announce(DAY_COPY.announce.changedBack(name, spokenValues(result.values)));
   }
@@ -364,12 +366,10 @@ export function useChange(
     return shown.kept ? `${said}. ${shown.kept}` : said;
   }
 
-  // What the ✕'s press watch reads when the press ends, after this render's closures are stale;
-  // and what is stored when a write's answer comes back (another phone may have moved it meanwhile).
-  const stored = entry?.values ?? null;
-  const latest = useRef({ dirty, pending: r.pending, commit, stored });
+  // What the ✕'s press watch reads when the press ends, after this render's closures are stale.
+  const latest = useRef({ dirty, pending: r.pending, commit });
   useEffect(() => {
-    latest.current = { dirty, pending: r.pending, commit, stored };
+    latest.current = { dirty, pending: r.pending, commit };
   });
 
   return {

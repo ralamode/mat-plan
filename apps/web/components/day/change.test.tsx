@@ -13,6 +13,8 @@ import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
 import { DAY_COPY, refusalCopy } from './day-copy';
+import { ANNOUNCE_TOGETHER_MS } from './day-screen';
+import { spokenValues } from './row-values';
 import { card, describedTexts, held, makeMount, press, status, openFolded } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
 import { unitSpoken } from './row-values';
@@ -1405,8 +1407,19 @@ describe('a failed save, then another phone’s Change to that entry', () => {
 });
 
 describe('another phone’s change, said to a screen reader (only for a row this one was changing)', () => {
-  /** Bench set 3: not logged in the fixture. */
-  const UNLOGGED_SET = 3;
+  /**
+   * Seconds later, as on a gym floor: past `ANNOUNCE_TOGETHER_MS`, so the change is said on its own,
+   * not joined to this phone's earlier sentence (jsdom runs a whole test inside the window).
+   */
+  async function later(run: () => void) {
+    const now = performance.now() + ANNOUNCE_TOGETHER_MS * 10;
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(now);
+    try {
+      await act(async () => run());
+    } finally {
+      clock.mockRestore();
+    }
+  }
   /** The plan with bench set 1's load at `value` lb, as another phone would leave it. */
   function loadElsewhere(plan: DayPlan, value: number): DayPlan {
     const next: DayPlan = structuredClone(plan);
@@ -1415,8 +1428,8 @@ describe('another phone’s change, said to a screen reader (only for a row this
       .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = value;
     return next;
   }
-  const said = (value: number, stillTyped: boolean) =>
-    DAY_COPY.announce.changedElsewhere(setLabel(1), `${value} ${SPOKEN.lb}, 8 reps`, stillTyped);
+  const spoken = (value: number) => `${value} ${SPOKEN.lb}, 8 reps`;
+  const said = (value: number) => DAY_COPY.announce.changedElsewhere(setLabel(1), spoken(value));
 
   it('a row nobody is changing here stays silent', async () => {
     const control = mount(yesterdayHalfDone, { change: true });
@@ -1439,15 +1452,41 @@ describe('another phone’s change, said to a screen reader (only for a row this
     const control = mount(yesterdayHalfDone, { change: true });
     type(load(), '30');
     await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
-    expect(status()).toBe(said(35, true));
+    expect(status()).toBe(said(35));
     expect(load().value).toBe('30');
   });
 
-  it('the other phone typed the same number: said, without "Yours isn’t saved"', async () => {
+  it('the stored number caught up with what was typed: only what is saved, never "elsewhere"', async () => {
     const control = mount(yesterdayHalfDone, { change: true });
     type(load(), '35');
     await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
-    expect(status()).toBe(said(35, false));
+    expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spoken(35)));
+  });
+
+  it('this phone’s own write, landed with its answer lost: "is saved as", not "changed elsewhere"', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async () => {
+          throw new Error('the answer was lost');
+        },
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    await later(() => control.setPlan(loadElsewhere(control.plan, 30)));
+    expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spoken(30)));
+  });
+
+  it('the load moved to another unit, so it is no longer a field: only what is saved', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    const next: DayPlan = structuredClone(control.plan);
+    const logged = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!.logged!;
+    logged.values.quantities[0] = { ...logged.values.quantities[0]!, unit: 'kg', value: 14 };
+    await act(async () => control.setPlan(next));
+    expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spokenValues(logged.values)));
   });
 
   it('after a failed save, too', async () => {
@@ -1457,8 +1496,8 @@ describe('another phone’s change, said to a screen reader (only for a row this
     });
     type(load(), '30');
     await leave(load());
-    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
-    expect(status()).toBe(said(35, true));
+    await later(() => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(said(35));
   });
 
   it('this phone’s own save is never "changed elsewhere": exactly its own sentence', async () => {
@@ -1473,33 +1512,33 @@ describe('another phone’s change, said to a screen reader (only for a row this
       ),
     );
   });
+});
 
-  it('a change landing while this phone’s save is in flight: its failure names the new number, and both sentences are read', async () => {
-    const holder: { control?: ReturnType<typeof mount> } = {};
-    holder.control = mount(yesterdayHalfDone, {
-      change: true,
-      wrap: (fake) => ({
-        // Set 1's save fails, so its typed number stays while this phone ticks set 3.
-        amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }),
-        // The refresh after this phone's ✓ also carries another phone's change to set 1.
-        logRow: async (input) => {
-          const result = await fake.logRow(input);
-          const setPlan = holder.control!.setPlan as unknown as (
-            f: (p: DayPlan) => DayPlan,
-          ) => void;
-          setPlan((p) => loadElsewhere(p, 35));
-          return result;
-        },
-      }),
-    });
-    type(load(), '30');
-    await press(benchTick(UNLOGGED_SET));
-    // Leaving set 1 for the ✓ sent its save again, still in flight when the change landed: its
-    // failure names the number stored now, so no second sentence is owed. Both are read.
-    const text = status() ?? '';
-    expect(text).toContain(DAY_COPY.announce.logged(setLabel(UNLOGGED_SET)));
-    expect(text).toContain(DAY_COPY.change.failed('35 lb × 8'));
-    expect(text).not.toContain('27.5');
-    expect(within(bench()).getByText(DAY_COPY.change.failed('35 lb × 8'))).toBeTruthy();
+describe('two announcements close together', () => {
+  it('within ANNOUNCE_TOGETHER_MS both are read, in order; after it, the second stands alone', async () => {
+    let now = 1_000_000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      const control = mount(yesterdayHalfDone, {
+        change: true,
+        wrap: () => ({ amendRow: amendOk }),
+      });
+      type(load(), '30');
+      await leave(load());
+      const saved = status();
+      type(load(), '31');
+      // A few tasks later (the refresh a write brings): joined.
+      now += 50;
+      fireEvent.keyDown(load(), { key: 'Escape' });
+      expect(status()).toBe(`${saved} ${DAY_COPY.announce.cancelled(setLabel(1))}`);
+      // Seconds later: on its own.
+      now += ANNOUNCE_TOGETHER_MS * 2;
+      type(load(), '32');
+      fireEvent.keyDown(load(), { key: 'Escape' });
+      expect(status()).toBe(DAY_COPY.announce.cancelled(setLabel(1)));
+      void control;
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

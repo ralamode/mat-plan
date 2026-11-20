@@ -174,9 +174,11 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     saved. Was 35 lb", which names what is stored now; the typed number stays. **Such a change is
     said to a screen reader** by the page's announcer (never by the line, which is not a live
     region), only for a row that showed "Not saved" or "Couldn't save": "… was changed elsewhere to
-    35 pounds, 8 reps. Yours isn't saved." A row nobody here is changing, a number typed back, and
-    this phone's own save (`saving`) stay silent. A failed save says what is stored when its answer
-    comes, not when it began. Two announcements in one task are both read (`announce` appends).
+    35 pounds, 8 reps. Yours isn't saved." while a field still differs, else "… is saved as 35
+    pounds, 8 reps." (true too when this phone's own write landed with its answer lost). A row
+    nobody here is changing, a number typed back, and this phone's own save (`saving`) stay
+    silent. Announcements within `ANNOUNCE_TOGETHER_MS` of the first are joined, so a ✓ and the
+    refresh it brings are both read; the same sentence again replaces, never doubles.
 
 17. 🔴 **Today is read in the row actions and nowhere below** (AGENTS.md → Server conventions, Time; FAM-1 board, 2026-11-16; plan row 12b's "works out the athlete's `today`" is the action's job, not `day.ts`'s). The
     action calls `getActiveLocalDay()`; `lib/dal/day/day.ts` and lane E's writers take `today` as an
