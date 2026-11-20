@@ -12,6 +12,10 @@ only way a notice about minors' health data is worth anything.
 > no one receives less yet. No new column or processor; the refusal's Sentry event is the id-free
 > `athlete authority refused` (two tags, no id; PROF-1 b), now also tagged `export_profile`, and the
 > in-memory report cap gains one key per action (§8).
+> 🔴 **§7 re-read 2026-11-19 for `CAT-3` A2-i** ([plan](../plans/cat-3-a2-i-catalog-seed.md)): the seed's
+> public `migrate.yml` log carries counts only. The shadow report no longer names a slug a household also
+> holds, and the catalog writer (`seedCatalog`) writes reference data only, with production's seed giving
+> it nothing until A2-ii. No new column, processor, reader, export or retention.
 > 🔴 **§7 re-read 2026-11-19 for the dead-limiter event**: Sentry now receives one id-free event when a
 > rate limiter is down (two fixed tags), once per process per limiter. No new processor or data.
 > 🔴 **§4 / §7 / §8 re-read 2026-11-19 for the FAM-1 export rate limit** ([plan](../plans/fam-1-export-owner-only.md)

@@ -22,8 +22,8 @@ name: Migrate + seed (production)
 # lived, `ON CONFLICT DO NOTHING` absorbed that collision and the catalog row was silently
 # never inserted. Migration 0017 dropped that constraint, so the two rows now coexist legally
 # and the global insert lands. The guard REPORTS instead: it seeds the curated row and logs a
-# warning naming the seed slug only — never the colliding row's `name`, which is household free
-# text and this log is world-readable. Background: docs/runbooks.md -> "the seed's shadow
+# warning with COUNTS ONLY (CAT-3 A2-i) — never a slug a household also holds, never a row's
+# `name`, because this log is world-readable. Background: docs/runbooks.md -> "the seed's shadow
 # guard fired".
 #
 # The PREVIEW estate has its own migrator, `migrate-preview.yml` — a separate FILE, not a second job
