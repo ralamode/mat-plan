@@ -2,9 +2,9 @@
 
 > Backlog: [plan.md](../plan.md) row FAM-1, step 12f of [the FAM-1 plan](./fam-1-family-program.md)
 > (row 12f, `fam-1-family-program.md:633`). Branch for this plan: `docs/fam-1-12f-retire-old-forms-plan`.
-> Five code PRs, named **12f PR 1 to 5** here. **Lane E builds PR 1 and PR 4; lane C builds PR 2, PR 3
-> and PR 5** _(lane C's hand-over, cleared by the board, 2026-11-19, after lane E's own steps had all
-> merged; until then lane C built all five)_.
+> Five code PRs, named **12f PR 1 to 5** here. **Lane E builds PR 1 and PR 4, lane S builds PR 3, and
+> lane C builds PR 2 and PR 5** _(lane C's offer, cleared by the board on 2026-11-19 under the
+> maintainer's rule, relayed by the board: "If we get to a point where lanes are sitting dormant, distribute some of the remaining work to them"; until then lane C built all five)_.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at the
 > maintainer's request, from lane C's notes. Panelled the same day by four lenses; every finding is
@@ -179,11 +179,17 @@ and the page keeps its `ROUTINE_COPY.orderHeading` region, its buttons and Save.
 
 ## File-by-file changes
 
-**Lane E builds PR 1 and PR 4; lane C builds PR 2, PR 3 and PR 5** (the hand-over above). The tables
-below were written with lane C as the builder of all five, and their marks stand with one change of
-reading: in PR 1 and PR 4 the files in lane C's and lane S's areas (`app/p/[profileId]/`,
-`components/`, `lib/`) are lane E's guest edits, which lane C reviews, and lane E takes over the
-clearance to edit the token preview (Q2). PR 4's `packages/db` hunks are still reviewed by lane P.
+**Lane E builds PR 1 and PR 4, lane S builds PR 3, and lane C builds PR 2 and PR 5** (the hand-over
+above). The tables below were written with lane C as the builder of all five, and their marks stand
+with one change of reading:
+
+- **PR 1 and PR 4 (lane E).** The files in lane C's and lane S's areas (`app/p/[profileId]/`,
+  `components/`, `lib/`) are lane E's guest edits, which lane C reviews. Lane E takes over the
+  clearance to edit the token preview (Q2). PR 4's `packages/db` hunks are still reviewed by lane P.
+- **PR 3 (lane S).** `actions.ts` holds lane S's four actions beside the three this PR deletes, so
+  the review the table asks of lane S becomes lane C's. Lane S builds it after its own B2, which
+  adds no gate to the plan but does set when PR 3, and so PR 5, can start.
+
 Files outside the builder's area are marked. Each PR carries its changelog
 fragment, its `docs/status.md` and `docs/roadmap.md` move, and the milestone chart in its description.
 The 400-line target is for code a reviewer must read; each PR says below why its size is acceptable.
@@ -216,7 +222,7 @@ test blocks and whole capture states.
 | `apps/web/scripts/screenshot-ephemeral.ts`                   | EDIT   | Delete the states for surfaces gone since #418: `calisthenics`, `strength-session`, `strength-amend`, `strength-log-more`, `form-skipped`, `form-sub-failure`, `status-badges`, `form-scaffolded`, `program-collapsed`, `form-bw-warning` (`:397-417`), `form-partial-sets`, `form-partial-blocked`, `form-time-card`, `history-spelled-units` (`:460-468`), with their seeders and interactions. `seedCalisthenics` is the tree's last writer of a ramp target (`:1294-1296`). The script has no test; lane C runs one kept state after. |
 | Comments that name deleted files                             | EDIT   | Lane C's: `app/p/[profileId]/use-on-action-success.ts:14-15`. **Guest edits, comment only, cleared by the board (2026-11-19), Q1:** `components/ui/sheet.tsx:140` (lane B's; it names `STRENGTH_COPY.close`), `bodyweight-section.test.tsx:7` (lane S's), `components/ui/announcer.tsx:8`, `components/theme/theme-toggle.tsx:25` and `.claude/skills/add-server-action/SKILL.md:120` (no lane's). `lib/routine/editor.ts:7` waits for PR 5: `programming.md` owns that folder, and PR 5 already takes that guide's turn.                 |
 
-### 12f PR 3: the three actions (about 1,350 lines deleted, about 45 added)
+### 12f PR 3: the three actions (about 1,350 lines deleted, about 45 added; lane S builds it)
 
 Waits for PR 1 (the forms import the actions). Runs beside PR 2. All of it is in surviving,
 security-relevant files, which is why it is its own PR. About 1,000 of its lines are test cases
