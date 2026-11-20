@@ -374,8 +374,8 @@ The shapes those lanes agree on, the fakes and the preview route are
 
    ⚠️ **`programBlockInHousehold(scope)` is the second PREFIXED helper (`PROF-1` a-g)**, per the
    naming convention in `writers/ownership.ts`: `program_blocks` carries its own `household_id`, so
-   it gets a prefix rather than reaching through `profiles`. Its one consumer is
-   `householdHasProgram`, and it reads `scope.householdId` — which is why it lives in that module and
+   it gets a prefix rather than reaching through `profiles`. Its consumers are the template-block helpers and the erasure graph (`householdHasProgram` was one
+   until FAM-1 12f PR 4 deleted it), and it reads `scope.householdId` — which is why it lives in that module and
    nowhere else.
 
    `householdRowIs(scope)` and `householdMemberInHousehold(scope)` (`PRIV-3` PR 1) are two more

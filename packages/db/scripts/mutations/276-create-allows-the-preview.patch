@@ -1,8 +1,8 @@
 diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
-index 9ec3f099..96a9ff4d 100644
+index a7ea7c8a..2ce0ca7d 100644
 --- a/packages/db/scripts/corrections/registry.ts
 +++ b/packages/db/scripts/corrections/registry.ts
-@@ -883,12 +883,6 @@ const createHousehold: Correction = {
+@@ -916,12 +916,6 @@ const createHousehold: Correction = {
    issue: 'PRIV-3',
    async run(db, apply) {
      try {
@@ -12,6 +12,6 @@ index 9ec3f099..96a9ff4d 100644
 -            'account; nothing written',
 -        );
 -      }
-       const ids = parseAccountList(process.env[CREATE_HOUSEHOLD_ACCOUNTS_ENV]);
-       const n = ids.length;
-       ids.forEach((id, i) => {
+       // A URL with no database name connects wherever `$PGDATABASE` points, which may BE the preview:
+       // the refusal above cannot see it, so this one refuses it (CAT-3 R0, D1).
+       if (correctionTargetDatabaseIsUnnamed()) {
