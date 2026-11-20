@@ -413,8 +413,13 @@ test.describe('Program order on real data', () => {
     //    line links to its program's page; the journey reads the links and does not follow them.
     const expectOrder = async (when: string) => {
       const links = programsLine(page).getByRole('link');
-      await expect(links, `${when}: the programs line`).toHaveText(moved.map((p) => p.name));
+      // By accessible name: each link's text ends in an aria-hidden " ›" (15c PR 1), which the
+      // name leaves out and `toHaveText` would not.
+      await expect(links, `${when}: the programs line`).toHaveCount(moved.length);
       for (const [index, program] of moved.entries()) {
+        await expect(links.nth(index), `${when}: link ${index + 1}`).toHaveAccessibleName(
+          program.name,
+        );
         await expect(links.nth(index)).toHaveAttribute(
           'href',
           programPath(program.path.split('/').at(-1)!),

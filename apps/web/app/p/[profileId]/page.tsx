@@ -274,11 +274,7 @@ export default async function TodayPage({
 
       {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
           program.", above Bodyweight. Each name on the line links to its program's page (15c, D49). */}
-      <ProgramLine
-        plan={plan}
-        actions={dayActions}
-        programHrefFor={(program) => programPath(program.programPublicId)}
-      />
+      <ProgramLine plan={plan} actions={dayActions} programHrefFor={programPath} />
       <NotOnAProgram
         plan={plan}
         programsHref={
