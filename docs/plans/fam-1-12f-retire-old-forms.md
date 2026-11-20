@@ -453,7 +453,7 @@ prototype's day page has no such card.
 
 **Answered by the board (2026-11-19):**
 
-- **Q1: yes** (the builder is lane B for PR 2 and lane E for PR 4 and PR 5 since L59, L61 and L62; read "lane C" below as that builder). Lane C makes the edits in lane S's files for the routine trim (`life-section.tsx`'s Wake
+- **Q1: yes** (the builder is lane B for PR 2 (L61) and lane E for PR 4 (L59) and PR 5 (L62); read "lane C" below as that builder). Lane C makes the edits in lane S's files for the routine trim (`life-section.tsx`'s Wake
   filter and its test) as guest edits lane S reviews, and the comment-only sweeps in other lanes'
   files, each named in its PR's body. `e2e/landing.spec.ts` belongs to no lane; lane C edits it in the
   routine-trim PR and names it the same way. It is the `SEC-1` witness test, so the change swaps the

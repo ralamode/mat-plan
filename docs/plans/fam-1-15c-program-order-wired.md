@@ -201,7 +201,7 @@ page, inside this step and not in a later row.
   ⚠️ **Overtaken (maintainer, 2026-11-20, relayed by the board: "Match prototype, no tooltip
   (Recommended)"; FAM-1 plan D52).** The line as built was checked against the prototype at 360px
   when the preview first showed it (#754): the comma landed after the "›" ("Family program ›,
-  Stretching ›"). The line takes the prototype's gap and no comma, in lane C's follow-up.
+  Stretching ›"). The line takes the prototype's gap and no comma since #758 (2026-11-20, built by lane B).
 - **Every day the line shows.** A read-only day links too, and so does a program the athlete has
   since come off: an id in `plan.programs` is one the household can use now (contract change C21).
 - **Size and wrap.** The link takes the class of the page's other inline link, `QUIET_LINK_CLASS`
