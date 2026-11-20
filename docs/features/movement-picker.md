@@ -394,7 +394,9 @@ the footer's states and the source scans. They deliberately **do not** claim:
 
 - any of Decision 8's **360px width arithmetic** — jsdom applies no Tailwind, so `min-h-12`, the tag
   wrap and "Overhead Shoulder Press" beside a group tag are all unmeasured here;
-- real `(pointer: coarse)`, and therefore **"no keyboard on open"** (criterion 18);
+- real `(pointer: coarse)`, and therefore **"no keyboard on open"** (criterion 18). The rule itself
+  is `prefersFineFocus()` in `apps/web/lib/a11y/pointer.ts` (shared since V1-9b B2-prep), which has
+  its own unit test;
 - `useDeferredValue` settling, and the status being read **once** by a screen reader (criterion 46).
   ⚠️ jsdom settles it synchronously, so invariant 8's bug class is **invisible** here in both
   directions: a regression that re-splits the query would not redden a single test;

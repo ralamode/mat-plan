@@ -60,6 +60,7 @@ import {
   type FilterChange,
 } from '@/components/movements/movement-filter-panel';
 import { SHEET_COPY, Sheet, sheetStatusId } from '@/components/ui/sheet';
+import { prefersFineFocus } from '@/lib/a11y/pointer';
 import { INPUT_CLASS, movementCount } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -484,12 +485,8 @@ export function MovementPicker({
   }
 
   // 🔴 **The search box takes focus only when there is no on-screen keyboard to raise** (criterion
-  // 18): focusing a field on touch covers the list the sheet exists to show. `matchMedia` is absent
-  // in jsdom, so the guard is a capability check and the default (the sheet's title) applies there.
-  const prefersKeyboardFocus =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    !window.matchMedia('(pointer: coarse)').matches;
+  // 18): focusing a field on touch covers the list the sheet exists to show. Where `matchMedia` is
+  // absent (jsdom) the default (the sheet's title) applies (`lib/a11y/pointer.ts`).
 
   // 🔴 **ONE query drives everything below: the deferred one.** `query` itself reaches only the
   // `<input>`'s own `value`. Filtering ~110 rows on the deferred value keeps typing responsive
@@ -816,7 +813,7 @@ export function MovementPicker({
       title={title}
       returnFocusTo={returnFocusTo}
       onReturned={onReturned}
-      initialFocus={prefersKeyboardFocus && !multiple?.takeover ? searchRef : undefined}
+      initialFocus={prefersFineFocus() && !multiple?.takeover ? searchRef : undefined}
       status={
         panelOpen
           ? panelNote && panelCounts
@@ -868,7 +865,7 @@ export function MovementPicker({
                 if (!enterTarget) {
                   // Nothing to pick. On a phone the Search key still puts the keyboard away, so
                   // the rows it is covering show: several matches, near misses, some-words.
-                  if (!prefersKeyboardFocus && shown > 0) {
+                  if (!prefersFineFocus() && shown > 0) {
                     e.currentTarget.blur();
                   }
                   return;
@@ -878,7 +875,7 @@ export function MovementPicker({
                 if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget, 'enter');
                 setQuery('');
                 setHow(null);
-                if (!prefersKeyboardFocus) e.currentTarget.blur();
+                if (!prefersFineFocus()) e.currentTarget.blur();
               }}
               maxLength={MOVEMENT_NAME_MAX}
               autoComplete="off"

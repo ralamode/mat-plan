@@ -36,7 +36,9 @@ describe.each([
     expect(ratio('ring', ground)).toBeGreaterThanOrEqual(AA_LARGE);
   });
 
-  it.each(['background', 'card'] as const)('the destructive ring clears 3:1 on %s', (ground) => {
+  // No ring is drawn in `destructive` since V1-9b B2-prep: the solid variant focuses with the ✓'s
+  // offset outline (destructive-tokens.test.ts). The red still marks an `aria-invalid` field's ring.
+  it.each(['background', 'card'] as const)('the aria-invalid ring clears 3:1 on %s', (ground) => {
     expect(ratio('destructive', ground)).toBeGreaterThanOrEqual(AA_LARGE);
   });
 

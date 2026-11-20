@@ -751,6 +751,15 @@ export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring outline-none focus-vi
 export const TICK_FOCUS_CLASS =
   'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
 
+/**
+ * A `Button` that focuses like the ✓: `TICK_FOCUS_CLASS`'s outline, offset onto the surface, with the
+ * base ring and border turned off so the two do not overlap. On the day page's tint (Undo, the
+ * Change's ✕, "+ Add set"), and on the solid `destructive` variant, where `foreground` inside the
+ * dark fill would be under 3:1 (docs/design.md → the ✓'s focus rule). Here, not in
+ * `components/day/`, since V1-9b B2-prep: `components/ui/button.tsx` reads it.
+ */
+export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
+
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
 

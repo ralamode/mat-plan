@@ -4,14 +4,18 @@ import type { ReactNode } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
-import { NAME_WRAP_CLASS } from '@/lib/constants';
+import { PENDING_CLASS } from '@/components/ui/pending-class';
+import { AMEND_COPY, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-import { BUILDER_COPY, PENDING_CLASS } from './builder-text';
-
 /**
- * A form sheet's footer (FAM-1 step 10b: Copy and Put on): its own message, then the action and
- * Cancel side by side, the action first and Cancel last.
+ * A form sheet's footer: its own message, then the action and Cancel side by side, the action first
+ * and Cancel last. Built for the program builder's Copy and Put on (FAM-1 step 10b), shared since
+ * V1-9b B2-prep for Clear this day.
+ *
+ * - **`variant`** styles the action: `'destructive'` for an action that removes something. It stays
+ *   `type="submit"` either way, so Enter in a field and the button still send the same form.
+ * - **`cancel`** is Cancel's label, `AMEND_COPY.cancel` ("Cancel") unless a caller names it.
  *
  * - **The message is seen and heard**: a visible `Announcer`, mounted empty so a change is read,
  *   tied to the action with `aria-describedby`. The Sheet's own `status` is screen-reader only.
@@ -30,6 +34,8 @@ export function SheetFormFooter({
   inactive,
   onCancel,
   lead,
+  variant = 'default',
+  cancel = AMEND_COPY.cancel,
 }: {
   formId: string;
   messageId: string;
@@ -38,6 +44,8 @@ export function SheetFormFooter({
   inactive: boolean;
   onCancel: () => void;
   lead?: ReactNode;
+  variant?: 'default' | 'destructive';
+  cancel?: string;
 }) {
   const leadId = `${messageId}-lead`;
   return (
@@ -53,6 +61,7 @@ export function SheetFormFooter({
         <Button
           type="submit"
           form={formId}
+          variant={variant}
           size="lg"
           className={cn('w-full text-base', PENDING_CLASS, NAME_WRAP_CLASS)}
           aria-disabled={inactive || undefined}
@@ -67,7 +76,7 @@ export function SheetFormFooter({
           className="w-full text-base"
           onClick={onCancel}
         >
-          {BUILDER_COPY.cancel}
+          {cancel}
         </Button>
       </div>
     </div>
