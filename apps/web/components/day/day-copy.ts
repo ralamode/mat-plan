@@ -168,7 +168,7 @@ export const PROGRAM_COPY = {
   orderAllEnding: (athlete: string) =>
     `${athlete}’s programs all come off after today, so there’s nothing to order.`,
   /**
-   * ⚠️ **Awaiting the maintainer's approval** (15c follow-up). Under Program order when its dialog's
+   * Approved by the maintainer (2026-11-20, 15c follow-up). Under Program order when its dialog's
    * code could not be loaded (a dropped connection on the gym floor): the button stays, and a tap
    * tries again. No existing line fits: `orderFailed` says a save failed, and nothing was saved.
    */
