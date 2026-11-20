@@ -15,6 +15,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The import pins hold names by barrel and by direct import, not by origin (added 2026-11-20, #779)
+
+- **What & why it's debt:** `apps/web/test/program-imports.test.ts` checks each `@mat-plan/db` name
+  by the name imported from `packages/db/src/index.ts`, and the DAL re-export rule by an `export`
+  that names it directly ([plan](./plans/td-program-tables-import-graph.md), § Goal). Two holes the
+  regex guard also had stay open: a lane P writer re-published by another `packages/db` module under
+  a new name, and a DAL passing one on through a local binding (`export { s }` of an aliased import,
+  an object literal, `cache(x)`).
+- **Impact:** code written that way could reach a writer outside the DAL without the guard refusing
+  it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the damage is
+  limited to a path a reviewer must catch.
+- **The fix:** key names by origin, walking `index.ts`'s re-export graph so a writer keeps its
+  identity under any name; and, in the DALs, allow a lane P name only as a direct callee. The second
+  is a new restriction, with a false-positive risk (a writer handed to a transaction wrapper).
+- **Severity:** low.
+
 ### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
 
 - **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
@@ -39,20 +55,6 @@ liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `repor
 - **The fix:** if Home's LCP suffers, batch `dayAssignments` with `profile_id IN (...)` and group in
   memory, keeping `currentPrograms`' order rule unchanged (the Programs list shares the read).
 - **Severity:** low.
-
-### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
-
-- **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
-  HELPERS and erasure pins) finds lane P's imports by matching specifier text. #552 tried to harden
-  it, and its security review found that each fix met another spelling: a comment inside an import, a
-  backtick specifier, `require (` with a space, a `../node_modules` path, or an `@/` alias walking out
-  of `apps/web`.
-- **Impact:** an import written that way into a page or the day DAL would not be refused by the
-  guard. Code written in good faith uses the plain forms, which the guard catches.
-- **The fix:** a parser-based check, ESLint `no-restricted-imports` with path patterns per directory
-  (or the TypeScript import graph), so every specifier form, comment and alias resolves in one place.
-  Then the regex guard's directory rules move into it.
-- **Severity:** low. Maintainer, 2026-11-18: "Close; lint check as tech debt".
 
 ### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
 

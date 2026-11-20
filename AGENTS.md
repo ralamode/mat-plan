@@ -370,6 +370,10 @@ build`; default-to-run). Override with the
   **`ci-skip-e2e` label, then push** — sparingly, a red `e2e` usually means a real bug — or an admin
   merge as last resort. The skip is step-level, never a job-level `if:`, so a required check never
   stalls "pending" ([plan](./docs/plans/ci-e2e-auto-skip.md)).
+- **The import-pins guard** (`apps/web/test/program-imports.test.ts`, who may import what from
+  `@mat-plan/db` and the action modules) is the one test the suite scopes: on a PR (`run_import_pins`)
+  and pre-push it runs only when `importPinsInScope` ([changed-scopes.mjs](./.github/scripts/changed-scopes.mjs))
+  finds a changed file it reads, and every run on `main` runs it. A scoping, not a loosening.
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking API/DB
   changes.
 - **No personal names in PRs, plans, ADRs, changelog fragments or commit messages.** Write the role —
