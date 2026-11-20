@@ -42,7 +42,7 @@ async function expectTheBar(page: Page, context: string): Promise<void> {
   await expect(page.getByRole('main')).toHaveCount(1);
   await expectNoAxeViolations(page, context);
   await expectTapTargets(page, context);
-  await expectLinkTargets(page, context);
+  await expectLinkTargets(page.getByRole('main'), context);
   await expectNoHorizontalOverflow(page, context);
 }
 

@@ -449,6 +449,10 @@ flowchart LR
 
 ## Traps
 
+- **Links on the builder's screens are measured by the suite's one link check**,
+  `expectLinkTargets(page.getByRole('main'), context)` in `e2e/a11y-checks.ts`, which
+  `program-builder.a11y.spec.ts` calls; there is no builder-local copy.
+
 - **The sheet pops its history entry on close, and in jsdom that `popstate` lands in the next
   test**, closing its sheet. A test file that opens a sheet stubs `history.back` (as
   `sheet.test.tsx` does).
