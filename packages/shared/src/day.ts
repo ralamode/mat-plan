@@ -52,10 +52,10 @@ export function inWritableWindow(day: string, today: string): boolean {
  * otherwise), and what a day's Restore all is held to (FAM-1 plan D32; the maintainer, 2026-11-17:
  * an archived athlete's day is never writable; contract change C34).
  *
- * ⚠️ **As of C34 only the contract's fixture world and the day page's `dayPageFlags` (plan step 12c,
- * `apps/web/lib/entries/declared-day.ts`) call this.** The day resolver and the row
- * writer call lane E's `rowDayOpen`, and Restore all calls lane S's `dayIsOpen`
- * (`clear-day-actions.ts`): the same rule, written twice more. Each switches in its own lane's PR.
+ * ⚠️ **Callers: the contract's fixture world, the day page's `dayPageFlags` (plan step 12c,
+ * `apps/web/lib/entries/declared-day.ts`) and Restore all (`clear-day-actions.ts`, since V1-9b
+ * B2-i).** The day resolver and the row writer call lane E's `rowDayOpen`: the same rule, written
+ * once more, which switches in its own lane's PR.
  *
  * One function, so the page and every writer answer alike: a second copy that forgot the archived
  * half would offer a ✓ the writer then refuses. Call this wherever the athlete is known;
@@ -67,6 +67,22 @@ export function inWritableWindow(day: string, today: string): boolean {
  */
 export function dayOpenFor(athlete: { archived: boolean }, day: string, today: string): boolean {
   return !athlete.archived && inWritableWindow(day, today);
+}
+
+/**
+ * **Is this athlete's day open for Clear this day?** Today only, and the athlete not archived
+ * (V1-9b B2; the maintainer, 2026-11-19, revising "today and yesterday"). Narrower than `dayOpenFor`
+ * on purpose: Restore all keeps today and yesterday, so every clear has at least a day to be put back.
+ *
+ * Built on `dayOpenFor` so the archived half is never written twice. `clearDayAction` calls this,
+ * and B2-ii's trigger will, so the page never offers a clear the action refuses.
+ */
+export function clearDayOpenFor(
+  athlete: { archived: boolean },
+  day: string,
+  today: string,
+): boolean {
+  return dayOpenFor(athlete, day, today) && day === today;
 }
 
 /** The calendar date `n` whole days after `day` (`YYYY-MM-DD`; a negative `n` goes back). */

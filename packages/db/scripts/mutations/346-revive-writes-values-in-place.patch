@@ -1,0 +1,35 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 23f0a3d8..ce43b278 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -391,6 +391,7 @@ export async function logRow(
+      * - **R8:** the un-hide stays here, module-private. `hide.ts` is the only module that HIDES; this
+      *   is the one other write of `entries.deleted_at`, and it only clears it, through `UNHIDE`.
+      */
++    let inPlace = false;
+     const revive = async (): Promise<
+       { entry: { id: number; publicId: string } } | { answer: RowResult } | null
+     > => {
+@@ -426,8 +427,12 @@ export async function logRow(
+           if (!row) return null;
+           await sp
+             .update(schema.entrySets)
+-            .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
++            .set({ reps: values.reps ?? null, updatedAt: sql`now()` })
+             .where(and(eq(schema.entrySets.entryId, row.id), isNull(schema.entrySets.deletedAt)));
++          await sp.execute(
++            sql`update entry_set_quantities set value_num = ${values.quantities[0]?.value ?? null} where entry_set_id in (select id from entry_sets where entry_id = ${row.id} and deleted_at is null)`,
++          );
++          inPlace = true;
+           return row;
+         });
+         return revived ? { entry: revived } : null;
+@@ -498,7 +503,7 @@ export async function logRow(
+     }
+ 
+     // The set row: one per ✓ (D3).
+-    await insertEntrySetRows(tx, { entryId: entry.id, sets: [values] });
++    if (!inPlace) await insertEntrySetRows(tx, { entryId: entry.id, sets: [values] });
+ 
+     // 12 — answered from the stored row, read the one way a replay reads it: `numeric(8,3)` rounds
+     //      (40.12345 is stored 40.123), so `values` itself would differ from the replay's answer.

@@ -3,7 +3,7 @@
 > Backlog: [plan.md](../plan.md) row `CAT-3`. Spec:
 > [cat-3-movement-library](../specs/cat-3-movement-library.md), criterion **P12**, with **K22 to
 > K24** and the B3 row of "Chunks, in order". Branch: `feat/cat-3-b3-browse-by-kind`. Lane B.
-> **Plan only:** no code until the maintainer approves it.
+> **Approved** _(maintainer, 2026-11-19)_.
 
 ## Where this sits
 
@@ -13,7 +13,7 @@
   (#594, #596) → **B3**.
 - **This PR:** B3, the last picker chunk. With no query, "All movements" opens to the kind of
   training and then a family, replacing the five legacy groups. Until the fresh start, the old
-  built-ins with no library entry sit in one folded section after the tree (K24).
+  built-ins with no library entry sit in one section after the tree (K24), which opens by itself whenever the tree does (`BROWSE_OPEN_AT_MOST` library rows or fewer) and is folded otherwise _(maintainer, 2026-11-19: "Open it while the tree is small")_.
 - **Build gate: after B2-ii only.** The spec owner decided this under the maintainer's overnight
   delegation on 2026-11-18.
   - P11-ii is not a gate. It is where the option payload is measured and where the taxonomy's
@@ -44,13 +44,16 @@
    - "Today's program" (no filter, when passed, unchanged);
    - "All movements", opening to the kind and then the family, each with its count, biggest family
      first.
-3. **The old built-ins stay findable by browsing** (K24): one folded section after the tree, **"Not
-   sorted yet"**.
+3. **The old built-ins stay findable by browsing** (K24): one section after the tree, **"Not
+   sorted yet"**, which opens by itself whenever the tree does (`BROWSE_OPEN_AT_MOST` library rows or fewer) and is folded otherwise _(maintainer, 2026-11-19: "Open it while the tree is small")_.
 4. **A tick is never hidden, and a group never closes under the person's thumb** (movement-picker
    invariant 15).
 
 **Until A2 seeds the library, the real picker's tree is small by design** (spec owner,
-2026-11-18): Strength · 5 and Conditioning · 1, with 29 rows in "Not sorted yet".
+2026-11-18). Counted again on 2026-11-19 by running `browseTree` over the 35 old rows whose slug
+has a `CATALOG_MOVEMENTS` entry (510 entries, batches 1 to 11): Strength · 11 and Conditioning · 1
+(12 in the tree), with 23 rows in "Not sorted yet". At 12 rows the tree opens itself (K26), and so
+does "Not sorted yet" (as built, below).
 
 - The preview shows the test library's tree, **not the real library's**.
 - So the PR description carries the real library's tree (kinds, families, counts and a few names
@@ -69,7 +72,8 @@ because a pasted copy goes stale. Done when:
   3. "Today's program", unchanged.
   4. "All movements · N", open. It holds each kind (folded, with its count) in `BROWSE_KINDS` order,
      and each kind's families (folded, with their counts), biggest first.
-  5. After the kinds: "Not sorted yet · N", folded, shown when any listed row lacks library data.
+  5. After the kinds: "Not sorted yet · N", shown when any listed row lacks library data. It
+     opens by itself whenever the tree does (`BROWSE_OPEN_AT_MOST` library rows or fewer) and is folded otherwise _(maintainer, 2026-11-19: "Open it while the tree is small")_.
 - **N for "All movements":**
   - with no filter, the tree's rows plus the "Not sorted yet" rows;
   - under a filter, the tree's rows only;
@@ -216,6 +220,12 @@ open(key) = userChoice.get(key) ?? (auto || seeded.has(key) || defaultOpen(key))
   the picker only renders what it is given.
 - **`defaultOpen`** is true for All movements, and for custom items at ≤ `CUSTOM_OPEN_AT_MOST` (5; H2) and false
   for kinds, families and Not sorted yet.
+- **As built (B3-i):** `auto` **never opens "Your custom items"**: the
+  formula above would open twenty-four custom items whenever the tree was short and bury it, which
+  is what K25 folds them for. **"Not sorted yet" opens with `auto` too** _(maintainer, 2026-11-19,
+  via the board: "Open it while the tree is small")_, which overrides K24's "folded" only while the
+  tree holds `BROWSE_OPEN_AT_MOST` rows or fewer: before the library is seeded most rows live
+  there. On a longer tree it is folded, as K24 says. A tap still wins and the seed still applies.
 - **A new selection reopens its ancestors** (round 2, correctness). When an id enters `selected`
   (the person's tick, or the caller's select or create) or becomes `currentId`, its ancestors are
   added to `seeded` **and their entries are deleted from `userChoice`**. So an earlier close never
@@ -313,6 +323,68 @@ of tests, which is over the 400-line target. If the build confirms that, B3 ship
 - **B3-i:** `browse-view.ts`, the disclosure, the open-state model, the no-filter tree, Not sorted
   yet, custom first, and no group tag.
 - **B3-ii:** the filtered tree, auto-open, the no-match fallback, and the e2e and capture states.
+
+**As built:** B3-i also shipped auto-open (filter or not, in `browseView`), the no-match fallback
+with no filter (All movements, no custom section), the no-filter e2e steps (a kind from the
+keyboard, a kind and a family open, at 360px) and the `picker-browse-open` capture state, with
+`PICKER_STATE_PREFIX`. **B3-ii is now** the filtered tree under "Movements that fit your filters",
+the filtered no-match fallback, the remaining e2e steps (the filtered headings, 200% text on an
+open family), and moving the two remaining `FoldedSection`s (the filtered custom section and
+Today's program, marked `TODO(CAT-3 B3-ii)`) onto `Group`, which deletes `FoldedSection`.
+
+**As built (B3-ii):**
+
+- **One view, filter or not.** The picker builds `browseView(options, filters)`, and the one
+  `browse` element renders it at every site: "Movements that fit your filters" is `Browse` with
+  `view.filtered`, the same `BROWSE_KEY.all` key, so a tap carries across a filter change (as
+  `forgetClosed` allows). `auto` was already counted on the filtered tree's library rows. The flat
+  list (`filteredBrowse`'s `filterMovementOptions` partition and its `byFoldedName` sort) is gone;
+  `filteredBrowse` is now the custom group plus the tree, or `COPY.noneFit` when nothing fits, and
+  serves both the empty query and the no-match fallback under a filter (P10).
+- **"Your custom items" has two keys** (review of #715): `BROWSE_KEY.custom` with no filter and
+  `BROWSE_KEY.customFiltered` under one, labelled `householdNotFiltered`. With one key, opening two
+  dozen custom items with no filter carried them open above the filtered results. The filtered
+  key's default is folded however few (P9, K25); a tick seeds only the key of the list being drawn
+  (`browseAncestors(…, filtered)`; second review of #715: seeding both carried a no-filter tick
+  into the filtered list, open).
+- **Today's program is a group in the same model** (`BROWSE_KEY.program`). Its default is "open
+  while any of it is not on a card, or while it holds a ticked row" (`programAllOnForm`,
+  `programHoldsTicked`, the second read live so ids that arrive after the tick still open it). A
+  multi-mode tick in it seeds it, and so does the program arriving holding a tick (`seedKeys`, on
+  `programHoldsTicked`'s rise, during render), which replaces `FoldedSection`'s latch: unticking a row that is on
+  another card does not fold it. The current row (single mode) and `reveal` do not seed it, as
+  before. `Group`'s count became optional, so its heading is unchanged ("Today's program", no
+  count).
+- **`FoldedSection` and `COPY.foldedCount` are deleted**: the latter's last reader was the former
+  (§Copy's "kept as is" predates that).
+- **Rows at large text (review of #715, WCAG 1.4.4).** Side by side, a multi row with "How to"
+  at 200% text on a 360px phone left its name about 30px (296 − gap 8 − "How to" 136 − paddings 48
+  − border 2 − box 48 − gap 24), a letter per line; on a page zoomed to 195 CSS px, about 29px. Now
+  `OptionList`'s `ul` is an `@container` and a row below `@xs` (20rem) stacks "How to" under the
+  name (`@max-xs:flex-col`, the empty spacer `@max-xs:hidden`, "How to" `self-start` and still
+  `min-h-11`). Name column: **194px** at 360px and 100% text (the list is 328px, one line, as
+  before); **about 174px** at 200% text (296 − 48 − 2 − 48 − 24); **about 101px** at 195 CSS px
+  (163 − 24 − 2 − 24 − 12). The family's label keeps about 128px at 200% (296 − `pl-6` 48 −
+  chevron 32 − two gaps 32 − count ~56) and 244px at 100%. A container query rather than
+  `flex-wrap` with `basis-48`, because a wrapped empty spacer would leave a row gap under every row
+  without "How to".
+- **e2e:** the filtered step expects the tree's headings (with "Quads" on, Strength · 3 with Jumps,
+  Lunges and Squats, all open by K26). A new step checks the open Squats family at 200% root text
+  and again at a 195px viewport: no text-bearing span wider than its box, Goblet squat's name at
+  least 120px (90 at 195, assuming headless Chromium's hidden scrollbars), "How to" under the
+  name at 200%, the family's count inside its button, nothing in the dialog wider than its box. Not
+  `expectNoHorizontalOverflow`, which measures the page under the fixed sheet. The no-filter step
+  pins the other half: at 360px and 100% text, Goblet squat's "How to" is beside its name
+  (Chin-up, the family the step opens, has no steps in the test library). **The threshold moves
+  with the text** (`@xs` is 20rem, against the root): a row stacks from about 103% text at 360px,
+  112% at 390px and 118% at 412px, so any enlargement on a 360px phone stacks it; rem is kept.
+- **What the filtered tree costs on today's data** (review of #715, UX). Until P11-ii lists more of
+  the library, a filter usually leaves a handful of rows, so the tree adds a kind and family
+  headings with nothing to fold: with "Quads" on, the third row starts about 637px down the sheet,
+  against about 460px for the flat list. The rule is the spec's (P12) and is kept. **Look at
+  `picker-filter-browse` again after P11-ii**, when the tree has rows enough to earn its headings.
+- **Capture:** no new state. `quadsOnThenBack`'s wait now matches the counted fit heading, so
+  `picker-filter-browse` shows the filtered, auto-opened tree.
 
 ## Test plan
 

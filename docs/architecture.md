@@ -385,8 +385,11 @@ leaves with the tombstone, and a CHECK refuses a live row that kept one. **B1-2:
 (`clearEventOn`, `queries/clear-events.ts`) serves `clearDay`'s replay, `restoreClear` and the
 banner's read `clearEventsForDay` (every clear of a day, newest first, as a token and a count), so the
 banner offers exactly what Restore all restores. Restore all's action answers counts, counted in the
-DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. The diagram's last block
-is Restore all's server half; B2 adds the banner that calls it.
+DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:** `clearDayAction`
+takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
+answers the day's newest clear's count: a call that finds nothing live replays that clear, however
+old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
+Restore all; B2-ii's banner and dialog will call them.
 
 ```mermaid
 sequenceDiagram
@@ -417,6 +420,15 @@ sequenceDiagram
       W->>DB: restore the item (guarded by the token)
       W-->>P: ok — or ROLLBACK TO SAVEPOINT
     end
+  end
+
+  P->>W: Clear this day (profile, day, confirm word) — today only, not archived
+  W->>DB: clearDay — the day's live ids, locked ORDER BY id, scoped
+  alt nothing live
+    W-->>P: ok · count 0 (or a replay's count)
+  else
+    W->>DB: deleted_at = now() · hide_reason = clear_day · ONE token
+    W-->>P: ok · count (no token leaves the action)
   end
 
   P->>W: Restore all (profile, day, token) — today or yesterday, not archived
@@ -846,9 +858,9 @@ flowchart TB
   DEV["feature branch → PR"] --> CI
   subgraph CI["GitHub Actions — on every PR"]
     S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false"]
-    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drift guard + PGlite db:verify"]
+    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drizzle-kit check + drift guard + PGlite db:verify"]
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
-    M["<b>mutations</b> × 8 shards on main, 4 on a PR (scoped; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
+    M["<b>mutations</b> × 4 shards (scoped on a PR; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
     S --> Q
     S --> E
     S --> M

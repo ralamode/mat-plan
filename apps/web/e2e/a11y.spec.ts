@@ -1,5 +1,4 @@
 import { SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import {
@@ -20,7 +19,6 @@ import {
   SETTINGS_PATH,
   SIGN_IN_COPY,
   SIGN_IN_PATH,
-  THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
   athleteEditPath,
   athleteRoutinePath,
@@ -41,7 +39,14 @@ import {
   NARROW_VIEWPORT,
   navRail,
 } from './contexts';
-import { expectNoOverflowWithin } from './a11y-checks';
+import {
+  describeControl,
+  expectActuallyDark,
+  expectNoAxeViolations,
+  expectNoOverflowWithin,
+  expectTapTargets,
+  seedStoredTheme,
+} from './a11y-checks';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -95,109 +100,6 @@ const ROUTES = [
   { name: 'token sets', path: TOKEN_SETS_PATH },
 ] as const;
 
-/**
- * Interactive controls that must meet the tap-target bar.
- *
- * `input:not([type="hidden"])` — a hidden input has NO bounding box (`boundingBox()` → null), so an
- * unfiltered selector would throw rather than assert; the app has several (the routine editor's JSON
- * field, the check-in client-ids, the gate's `from`).
- *
- * `<a>` is EXCLUDED: WCAG 2.2 SC 2.5.8 has an explicit exception for links inline in a block of text,
- * and the app's links ("← All athletes", "→ Edit {name}") are exactly that — growing them to 44px
- * would be a visual regression, not a fix. Link CARDS that behave like buttons are opted in
- * separately below.
- * ⚠️ **The consequence, now that those links carry `min-h-11` anyway:** nothing in THIS file asserts
- * it. `athletes.spec.ts` measures the edit page's back link, because a link that is the recovery
- * path from a writing screen is not "inline in a block of text" in any useful sense.
- */
-const INTERACTIVE = 'button, [role="button"], select, textarea, input:not([type="hidden"])';
-
-/**
- * A checkbox/radio's own box is intentionally small (20px here) — its ACTIVATABLE AREA is the bound
- * `<label>`, which is what a thumb aims at and what the browser actually toggles. WCAG target size
- * measures the activatable region, so measuring the 20px box would be measuring the wrong thing and
- * would push us toward a 44px checkbox glyph, which is not the fix. For these, we measure the label.
- */
-const LABEL_MEASURED = ['checkbox', 'radio'];
-
-/**
- * The element whose height represents this control's real tap target: normally itself, but for a
- * checkbox/radio the `<label for=…>` that activates it. Returns `null` when a checkbox has no bound
- * label — which is itself a defect, reported by the caller rather than silently skipped.
- */
-async function targetOf(page: Page, control: Locator): Promise<Locator | null> {
-  const type = await control.getAttribute('type');
-  if (!type || !LABEL_MEASURED.includes(type)) return control;
-
-  // EXPLICIT association: <label for="id">. NOT `CSS.escape` — that is a BROWSER global and this runs
-  // in Node. The id sits inside a quoted attribute selector, so only a quote or backslash needs
-  // escaping (the app's ids contain ':' from `activityKey:metricKey`, which is fine inside quotes).
-  const id = await control.getAttribute('id');
-  if (id) {
-    const explicit = page.locator(`label[for="${id.replace(/["\\]/g, '\\$&')}"]`);
-    if ((await explicit.count()) === 1) return explicit;
-  }
-
-  // IMPLICIT association: the control is WRAPPED in its <label> (equally valid HTML, and what the
-  // superset toggle uses). Checking only `label[for]` would report a false defect here.
-  const implicit = control.locator('xpath=ancestor::label[1]');
-  return (await implicit.count()) === 1 ? implicit : null;
-}
-
-/** Assert every VISIBLE interactive control on the page clears the tap-target bar. */
-async function expectTapTargets(
-  page: Page,
-  context: string,
-  opts: { expectControls?: boolean } = {},
-): Promise<void> {
-  const controls = await page.locator(INTERACTIVE).all();
-  // A guard against the selector silently matching nothing (which would make this whole assertion
-  // vacuous). Opt-out for the picker, which legitimately has only link-cards — those are measured by
-  // their own test, since links are excluded here under the SC 2.5.8 inline exception.
-  if (opts.expectControls !== false) {
-    expect(
-      controls.length,
-      `${context}: found no interactive controls — selector is wrong`,
-    ).toBeGreaterThan(0);
-  }
-
-  const undersized: string[] = [];
-  for (const control of controls) {
-    if (!(await control.isVisible())) continue; // collapsed/conditional UI has no target to hit
-    const target = await targetOf(page, control);
-    if (!target) {
-      undersized.push(`${await describe(control)} → no bound <label> to act as its tap target`);
-      continue;
-    }
-    const box = await target.boundingBox();
-    if (!box) continue; // visible but unrendered (0-area) — nothing to measure
-    if (box.height < MIN_TAP_TARGET_PX) {
-      undersized.push(`${await describe(control)} → ${Math.round(box.height)}px`);
-    }
-  }
-  expect(undersized, `${context}: controls under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
-}
-
-/** A human-readable identifier for a failing control, so the assertion names the culprit. */
-async function describe(control: Locator): Promise<string> {
-  const [tag, label, text] = await Promise.all([
-    control.evaluate((el) => el.tagName.toLowerCase()),
-    control.getAttribute('aria-label'),
-    control.innerText().catch(() => ''),
-  ]);
-  return `<${tag}> "${(label ?? text ?? '').trim().slice(0, 40) || '(unnamed)'}"`;
-}
-
-/** Scan with the WCAG 2.0/2.1 A + AA rule sets. Zero tolerance — no allowlist (nothing to grandfather
- *  on a first scan), and the dependency is EXACTLY pinned so a rule-set bump can't redden an unrelated PR. */
-async function expectNoAxeViolations(page: Page, context: string): Promise<void> {
-  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-  expect(
-    violations.map((v) => `${v.id} (${v.nodes.length}): ${v.help}`),
-    `${context}: axe violations`,
-  ).toEqual([]);
-}
-
 test.use({ viewport: MOBILE_VIEWPORT });
 
 for (const route of ROUTES) {
@@ -235,18 +137,9 @@ test.describe('dark theme', () => {
 
   for (const route of ROUTES) {
     test(`${route.name} has no WCAG A/AA violations in dark mode`, async ({ page }) => {
-      await page.addInitScript((key) => {
-        try {
-          window.localStorage.removeItem(key as string);
-        } catch {
-          /* ignore */
-        }
-      }, THEME_STORAGE_KEY);
+      await seedStoredTheme(page, null);
       await page.goto(route.path, { waitUntil: 'networkidle' });
-      await expect(
-        page.locator('html'),
-        `${route.name}: not actually rendering dark — this scan would have audited the LIGHT palette`,
-      ).toHaveClass(/\bdark\b/);
+      await expectActuallyDark(page, route.name);
       await expectNoAxeViolations(page, `${route.name} (dark)`);
     });
   }
@@ -440,9 +333,10 @@ async function expectLinkTapTargets(
   }
   for (const link of links) {
     const box = await link.boundingBox();
-    expect(box?.height ?? 0, `${context} link "${await describe(link)}"`).toBeGreaterThanOrEqual(
-      MIN_TAP_TARGET_PX,
-    );
+    expect(
+      box?.height ?? 0,
+      `${context} link "${await describeControl(link)}"`,
+    ).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
   }
 }
 

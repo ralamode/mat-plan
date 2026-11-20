@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
-index a98f3597..6dd46fe5 100644
+index 23f0a3d8..f43635bf 100644
 --- a/packages/db/src/writers/day/log-row.ts
 +++ b/packages/db/src/writers/day/log-row.ts
-@@ -355,7 +355,7 @@ export async function logRow(
-           prescriptionSet: write.set,
-           // What the row was logged against, frozen (D7). `''` is a real value (a Check) and stays
-           // `''`. The quantities are the target's, so a range renders as the day page shows it.
--          prescribedSnapshot: text,
-+          prescribedSnapshot: '',
-         })
-         .onConflictDoNothing()
-         .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
+@@ -344,7 +344,7 @@ export async function logRow(
+       movementName: movement.name,
+       supersetId,
+       supersetOrder: supersetId === null ? null : prescription.supersetOrder,
+-      prescribedSnapshot: text,
++      prescribedSnapshot: '',
+     } satisfies Partial<typeof schema.entries.$inferInsert>;
+ 
+     // The entry. Bare `ON CONFLICT DO NOTHING`: the `client_id` and the row arbiter

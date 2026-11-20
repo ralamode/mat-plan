@@ -31,8 +31,9 @@ you start.**
   drifted (it omitted Google and GitHub) by the time PRIV-1 checked it, which is the argument for
   pointing rather than copying.
 
-`.github/SECURITY.md` already classifies kid bodyweight as privileged — "never returned outside the
-household operator, never logged." Treat that as the standing rule this lens enforces.
+`.github/SECURITY.md` → Sensitive data classifies bodyweight as privileged, for every profile, and says
+who may receive it (in the app, the export, any future feed). Read it there rather than from a copy:
+it is the standing rule this lens enforces.
 
 **You are not giving legal advice, and must not pretend to.** This is engineering hygiene expressed
 in the vocabulary of data protection. Say "this holds data with no deletion path", never "this is

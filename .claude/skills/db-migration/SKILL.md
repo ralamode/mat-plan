@@ -102,12 +102,13 @@ patches you are writing (`pnpm --filter @mat-plan/db db:mutations --only <n>`).
 
 ```bash
 pnpm db:generate && git status --short packages/db/migrations   # must be clean: no drift
-pnpm verify                                                       # includes db:verify
+pnpm verify                                                       # includes db:check and db:verify
 npx squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/NNNN_*.sql
 ```
 
 CI adds: the **forward-only guard** (migrations may only be ADDED; `_journal.json` append-only and in
-time order; the snapshot `prevId` chain), **Squawk** on added `.sql`, and the **drift guard**. There is **no
+time order; the snapshot `prevId` chain, which also catches a `prevId` equal to its own `id`), `drizzle-kit check` (two
+snapshots claiming one parent; it runs in `pnpm verify` too), **Squawk** on added `.sql`, and the **drift guard**. There is **no
 Neon-branch apply** yet (tech-debt.md), so don't cite one.
 
 ⚠️ **Generate on top of the newest migration on main, never before it.** drizzle's migrator applies a

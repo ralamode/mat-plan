@@ -2,12 +2,15 @@
 
 import * as Sentry from '@sentry/nextjs';
 import {
+  PROGRAM_REFUSAL,
+  programOrderSchema,
   ROW_REFUSAL,
   rowAmendSchema,
   rowRetickSchema,
   rowUntickSchema,
   rowWriteSchema,
   TRANSPORT_REFUSALS,
+  type ProgramResult,
   type RowResult,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
@@ -17,14 +20,17 @@ import { enterMutation } from '@/app/p/mutation-entry';
 import { getActiveLocalDay } from '@/lib/active-timezone';
 import { athletePath } from '@/lib/constants';
 import { amendDayRow, logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
+import { refreshAssignment } from '@/lib/dal/program/revalidate';
+import { reorderHouseholdPrograms } from '@/lib/dal/program/writes';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 
 /**
- * The day page's row writes: four of `DayActions`' members, `logRow`, `untickRow` and `retickRow`
- * (FAM-1 step 12b), and `amendRow` (12d, Change). `reorderPrograms` (15c) is not here yet, so the
- * screen keeps Program order hidden. Each action is a PUBLIC endpoint and re-checks the boundary itself
- * (AGENTS.md → Server conventions):
+ * The day page's writes, `DayActions`' five members: four row writes, `logRow`, `untickRow` and
+ * `retickRow` (FAM-1 step 12b) and `amendRow` (12d, Change), and the athlete's Program order,
+ * `reorderPrograms` (15c; no page passes it until 15c PR 3, so the screen keeps the control hidden).
+ * Each action is a PUBLIC endpoint and re-checks the boundary itself (AGENTS.md → Server
+ * conventions). The four row writes:
  *
  * 1. Sentry's wrapper, with NO options: headers and form data never reach a captured event.
  * 2. `enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT)`: the session, then the row-write
@@ -114,6 +120,40 @@ export async function amendRowAction(input: unknown): Promise<RowResult> {
       const entry = await enterMutation(TRANSPORT_REFUSALS, ROW_WRITE_RATE_LIMIT);
       if (!entry.ok) return entry;
       return writeRow(rowAmendSchema, input, amendDayRow);
+    },
+  );
+}
+
+const INVALID_ORDER = { ok: false, reason: PROGRAM_REFUSAL.invalid } as const;
+
+/**
+ * An athlete's Program order (FAM-1 step 15c), `DayActions.reorderPrograms`. Not a row write, so it
+ * differs from the four above at each step, and does not use `writeRow`, which speaks `RowResult`:
+ *
+ * 1. Sentry's wrapper, with NO options.
+ * 2. `enterMutation(TRANSPORT_REFUSALS)` with the **default** limiter: a reorder is not a ✓ (D23).
+ * 3. `programOrderSchema` (at most `MAX_ORDER_PROGRAMS` ids, each once), else `invalid`, and the
+ *    DAL is not called.
+ * 4. No `getProfileByPublicId`: the action is household-addressed, as Put on and Take off are, and
+ *    lane P's writer is the one check of the athlete (`lockAthletes`: this household's, live, not
+ *    archived) and of the list (a permutation of the current programs, else `invalid`).
+ * 5. Today is read here, as for the row writes, and handed down.
+ * 6. One DAL call. A refusal is returned as it is; on success, the assignment's pages are
+ *    revalidated for the PARSED athlete id (the schema hands it back in lower case, never the URL's
+ *    segment), and the answer is `{ ok: true }`, built here.
+ */
+export async function reorderProgramsAction(input: unknown): Promise<ProgramResult> {
+  return await Sentry.withServerActionInstrumentation(
+    'reorderProgramsAction',
+    async (): Promise<ProgramResult> => {
+      const entry = await enterMutation(TRANSPORT_REFUSALS);
+      if (!entry.ok) return entry;
+      const parsed = programOrderSchema.safeParse(input);
+      if (!parsed.success) return INVALID_ORDER;
+      const result = await reorderHouseholdPrograms(parsed.data, await getActiveLocalDay());
+      if (!result.ok) return { ok: false, reason: result.reason };
+      refreshAssignment([parsed.data.profilePublicId]);
+      return { ok: true };
     },
   );
 }
