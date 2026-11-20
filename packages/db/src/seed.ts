@@ -42,15 +42,6 @@ import {
 import { seedProgramFixtures } from './writers/program/seed-fixtures';
 
 /**
- * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
- * demonstrates A≠B vs Athlete One (whose own routine is `SEED_FULL_ROUTINE` since ONB-0 — it was NULL, i.e. the
- * old whole-catalog default). Exported so an app-side test can bind these keys
- * to the REAL catalog (`CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS`, which live app-side) — a stale seed key would
- * be silently dropped on render, so the test asserts every key resolves. The keys are grammar-valid
- * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Only differentiates on an EMPTY
- * target (fresh PGlite / Docker PG) — a prod re-seed no-ops via onConflictDoNothing.
- */
-/**
  * The PRE-ONB-0 default routine, written out explicitly — the full `ROUTINE_CATALOG` order
  * (strength → check-ins → life).
  *
@@ -68,8 +59,9 @@ import { seedProgramFixtures } from './writers/program/seed-fixtures';
  *     today, so it is a no-op from the household's point of view.
  *
  * ⚠️ Hand-authored because `packages/db` cannot import the app-side `ROUTINE_CATALOG` (it is derived from
- * `CHECKIN_FIELDS`/`LIFE_ACTIVITIES`, which are React-adjacent). `apps/web/lib/routine/catalog.test.ts`
- * asserts this list EQUALS `ROUTINE_CATALOG` exactly, so the two cannot drift.
+ * `LIFE_ACTIVITIES`, which is React-adjacent). `apps/web/lib/routine/catalog.test.ts` asserts this list
+ * RESOLVES to `ROUTINE_CATALOG`, in order (`resolveProfileRoutine`; entries the catalog retired drop),
+ * so the two cannot drift.
  */
 export const SEED_FULL_ROUTINE = {
   version: 1,
@@ -94,6 +86,15 @@ export const SEED_FULL_ROUTINE = {
   ],
 } as const satisfies RoutineConfig;
 
+/**
+ * V1-18: Athlete Two's EXPLICIT routine (check-ins before strength, a conditional strength, Wake), so a
+ * fresh DB demonstrates A≠B against Athlete One (`SEED_FULL_ROUTINE` above). The keys are grammar-valid
+ * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Since FAM-1 12f PR 5 trimmed the
+ * routine catalog to `strength` and Wrestling practice, its check-in keys and Wake drop at read, and
+ * `apps/web/lib/routine/contract.test.ts` asserts it resolves to `strength` alone, with the marker. Only
+ * differentiates on an EMPTY target (fresh PGlite / Docker PG); a prod re-seed no-ops via
+ * onConflictDoNothing.
+ */
 export const SEED_ATHLETE_TWO_ROUTINE = {
   version: 1,
   order: [

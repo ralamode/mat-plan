@@ -215,7 +215,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
   (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
   `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
-  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user is `lib/checkins`.
+  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user was `lib/checkins`.
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
 - **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
@@ -258,20 +258,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **The fix:** none planned. `seedProgramFixtures(db, scope)` takes no `world`, so it cannot seed
   12a's several worlds; the earlier "fold it in at 6c" fix is struck.
 - **Severity:** low. Test-only, one file.
-
-### Two reads of a logged row's live sets and quantities (added 2026-11-16, FAM-1 step 11b)
-
-- **What & why it's debt:** `packages/db/src/queries/day/stored-row-values.ts` (`readRowValues`, the
-  row writer's replay and re-tick answer) and the app DAL's day read
-  (`apps/web/lib/dal/entries.ts`, the live `entry_sets` and then their quantities) are the same two
-  queries with the same load-bearing parent filter. 11b wrote the first in `packages/db` because the
-  writer cannot import the app DAL; folding the DAL onto it changes a lane-S file, so it was left.
-- **Impact:** a change to the parent filter made in one copy (the set-liveness rule) leaves the other
-  reading by the old rule. The writer's copy is guarded by mutation 172; the DAL's is not.
-- **The fix:** the DAL calls `readRowValues` (or a sibling that also returns the set ids and
-  statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
-  one (`queries/day/day-plan.ts`).
-- **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
 
 ### The nav rail unmounts during a switch between athletes (added 2026-11-13)
 

@@ -97,6 +97,12 @@ function DayBody({ plan, actions }: DayScreenProps) {
     (rowKey: string, isPending: boolean) => setInFlight((was) => toggled(was, rowKey, isPending)),
     [],
   );
+  // 12c-iii: work typed or added but not saved, which "Collapse" must never hide.
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
+  const setRowBusy = useCallback(
+    (rowKey: string, isBusy: boolean) => setBusy((was) => toggled(was, rowKey, isBusy)),
+    [],
+  );
 
   // 🔴 **A ✓ still waiting to send is lost if the page is left** (FAM-1 12c; maintainer,
   // 2026-11-17: "Warn + record"). The browser's own leave-page prompt, while any write is in flight.
@@ -133,6 +139,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
       announce: (text) => setMessage((was) => ({ text, n: was.n + 1 })),
       setRowFailed,
       setRowPending,
+      setRowBusy,
       // The notice takes focus, which reads it; the live region would say it a second time.
       closeDay: () => setClosed(true),
       // A reload after midnight would show the new today: the day is pinned first (a `closed_day`
@@ -150,6 +157,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
       readOnly,
       setRowFailed,
       setRowPending,
+      setRowBusy,
       router,
     ],
   );
@@ -161,6 +169,9 @@ function DayBody({ plan, actions }: DayScreenProps) {
     (many && plan.programs.find((p) => p.programPublicId === id)?.name) || null;
   const notSavedIn = (workoutKey: string) =>
     [...failed].filter((key) => rowIsIn(workoutKey, key)).length;
+  // A write in flight, a Change typed and not saved, or an added set not ticked (12c-iii §4).
+  const busyIn = (workoutKey: string) =>
+    [...inFlight, ...busy].some((key) => rowIsIn(workoutKey, key));
 
   return (
     <DayContext value={day}>
@@ -194,6 +205,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
               headingId={`${headingId}-w${index}`}
               programName={programName(workout.programPublicId)}
               notSaved={notSavedIn(key)}
+              busy={busyIn(key)}
             />
           );
         })}

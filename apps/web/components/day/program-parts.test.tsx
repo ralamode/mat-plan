@@ -21,23 +21,36 @@ import {
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { lastDayText } from '@/components/program-builder/builder-text';
 import { sheetStatusId } from '@/components/ui/sheet';
 import { programPath, PROGRAMS_PATH } from '@/components/program-builder/routes';
-import { athletePath, NAME_WRAP_CLASS } from '@/lib/constants';
+import {
+  athletePath,
+  NAME_WRAP_CLASS,
+  PROGRAM_NAME_LINK_CLASS,
+  VALUE_JOINER,
+} from '@/lib/constants';
 
 import { AthleteSwitcher, switcherLabels } from './athlete-switcher';
 import { athleteNameOf, PROGRAM_COPY } from './day-copy';
 import { restNotice } from './day-notices';
 import { NotOnAProgram } from './not-on-a-program';
 import { ProgramLine } from './program-line';
-import { PROGRAM_ORDER_SHEET_ID } from './program-order-dialog';
+import { loadProgramOrderDialog } from './program-order-button';
+import { PROGRAM_ORDER_SHEET_ID } from './program-order-id';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+
+// The dialog's chunk is loaded on demand (program-order-button.tsx). Loaded up front, a tap opens it
+// in the same act, as it does in a browser once the idle prefetch has run; the lazy path itself is
+// program-order-button.test.tsx's.
+beforeAll(async () => {
+  await loadProgramOrderDialog();
+});
 
 afterEach(() => {
   cleanup();
@@ -720,8 +733,143 @@ describe('ProgramLine and the Program order dialog', () => {
     });
   });
 
+  it('closed, then its button hidden by a re-read: Forward onto its entry does not reopen it', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    try {
+      const view = mountLine(todayTwoPrograms);
+      fireEvent.click(orderButton());
+      const entry = window.history.state;
+      expect(entry?.sheet).toBe(PROGRAM_ORDER_SHEET_ID);
+      // Done with no arrow tapped: the sheet pops its entry (mocked, so the browser stays on it).
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: PROGRAM_COPY.done }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      const notWritable = { ...todayTwoPrograms, writable: false };
+      view.rerender(
+        <ProgramLine plan={notWritable} actions={createFakeDayActions(notWritable).actions} />,
+      );
+      back.mockClear();
+      await act(async () => {
+        window.history.replaceState(entry, '');
+        window.dispatchEvent(new PopStateEvent('popstate', { state: entry }));
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      // Bounced off the entry, so Forward is a no-op rather than a dead entry.
+      expect(back).toHaveBeenCalledTimes(1);
+    } finally {
+      back.mockRestore();
+    }
+  });
+
+  describe('nothing left to order (15c follow-up)', () => {
+    const plan = todayThreeProgramsOneEnding;
+    const { staying } = programsByStay(plan.currentPrograms);
+    const doneButton = () => screen.getByRole('button', { name: PROGRAM_COPY.done });
+    const statusNode = () => document.getElementById(sheetStatusId(PROGRAM_ORDER_SHEET_ID));
+    const offEverything: DayPlan = { ...plan, currentPrograms: [] };
+    /** The visible sentence: the sheet's status region says the same words, once. */
+    const shown = (text: string) => {
+      const found = within(screen.getByRole('dialog'))
+        .getAllByText(text)
+        .filter((el) => el.closest('[role="status"]') === null);
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+    const allEnding: DayPlan = {
+      ...plan,
+      currentPrograms: plan.currentPrograms.map((p) => ({ ...p, endsToday: true as const })),
+    };
+
+    const cases = [
+      ['off every program', offEverything, PROGRAM_COPY.orderEmpty(nameOf(plan))],
+      ['every program ending today', allEnding, PROGRAM_COPY.orderAllEnding(nameOf(plan))],
+    ] as const;
+
+    it.each(cases)(
+      '%s, from an arrow: one sentence is the body; focus goes to Done, described by it, and the status says it too',
+      (_case, next, text) => {
+        const view = mountLine(plan, withReorder(plan, vi.fn()));
+        fireEvent.click(orderButton());
+        act(() => arrow('up', staying[1]!.name).focus());
+        view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+        const dialog = screen.getByRole('dialog');
+        const message = shown(text);
+        expect(message.tagName).toBe('P');
+        expect(within(dialog).queryByText(PROGRAM_COPY.orderExplainer)).toBeNull();
+        expect(within(dialog).queryAllByRole('list')).toHaveLength(0);
+        expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(1), { exact: false })).toBeNull();
+        expect(within(dialog).queryByText(PROGRAM_COPY.endingNote(3), { exact: false })).toBeNull();
+        // The arrow that had focus is gone: Done takes it, described by the sentence alone, and the
+        // status says it as well, since a description may be only a hint (iOS VoiceOver).
+        expect(document.activeElement).toBe(doneButton());
+        expect(doneButton().getAttribute('aria-describedby')).toBe(message.id);
+        expect(statusNode()?.textContent).toBe(text);
+      },
+    );
+
+    it.each(cases)(
+      '%s, with focus elsewhere: the status says it once, and a same-sentence re-read is silent',
+      (_case, next, text) => {
+        const view = mountLine(plan, withReorder(plan, vi.fn()));
+        fireEvent.click(orderButton());
+        view.rerender(<ProgramLine plan={next} actions={withReorder(next, vi.fn())} />);
+        expect(document.activeElement).not.toBe(doneButton());
+        expect(statusNode()?.textContent).toBe(text);
+        const said = statusNode()?.firstElementChild;
+        const again = { ...next, currentPrograms: [...next.currentPrograms] };
+        view.rerender(<ProgramLine plan={again} actions={withReorder(again, vi.fn())} />);
+        expect(statusNode()?.firstElementChild).toBe(said);
+      },
+    );
+
+    it('a change of sentence while open is said: all ending, then off every program', () => {
+      const view = mountLine(plan, withReorder(plan, vi.fn()));
+      fireEvent.click(orderButton());
+      view.rerender(<ProgramLine plan={allEnding} actions={withReorder(allEnding, vi.fn())} />);
+      expect(statusNode()?.textContent).toBe(PROGRAM_COPY.orderAllEnding(nameOf(plan)));
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, vi.fn())} />,
+      );
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(statusNode()?.textContent).toBe(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+    });
+
+    it('a save that succeeds after a re-read emptied the list shows the empty sentence', async () => {
+      const { reorder, answer } = deferredReorder();
+      const view = mountLine(plan, withReorder(plan, reorder));
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, reorder)} />,
+      );
+      await answer(0, { ok: true });
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(within(screen.getByRole('dialog')).queryAllByRole('list')).toHaveLength(0);
+    });
+
+    it('wins over the stale refusal’s line: one message shows', async () => {
+      const view = mountLine(
+        plan,
+        withReorder(plan, async () => ({ ok: false, reason: PROGRAM_REFUSAL.invalid })),
+      );
+      fireEvent.click(orderButton());
+      await act(async () => {
+        fireEvent.click(arrow('down', staying[0]!.name));
+      });
+      expect(screen.getByText(PROGRAM_COPY.orderStale)).toBeTruthy();
+      view.rerender(
+        <ProgramLine plan={offEverything} actions={withReorder(offEverything, vi.fn())} />,
+      );
+      shown(PROGRAM_COPY.orderEmpty(nameOf(plan)));
+      expect(screen.queryByText(PROGRAM_COPY.orderStale)).toBeNull();
+    });
+  });
+
   describe('the names as links (15c, D49)', () => {
-    it('given programHrefFor, each name links to its program; without it, text', () => {
+    const linked = () =>
       render(
         <ProgramLine
           plan={todayTwoPrograms}
@@ -729,17 +877,69 @@ describe('ProgramLine and the Program order dialog', () => {
           programHrefFor={programPath}
         />,
       );
+
+    it('given programHrefFor, each name links to its program; without it, text', () => {
+      linked();
       for (const program of todayTwoPrograms.programs) {
         // The "›" is hidden from a screen reader: the link's name is the program's name alone.
         const link = screen.getByRole('link', { name: program.name });
         expect(link.getAttribute('href')).toBe(programPath(program.programPublicId));
         expect(link.textContent).toBe(`${program.name}›`);
-        expect(link.className).toContain(NAME_WRAP_CLASS);
+        // No tooltip: the name is the whole of what the link says.
+        expect(link.getAttribute('title')).toBeNull();
       }
-      expect(screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: false })).toBeTruthy();
+      expect(screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: true })).toBeTruthy();
       cleanup();
       mountLine(todayTwoPrograms);
       expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('is a muted label, then an unlabelled list of "Name ›" with no commas, as the prototype', () => {
+      linked();
+      const label = screen.getByText(PROGRAM_COPY.lineLabel(2), { exact: true });
+      expect(label.className).toContain('text-muted-foreground');
+      // A `div` holding the label and the list: a `p` cannot hold a `ul`.
+      expect(label.parentElement?.tagName).toBe('DIV');
+      const list = screen.getByRole('list');
+      expect(list.tagName).toBe('UL');
+      expect(list.parentElement).toBe(label.parentElement);
+      expect(list.getAttribute('aria-label')).toBeNull();
+      expect(list.getAttribute('aria-labelledby')).toBeNull();
+      const items = within(list).getAllByRole('listitem');
+      expect(items).toHaveLength(todayTwoPrograms.programs.length);
+      for (const item of items) expect(within(item).getAllByRole('link')).toHaveLength(1);
+      // No joiner of any kind: not the shared ", ", and no bare comma either.
+      expect(label.parentElement?.textContent).not.toContain(VALUE_JOINER.trim());
+      expect(label.parentElement?.textContent).not.toContain(',');
+      // One wrapping row, the prototype's: the label is its first item, and the list's items flow
+      // in the same inline run after it, so a wrapped name comes back under the label.
+      expect(label.parentElement?.firstElementChild).toBe(label);
+      expect(label.className.split(' ')).toContain('inline-flex');
+      expect(list.className.split(' ')).toContain('inline');
+      for (const item of items) expect(item.className.split(' ')).toContain('inline-flex');
+    });
+
+    it('each link is the named class: no underline until hover, a 44px target both ways', () => {
+      linked();
+      const classes = PROGRAM_NAME_LINK_CLASS.split(' ');
+      expect(classes).not.toContain('underline');
+      for (const token of [
+        'hover:underline',
+        'min-h-11',
+        'min-w-11',
+        'font-medium',
+        'wrap-anywhere',
+      ]) {
+        expect(classes).toContain(token);
+      }
+      // The prototype's line buttons have no padding (`padding:0`): the row's gaps space them.
+      expect(classes.some((token) => /^p[xylrtb]?-/.test(token))).toBe(false);
+      for (const link of screen.getAllByRole('link')) {
+        expect(link.className).toBe(PROGRAM_NAME_LINK_CLASS);
+        const arrow = link.querySelector('[aria-hidden="true"]');
+        expect(arrow?.textContent).toBe('›');
+        expect(arrow?.className).toContain('ml-1');
+      }
     });
   });
 
