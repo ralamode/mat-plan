@@ -45,7 +45,7 @@ import { getCurrentUser } from './session';
  * households … LIMIT 2`, with *"ZERO rows → a genuinely empty database"* and *"TWO rows → THROW"*.
  * None of that is true now: zero means **this account has no membership**, which is the common case,
  * and nothing throws on a second live household (two of them is the intended Beta 0 end state once a
- * family is invited). `liveHouseholdIds` survives for `db:verify` and one fixture script only.
+ * family is invited). `liveHouseholdIds` survives for `db:verify` only.
  *
  * ⚠️ **The `LIMIT 2` exists to DETECT ambiguity. `rows[0]` must NEVER be read as a pick.** *"Just use
  * the first one"* is exactly the edit a later author makes to "fix" a dark app, and it is a silent
@@ -80,8 +80,9 @@ import { getCurrentUser } from './session';
  * landed before its consumers.
  *
  * ⚠️ **`queries/household-scope.ts` did NOT go with it**, contrary to what that module and this
- * docblock both said until 1c-4. `liveHouseholdIds` survives for two script consumers — the
- * screenshot harness's fixture scope and `db:verify` section 0 — neither of which is a request.
+ * docblock both said until 1c-4. `liveHouseholdIds` survives for one script consumer, `db:verify`
+ * section 0, which is not a request (the screenshot harness's fixture scope was the other until
+ * FAM-1 12f retired it).
  *
  * 🔴 **This is what makes `1d` safe.** Before it, a session proved only *that* you are someone the
  * Clerk instance admits; the household came from "whichever one is live". Deleting the access gate

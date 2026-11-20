@@ -121,7 +121,9 @@ export function ChangeInput({
  * "Not saved" line `pt-1` keeps 8px between the two, as `InlineEditActions` spaces a pair. Undo
  * never shows beside it (`canUndo` needs a row that is not typed over), so Undo stays by its text.
  *
- * Not a live region: the page's one announcer speaks every change (`day.announce`).
+ * Not a live region: the page's one announcer speaks every change (`day.announce`), another phone's
+ * included (`useChange`'s `changedElsewhere`). A live region here would stay silent on the swap
+ * from a failed save's line to this one (a new node, mounted full) and speak twice on our own save.
  */
 export function RowStatus({
   r,
