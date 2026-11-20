@@ -68,8 +68,9 @@ import { seedProgramFixtures } from './writers/program/seed-fixtures';
  *     today, so it is a no-op from the household's point of view.
  *
  * ⚠️ Hand-authored because `packages/db` cannot import the app-side `ROUTINE_CATALOG` (it is derived from
- * `CHECKIN_FIELDS`/`LIFE_ACTIVITIES`, which are React-adjacent). `apps/web/lib/routine/catalog.test.ts`
- * asserts this list EQUALS `ROUTINE_CATALOG` exactly, so the two cannot drift.
+ * `LIFE_ACTIVITIES`, which is React-adjacent). `apps/web/lib/routine/catalog.test.ts` asserts this list
+ * RESOLVES to `ROUTINE_CATALOG`, in order (`resolveProfileRoutine`; entries the catalog retired drop),
+ * so the two cannot drift.
  */
 export const SEED_FULL_ROUTINE = {
   version: 1,
