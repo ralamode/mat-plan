@@ -125,7 +125,7 @@ bounded consequence the id path creates — is [write-path.md](./features/write-
 section is the shape; that one is the rule. (§2f above is its neighbour and the two compose: §2g
 resolves the `movement_id` that §2f freezes.)
 
-## 2c. Batch write path — logging a day's check-ins (V1-5)
+## 2c. Batch write path — logging a day's check-ins (V1-5; historical since FAM-1 12f)
 
 The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by
 V1-1c). Differs from §2 in three ways worth seeing at a glance: the action derives its fields from a
@@ -155,8 +155,11 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
-> ⚠️ **The Check-ins form is off the day page since V1-24 3b-page (2026-11-15, #418)**;
-> `logCheckinsAction` and this write path stay, tested, until FAM-1 12f.
+> ⚠️ **Historical.** The Check-ins form left the day page at V1-24 3b-page (2026-11-15, #418), and
+> FAM-1 12f PR 3 removed `logCheckinsAction`: the form, its field registry walk and its batch answer
+> above are gone. What stays is the writer (`logCheckinEntries` → `writers/checkin.ts`), which the
+> day page's practice (`logLifeActivitiesAction`) calls with one item, answering
+> `created`/`replay`/`day_taken`/`own_hidden`/`conflict`.
 
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
@@ -385,8 +388,11 @@ leaves with the tombstone, and a CHECK refuses a live row that kept one. **B1-2:
 (`clearEventOn`, `queries/clear-events.ts`) serves `clearDay`'s replay, `restoreClear` and the
 banner's read `clearEventsForDay` (every clear of a day, newest first, as a token and a count), so the
 banner offers exactly what Restore all restores. Restore all's action answers counts, counted in the
-DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. The diagram's last block
-is Restore all's server half; B2 adds the banner that calls it.
+DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:** `clearDayAction`
+takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
+answers the day's newest clear's count: a call that finds nothing live replays that clear, however
+old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
+Restore all; the day page's dialog and banner call them (B2-ii).
 
 ```mermaid
 sequenceDiagram
@@ -417,6 +423,15 @@ sequenceDiagram
       W->>DB: restore the item (guarded by the token)
       W-->>P: ok — or ROLLBACK TO SAVEPOINT
     end
+  end
+
+  P->>W: Clear this day (profile, day, confirm word) — today only, not archived
+  W->>DB: clearDay — the day's live ids, locked ORDER BY id, scoped
+  alt nothing live
+    W-->>P: ok · count 0 (or a replay's count)
+  else
+    W->>DB: deleted_at = now() · hide_reason = clear_day · ONE token
+    W-->>P: ok · count (no token leaves the action)
   end
 
   P->>W: Restore all (profile, day, token) — today or yesterday, not archived
@@ -845,10 +860,10 @@ erDiagram
 flowchart TB
   DEV["feature branch → PR"] --> CI
   subgraph CI["GitHub Actions — on every PR"]
-    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false"]
-    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drift guard + PGlite db:verify"]
+    S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false<br/>catalog data: not a mutation trigger"]
+    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drizzle-kit check + drift guard + PGlite db:verify"]
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
-    M["<b>mutations</b> × 8 shards on main, 4 on a PR (scoped; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
+    M["<b>mutations</b> × 4 shards (scoped on a PR; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
     S --> Q
     S --> E
     S --> M
@@ -860,7 +875,7 @@ flowchart TB
   PREV --> REV["review + squash-merge to main"]
   REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>migrate.yml (prod) + migrate-preview.yml"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
-  REV --> MAIN["push to main: every mutation shard runs<br/>red → one issue, 'mutation gate red on main'"]
+  REV --> MAIN["push to main: every mutation shard runs; a burst of pushes coalesces to at most two runs<br/>red → one issue, 'mutation gate red on main'"]
   MIG --> NEON[("Neon: production")]
   MIG --> NEONP[("Neon: mat-plan-preview<br/>seed-only, separate project")]
   PROD --> NEON

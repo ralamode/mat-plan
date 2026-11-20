@@ -1,3 +1,4 @@
+import { clearDayOpenFor } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -8,6 +9,7 @@ import { dayPageView, lookAheadFallsBack, offersProgramsLink } from '@/component
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
 import { PROGRAMS_PATH } from '@/components/program-builder/routes';
+import { ExportControl } from '@/components/profiles/export-control';
 import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
 
@@ -16,10 +18,13 @@ import { localDayIso, localWeekStartIso } from '@/lib/date';
 import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { getDayPlan } from '@/lib/dal/day/day';
-import { lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
+import { householdState } from '@/lib/dal/household';
+import { dayClearEvents, lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
 import { loggedBodyweight, loggedLifeActivities } from '@/lib/entries/activity-totals';
+import { clearDaySummary } from '@/lib/entries/clear-summary';
+import { restoreDeadline } from '@/lib/entries/restore-deadline';
 import { buildRoutineBlocks } from '@/lib/routine/catalog';
 
 import {
@@ -27,19 +32,19 @@ import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   CLOSED_DAY_NOTICE,
-  EXPORT_CSV_LABEL,
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
-  NOTHING_TO_EXPORT,
   NOTICE_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
   athleteEditPath,
-  athleteExportPath,
   athletePath,
 } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
+import { ClearDay } from './clear-day';
+import { ClearDayBanner } from './clear-day-banner';
+import { clearedNoticeLine } from './clear-day-notice';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
 import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
@@ -72,6 +77,9 @@ export default async function TodayPage({
   // profile tiles are a UX switch, not a security boundary). Unknown → 404.
   const profile = await getProfileByPublicId(profileId);
   if (!profile) notFound();
+  // The export control's capability (FAM-1 export follow-up). `getHouseholdScope` is `cache()`d, so
+  // this is no second scope query.
+  const { canExportAthletes } = await householdState();
 
   // "Today" is the LOCAL calendar date in the request's active tz (V1-6c) — the client
   // reports its zone via the `tz` cookie (see TimeZoneSync); the RSC validates + uses it,
@@ -106,10 +114,18 @@ export default async function TodayPage({
   const weekStart = localWeekStartIso(day);
   // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
   // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
-  const [entries, adherence] = await Promise.all([
+  const [entries, adherence, clears] = await Promise.all([
     listEntriesForDay(profile.id, day),
     getWeeklyAdherence(profile.id, weekStart),
+    // V1-9b B2: the day's clears, newest first, for the banner and the notice's cleared sentence.
+    dayClearEvents(profile.id, day),
   ]);
+  // V1-9b B2: Clear this day is offered on today only, for a live athlete (`clearDayOpenFor`, the
+  // action's own rule); its dialog's summary is derived from the two reads above, no query.
+  const clearable = clearDayOpenFor(profile, day, today);
+  const clearSummary = clearable && entries.length > 0 ? clearDaySummary(plan, entries) : null;
+  const deadline = restoreDeadline(day, today);
+  const clearedTotal = clears.reduce((sum, c) => sum + c.count, 0);
 
   // V1-24 PR 1a: every bodyweight row on the day (usually zero or one) — what makes the weigh-in
   // surface render the RECEIPT instead of an empty input. Derived from the entries already fetched
@@ -129,6 +145,13 @@ export default async function TodayPage({
   // What shows around the screen: the one state notice, the sections, the screen itself (tested in
   // `day-notices.test.ts`).
   const view = dayPageView(plan, { future, showClosedNotice, archived: profile.archived });
+  // V1-9b B2: a cleared day's sentence, carried inside the one notice box (`clear-day-notice.ts`).
+  const clearedLine = clearedNoticeLine({
+    notice: view.notice,
+    clearedTotal,
+    deadline,
+    athleteName: profile.name,
+  });
 
   // The day screen's writes (FAM-1 12b's Server Actions, and 12d's Change). Program order
   // (`reorderPrograms`) arrives at 15c: an action left out hides its control (plan §6).
@@ -202,21 +225,45 @@ export default async function TodayPage({
 
           V1-15, the closed day: an unexplained absence reads as a bug — the finding that explains
           the 2026-09-28 incident. Not for an archived athlete, where it is false. */}
+      {/* V1-9b B2: a cleared day's sentence rides IN the one notice box, as a second paragraph,
+          never as a second box. An archived athlete whose day is still open for Restore all is told
+          how to get it back; a closed day, that the entries are kept. */}
       {view.notice === 'archived' ? (
-        <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
-          {SETTINGS_COPY.archivedNotice(profile.name)}{' '}
-          <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
-            {SETTINGS_COPY.heading}
-          </Link>
-          .
-        </p>
+        <div className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS} flex flex-col gap-2`}>
+          <p>
+            {SETTINGS_COPY.archivedNotice(profile.name)}{' '}
+            <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
+              {SETTINGS_COPY.heading}
+            </Link>
+            .
+          </p>
+          {clearedLine ? <p>{clearedLine}</p> : null}
+        </div>
       ) : view.notice === 'comingUp' ? (
         <p className={`${NOTICE_CLASS} ${NAME_WRAP_CLASS}`}>
           {PROGRAM_COPY.comingUp(profile.name, day)}
         </p>
       ) : view.notice === 'closed' ? (
-        <p className={NOTICE_CLASS}>{CLOSED_DAY_NOTICE}</p>
+        <div className={`${NOTICE_CLASS} flex flex-col gap-2`}>
+          <p>{CLOSED_DAY_NOTICE}</p>
+          {clearedLine ? <p>{clearedLine}</p> : null}
+        </div>
       ) : null}
+
+      {/* V1-9b B2: the day's clears and Restore all, on a day open for it. Mounted on every day and
+          keyed by athlete and day: it owns the outcome line every Restore all lands on. */}
+      <ClearDayBanner
+        key={`clear-banner-${profile.id}-${day}`}
+        profileId={profile.id}
+        day={day}
+        today={today}
+        // Only where Restore all is offered: a closed or archived day's clear is a sentence in the
+        // notice (its total computed here), so its tokens need not reach the browser.
+        events={writable ? clears : []}
+        writable={writable}
+        relogged={entries.length > 0}
+        deadline={deadline}
+      />
 
       {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
           program.", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
@@ -280,14 +327,28 @@ export default async function TodayPage({
           is one row shorter on a phone. A plain <a>, not a <Link>: a file download, which Next's
           client router would try to navigate to; `download` names it, `min-h-11` keeps the bar.
           🔴 Maintainer decision N3 applies to BOTH surfaces: no history → no link (the EOCD-only zip
-          N3 exists to eliminate), the same sentence the settings row shows. */}
-      {profile.hasHistory ? (
-        <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
-          {EXPORT_CSV_LABEL}
-        </a>
-      ) : (
-        <p className={`${NAV_LINK_CLASS} flex items-center`}>{NOTHING_TO_EXPORT}</p>
-      )}
+          N3 exists to eliminate), the same sentence the settings row shows. And only the household's
+          owner sees either (FAM-1 export follow-up, Q1): `ExportControl` holds all three states. */}
+      {/* V1-9b B2: Clear this day, at the foot with export and rename. Placement is not a control: any member may clear. Mounted on
+          every day it can act on, even with nothing left to clear, so its answer is not lost when
+          the clear empties the day (the plan's P5). */}
+      {clearable && deadline ? (
+        <ClearDay
+          key={`clear-day-${profile.id}-${day}`}
+          profileId={profile.id}
+          athleteName={profile.name}
+          day={day}
+          today={today}
+          summary={clearSummary}
+          deadline={deadline}
+        />
+      ) : null}
+      <ExportControl
+        profileId={profileId}
+        hasHistory={profile.hasHistory}
+        canExport={canExportAthletes}
+        surface="day"
+      />
       <Link
         href={`${athleteEditPath(profile.id)}?from=${encodeURIComponent(athletePath(profile.id))}`}
         className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}

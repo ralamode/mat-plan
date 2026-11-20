@@ -22,7 +22,9 @@ import { isLiveProfile } from './ownership';
 import { isUniqueViolationOn } from './unique-violation';
 
 /**
- * V1-9b — **the only RUNTIME writer of `entries.deleted_at`** (ADR 0008 decision 3.3).
+ * V1-9b — **the only RUNTIME module that HIDES an entry** (ADR 0008 decision 3.3). The one other
+ * runtime write of `entries.deleted_at` is FAM-1 11c-ii's revive, private to `day/log-row.ts`, which
+ * only clears it, through `UNHIDE`, so the reader audit stays finite.
  *
  * ⚠️ "The only writer" would be false, and a privacy lens caught it: the bodyweight de-dup
  * correction (`scripts/corrections/registry.ts`) writes it too — as an operator action, and it has
@@ -61,8 +63,7 @@ const uuidArray = (ids: readonly string[]) => sql`${sql.param(ids)}::uuid[]`;
  * 🔴 **The one un-hide (V1-9b B2-0).** Every writer that makes a hidden entry live sets this, so the
  * hide reason goes in the same statement as `deleted_at`: a live row with a reason is refused by
  * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`). `no-bare-unhide.test.ts` fails on any other
- * un-hide in this package or the app's DAL. FAM-1 11c's D35 revive (`day/log-row.ts`, not built yet)
- * must spread it: whichever of 11c and B2-0 lands second makes that edit.
+ * un-hide in this package or the app's DAL. FAM-1 11c-ii's D35 revive (`day/log-row.ts`) spreads it.
  */
 export const UNHIDE = { deletedAt: null, hideReason: null } as const;
 

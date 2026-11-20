@@ -1,5 +1,6 @@
 import {
   catalogHowToOf,
+  equipmentInOrder,
   TRACKING_TYPE,
   type CatalogOptionTaxonomy,
   type Unit,

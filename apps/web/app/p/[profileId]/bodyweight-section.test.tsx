@@ -4,7 +4,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The form imports the Server Action module ('use server'), which cannot be evaluated under jsdom
-// (the strength-form.test.tsx precedent). This file is about what the SECTION renders.
+// (the precedent every component test that imports it follows). This file is about what the
+// SECTION renders.
 vi.mock('./actions', () => ({
   logBodyweightAction: vi.fn(async () => ({ ok: true, error: null })),
   editBodyweightAction: vi.fn(async () => ({ ok: true, error: null })),

@@ -38,8 +38,9 @@ export type EntrySetRowInput = Pick<RowValues, 'reps' | 'quantities'> &
  * and a `done` set writes a byte-identical row.
  *
  * Callers: `writeSessionStrengthEntry` (one PRIMARY quantity per set that carries a weight) and the
- * FAM-1 row writer (one set per ✓, D3). Each calls it only when it created the entry, never on a
- * replay, so a retry never doubles the sets.
+ * FAM-1 row writer (one set per ✓, D3). Each calls it when it created the entry or, for the row
+ * writer's revive (11c-ii), after soft-deleting the revived entry's live set; never on a replay, so a
+ * retry never doubles the sets.
  */
 export async function insertEntrySetRows(
   exec: Executor,

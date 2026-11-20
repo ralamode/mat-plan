@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 /**
  * V1-9b B2-0: **every un-hide is `UNHIDE`** (`writers/hide.ts`), so the hide reason is cleared in the
  * same statement as `deleted_at`. A live row with a reason is refused by
- * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`); this test stops a new un-hide (FAM-1 11c's D35 revive,
- * or any later one) from reaching that refusal in production first.
+ * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`); this test stops a new un-hide from reaching that refusal in production first. FAM-1 11c-ii's
+ * revive (`writers/day/log-row.ts`) is one, and sets `...UNHIDE`.
  *
  * It looks for the un-hide's spellings in code (comments skipped), in `packages/db/src` and in the
  * app's DAL (`apps/web/lib/dal`, the other module that reaches `db`): `deletedAt: null`,

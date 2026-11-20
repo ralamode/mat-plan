@@ -178,7 +178,9 @@ export async function captureScreenshot(opts: {
       await page.goto(opts.route, { waitUntil: opts.waitUntil ?? 'networkidle' });
       if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;
-      await page.screenshot({ path, fullPage: !opts.viewportOnly });
+      // `animations: 'disabled'` finishes CSS transitions first, so a state that ends on a tap (a
+      // disclosure's chevron turning) is shot at rest, not mid-turn.
+      await page.screenshot({ path, fullPage: !opts.viewportOnly, animations: 'disabled' });
       paths.push(path);
       console.log(`✓ ${vp.suffix} (${vp.width}px): ${path}`);
       await context.close();

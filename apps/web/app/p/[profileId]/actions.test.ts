@@ -1,14 +1,9 @@
 import {
   ACTIVITY_TYPE_KEYS,
-  BLANK_SET_MESSAGE,
   BODYWEIGHT_UNITS,
   E2E_SESSION_BYPASS_USER,
-  FREE_TEXT_NOTE_MAX,
   isoDayDiff,
-  LOGGABLE_DIMENSION_NOUNS,
   METRIC_KEYS,
-  modeNotApplicableBlankMessage,
-  modeNotApplicableMessage,
   newId,
   ROUTINE_VERSION,
   PRACTICE_AMEND_REFUSAL,
@@ -49,9 +44,6 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefined })) }));
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
-  logStrengthSession: vi.fn(async () => ({ sessionId: 'session-pub-id' })),
-  // Default: the set was found + edited. The not-found test overrides to null.
-  editStrengthSet: vi.fn(async () => ({ setId: 'set-pub-id' })),
   // V1-24 PR 1b. Default: the amend matched. The refusal tests override to null and then drive the
   // three-way branch through `ownedBodyweightValue`.
   editBodyweight: vi.fn(async () => ({ entryId: 'bw-pub-id' })),
@@ -81,7 +73,7 @@ vi.mock('@/lib/dal/session', () => ({
 }));
 // 🔴 The limiter is mocked so a REFUSAL is reachable. In the real module it fails open, and with no
 // Upstash configured under vitest it answers `unconfigured` to everything — so without this mock the
-// refusal branch in all seven actions would be dead code that no test could enter.
+// refusal branch in all five actions would be dead code that no test could enter.
 // ⚠️ A PARTIAL mock since FAM-1 step 0b: `enterMutation` reads `MUTATION_RATE_LIMIT` for its default
 // policy and the matrix compares the limiter call against that const, so the real module supplies
 // the policies and only the check is replaced.
@@ -104,17 +96,14 @@ vi.mock('@/lib/dal/profiles', () => ({
   // `actions.ts` imports none of them, and a mock that does not define one refuses the first touch.
 }));
 
-import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
 import {
   bodyweightRowDay,
   clearBodyweightEntry,
   clearPracticeEntry,
   editBodyweight,
   editPractice,
-  editStrengthSet,
   logBodyweight,
   logCheckinEntries,
-  logStrengthSession,
   ownedBodyweightValue,
   ownedPracticeMinutes,
   practiceRowDay,
@@ -138,17 +127,14 @@ function localDay(offsetDays = 0): string {
 // `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
 // the registry (`./actions.registry.ts`), which is the single source for both the action names and
 // their refusal copy.
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, HIDE_COPY, PRACTICE_COPY } from '@/lib/constants';
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY, PRACTICE_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
   editPracticeAction,
   editRoutineAction,
-  editStrengthSetAction,
   logBodyweightAction,
-  logCheckinsAction,
   logLifeActivitiesAction,
-  logStrengthSessionAction,
 } from './actions';
 // ⚠️ `app/p/profile-actions.ts`'s four actions were imported here from PROF-1 a-r until FAM-1 step
 // 0b, because this file's matrices ran over every module. Each module's own test runs them now, so
@@ -191,7 +177,7 @@ function form(fields: Record<string, string>): FormData {
 beforeEach(() => vi.clearAllMocks());
 
 /**
- * 🔴 **The boundary matrices for THIS module's seven actions** — unauth, rate-limited, wrong
+ * 🔴 **The boundary matrices for THIS module's five actions** — unauth, rate-limited, wrong
  * household, and the byte-identical refusals (AGENTS.md → Backend / API PR rules).
  *
  * The suites themselves are `describeActionMatrices` in `@/test/action-matrix` since FAM-1 step 0b.
@@ -213,11 +199,7 @@ describeActionMatrices({
   principal: PRINCIPAL,
   bindings: {
     logBodyweightAction: { fn: logBodyweightAction, writers: [logBodyweight] },
-    logCheckinsAction: { fn: logCheckinsAction, writers: [logCheckinEntries] },
-    logStrengthSessionAction: { fn: logStrengthSessionAction, writers: [logStrengthSession] },
-    // Shares `logCheckinEntries` with check-ins — the writer is the entry batch, not the screen.
     logLifeActivitiesAction: { fn: logLifeActivitiesAction, writers: [logCheckinEntries] },
-    editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
     editBodyweightAction: {
       fn: editBodyweightAction,
       writers: [editBodyweight, clearBodyweightEntry],
@@ -229,16 +211,8 @@ describeActionMatrices({
   validBody: {
     logBodyweightAction: () =>
       form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
-    logCheckinsAction: () => checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
-    logStrengthSessionAction: () =>
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
     logLifeActivitiesAction: () =>
       lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: localDay() }),
-    editStrengthSetAction: () =>
-      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
     editBodyweightAction: () => amendForm(),
     editPracticeAction: () => practiceInput(),
     editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
@@ -364,885 +338,17 @@ describe('logBodyweightAction — happy path + ownership', () => {
   });
 });
 
-// Builds strength-session FormData: the movement cards serialized into ONE hidden `movements` JSON
-// field (V1-8-2), plus the session-level profileId/clientId/day. `sessionType` is deliberately never
-// submitted (the schema default fires). `movementsRaw` injects a raw string for the malformed-JSON test.
-function strengthForm(opts: {
-  profileId?: string;
-  clientId?: string;
-  day?: string;
-  feel?: string;
-  dayRole?: string;
-  movements?: Array<{
-    movementName?: string;
-    // PICK-1 PR 2: omitted unless a test sets it, so every existing case keeps exercising the typed
-    // path — which is also what proves the field is genuinely optional on the wire.
-    movementPublicId?: string;
-    unit?: string;
-    clientId?: string;
-    status?: string;
-    sets: Array<{ reps: string; weight?: string; isBodyweight?: boolean; isBand?: boolean }>;
-  }>;
-  movementsRaw?: string;
-}): FormData {
-  const fd = new FormData();
-  if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
-  fd.append('clientId', opts.clientId ?? newId());
-  fd.append('day', opts.day ?? localDay());
-  if (opts.feel !== undefined) fd.append('feel', opts.feel);
-  if (opts.dayRole !== undefined) fd.append('dayRole', opts.dayRole);
-  if (opts.movementsRaw !== undefined) {
-    fd.append('movements', opts.movementsRaw);
-  } else if (opts.movements !== undefined) {
-    fd.append(
-      'movements',
-      JSON.stringify(
-        opts.movements.map((m) => ({
-          movementName: m.movementName ?? 'Back squat',
-          unit: m.unit ?? BODYWEIGHT_UNITS[0],
-          clientId: m.clientId ?? newId(),
-          // Omitted unless the test sets it, so every existing case still exercises the
-          // status-absent path that must default to `done` (GAP-1 P1-1a).
-          ...(m.status !== undefined ? { status: m.status } : {}),
-          ...(m.movementPublicId !== undefined ? { movementPublicId: m.movementPublicId } : {}),
-          sets: m.sets,
-        })),
-      ),
-    );
-  }
-  return fd;
-}
-
-describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () => {
-  it('rejects a movement with a blank name without touching the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: '', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements).toBeTruthy();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects a movement with no sets', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: 'Back squat', sets: [] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements).toBeTruthy();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects an empty movements array (a session needs ≥1 movement)', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({ profileId: PROFILE_ID, movements: [] }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements).toBeTruthy();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  // V1-30: the form offers every LOGGABLE unit; the server must accept each, and the DAL must receive
-  // the unit the athlete chose. Before the fix only lb/kg got through.
-  it('accepts lb, kg, sec and m movements and hands each unit to the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
-          { unit: 'kg', sets: [{ reps: '5', weight: '60' }] },
-          { unit: 'sec', sets: [{ reps: '1', weight: '30' }] },
-          { unit: 'm', sets: [{ reps: '1', weight: '20' }] },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(true);
-    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
-      movements: [{ unit: 'lb' }, { unit: 'kg' }, { unit: 'sec' }, { unit: 'm' }],
-    });
-  });
-
-  // ── PICK-1 PR 2: the movement public id reaches the DAL, and the id decides ──────────────────
-  //
-  // ⚠️ `actions.ts` is NOT edited by PR 2 — the field rides inside `parsed.data.movements`, which the
-  // action forwards wholesale. That is exactly why these tests exist: zod's default is STRIP mode, so
-  // a field absent from the schema vanishes silently here and every picked movement would quietly
-  // fall back to the typed path, with every gate green. Assert the VALUE.
-  it('hands movementPublicId to the DAL with its value (the strip-mode trap)', async () => {
-    const movementPublicId = newId();
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementPublicId, sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(true);
-    // `toMatchObject` on the whole argument, not `objectContaining`: a key that is simply ABSENT
-    // satisfies the latter, which is the shape of the bug this test is for.
-    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
-      movements: [{ movementPublicId }],
-    });
-  });
-
-  it('forwards BOTH an id and a different label — the id decides, in packages/db', async () => {
-    const movementPublicId = newId();
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { movementPublicId, movementName: 'Bench', sets: [{ reps: '5', weight: '135' }] },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(true);
-    // The action is a pass-through for both; `resolveSessionMovements` is what replaces the label
-    // with the database's name, and `db:verify` case (c) proves THAT against a real row.
-    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
-      movements: [{ movementPublicId, movementName: 'Bench' }],
-    });
-  });
-
-  it('rejects a movementPublicId that is not a UUID without touching the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementPublicId: 'not-a-uuid', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements).toBeTruthy();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['a comma', 'Bench, close grip'],
-    ['no letter', '123'],
-  ])('refuses a TYPED name with %s, naming the movement', async (_why, movementName) => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName, sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    // The path `['movements', 0, 'movementName']` is what makes this read "<name>: <message>" rather
-    // than an unlocatable bare string — the mapping keys on a numeric `path[1]`.
-    expect(res.fieldErrors?.movements?.some((m) => m.startsWith(`${movementName}: `))).toBe(true);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('ACCEPTS the same label when an id is present (correctness S1)', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          {
-            movementPublicId: newId(),
-            movementName: 'Bench, close grip',
-            sets: [{ reps: '5', weight: '135' }],
-          },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(true);
-    expect(logStrengthSession).toHaveBeenCalled();
-  });
-
-  it('rejects a unit no form offers (count) without touching the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ unit: 'count', sets: [{ reps: '5', weight: '5' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements?.[0]).toMatch(/^Back squat: /);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('names the movement AND the set when BW is tapped on a timed hold', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
-          {
-            movementName: 'Plank',
-            unit: 'sec',
-            sets: [
-              { reps: '1', weight: '30' },
-              { reps: '1', isBodyweight: true },
-            ],
-          },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    // The time is blank too, so the copy names both fixes (one round trip, not two).
-    expect(res.fieldErrors?.movements).toEqual([
-      `Plank, set 2: ${modeNotApplicableBlankMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
-    ]);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('lists errors in FORM order, whichever check raised them', async () => {
-    // The set check (blank) runs before the session check (BW on a time), so without the sort set 2
-    // would be listed above set 1.
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          {
-            movementName: 'Plank',
-            unit: 'sec',
-            sets: [
-              { reps: '3', isBodyweight: true },
-              { reps: '3', weight: '' },
-            ],
-          },
-        ],
-      }),
-    );
-    expect(res.fieldErrors?.movements).toEqual([
-      `Plank, set 1: ${modeNotApplicableBlankMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
-      `Plank, set 2: ${BLANK_SET_MESSAGE}`,
-    ]);
-  });
-
-  it('names the faulty card by its movement, not its index in the submitted list', async () => {
-    // On screen: 1 Squat, 2 Pull-up, 3 RDL (untouched → dropped by the form), 4 Plank. The server sees
-    // three movements, so an index would say "Movement 3" — the RDL card. The name says Plank.
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { movementName: 'Squat', unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
-          { movementName: 'Pull-up', unit: 'lb', sets: [{ reps: '5', weight: '0' }] },
-          {
-            movementName: 'Plank',
-            unit: 'sec',
-            sets: [{ reps: '1', weight: '30', isBodyweight: true }],
-          },
-        ],
-      }),
-    );
-    expect(res.fieldErrors?.movements).toEqual([
-      `Plank, set 1: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
-    ]);
-  });
-
-  it('falls back to the movement number only when the name is empty', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { movementName: 'Squat', unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
-          { movementName: '  ', unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
-        ],
-      }),
-    );
-    expect(res.fieldErrors?.movements?.[0]).toMatch(/^Movement 2: /);
-  });
-
-  it('rejects a non-integer rep count', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5.5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects a blank weight (must not coerce to 0)', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects two movements sharing a clientId (would silently drop one)', async () => {
-    const dupId = '019826b4-0000-7000-8000-0000000000aa';
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { movementName: 'Back squat', clientId: dupId, sets: [{ reps: '5', weight: '135' }] },
-          { movementName: 'Bench press', clientId: dupId, sets: [{ reps: '8', weight: '95' }] },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements).toBeTruthy();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects a malformed movements JSON body without touching the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({ profileId: PROFILE_ID, movementsRaw: '{not valid json' }),
-    );
-    expect(res.ok).toBe(false);
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects a crafted superset order without a superset id (bad body → zod-reject)', async () => {
-    // `supersetOrder` rides in the forwarded movements JSON, so this reaches the schema — the pairing
-    // superRefine must reject it as a typed envelope, not let it hit the DB CHECK as a raw 500 (V1-8-3c).
-    const badMovements = JSON.stringify([
-      {
-        movementName: 'Back squat',
-        unit: 'lb',
-        clientId: newId(),
-        sets: [{ reps: '5', weight: '135' }],
-        supersetOrder: 5,
-      },
-    ]);
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({ profileId: PROFILE_ID, movementsRaw: badMovements }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('rejects a missing profileId without touching the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.profileId).toBeTruthy();
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-});
-
-describe('logStrengthSessionAction — happy path (multi-movement session)', () => {
-  // V1-24 3a-ii: the island announces and focuses the save from `savedId`, the session's PUBLIC id —
-  // and a replay (same client_id) must return the SAME id, or a retried submit focuses nothing.
-  // The REPLAY id is proven against a real DB in packages/db/scripts/verify.ts ("same id"); here the
-  // DAL is mocked, so this pins that the action forwards whatever id the DAL returns, on every call.
-  it("returns the DAL's session id as savedId, and passes the same clientId on a retry", async () => {
-    const clientId = newId();
-    const form = () =>
-      strengthForm({
-        profileId: PROFILE_ID,
-        clientId,
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      });
-    const first = await logStrengthSessionAction(initial, form());
-    const replay = await logStrengthSessionAction(initial, form());
-    expect(first).toMatchObject({ ok: true, savedId: 'session-pub-id' });
-    expect(replay).toMatchObject({ ok: true, savedId: first.savedId });
-    expect(vi.mocked(logStrengthSession).mock.calls.map((c) => c[0].clientId)).toEqual([
-      clientId,
-      clientId,
-    ]);
-  });
-
-  it('passes the parsed movements + defaulted sessionType to the DAL and revalidates', async () => {
-    const clientId = newId();
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        clientId,
-        movements: [
-          {
-            movementName: 'Back squat',
-            sets: [
-              { reps: '5', weight: '135' },
-              { reps: '3', weight: '155' },
-            ],
-          },
-          { movementName: 'Bench press', sets: [{ reps: '8', weight: '95' }] },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(true);
-    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
-    expect(logStrengthSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        profilePublicId: PROFILE_ID,
-        sessionType: 'strength', // the schema default (never submitted) — panel B3
-        clientId,
-        day: localDay(), // threaded from the rendered day (V1-6c)
-        movements: [
-          expect.objectContaining({
-            movementName: 'Back squat',
-            unit: BODYWEIGHT_UNITS[0],
-            sets: [
-              { reps: 5, weight: 135 }, // coerced to numbers by the schema
-              { reps: 3, weight: 155 },
-            ],
-          }),
-          expect.objectContaining({
-            movementName: 'Bench press',
-            sets: [{ reps: 8, weight: 95 }],
-          }),
-        ],
-      }),
-    );
-    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
-  });
-
-  // GAP-1 P0-1 regression. `dayRole` was parsed and then DROPPED on the way to the DAL, so
-  // `sessions.day_role` was never written from the app — the whole point of the column. Nothing
-  // caught it: `LogStrengthSessionArgs.dayRole` is optional so `tsc` was clean, `db:verify` drives
-  // the writer directly (bypassing this action), and the happy-path assertion above uses
-  // `objectContaining`, which is BLIND to a key that is simply absent. Hence asserting the VALUE.
-  it('threads the declared dayRole to the DAL (it was parsed but never forwarded)', async () => {
-    await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        dayRole: 'strength_a',
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
-      dayRole: 'strength_a',
-    });
-  });
-
-  it('sends dayRole: undefined when the day is not a programmed one', async () => {
-    // The "Not a programmed day" option submits '', which `optionalDayRoleSchema` normalises to
-    // undefined — it must NOT reach the DAL as '' and land in a CHECK-constrained column.
-    await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        dayRole: '',
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(vi.mocked(logStrengthSession).mock.calls[0]![0].dayRole).toBeUndefined();
-  });
-
-  // GAP-1 P1-1a. The action forwards `parsed.data.movements` wholesale, so `status` threads itself —
-  // but "it threads itself" is exactly the assumption that made #98's `dayRole` silently inert. Assert
-  // the VALUE reaching the DAL, and via mock.calls rather than `objectContaining`, which cannot see a
-  // field going missing. This test is the guard on that whole class of bug.
-  it('threads a skipped movement (status + zero sets) through to the DAL', async () => {
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [
-          { movementName: 'Bulgarian split squat', status: 'skipped', sets: [] },
-          { movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] },
-        ],
-      }),
-    );
-    expect(res.ok).toBe(true);
-    const arg = vi.mocked(logStrengthSession).mock.calls[0]![0];
-    expect(arg.movements[0]).toMatchObject({ status: 'skipped', sets: [] });
-    // The sibling still logs normally, and an omitted status defaults to `done` on the wire.
-    expect(arg.movements[1]).toMatchObject({ status: 'done' });
-    expect(arg.movements[1]!.sets).toHaveLength(1);
-  });
-
-  it('threads a session feel to the DAL', async () => {
-    await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        feel: 'strong',
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: 'strong' }));
-  });
-
-  it('normalizes a blank/whitespace feel to undefined (stored NULL, not empty string)', async () => {
-    await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        feel: '   ',
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: undefined }));
-  });
-
-  it('rejects an over-length feel from a direct POST (bad body → zod-reject)', async () => {
-    // The client maxLength is bypassable; the schema `.max` is the real guard.
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        feel: 'x'.repeat(FREE_TEXT_NOTE_MAX + 1),
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('derives supersets from the tagged movements and threads them to the DAL (V1-8-3d)', async () => {
-    const ss = newId();
-    // Two movements tagged into one superset; the action derives `supersets: [{clientId: ss}]`.
-    const raw = JSON.stringify([
-      {
-        movementName: 'Bench',
-        unit: 'lb',
-        clientId: newId(),
-        sets: [{ reps: '8', weight: '40' }],
-        supersetClientId: ss,
-        supersetOrder: 1,
-      },
-      {
-        movementName: 'OHP',
-        unit: 'lb',
-        clientId: newId(),
-        sets: [{ reps: '8', weight: '30' }],
-        supersetClientId: ss,
-        supersetOrder: 2,
-      },
-    ]);
-    await logStrengthSessionAction(
-      initial,
-      strengthForm({ profileId: PROFILE_ID, movementsRaw: raw }),
-    );
-    expect(logStrengthSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        supersets: [{ clientId: ss }],
-        movements: expect.arrayContaining([
-          expect.objectContaining({ supersetClientId: ss, supersetOrder: 1 }),
-        ]),
-      }),
-    );
-  });
-
-  it('rejects a lone superset member (≥2) with a locatable superset error (V1-8-3d)', async () => {
-    const ss = newId();
-    const raw = JSON.stringify([
-      {
-        movementName: 'Bench',
-        unit: 'lb',
-        clientId: newId(),
-        sets: [{ reps: '8', weight: '40' }],
-        supersetClientId: ss,
-        supersetOrder: 1,
-      },
-      {
-        movementName: 'Squat',
-        unit: 'lb',
-        clientId: newId(),
-        sets: [{ reps: '5', weight: '135' }],
-      }, // standalone → ss has 1 member
-    ]);
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({ profileId: PROFILE_ID, movementsRaw: raw }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.supersets).toBeTruthy(); // surfaced, not a locked banner
-    expect(logStrengthSession).not.toHaveBeenCalled();
-  });
-
-  it('fails gracefully (no write) when the profile is unknown', async () => {
-    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
-    const res = await logStrengthSessionAction(
-      initial,
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logStrengthSession).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
-  });
-});
-
-// ── V1-5: check-ins / habits ────────────────────────────────────────────────────
-//
-// These drive REAL FormData objects on purpose. A checkbox submits the STRING "1",
-// never the number 1 — a `z.literal(1)` validator would reject every checkbox and
-// make the happy path unreachable, and a hand-built object fixture would hide it.
-
-const HABIT = CHECKIN_FIELDS.find((f) => f.metricKey === null)!;
-const BOOL_METRIC = CHECKIN_FIELDS.find((f) => f.valueType === 'bool')!;
-const SCALE_METRIC = CHECKIN_FIELDS.find((f) => f.valueType === 'scale_10')!;
-
-/** Build check-in FormData: one `v:`/`c:` pair per submitted field. */
-function checkinForm(opts: {
-  profileId?: string;
-  day?: string;
-  values?: Record<string, string>;
-  clientIds?: Record<string, string>;
-  extra?: Record<string, string>;
-}): FormData {
-  const fd = new FormData();
-  if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
-  fd.append('day', opts.day ?? localDay());
-  for (const [key, value] of Object.entries(opts.values ?? {})) {
-    fd.append(valueInputName(key), value);
-    fd.append(clientIdInputName(key), opts.clientIds?.[key] ?? newId());
-  }
-  for (const [k, v] of Object.entries(opts.extra ?? {})) fd.append(k, v);
-  return fd;
-}
-
-describe('logCheckinsAction — boundary (bad body → zod-reject)', () => {
-  it('rejects a missing profileId without touching the DAL', async () => {
-    const res = await logCheckinsAction(initial, checkinForm({ values: { [HABIT.key]: '1' } }));
-    expect(res.ok).toBe(false);
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
-  });
-
-  it('rejects a malformed (non-UUID) profileId', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: 'not-a-uuid', values: { [HABIT.key]: '1' } }),
-    );
-    expect(res.ok).toBe(false);
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-
-  it('rejects an empty submission (nothing checked)', async () => {
-    const res = await logCheckinsAction(initial, checkinForm({ profileId: PROFILE_ID }));
-    expect(res.ok).toBe(false);
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-
-  it('IGNORES an unknown field key — the action walks the registry, not the body', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({
-        profileId: PROFILE_ID,
-        values: { [HABIT.key]: '1' },
-        extra: { 'v:evil_key': '1', 'c:evil_key': newId(), unit: 'lb', activityKey: 'sc_lift' },
-      }),
-    );
-    expect(res.ok).toBe(true);
-    const items = vi.mocked(logCheckinEntries).mock.calls[0]![0].items;
-    expect(items).toHaveLength(1);
-    expect(items[0]!.activityKey).toBe(HABIT.activityKey);
-  });
-
-  it('rejects a checkbox value other than "1"', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '2' } }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.[HABIT.key]).toBeTruthy();
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-
-  it.each(['0', '11', 'abc'])('rejects an out-of-range scale_10 value (%s)', async (bad) => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: PROFILE_ID, values: { [SCALE_METRIC.key]: bad } }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.[SCALE_METRIC.key]).toBeTruthy();
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-
-  it('reports EVERY invalid field, not just the first', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({
-        profileId: PROFILE_ID,
-        values: { [HABIT.key]: '2', [SCALE_METRIC.key]: '99' },
-      }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.[HABIT.key]).toBeTruthy();
-    expect(res.fieldErrors?.[SCALE_METRIC.key]).toBeTruthy();
-  });
-
-  it('rejects a non-UUID clientId', async () => {
-    const fd = checkinForm({ profileId: PROFILE_ID });
-    fd.append(valueInputName(HABIT.key), '1');
-    fd.append(clientIdInputName(HABIT.key), 'not-a-uuid');
-    const res = await logCheckinsAction(initial, fd);
-    expect(res.ok).toBe(false);
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-
-  // todayIso() is UTC and check-ins are evening activities, so the form submits the day
-  // it rendered; a day far from the server's today means a stale tab, not a valid log.
-  it('rejects a stale day (more than ±1 from today)', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: PROFILE_ID, day: '2020-01-01', values: { [HABIT.key]: '1' } }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-});
-
-describe('logCheckinsAction — happy path + ownership', () => {
-  it('parses the checkbox STRING "1" to numeric 1 and writes via the DAL', async () => {
-    const clientId = newId();
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({
-        profileId: PROFILE_ID,
-        values: { [HABIT.key]: '1' },
-        clientIds: { [HABIT.key]: clientId },
-      }),
-    );
-    expect(res.ok).toBe(true);
-    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
-    expect(logCheckinEntries).toHaveBeenCalledWith(
-      expect.objectContaining({
-        profilePublicId: PROFILE_ID,
-        day: localDay(),
-        items: [{ activityKey: HABIT.activityKey, metricKey: null, value: 1, clientId }],
-      }),
-    );
-    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
-  });
-
-  it('writes a mixed batch: a habit, a bool metric, and a rated metric', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({
-        profileId: PROFILE_ID,
-        values: { [HABIT.key]: '1', [BOOL_METRIC.key]: '1', [SCALE_METRIC.key]: '7' },
-      }),
-    );
-    expect(res.ok).toBe(true);
-    const items = vi.mocked(logCheckinEntries).mock.calls[0]![0].items;
-    expect(items).toHaveLength(3);
-    // A bare habit carries NEITHER source column — the shape V1-5 introduces.
-    expect(items.find((i) => i.activityKey === HABIT.activityKey)!.metricKey).toBeNull();
-    expect(items.find((i) => i.metricKey === BOOL_METRIC.metricKey)!.value).toBe(1);
-    expect(items.find((i) => i.metricKey === SCALE_METRIC.metricKey)!.value).toBe(7);
-    // `unit` is never on the wire — the DAL resolves it from the seeded catalog.
-    for (const i of items) expect(i).not.toHaveProperty('unit');
-  });
-
-  it('fails gracefully (no write) when the profile is unknown', async () => {
-    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
-    );
-    expect(res.ok).toBe(false);
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
-  });
-
-  // client_id UNIQUE is GLOBAL, not profile-scoped: a colliding id writes nothing.
-  // Reporting success there would mask a lost write.
-  it('reports failure when every item conflicted (nothing written)', async () => {
-    vi.mocked(logCheckinEntries).mockResolvedValueOnce([
-      { clientId: 'x', id: null, created: false, outcome: 'conflict' },
-    ]);
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/already logged/i);
-  });
-});
-
-// ── V1-6a: calisthenics (accumulating count metrics) ─────────────────────────────
-const CALIS = CHECKIN_FIELDS.find((f) => f.activityKey === 'calisthenics')!;
-
-describe('logCheckinsAction — calisthenics counts', () => {
-  it('logs a filled counter via the DAL (rides the V1-5 count path)', async () => {
-    const clientId = newId();
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({
-        profileId: PROFILE_ID,
-        values: { [CALIS.key]: '20' },
-        clientIds: { [CALIS.key]: clientId },
-      }),
-    );
-    expect(res.ok).toBe(true);
-    const items = vi.mocked(logCheckinEntries).mock.calls[0]![0].items;
-    expect(items).toEqual([
-      { activityKey: 'calisthenics', metricKey: CALIS.metricKey, value: 20, clientId },
-    ]);
-  });
-
-  it.each(['-1', '100000.5', 'abc'])(
-    'rejects an out-of-range / non-int count (%s)',
-    async (bad) => {
-      const res = await logCheckinsAction(
-        initial,
-        checkinForm({ profileId: PROFILE_ID, values: { [CALIS.key]: bad } }),
-      );
-      expect(res.ok).toBe(false);
-      expect(res.fieldErrors?.[CALIS.key]).toBeTruthy();
-      expect(logCheckinEntries).not.toHaveBeenCalled();
-    },
-  );
-
-  it('ignores a blank counter (not submitted)', async () => {
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({ profileId: PROFILE_ID, values: { [CALIS.key]: '   ' } }),
-    );
-    expect(res.ok).toBe(false); // nothing submitted at all
-    expect(logCheckinEntries).not.toHaveBeenCalled();
-  });
-});
-
-// ── V1-6c: the shared declared-day ±1 bound applies to ALL THREE writers ──────────
-// resolveDeclaredDay bounds the rendered `day` to the active-tz today ±1, so a write lands
-// on the day the user saw (even across local midnight) but a stale tab is rejected.
 describe('declared-day ±1 bound (shared across writers)', () => {
   const bwForm = (day: string) =>
     form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId(), day });
-  const strForm = (day: string) =>
-    strengthForm({
-      profileId: PROFILE_ID,
-      movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      day,
-    });
-  const ciForm = (day: string) =>
-    checkinForm({ profileId: PROFILE_ID, day, values: { [HABIT.key]: '1' } });
+  // FAM-1 12f PR 3: the life form joins here, so the shared bound still holds two writers once the
+  // check-ins and strength-session actions are gone (plan review row Ar-14).
+  const prForm = (day: string) => lifeForm({ day });
 
   it.each([-1, 0])('accepts today and yesterday (offset %s)', async (offset) => {
     const day = localDay(offset);
     expect((await logBodyweightAction(initial, bwForm(day))).ok).toBe(true);
-    expect((await logStrengthSessionAction(initial, strForm(day))).ok).toBe(true);
-    expect((await logCheckinsAction(initial, ciForm(day))).ok).toBe(true);
+    expect((await logLifeActivitiesAction(initial, prForm(day))).ok).toBe(true);
     // Sanity: the offset day is yesterday or today in the active-tz.
     expect(isoDayDiff(day, localDay())).toBeLessThanOrEqual(0);
   });
@@ -1252,20 +358,18 @@ describe('declared-day ±1 bound (shared across writers)', () => {
     async (offset) => {
       const day = localDay(offset);
       const bw = await logBodyweightAction(initial, bwForm(day));
-      const str = await logStrengthSessionAction(initial, strForm(day));
-      const ci = await logCheckinsAction(initial, ciForm(day));
-      for (const res of [bw, str, ci]) expect(res.ok).toBe(false);
+      const pr = await logLifeActivitiesAction(initial, prForm(day));
+      for (const res of [bw, pr]) expect(res.ok).toBe(false);
       expect(logBodyweight).not.toHaveBeenCalled();
-      expect(logStrengthSession).not.toHaveBeenCalled();
       expect(logCheckinEntries).not.toHaveBeenCalled();
     },
   );
 
-  it('rejects a malformed day on bodyweight/strength (after zod, before the DAL)', async () => {
+  it('rejects a malformed day on both writers (after zod, before the DAL)', async () => {
     expect((await logBodyweightAction(initial, bwForm('not-a-date'))).ok).toBe(false);
-    expect((await logStrengthSessionAction(initial, strForm('2026-13-99'))).ok).toBe(false);
+    expect((await logLifeActivitiesAction(initial, prForm('2026-13-99'))).ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
-    expect(logStrengthSession).not.toHaveBeenCalled();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 });
 
@@ -1409,117 +513,6 @@ describe('logLifeActivitiesAction — the minutes and the outcomes (3b-life-b B5
   });
 });
 
-describe('logCheckinsAction — own_hidden is reported per field (V1-9b B1-2)', () => {
-  /**
-   * The mixed batch is the case that matters: some rows saved and one did not, so a form-level
-   * "something failed" over ten rows tells the person nothing they can act on. `fieldErrors` already
-   * exists and is wired to `aria-describedby`, so the refusal names the row.
-   */
-  it('names the field whose id was held by a deleted row, and does not report success', async () => {
-    vi.mocked(logCheckinEntries).mockImplementationOnce(async ({ items }) =>
-      items.map((i, idx) => ({
-        clientId: i.clientId,
-        id: idx === 0 ? 'written' : null,
-        created: idx === 0,
-        outcome: idx === 0 ? ('created' as const) : ('own_hidden' as const),
-      })),
-    );
-    const res = await logCheckinsAction(
-      initial,
-      checkinForm({
-        profileId: PROFILE_ID,
-        values: { [HABIT.key]: '1', [BOOL_METRIC.key]: '1' },
-      }),
-    );
-    expect(res.ok, 'a batch with a lost write is not a success').toBe(false);
-    expect(res.error).toBe(HIDE_COPY.loggedThenDeletedSome);
-    expect(res.fieldErrors?.[BOOL_METRIC.key]).toEqual([HIDE_COPY.loggedThenDeleted]);
-    expect(res.fieldErrors?.[HABIT.key], 'the row that DID save carries no error').toBeUndefined();
-  });
-});
-
-// A fresh set id (UUIDv7) for the edit tests — the DAL is mocked, so it just needs to pass uuidSchema.
-function editForm(fields: Record<string, string>): FormData {
-  const fd = new FormData();
-  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
-  return fd;
-}
-
-describe('editStrengthSetAction — boundary (bad body → zod-reject)', () => {
-  it('rejects a non-numeric reps without touching the DAL', async () => {
-    const res = await editStrengthSetAction(
-      initial,
-      editForm({ profileId: PROFILE_ID, setId: newId(), reps: 'abc', weight: '135' }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.reps).toBeTruthy();
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(editStrengthSet).not.toHaveBeenCalled();
-  });
-
-  it('rejects a blank weight (blank must not slip past as 0)', async () => {
-    const res = await editStrengthSetAction(
-      initial,
-      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '' }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.weight).toBeTruthy();
-    expect(editStrengthSet).not.toHaveBeenCalled();
-  });
-
-  it('rejects a non-UUID setId', async () => {
-    const res = await editStrengthSetAction(
-      initial,
-      editForm({ profileId: PROFILE_ID, setId: 'not-a-uuid', reps: '5', weight: '135' }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.setId).toBeTruthy();
-    expect(editStrengthSet).not.toHaveBeenCalled();
-  });
-
-  it('rejects a malformed profileId without touching the DAL', async () => {
-    const res = await editStrengthSetAction(
-      initial,
-      editForm({ profileId: 'not-a-uuid', setId: newId(), reps: '5', weight: '135' }),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.profileId).toBeTruthy();
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(editStrengthSet).not.toHaveBeenCalled();
-  });
-});
-
-describe('editStrengthSetAction — happy path + not-found', () => {
-  it('edits a valid set via the DAL and revalidates the scoped Today', async () => {
-    const setId = newId();
-    const res = await editStrengthSetAction(
-      initial,
-      editForm({ profileId: PROFILE_ID, setId, reps: '7', weight: '142.5' }),
-    );
-    expect(res.ok).toBe(true);
-    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
-    expect(editStrengthSet).toHaveBeenCalledWith(
-      expect.objectContaining({ profilePublicId: PROFILE_ID, setId, reps: 7, weight: 142.5 }),
-    );
-    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
-  });
-
-  it('maps a not-found set (wrong owner / stale id) to the shared typed error, and revalidates', async () => {
-    // The guarded UPDATE matched no row → the DAL returns null. That is an EXPECTED outcome, so the
-    // action returns { ok:false }, never a throw to error.tsx.
-    vi.mocked(editStrengthSet).mockResolvedValueOnce(null);
-    const res = await editStrengthSetAction(
-      initial,
-      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '7', weight: '142.5' }),
-    );
-    expect(res.ok).toBe(false);
-    // The SAME copy the bodyweight amend uses, and a revalidate so "the page now shows what's saved"
-    // is true. A revalidate tells a crafted request nothing a stale one wouldn't.
-    expect(res.error).toBe(AMEND_ERROR_COPY.notFound('set'));
-    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
-  });
-});
-
 // ── V1-18 PR 2: the coach routine editor ─────────────────────────────────────────
 // The routine rides as ONE hidden `routine` JSON field (an ordered variable-length list, the
 // strength-form idiom). `validateRoutineForWrite` is the trust boundary — it REJECTS an empty /
@@ -1625,7 +618,7 @@ describe('editRoutineAction — happy path + ownership', () => {
 // ── V1-24 PR 1b: the bodyweight amend ───────────────────────────────────────────────────────────
 const ENTRY_ID = '019826b4-0000-7000-8000-0000000000aa';
 const amendForm = (over: Record<string, string> = {}): FormData =>
-  editForm({
+  form({
     profileId: PROFILE_ID,
     entryId: ENTRY_ID,
     value: '85.2',

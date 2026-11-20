@@ -100,9 +100,15 @@ describe('the row tags', () => {
     expect(COPY.tagAlreadyIn('Strength A')).toBe('already in Strength A');
     expect(COPY.tagAlsoCalled('RDL')).toBe('also called RDL');
   });
+});
 
-  it('labels a group from the shared map rather than a second copy', () => {
-    expect(COPY.groupLabel('legs')).toBe('Legs');
+describe('the browse tree (CAT-3 B3)', () => {
+  it('names its sections, and a heading carries its count with the one separator', () => {
+    expect(COPY.allMovements).toBe('All movements');
+    expect(COPY.notSorted).toBe('Not sorted yet');
+    expect(COPY.separator).toBe(' · ');
+    expect(COPY.choiceName(COPY.allMovements, 1)).toBe('All movements, 1 movement');
+    expect(COPY.choiceName(COPY.allMovements, 12)).toBe('All movements, 12 movements');
   });
 });
 
@@ -155,9 +161,6 @@ describe('the filters (CAT-3 B2-ii) — every counted sentence, both ways', () =
   it("the custom section keeps the maintainer's words and adds to them (P9)", () => {
     expect(COPY.household).toBe('Your custom items');
     expect(COPY.householdNotFiltered).toBe('Your custom items (not filtered)');
-    expect(COPY.foldedCount(COPY.householdNotFiltered, 2)).toBe(
-      'Your custom items (not filtered) · 2',
-    );
   });
 
   it('a hidden near miss is said to be hidden, with what to do, never "listed"', () => {

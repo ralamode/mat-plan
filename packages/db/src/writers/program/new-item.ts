@@ -16,7 +16,7 @@ import {
 import { schema } from '../../client';
 import { movementOptions } from '../../queries/program/movement-options';
 import type { HouseholdScope } from '../../scope';
-import type { Executor } from '../executor';
+import { setLocalLockTimeout, type Executor } from '../executor';
 import { findOrCreateTypedMovement } from '../movement-catalog';
 import { householdRowIs, movementIsAvailableTo, movementIsGlobal } from '../ownership';
 import { ADVISORY_LOCK } from '../locks';
@@ -77,6 +77,8 @@ async function addOrSelect(
   trackingType: TrackingType,
   library: readonly CatalogMovement[],
 ): Promise<NewItemResult> {
+  // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
+  await setLocalLockTimeout(exec);
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
   // unwrapped here. No row means the household is gone (an erasure mid-call): `not_found`, so the
   // count below never runs without the lock.

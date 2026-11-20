@@ -119,7 +119,15 @@ import {
   SEED_E2E_START_DAY,
 } from '../../src/writers/program/seed-e2e';
 import { resolveDayPlan } from '../../src/queries/day/day-plan';
-import { asDb, asTx, orFail, rolledBack, type VerifyContext, type VerifyTx } from './harness';
+import {
+  asDb,
+  asTx,
+  lockTimeoutSetBy,
+  orFail,
+  rolledBack,
+  type VerifyContext,
+  type VerifyTx,
+} from './harness';
 import { normalizeFixture } from './normalize-fixture';
 
 /**
@@ -2983,6 +2991,16 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       { ok: true, lastDay: PUT_ON_TODAY },
       'FAM-1 6c-i: x is taken off P today (the real writer, 6d-i)',
     );
+    const xOnP = async () =>
+      (await readProgramsByAthlete(exec, A_SCOPE, PUT_ON_TODAY))
+        .get(x)
+        ?.filter((p) => p.programPublicId === P)
+        .map(({ activeFrom, activeTo }) => ({ activeFrom, activeTo }));
+    assert.deepEqual(
+      await xOnP(),
+      [{ activeFrom: xStart, activeTo: PUT_ON_TODAY }],
+      'FAM-1 15 PR 3: readProgramsByAthlete gives a program taken off today its last day, today',
+    );
     assert.deepEqual(
       await tryIt(A_SCOPE, { programPublicId: R, profilePublicIds: [x], from: PUT_ON_TODAY }),
       { ok: true },
@@ -3006,6 +3024,11 @@ async function verifyPutOn({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
       pRows.map((r) => ({ id: r.id, activeFrom: r.activeFrom, activeTo: r.activeTo })),
       [{ id: pRow.id, activeFrom: xStart, activeTo: null }],
       'FAM-1 6c-i: …reopens the same row, its start kept: one stretch, no gap, whatever `from` says',
+    );
+    assert.deepEqual(
+      await xOnP(),
+      [{ activeFrom: xStart, activeTo: null }],
+      'FAM-1 15 PR 3: …and readProgramsByAthlete reports the reopened stretch open (activeTo null), from its row',
     );
     assert.deepEqual(
       await openOrder(x),
@@ -3955,7 +3978,9 @@ async function verifyCaps(): Promise<void> {
     const add = (name: string) =>
       newItem(exec, scope, { name, trackingType: TRACKING_TYPE.reps }, CATALOG_MOVEMENTS);
 
-    const last = await add('Caps Last Drill');
+    const { set: timeoutSet, result: last } = await lockTimeoutSetBy(tx, () =>
+      add('Caps Last Drill'),
+    );
     assert.ok(last.ok && !last.existed, 'FAM-1 caps: the item that reaches the cap is made');
     assert.equal(
       await own(),
@@ -3979,6 +4004,10 @@ async function verifyCaps(): Promise<void> {
           Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
       ),
       'FAM-1 caps: newItem holds the household-items advisory lock, keyed by its household',
+    );
+    assert.ok(
+      timeoutSet,
+      'TD lock timeout: newItem sets lock_timeout before it waits on the household-items lock',
     );
     assert.deepEqual(
       await add('Caps One Too Many'),
@@ -4685,6 +4714,30 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       [],
       'FAM-1 6c-ii: readProgramsByAthlete maps an athlete on no program to no programs',
     );
+    // A start after today carries its own first day, so Home can say "starts {day}" (15 PR 3).
+    const p1Id = ids.get(fixtureIds.program('p1'))!;
+    const loneFrom = addDays(today, 1);
+    assert.deepEqual(
+      await putOn(
+        exec,
+        scope,
+        { programPublicId: p1Id, profilePublicIds: [lone], from: loneFrom },
+        today,
+      ),
+      { ok: true },
+      'FAM-1 15 PR 3: the proof puts the lone athlete on p1 from tomorrow',
+    );
+    assert.deepEqual(
+      (await readProgramsByAthlete(exec, scope, today))
+        .get(lone)
+        ?.map(({ programPublicId, activeFrom, activeTo }) => ({
+          programPublicId,
+          activeFrom,
+          activeTo,
+        })),
+      [{ programPublicId: p1Id, activeFrom: loneFrom, activeTo: null }],
+      'FAM-1 15 PR 3: readProgramsByAthlete gives a start after today its own first day, open-ended',
+    );
     byAthlete.delete(lone);
     // Removed again, so the fixture world below is exactly the fixture's.
     await tx
@@ -4698,6 +4751,8 @@ async function verifyProgramReads({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
         (world.assign[a.id] ?? []).map((s) => ({
           programPublicId: ids.get(fixtureIds.program(s.prog)),
           name: world.programs.find((p) => p.id === s.prog)!.name,
+          activeFrom: s.from,
+          activeTo: s.to ?? null,
         })),
       ]),
       'FAM-1 6c-ii: readProgramsByAthlete answers each athlete’s current programs, in their order',

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { APP_HOME_PATH, SIGN_IN_PATH, THEME_COPY, THEME_STORAGE_KEY } from '../lib/constants';
+import { seedStoredTheme } from './a11y-checks';
 import { cspViolations, headerNonce, recordCspViolations } from './csp';
 
 /**
@@ -43,20 +44,6 @@ const tapTheme = (page: Page, choice: 'system' | 'light' | 'dark') =>
     .locator('label')
     .filter({ has: themeRadio(page, choice) })
     .click();
-
-/** Pre-seed the stored choice the way a returning viewer's browser would have it. */
-async function seedStoredTheme(page: Page, value: 'light' | 'dark'): Promise<void> {
-  await page.addInitScript(
-    ([key, v]) => {
-      try {
-        window.localStorage.setItem(key!, v!);
-      } catch {
-        /* a private window would throw; the app must still render */
-      }
-    },
-    [THEME_STORAGE_KEY, value],
-  );
-}
 
 /** Record the earliest observable state of `<html>`'s class, from before any page script runs. */
 async function recordFirstClassMutation(page: Page): Promise<void> {
@@ -165,13 +152,7 @@ test('the choice survives a reload, and the control shows it', async ({ page }) 
 test('with no stored choice, Auto follows the device', async ({ page }) => {
   // The default, and the reason `system` is the default: a viewer whose phone is dark gets dark
   // without touching anything.
-  await page.addInitScript((key) => {
-    try {
-      window.localStorage.removeItem(key as string);
-    } catch {
-      /* ignore */
-    }
-  }, THEME_STORAGE_KEY);
+  await seedStoredTheme(page, null);
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
   await expect(page.locator('html')).toHaveClass(/\bdark\b/);

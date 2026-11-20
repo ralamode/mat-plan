@@ -13,15 +13,19 @@ describe('hiddenAtSchema (the hide token)', () => {
     expect(hiddenAtSchema.safeParse('2026-11-17T18:04:05.1234567Z').success).toBe(false);
   });
 
-  // The right format, but no real instant: Postgres' `::timestamptz` cast would throw (22008), so a
-  // crafted one would reach error.tsx instead of answering bad_value (#547's review).
+  // The right format, refused (the reasons are hiddenAtSchema's docblock, hide.ts).
   it.each([
     ['30 February', '2026-02-30T00:00:00.000000Z'],
     ['month 13', '2026-13-01T00:00:00.000000Z'],
+    ['year 0000', '0000-01-01T00:00:00.000000Z'],
+  ])('refuses %s, which fails the database cast', (_label, token) => {
+    expect(hiddenAtSchema.safeParse(token).success).toBe(false);
+  });
+
+  it.each([
     ['hour 24', '2026-11-17T24:00:00.000000Z'],
     ['second 60', '2026-11-17T18:04:60.000000Z'],
-    ['year 0000', '0000-01-01T00:00:00.000000Z'],
-  ])('refuses %s', (_label, token) => {
+  ])('refuses %s, a second spelling of an instant', (_label, token) => {
     expect(hiddenAtSchema.safeParse(token).success).toBe(false);
   });
 
