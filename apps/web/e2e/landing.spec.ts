@@ -135,7 +135,13 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
       await route.continue();
     }
   });
-  await page.getByRole('button', { name: `Move ${before[0]} down`, exact: true }).click();
+  // FAM-1 12f PR 5: the seeded athlete's routine now lists one item, whose arrows are `aria-disabled`,
+  // so the edit before Save is a Remove. It is still the editor's real Save with a real `next-action`
+  // id, captured and aborted; the posted routine turns practice off, so the last assertion below (a
+  // fresh load still shows the original order) still fails if any replay ran.
+  await page
+    .getByRole('button', { name: `Remove ${before[0]} from the routine`, exact: true })
+    .click();
   await page.getByRole('button', { name: ROUTINE_COPY.save, exact: true }).click();
   await expect.poll(() => captured).not.toBeNull();
   const request = captured as unknown as Request;

@@ -1,28 +1,37 @@
 import {
+  buildDefaultRoutine,
   makeRoutineKey,
   parseRoutineKey,
   resolveRoutine,
   type RoutineConfig,
+  type RoutineItem,
   STRENGTH_KEY,
-  STRENGTH_LABEL,
 } from '@mat-plan/shared';
 
-import { type CheckinField, CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { LIFE_ACTIVITIES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 type LifeActivity = (typeof LIFE_ACTIVITIES)[number];
 
 /**
- * The ordered routine catalog (V1-18) — the SINGLE source of both the default routine order AND
- * `resolveRoutine`'s membership set, derived from the live catalogs (`CHECKIN_FIELDS`, `LIFE_ACTIVITY_KEYS`)
- * so it can't drift. Keys are built with the shared `makeRoutineKey` (symmetric with `parseRoutineKey`).
- * Order = today's page: strength → check-ins (in `CHECKIN_FIELDS` order) → life. Bodyweight is NOT here —
- * weigh-in is pinned separately. Pure (no `server-only`/React — the transitive catalogs are pure), so the
+ * The ordered routine catalog (V1-18; trimmed at FAM-1 12f PR 5, D28): `strength`, then the Life keys
+ * (`LIFE_ACTIVITY_KEYS`, today Wrestling practice alone). The SINGLE source of both the default routine
+ * order AND `resolveRoutine`'s membership set, derived from `LIFE_ACTIVITY_KEYS` so it can't drift.
+ * Keys are built with the shared `makeRoutineKey` (symmetric with `parseRoutineKey`).
+ *
+ * - **The check-in keys and Wake left** (12f PR 5): the day page logs neither, and the editor offered
+ *   what it could no longer switch on. A stored `checkin:*` or `life:wake` key is dropped at read and
+ *   leaves storage only when that athlete's routine is next saved; no stored routine is rewritten.
+ * - **`strength` stays a member, listed nowhere.** `resolveRoutine` never returns an empty routine: with
+ *   no usable key it returns the fallback, and when the fallback is not in the catalog, the whole
+ *   catalog. A Life-only catalog would hand every athlete with no stored routine Wrestling practice,
+ *   "Life for everyone", which D28 rejected. So `strength` is the catalog's never-empty member: the
+ *   first-run default, and what `savedOrder` writes when nothing listed is left.
+ *
+ * Bodyweight is NOT here: weigh-in is pinned separately. Pure (no `server-only`/React), so the
  * `server-only` DAL imports it without dragging a client boundary.
  */
 export const ROUTINE_CATALOG: readonly string[] = [
   STRENGTH_KEY,
-  ...CHECKIN_FIELDS.map((f) => makeRoutineKey('checkin', f.key)),
   ...LIFE_ACTIVITY_KEYS.map((k) => makeRoutineKey('life', k)),
 ];
 
@@ -51,10 +60,13 @@ export const ROUTINE_CATALOG: readonly string[] = [
  *    with no number on the button. Since V1-24 3b-life it is typed minutes with Change and Clear, so
  *    that reason is gone; whether a new household sees it by default is still this row's call
  *    (docs/plan.md's standing ruling), and it stays out until that is decided.
- * Everything excluded stays fully authorable in the shipped editor, which Today links to.
+ * Since FAM-1 12f PR 5 the catalog holds none of those exclusions but practice: the check-in keys and
+ * Wake left it, and nothing links to the editor (it is reached by its URL).
  *
- * ⚠️ READ-TIME FALLBACK, NEVER WRITTEN. `routine_config = NULL` *is* the representation of "the neutral
- * default", so a profile creator leaves it NULL. If PROF-1 / TEN-1 / ONB-2 ever needs to WRITE a starter
+ * ⚠️ READ-TIME FALLBACK, NEVER WRITTEN AS A DEFAULT. `routine_config = NULL` *is* the representation of
+ * "the neutral default", so a profile creator leaves it NULL. `strength` alone may still be written, by
+ * `savedOrder`, as the catalog's never-empty member when an editor save leaves nothing listed: that is
+ * a saved routine, not the first-run default. If PROF-1 / TEN-1 / ONB-2 ever needs to WRITE a starter
  * routine from `packages/db`, this const and the two registries it derives from have to move to
  * `packages/shared` first — `packages/db` cannot import `apps/web`.
  */
@@ -79,36 +91,26 @@ export function resolveProfileRoutine(raw: unknown): RoutineConfig {
 }
 
 /**
- * A render block: one existing form + the collapsed BARE catalog keys it covers. A CONTIGUOUS run of
- * `checkin:*` (or `life:*`) keys collapses into ONE block, so `CheckinForm`/`PracticeForm` are called once per
- * run — preserving the batch submit + a single hydration island (`DEFAULT_ROUTINE`, all check-ins
- * contiguous, = today's single `CheckinForm`). A scattered routine yields multiple blocks (the honest
- * consequence). `strength` is a singleton block; unknown namespaces (`finisher:*`, already stripped by
- * `resolveRoutine`) are skipped.
+ * A render block: the collapsed BARE catalog keys one run of `life:*` keys covers, or the `strength`
+ * singleton. A contiguous run of `life:*` keys collapses into ONE block. Unknown namespaces (a stored
+ * `checkin:*` since 12f PR 5, `finisher:*`), already stripped by `resolveRoutine`, are skipped.
  */
-export type RoutineBlock =
-  | { kind: 'strength' }
-  | { kind: 'checkins'; keys: string[] } // bare CheckinField.key values, in routine order
-  | { kind: 'life'; keys: string[] }; // bare LIFE_ACTIVITY_KEYS values, in routine order
+export type RoutineBlock = { kind: 'strength' } | { kind: 'life'; keys: string[] }; // bare LIFE_ACTIVITY_KEYS values, in routine order
 
 /**
- * Classify ONE routine key into what renders it — the single dispatch both `buildRoutineBlocks` (Today)
- * and `routineCatalogItems` (the coach editor) share, so a new namespace can't render on one surface but
- * silently drop on the other. `strength` → the singleton; `checkin:*`/`life:*` → their kind + bare
- * catalog key; a missing tail or an unknown namespace (`finisher:*` etc.) → null (skipped everywhere).
+ * Classify ONE routine key into what renders it: the single dispatch both `buildRoutineBlocks` (the day
+ * page) and `routineCatalogItems` (the editor) share, so a new namespace can't render on one surface but
+ * silently drop on the other. `strength` → the singleton; `life:*` → its bare catalog key; a missing
+ * tail or any other namespace → null (skipped everywhere).
  */
-type RoutineKeyClass =
-  | { kind: 'strength' }
-  | { kind: 'checkins'; catalogKey: string }
-  | { kind: 'life'; catalogKey: string };
+type RoutineKeyClass = { kind: 'strength' } | { kind: 'life'; catalogKey: string };
 
 function classifyRoutineKey(key: string): RoutineKeyClass | null {
   const { namespace, catalogKey } = parseRoutineKey(key);
   if (namespace === STRENGTH_KEY) return { kind: 'strength' };
   if (!catalogKey) return null; // no namespace tail (null / empty '')
-  if (namespace === 'checkin') return { kind: 'checkins', catalogKey };
   if (namespace === 'life') return { kind: 'life', catalogKey };
-  return null; // unknown namespace (finisher:* etc.)
+  return null; // any other namespace (checkin:* since 12f PR 5, finisher:* etc.)
 }
 
 export function buildRoutineBlocks(order: readonly { key: string }[]): RoutineBlock[] {
@@ -121,27 +123,18 @@ export function buildRoutineBlocks(order: readonly { key: string }[]): RoutineBl
       continue;
     }
     const last = blocks[blocks.length - 1];
-    if (last && 'keys' in last && last.kind === cls.kind)
+    if (last && last.kind === 'life')
       last.keys.push(cls.catalogKey); // extend the run
-    else blocks.push({ kind: cls.kind, keys: [cls.catalogKey] }); // start a new block
+    else blocks.push({ kind: 'life', keys: [cls.catalogKey] }); // start a new block
   }
   return blocks;
 }
 
-// Static key → object lookups, built ONCE at module load (the registries are static consts) — not per call.
-const CHECKIN_FIELD_BY_KEY = new Map<string, CheckinField>(CHECKIN_FIELDS.map((f) => [f.key, f]));
+// Static key → object lookup, built ONCE at module load (the registry is a static const), not per call.
 const LIFE_ACTIVITY_BY_KEY = new Map<string, LifeActivity>(LIFE_ACTIVITIES.map((a) => [a.key, a]));
 
-/** Map a check-in block's bare keys back to the live `CheckinField` objects (the ONE registry), in routine
- *  order (unknown keys dropped). DEFAULT (catalog-order keys) yields exactly today's `fields={CHECKIN_FIELDS}`. */
-export function checkinFieldsForKeys(keys: readonly string[]): CheckinField[] {
-  return keys
-    .map((k) => CHECKIN_FIELD_BY_KEY.get(k))
-    .filter((f): f is CheckinField => f !== undefined);
-}
-
-/** The life twin of `checkinFieldsForKeys` — bare keys → live `LIFE_ACTIVITIES` objects, in routine order
- *  (unknown keys dropped). Single-sources the resolution the Life section's subset uses (no inline re-implement). */
+/** Bare Life keys → live `LIFE_ACTIVITIES` objects, in routine order (unknown keys dropped). The Life
+ *  section's one resolution: since 12f PR 5 the catalog holds no Wake, so a stored `wake` key drops here. */
 export function lifeActivitiesForKeys(keys: readonly string[]): LifeActivity[] {
   return keys
     .map((k) => LIFE_ACTIVITY_BY_KEY.get(k))
@@ -152,25 +145,45 @@ export function lifeActivitiesForKeys(keys: readonly string[]): LifeActivity[] {
 export type RoutineCatalogItem = { key: string; label: string };
 
 /**
- * The labelled routine catalog (V1-18 PR 2) — every `ROUTINE_CATALOG` key paired with its human label, in
- * catalog order, for the coach editor's checklist. Labels are single-sourced, NOT re-typed: `strength` →
- * the shared `STRENGTH_LABEL`; `checkin:*` / `life:*` → the live registry object's `.label`, resolved via
- * `parseRoutineKey` + the already-hoisted maps (the same maps `checkinFieldsForKeys`/`lifeActivitiesForKeys`
- * use). Order comes free from `ROUTINE_CATALOG` (itself derived from the registries — can't drift). A key
- * whose object has gone missing is dropped (can't happen while the catalog IS derived from the registries).
+ * The labelled routine catalog the editor lists (V1-18 PR 2; Life only since FAM-1 12f PR 5): every
+ * `life:*` key of `ROUTINE_CATALOG` with its label from `LIFE_ACTIVITIES`, in catalog order. `strength`
+ * is a member but is never listed: the editor cannot switch it off, and `savedOrder` carries it.
  */
 export function routineCatalogItems(): RoutineCatalogItem[] {
   const items: RoutineCatalogItem[] = [];
   for (const key of ROUTINE_CATALOG) {
     const cls = classifyRoutineKey(key); // the SAME dispatch buildRoutineBlocks uses (no drift)
-    if (cls === null) continue;
-    const label =
-      cls.kind === 'strength'
-        ? STRENGTH_LABEL
-        : cls.kind === 'checkins'
-          ? CHECKIN_FIELD_BY_KEY.get(cls.catalogKey)?.label
-          : LIFE_ACTIVITY_BY_KEY.get(cls.catalogKey)?.label;
+    if (cls?.kind !== 'life') continue;
+    const label = LIFE_ACTIVITY_BY_KEY.get(cls.catalogKey)?.label;
     if (label !== undefined) items.push({ key, label });
   }
   return items;
+}
+
+/**
+ * **What the editor's Save sends** (FAM-1 12f PR 5): the items it lists, with what it does not list
+ * carried along. `initial` is the athlete's resolved routine and `listed` the editor's current items.
+ *
+ * - **Carried:** every item of `initial` whose key the editor does not list (today `strength`), kept at
+ *   its place among the listed ones and with its `conditional` marker, so a day-conditional strength
+ *   stays day-conditional through a save that never showed it.
+ * - **Nothing left** (no listed item and nothing carried): `strength` alone, as the catalog's
+ *   never-empty member. An empty order is not authorable (the write path refuses it), and the read side
+ *   would otherwise re-expand it.
+ *
+ * The version comes from `buildDefaultRoutine`; the order comes from the items themselves, because
+ * `buildDefaultRoutine` takes keys and would drop a `conditional` marker.
+ */
+export function savedOrder(initial: RoutineConfig, listed: readonly RoutineItem[]): RoutineConfig {
+  const listable = new Set(routineCatalogItems().map((item) => item.key));
+  const queue = [...listed];
+  const order: RoutineItem[] = [];
+  for (const item of initial.order) {
+    if (!listable.has(item.key))
+      order.push(item); // carried, at its place
+    else if (queue.length > 0) order.push(queue.shift()!); // a listed slot takes the next listed item
+  }
+  order.push(...queue); // listed items beyond the initial's listed slots, in the editor's order
+  const version = buildDefaultRoutine([STRENGTH_KEY]).version;
+  return order.length > 0 ? { version, order } : buildDefaultRoutine([STRENGTH_KEY]);
 }

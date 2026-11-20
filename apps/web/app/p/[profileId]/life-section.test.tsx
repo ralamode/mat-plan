@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { ACTIVITY_TYPE_KEYS, PRACTICE_AMEND_REFUSAL, PRACTICE_UNIT } from '@mat-plan/shared';
+import {
+  ACTIVITY_TYPE_KEYS,
+  ACTIVITY_TYPE_SEED_ROWS,
+  PRACTICE_AMEND_REFUSAL,
+  PRACTICE_UNIT,
+} from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,7 +37,8 @@ const DAY = '2026-09-30';
 const PRACTICE = ACTIVITY_TYPE_KEYS.wrestling_practice;
 const WAKE = ACTIVITY_TYPE_KEYS.wake;
 const practiceLabel = LIFE_ACTIVITIES.find((a) => a.key === PRACTICE)!.label;
-const wakeLabel = LIFE_ACTIVITIES.find((a) => a.key === WAKE)!.label;
+// Wake left the routine catalog (FAM-1 12f PR 5), so its label is read from the activity type it still is.
+const wakeLabel = ACTIVITY_TYPE_SEED_ROWS.find((a) => a.key === WAKE)!.label;
 
 const practice = (value: number, entryId = `019826b4-0000-7000-8000-00000000c${value}`) =>
   ({ entryId, activityKey: PRACTICE, value, unit: PRACTICE_UNIT }) satisfies LoggedLifeActivity;
@@ -112,7 +118,7 @@ describe('LifeSection — its states', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('a logged Wake is not shown', () => {
+  it('Wake is not in the catalog: a logged Wake is not shown', () => {
     const wake: LoggedLifeActivity = {
       entryId: 'w',
       activityKey: WAKE,
@@ -124,7 +130,7 @@ describe('LifeSection — its states', () => {
     expect(screen.getByText(LIFE_COPY.noneOnClosedDay)).toBeTruthy();
   });
 
-  it('renders nothing when the routine has no life activity to show', () => {
+  it('Wake is not in the catalog: a routine of Wake alone renders nothing', () => {
     for (const activityKeys of [[], [WAKE]]) {
       const { container } = render(section({ activityKeys }));
       expect(container.innerHTML).toBe('');

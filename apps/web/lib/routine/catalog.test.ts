@@ -1,75 +1,109 @@
-import { SEED_FULL_ROUTINE } from '@mat-plan/db';
+import { SEED_ATHLETE_TWO_ROUTINE, SEED_FULL_ROUTINE } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
   buildDefaultRoutine,
   makeRoutineKey,
-  parseRoutineKey,
+  type RoutineConfig,
   STRENGTH_KEY,
-  STRENGTH_LABEL,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
-import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { LIFE_ACTIVITIES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
+import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 
 import {
   buildRoutineBlocks,
-  checkinFieldsForKeys,
+  lifeActivitiesForKeys,
   NEUTRAL_DEFAULT_KEYS,
   resolveProfileRoutine,
   ROUTINE_CATALOG,
   routineCatalogItems,
+  savedOrder,
 } from './catalog';
 
-const CHECKIN_KEYS = CHECKIN_FIELDS.map((f) => f.key);
-const item = (key: string) => ({ key });
+const PRACTICE = makeRoutineKey('life', ACTIVITY_TYPE_KEYS.wrestling_practice);
+const WAKE = makeRoutineKey('life', ACTIVITY_TYPE_KEYS.wake);
+const routine = (order: RoutineConfig['order']): RoutineConfig => ({ version: 1, order });
 
-describe('ROUTINE_CATALOG — derived from the live catalogs (anti-drift)', () => {
-  it('is strength → check-ins (in CHECKIN_FIELDS order) → life, with no bodyweight', () => {
-    expect(ROUTINE_CATALOG).toEqual([
-      STRENGTH_KEY,
-      ...CHECKIN_KEYS.map((k) => makeRoutineKey('checkin', k)),
-      ...LIFE_ACTIVITY_KEYS.map((k) => makeRoutineKey('life', k)),
-    ]);
-    expect(ROUTINE_CATALOG).not.toContain('bodyweight');
+/** What the day page shows for a stored routine: its Life items, as `page.tsx` and the Life section read them. */
+const lifeShown = (raw: unknown) =>
+  lifeActivitiesForKeys(
+    buildRoutineBlocks(resolveProfileRoutine(raw).order).flatMap((b) =>
+      b.kind === 'life' ? b.keys : [],
+    ),
+  ).map((a) => a.key);
+
+describe('ROUTINE_CATALOG — after the trim (FAM-1 12f PR 5, D28)', () => {
+  it('is exactly strength, then Wrestling practice: no check-in key, no Wake, no bodyweight', () => {
+    expect(ROUTINE_CATALOG).toEqual([STRENGTH_KEY, PRACTICE]);
   });
 });
 
-describe('buildRoutineBlocks — contiguous-run collapse', () => {
-  it('DEFAULT (all check-ins contiguous) → ONE check-ins block = today’s single CheckinForm', () => {
-    const blocks = buildRoutineBlocks(buildDefaultRoutine(ROUTINE_CATALOG).order);
-    expect(blocks).toEqual([
-      { kind: 'strength' },
-      { kind: 'checkins', keys: CHECKIN_KEYS },
-      { kind: 'life', keys: [...LIFE_ACTIVITY_KEYS] },
+/**
+ * The plan's routine table, one case per row: no athlete's day page changes. Q5's second read
+ * (2026-11-19) found production holds three of these shapes: none, Athlete Two's, and strength with
+ * check-in keys and no Life key.
+ */
+describe('the day page shows the same Life items for every stored routine (the plan’s table)', () => {
+  it.each([
+    ['none (every athlete added in the app)', null, []],
+    ['the full routine (the seed)', SEED_FULL_ROUTINE, [ACTIVITY_TYPE_KEYS.wrestling_practice]],
+    ['Athlete Two’s (check-ins, strength, Wake)', SEED_ATHLETE_TWO_ROUTINE, []],
+    [
+      'only keys that left (Wake, a check-in)',
+      routine([{ key: WAKE }, { key: 'checkin:rice_bucket' }]),
+      [],
+    ],
+    [
+      'strength and check-in keys, no Life key (found in production, Q5)',
+      routine([
+        { key: STRENGTH_KEY },
+        { key: 'checkin:rice_bucket' },
+        { key: 'checkin:calisthenics:pushups' },
+      ]),
+      [],
+    ],
+    [
+      'Wrestling practice alone',
+      routine([{ key: PRACTICE }]),
+      [ACTIVITY_TYPE_KEYS.wrestling_practice],
+    ],
+  ])('%s', (_name, stored, shown) => {
+    expect(lifeShown(stored)).toEqual(shown);
+  });
+
+  it('a routine of strength plus check-in keys resolves to strength alone, never the whole catalog', () => {
+    // The board's extra test: falling back to the whole catalog here would hand this athlete practice.
+    const resolved = resolveProfileRoutine(
+      routine([{ key: STRENGTH_KEY }, { key: 'checkin:rice_bucket' }]),
+    );
+    expect(resolved.order.map((i) => i.key)).toEqual([STRENGTH_KEY]);
+  });
+
+  it('Athlete Two’s seed resolves to strength with its conditional marker', () => {
+    expect(resolveProfileRoutine(SEED_ATHLETE_TWO_ROUTINE).order).toEqual([
+      { key: STRENGTH_KEY, conditional: true },
     ]);
   });
 
-  it('a scattered routine (a check-in on each side of strength) splits into TWO check-in blocks', () => {
-    const blocks = buildRoutineBlocks([
-      item('checkin:rice_bucket'),
-      item('strength'),
-      item('checkin:brush_teeth:stance'), // two-colon tail preserved
-      item('life:wake'),
-    ]);
-    expect(blocks).toEqual([
-      { kind: 'checkins', keys: ['rice_bucket'] },
-      { kind: 'strength' },
-      { kind: 'checkins', keys: ['brush_teeth:stance'] },
-      { kind: 'life', keys: ['wake'] },
-    ]);
+  it('the full seed resolves to the catalog’s keys, in order (its check-ins and Wake drop)', () => {
+    expect(resolveProfileRoutine(SEED_FULL_ROUTINE).order.map((i) => i.key)).toEqual(
+      ROUTINE_CATALOG,
+    );
   });
+});
 
-  it('collapses an adjacent run into one block and skips unknown namespaces (finisher:*)', () => {
-    const blocks = buildRoutineBlocks([
-      item('checkin:rice_bucket'),
-      item('checkin:brush_teeth:stance'),
-      item('finisher:sprints'), // unknown namespace → skipped
-      item('life:wake'),
-    ]);
-    expect(blocks).toEqual([
-      { kind: 'checkins', keys: ['rice_bucket', 'brush_teeth:stance'] },
-      { kind: 'life', keys: ['wake'] },
+describe('buildRoutineBlocks', () => {
+  it('a run of life keys is one block; strength is a singleton; other namespaces are skipped', () => {
+    expect(
+      buildRoutineBlocks([
+        { key: STRENGTH_KEY },
+        { key: 'checkin:rice_bucket' },
+        { key: PRACTICE },
+        { key: 'finisher:sled' },
+      ]),
+    ).toEqual([
+      { kind: 'strength' },
+      { kind: 'life', keys: [ACTIVITY_TYPE_KEYS.wrestling_practice] },
     ]);
   });
 
@@ -78,108 +112,50 @@ describe('buildRoutineBlocks — contiguous-run collapse', () => {
   });
 });
 
-describe('checkinFieldsForKeys — maps bare keys back to CheckinField objects in order', () => {
-  it('returns the live fields in routine order, dropping unknown keys', () => {
-    const first = CHECKIN_KEYS[0];
-    const fields = checkinFieldsForKeys([first, 'nope']);
-    expect(fields.map((f) => f.key)).toEqual([first]);
+describe('routineCatalogItems — what the editor lists', () => {
+  it('lists Wrestling practice, with its label from LIFE_ACTIVITIES, and never strength or Wake', () => {
+    const practice = LIFE_ACTIVITIES.find((a) => a.key === ACTIVITY_TYPE_KEYS.wrestling_practice)!;
+    expect(routineCatalogItems()).toEqual([{ key: PRACTICE, label: practice.label }]);
   });
 });
 
-describe('routineCatalogItems — the labelled catalog for the coach editor', () => {
-  const items = routineCatalogItems();
-
-  it('covers every ROUTINE_CATALOG key, in catalog order', () => {
-    expect(items.map((i) => i.key)).toEqual([...ROUTINE_CATALOG]);
+describe('savedOrder — what Save sends', () => {
+  it('carries strength, with its conditional marker, at its place among the listed items', () => {
+    const initial = routine([{ key: STRENGTH_KEY, conditional: true }, { key: PRACTICE }]);
+    expect(savedOrder(initial, [{ key: PRACTICE }])).toEqual(
+      routine([{ key: STRENGTH_KEY, conditional: true }, { key: PRACTICE }]),
+    );
   });
 
-  it('single-sources labels from the registries (no re-typed strings)', () => {
-    const byKey = new Map(items.map((i) => [i.key, i.label]));
-    // strength → the shared STRENGTH_LABEL
-    expect(byKey.get(STRENGTH_KEY)).toBe(STRENGTH_LABEL);
-    // a check-in key → its CheckinField.label
-    const cf = CHECKIN_FIELDS[0]!;
-    expect(byKey.get(makeRoutineKey('checkin', cf.key))).toBe(cf.label);
-    // a life key → its LIFE_ACTIVITIES label
-    const la = LIFE_ACTIVITIES[0]!;
-    expect(byKey.get(makeRoutineKey('life', la.key))).toBe(la.label);
+  it('keeps a carried item’s place when the listed items come first', () => {
+    const initial = routine([{ key: PRACTICE }, { key: STRENGTH_KEY, conditional: true }]);
+    expect(savedOrder(initial, [{ key: PRACTICE }]).order).toEqual([
+      { key: PRACTICE },
+      { key: STRENGTH_KEY, conditional: true },
+    ]);
   });
 
-  it('gives every item a non-empty label', () => {
-    for (const i of items) expect(i.label.length).toBeGreaterThan(0);
+  it('a removed listed item leaves; strength stays', () => {
+    const initial = routine([{ key: STRENGTH_KEY }, { key: PRACTICE }]);
+    expect(savedOrder(initial, []).order).toEqual([{ key: STRENGTH_KEY }]);
+  });
+
+  it('an added listed item joins after what was there', () => {
+    const initial = routine([{ key: STRENGTH_KEY }]);
+    expect(savedOrder(initial, [{ key: PRACTICE }]).order).toEqual([
+      { key: STRENGTH_KEY },
+      { key: PRACTICE },
+    ]);
+  });
+
+  it('saves strength alone, as the never-empty member, when nothing is left', () => {
+    expect(savedOrder(routine([]), [])).toEqual(buildDefaultRoutine([STRENGTH_KEY]));
   });
 });
 
-/**
- * ONB-0 — the neutral first-run default. Before this, a profile with `routine_config = NULL` fell back
- * to the WHOLE catalog, so a brand-new household's first screen was ~17 controls belonging to the
- * maintainer's household (3 habits, 7 metrics grouped under the label "Brush teeth", 4 calisthenics
- * counters, 2 life controls).
- */
 describe('NEUTRAL_DEFAULT_KEYS — the first-run fallback', () => {
-  // The ONE literal-pinning assertion in this file (AGENTS.md's sanctioned exception). Everything else
-  // asserts through a const, and a `⊆ ROUTINE_CATALOG` / "in catalog order" check would be tautological
-  // against a hand-written list — this is what actually fails if someone widens the default.
-  it('is strength alone — which, with the pinned weigh-in, is "weigh-in + strength only"', () => {
-    expect([...NEUTRAL_DEFAULT_KEYS]).toEqual(['strength']);
-  });
-
-  it('is a STRICT subset of the catalog (the narrowing actually happened)', () => {
-    expect(NEUTRAL_DEFAULT_KEYS.length).toBeGreaterThan(0);
-    expect(NEUTRAL_DEFAULT_KEYS.length).toBeLessThan(ROUTINE_CATALOG.length);
-  });
-
-  it('contains no household-chosen activity — asserted through the catalog, not re-typed keys', () => {
-    const excluded = new Set<string>([
-      ACTIVITY_TYPE_KEYS.rice_bucket,
-      ACTIVITY_TYPE_KEYS.brain_rep,
-      ACTIVITY_TYPE_KEYS.splits,
-      ACTIVITY_TYPE_KEYS.brush_teeth,
-      // CAT-1: these twin the push-ups / pull-up / v-sit movements and double-count adherence.
-      ACTIVITY_TYPE_KEYS.calisthenics,
-    ]);
-    const fieldByKey = new Map(CHECKIN_FIELDS.map((f) => [f.key, f]));
-
-    for (const key of NEUTRAL_DEFAULT_KEYS) {
-      const { namespace, catalogKey } = parseRoutineKey(key);
-      // No life activity either: whether a new household sees wrestling practice by default is the
-      // neutral default's own call (catalog.ts), not decided by V1-24 3b-life's typed minutes.
-      expect(namespace).not.toBe('life');
-      if (namespace !== 'checkin' || catalogKey === null) continue;
-      expect(excluded.has(fieldByKey.get(catalogKey)?.activityKey ?? '')).toBe(false);
-    }
-  });
-});
-
-describe('resolveProfileRoutine — the ONE pairing of membership with the first-run default', () => {
-  it('a NULL config resolves to the neutral default, NOT the whole catalog', () => {
-    expect(resolveProfileRoutine(null)).toEqual(buildDefaultRoutine(NEUTRAL_DEFAULT_KEYS));
-    // The regression this row exists for, stated as the inequality it really is.
-    expect(resolveProfileRoutine(null)).not.toEqual(buildDefaultRoutine(ROUTINE_CATALOG));
-    const keys = resolveProfileRoutine(null).order.map((i) => i.key);
-    expect(keys.some((k) => k.includes(ACTIVITY_TYPE_KEYS.brush_teeth))).toBe(false);
-  });
-
-  it('MEMBERSHIP stays the whole catalog — an authored household key still renders', () => {
-    // The maintainer's-household guard: narrowing membership (instead of only the fallback) would have
-    // silently stripped this item on the next read, which is a data-visible regression, not a fix.
-    const authored = {
-      version: 1,
-      order: [{ key: makeRoutineKey('checkin', 'brush_teeth:pressure') }, { key: STRENGTH_KEY }],
-    };
-    expect(resolveProfileRoutine(authored).order.map((i) => i.key)).toEqual([
-      'checkin:brush_teeth:pressure',
-      STRENGTH_KEY,
-    ]);
-  });
-});
-
-describe("SEED_FULL_ROUTINE — the seeded profile's explicit pre-ONB-0 routine", () => {
-  // `packages/db` cannot import this (app-side) catalog, so the seed literal is hand-written. This is
-  // the tie that stops it drifting: a new habit / metric / life activity extends ROUTINE_CATALOG
-  // automatically, and without this assertion the fixture would just quietly get a narrower Today —
-  // which is the exact e2e surface the explicit config was added to protect.
-  it('equals ROUTINE_CATALOG exactly, in order', () => {
-    expect(SEED_FULL_ROUTINE.order.map((i) => i.key)).toEqual([...ROUTINE_CATALOG]);
+  it('is strength alone, and a NULL config resolves to it, not to the whole catalog', () => {
+    expect(NEUTRAL_DEFAULT_KEYS).toEqual([STRENGTH_KEY]);
+    expect(resolveProfileRoutine(null)).toEqual(buildDefaultRoutine([STRENGTH_KEY]));
   });
 });
