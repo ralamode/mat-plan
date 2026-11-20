@@ -257,7 +257,9 @@ export default async function TodayPage({
         profileId={profile.id}
         day={day}
         today={today}
-        events={clears}
+        // Only where Restore all is offered: a closed or archived day's clear is a sentence in the
+        // notice (its total computed here), so its tokens need not reach the browser.
+        events={writable ? clears : []}
         writable={writable}
         relogged={entries.length > 0}
         deadline={deadline}

@@ -24,7 +24,11 @@ import { clearDayKey, onClearOutcome } from './clear-day-outcome';
 function restoredText(restored: number, keptHidden: number, older: number): string {
   if (restored === 0 && keptHidden === 0) return CLEAR_DAY_COPY.nothingToRestore;
   if (restored === 0) return CLEAR_DAY_COPY.restoredNone;
-  if (keptHidden > 0) return CLEAR_DAY_COPY.restoredSome(restored, keptHidden);
+  if (keptHidden > 0) {
+    return older > 0
+      ? CLEAR_DAY_COPY.restoredSomeOlderLeft(restored, keptHidden, older)
+      : CLEAR_DAY_COPY.restoredSome(restored, keptHidden);
+  }
   // "Day restored." would be false while an older clear still hides entries.
   if (older > 0) return CLEAR_DAY_COPY.restoredOlderLeft(restored, older);
   return CLEAR_DAY_COPY.restored;

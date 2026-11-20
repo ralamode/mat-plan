@@ -121,6 +121,41 @@ describe('ClearDay (V1-9b B2-ii)', () => {
     expect(dialog().textContent).toContain(CLEAR_DAY_COPY.sessionStays);
   });
 
+  it('on a touch screen, focus opens on the title, not the field (maintainer, 2026-11-19)', async () => {
+    render(clearIsland());
+    fireEvent.click(trigger());
+    const title = within(dialog()).getByRole('heading', {
+      name: CLEAR_DAY_COPY.title(formatDayShort(TODAY)),
+    });
+    await waitFor(() => expect(document.activeElement).toBe(title));
+  });
+
+  it('with a fine pointer, focus opens on the field', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(clearIsland());
+      fireEvent.click(trigger());
+      await waitFor(() => expect(document.activeElement).toBe(field()));
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
+  it('a submit with the field focused never clears, whatever key the keyboard sent', () => {
+    render(clearIsland());
+    fireEvent.click(trigger());
+    fireEvent.change(field(), { target: { value: CLEAR_DAY_CONFIRM_WORD } });
+    field().focus();
+    fireEvent.submit(field().form!);
+    expect(clearDayAction).not.toHaveBeenCalled();
+  });
+
   it('is not armed until the word is typed, and a tap says so without clearing', () => {
     render(clearIsland());
     fireEvent.click(trigger());
@@ -252,15 +287,17 @@ describe('the clear, the banner and the hand-off between them (V1-9b B2-ii)', ()
     await waitFor(() => expect(document.activeElement).toBe(outcomeLine()));
   });
 
-  it('a closed_day refusal is said on the banner even when the re-read unmounts the dialog', async () => {
-    clearDayAction.mockResolvedValueOnce({ ok: false, reason: DAY_CLEAR_REFUSAL.closed_day });
+  it('a closed_day refusal is said on the banner even when the re-read unmounts the dialog first', async () => {
+    let finish!: (v: unknown) => void;
+    clearDayAction.mockReturnValueOnce(new Promise((r) => (finish = r)));
     const view = render(page([]));
     typeAndClear();
-    await waitFor(() =>
-      expect(outcomeLine().textContent).toContain(CLEAR_DAY_COPY.refused.closed_day),
-    );
-    view.rerender(banner([], { writable: false })); // the re-read: no longer clearable
-    expect(outcomeLine().textContent).toContain(CLEAR_DAY_COPY.refused.closed_day);
+    // The answer and the re-read land together: the dialog's island is gone before it can close.
+    await act(async () => {
+      finish({ ok: false, reason: DAY_CLEAR_REFUSAL.closed_day });
+      view.rerender(banner([], { writable: false }));
+    });
+    expect(outcomeLine().textContent).toContain(CLEAR_DAY_COPY.clearClosed);
     // It stays on the day the person meant, not the new today.
     expect(replace).toHaveBeenCalledWith(expect.stringContaining(`?d=${TODAY}`));
   });
@@ -291,14 +328,19 @@ describe('ClearDayBanner (V1-9b B2-ii)', () => {
     expect(screen.queryByRole('button', { name: CLEAR_DAY_COPY.restoreAll })).toBeNull();
   });
 
+  it('a partial restore with an older clear left says both', async () => {
+    restoreClearAction.mockResolvedValueOnce({ ok: true, restored: 1, keptHidden: 1 });
+    render(banner([{ hiddenAt: TOKEN, count: 2 }, OLDER]));
+    fireEvent.click(screen.getByRole('button', { name: CLEAR_DAY_COPY.restoreN(2) }));
+    await waitFor(() =>
+      expect(outcomeLine().textContent).toContain(CLEAR_DAY_COPY.restoredSomeOlderLeft(1, 1, 4)),
+    );
+  });
+
   it.each([
     [{ restored: 5, keptHidden: 0 }, CLEAR_DAY_COPY.restored, [] as ClearEvent[]],
-    [
-      { restored: 3, keptHidden: 2 },
-      CLEAR_DAY_COPY.restoredSome(3, 2),
-      [{ hiddenAt: TOKEN, count: 2 }],
-    ],
-    [{ restored: 0, keptHidden: 2 }, CLEAR_DAY_COPY.restoredNone, [{ hiddenAt: TOKEN, count: 2 }]],
+    [{ restored: 3, keptHidden: 2 }, CLEAR_DAY_COPY.restoredSome(3, 2), [] as ClearEvent[]],
+    [{ restored: 0, keptHidden: 2 }, CLEAR_DAY_COPY.restoredNone, [] as ClearEvent[]],
     [{ restored: 0, keptHidden: 0 }, CLEAR_DAY_COPY.nothingToRestore, [] as ClearEvent[]],
   ])(
     'Restore all %o, tapped (so focused), says so on the outcome line, which takes focus',
@@ -310,7 +352,8 @@ describe('ClearDayBanner (V1-9b B2-ii)', () => {
       fireEvent.click(button);
       await waitFor(() => expect(outcomeLine().textContent).toContain(text));
       expect(document.activeElement).toBe(outcomeLine());
-      // The revalidated page, as the server answers it (a kept-hidden clear stays).
+      // The revalidated page, as the server answers it: kept-hidden items lose their reason
+      // (`dropReasonOfItemsLeftHidden`), so the clear leaves the read either way.
       view.rerender(banner(after));
       expect(document.activeElement).toBe(outcomeLine());
       expect(outcomeLine().textContent).toContain(text);

@@ -1641,6 +1641,12 @@ export const CLEAR_DAY_COPY = {
     })}`,
   restoredNone: 'None came back: the day already has an entry in each place.',
   /** A restore of the newest clear, with an older one left (it is the banner now). */
+  /** A partial restore of the newest clear, with an older one left (it is the banner now). */
+  restoredSomeOlderLeft: (r: number, k: number, m: number) =>
+    `Restored ${r}. ${plural(k, {
+      one: '1 wasn’t, because the day already has one in its place.',
+      other: `${k} weren’t, because the day already has one in each place.`,
+    })} ${entriesText(m)} from an earlier clear ${m === 1 ? 'is' : 'are'} still hidden.`,
   restoredOlderLeft: (r: number, m: number) =>
     `Restored ${r}. ${entriesText(m)} from an earlier clear ${m === 1 ? 'is' : 'are'} still hidden.`,
   nothingToRestore: 'Nothing left to restore.',
@@ -1655,8 +1661,11 @@ export const CLEAR_DAY_COPY = {
    * Household settings (`SETTINGS_COPY.restoreFor`), then Restore all here.
    */
   archivedCleared: (name: string, n: number, deadline: string) =>
-    `This day was also cleared: ${entriesText(n)} hidden, not erased. Restore ${name} in Household ` +
-    `settings, then tap Restore all here before ${deadline} to bring ${n === 1 ? 'it' : 'them'} back.`,
+    `This day was also cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
+      name,
+    )} in ${SETTINGS_COPY.heading}, then tap Restore all here before ${deadline} to bring ${
+      n === 1 ? 'it' : 'them'
+    } back.`,
   /**
    * One line per refusal word (`DAY_CLEAR_REFUSALS`), for both actions. Not `components/day`'s
    * `refusalCopy`: that is keyed by a row's write kind (a ✓, an un-tick, a Change), and a clear is none.
@@ -1668,6 +1677,12 @@ export const CLEAR_DAY_COPY = {
     closed_day: 'This day can no longer be changed.',
     retry: 'Too many changes at once. Wait a moment and try again.',
   } satisfies Record<DayClearRefusal, string>,
+  /**
+   * Clear this day's own `closed_day` line. Not `refused.closed_day`: a clear refused just after
+   * midnight is of a day that is now yesterday, still open to every other write and to Restore all, so
+   * "can no longer be changed" would be false. True for the midnight case and the archived one alike.
+   */
+  clearClosed: 'Only today can be cleared.',
   /** The action threw (a dropped connection, a server error): no cause is claimed. */
   failed: 'Couldn’t reach the app. Try again.',
 } as const;

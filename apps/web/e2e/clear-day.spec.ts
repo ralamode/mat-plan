@@ -8,7 +8,7 @@ import {
   expectNoOverflowWithin,
   seedStoredTheme,
 } from './a11y-checks';
-import { addAthlete, archiveAdded, logBodyweight, loggedWeight } from './steps';
+import { addAthlete, archiveAdded, isoDaysAgo, logBodyweight, loggedWeight } from './steps';
 
 /**
  * **V1-9b B2 — Clear this day, end to end:** log, clear behind the typed word, Restore all.
@@ -56,6 +56,8 @@ test('clear the day behind the typed word, then Restore all, with focus at each 
 
   await triggerButton(page).click();
   await expect(dialog(page)).toBeVisible();
+  // Desktop Chromium has a fine pointer: focus opens on the field (on touch it is the title).
+  await expect(confirmField(page)).toBeFocused();
   // Not armed until the word is typed: Clear day is `aria-disabled` (Playwright will not tap it, which
   // is the point), and Enter on the empty field says why and clears nothing. The tap's own message is
   // `clear-day.test.tsx`'s.
@@ -93,6 +95,11 @@ test('clear the day behind the typed word, then Restore all, with focus at each 
   await expect(page.locator(`#${CLEAR_DAY_OUTCOME_ID}`)).toContainText(CLEAR_DAY_COPY.restored);
   await expect(page.locator(`#${CLEAR_DAY_OUTCOME_ID}`)).toBeFocused();
   await expect(loggedWeight(page, WEIGHT)).toHaveCount(1);
+
+  // Only today can be cleared: yesterday shows no trigger (Restore all would still run there).
+  await page.goto(`${new URL(page.url()).pathname}?d=${isoDaysAgo(1)}`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(triggerButton(page)).toHaveCount(0);
 });
 
 test('on a small phone with the keyboard up, the field and then Clear day stay in view', async ({

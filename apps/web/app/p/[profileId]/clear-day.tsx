@@ -124,9 +124,13 @@ export function ClearDay({
     return document.querySelector<HTMLButtonElement>(`button[type="submit"][form="${FORM_ID}"]`);
   }
 
-  /** Close the dialog, and land focus on the outcome line once it is back (from `onReturned`). */
+  /** Close the dialog, unless the clear is in flight. */
   function close() {
-    if (!pending) setOpen(false);
+    if (pending) return;
+    setOpen(false);
+    // After a dropped connection the clear may have committed: re-read, so the page is not left
+    // showing entries that are hidden.
+    if (message === CLEAR_DAY_COPY.failed) router.refresh();
   }
 
   function refused(reason: DayClearRefusal) {
@@ -134,7 +138,12 @@ export function ClearDay({
     // The day closed (midnight, an archive), or the page is stale: close, say why on the banner's
     // line, and re-read. 🔴 The report goes NOW, not from `onReturned`: the re-read can unmount this
     // island (the day no longer clearable), and the banner, keyed the same, survives it.
-    reportClearOutcome(key, CLEAR_DAY_COPY.refused[reason]);
+    reportClearOutcome(
+      key,
+      reason === DAY_CLEAR_REFUSAL.closed_day
+        ? CLEAR_DAY_COPY.clearClosed
+        : CLEAR_DAY_COPY.refused[reason],
+    );
     after.current = { target: CLEAR_DAY_OUTCOME_ID };
     setOpen(false);
     if (reason === DAY_CLEAR_REFUSAL.closed_day) {
@@ -218,6 +227,10 @@ export function ClearDay({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
+            // 🔴 Structural: an implicit submit (Enter, Done, a keyboard's composition key) happens
+            // with the field focused; a tap on Clear day moves focus off it. So a submit with the
+            // field focused never clears, whatever key the keyboard reports.
+            if (document.activeElement === input.current) return;
             void clear();
           }}
         >

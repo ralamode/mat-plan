@@ -237,7 +237,8 @@ athlete on that day, at once, after you type a word to confirm. Nothing is erase
 weigh-in or practice, a cleared day can be **put back**: a banner offers **Restore all** while that
 day is today or yesterday, so a day cleared today can be put back until the end of tomorrow. After
 that the entries stay hidden and out of the export; a full copy on request includes them, and
-nothing short of deleting the athlete or the household removes them. The offer survives a reload,
+nothing short of deleting the athlete or the household removes them (though a cleared workout row
+ticked again is written over, below). The offer survives a reload,
 because nothing about it is held on your phone. Things worth saying plainly:
 
 - **It hides from everyone in your household, not just from the person who cleared it.** Anyone

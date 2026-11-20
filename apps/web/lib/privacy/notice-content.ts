@@ -1770,7 +1770,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " while that\nday is today or yesterday, so a day cleared today can be put back until the end of tomorrow. After\nthat the entries stay hidden and out of the export; a full copy on request includes them, and\nnothing short of deleting the athlete or the household removes them. The offer survives a reload,\nbecause nothing about it is held on your phone. Things worth saying plainly:"
+        "text": " while that\nday is today or yesterday, so a day cleared today can be put back until the end of tomorrow. After\nthat the entries stay hidden and out of the export; a full copy on request includes them, and\nnothing short of deleting the athlete or the household removes them (though a cleared workout row\nticked again is written over, below). The offer survives a reload,\nbecause nothing about it is held on your phone. Things worth saying plainly:"
       }
     ]
   },
