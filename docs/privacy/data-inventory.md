@@ -596,7 +596,8 @@ pointing at a file that no longer exists.)
 Free-text columns are where a notice stops being able to enumerate what is stored, so they are listed
 separately. **Four reach the UI today** (two until `PROF-1` a-r; the fourth, the program builder's, since FAM-1 7b-i):
 
-1. **`sessions.feel`** — "how it felt", one input on the strength form.
+1. **`sessions.feel`** — "how it felt". **No page writes it any more**: its one input was on the
+   strength form, removed with the strength-session action (#741). Rows written before keep it.
 2. **The movement-name box** (`strength-form.tsx`) → `entries.movement_name`, **and** a `movements`
    row. **This is the one that leaves the household**, and since TEN-1 1d that is measured rather
    than suspected. 🔴 **`TEN-2b` narrowed it from "global" to one named case.** The row is no longer

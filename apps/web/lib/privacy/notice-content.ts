@@ -347,7 +347,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " \"How it felt\"; the box where a movement can be typed by name;\nan "
+        "text": " The box where a movement can be typed by name;\nan "
       },
       {
         "k": "strong",
@@ -2479,6 +2479,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
+        "text": "What changed on 20 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "\"How it felt\" is no longer listed as a text box."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " No page shows that box any more. A note typed\nthere before is still kept with its workout, as \"How long we keep it\" says."
+      }
+    ]
+  },
+  {
+    "k": "h2",
+    "children": [
+      {
+        "k": "text",
         "text": "What changed on 19 November 2026"
       }
     ]
@@ -3010,6 +3037,32 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           {
             "k": "text",
             "text": "(both pending the maintainer's re-read)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "2026-11-20:"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " \"How it felt\" removed from\nthe text-box list, which no page renders any more "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(the maintainer approved it)"
           }
         ]
       },
