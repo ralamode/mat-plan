@@ -45,9 +45,16 @@ import {
   SETTINGS_PATH,
 } from '../lib/constants';
 import { isIanaTimeZone, localDayIso } from '../lib/date';
-import { changePrefix, logPractice, PRACTICE_MINUTES, SEED_PROFILE_ROUTE } from '../e2e/steps';
+import {
+  bodyweightSection,
+  changePrefix,
+  logPractice,
+  openIfCollapsed,
+  PRACTICE_MINUTES,
+  SEED_PROFILE_ROUTE,
+} from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
-import { DAY_COPY } from '../components/day/day-copy';
+import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
 import {
   BUILDER_COPY,
   EDITOR_COPY,
@@ -287,6 +294,8 @@ const STATES = {
   'already-logged': seedAlreadyLogged,
   // V1-24 PR 1b — the weigh-in's OPEN editor. Interaction-only on top of the already-logged
   // fixture: the open state is transient client state no seeder can produce.
+  'bodyweight-open': seedAlreadyLogged,
+  'sections-folded': seedAlreadyLogged,
   'bodyweight-editing': seedAlreadyLogged,
   // V1-24 PR 1a — the bodyweight receipt's other states (today's single value is `already-logged`).
   // (`bodyweight-duplicates` was removed in PR 1d: two live weigh-ins on one day are now refused by
@@ -319,6 +328,9 @@ const STATES = {
   // FAM-1 12c — tomorrow while the athlete is on a program: "Coming up", the workouts, no ✓, no
   // Bodyweight or Life. Interaction-only: it is a `?d=` one day ahead.
   'day-look-ahead': null,
+  // FAM-1 15c PR 1: the Program order dialog OPEN, on the preview route
+  // (`/design/program?screen=day&fixture=today-three-programs-one-ending`): it exists only after a tap.
+  'program-order-open': null,
   // FAM-1 12d — Change on a set row, typed over and not yet saved ("Not saved. Was …" and the ✕),
   // in today's superset. Interaction-only: the state exists only between typing and leaving the row.
   'day-change-typed-over': null,
@@ -635,6 +647,10 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await load.fill(String(Number(await load.inputValue()) + 5));
     await superset.getByText(/^Not saved\. Was /).waitFor();
   },
+  'program-order-open': async (page) => {
+    await page.getByRole('button', { name: PROGRAM_COPY.order, exact: true }).click();
+    await page.getByRole('dialog').waitFor();
+  },
   'day-look-ahead': async (page) => {
     await page
       .getByRole('navigation', { name: 'Change day' })
@@ -654,7 +670,19 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
    * fixture logs a weight, then Change opens the editor beneath it. Worth a state of its own because
    * the LAYOUT is the thing under review (why: `single-value-amend.tsx`).
    */
+  // 12c-iii PR 2: a logged Bodyweight arrives folded to one line; this is it opened, with Collapse.
+  'bodyweight-open': async (page) => {
+    await openBodyweight(page);
+  },
+  // Both sections as they arrive once logged: one line each (12c-iii PR 2). The practice is logged
+  // here, so the reload is the arrival that folds it.
+  'sections-folded': async (page) => {
+    await logPracticeOnce(page);
+    await page.reload();
+    await practiceSection(page).getByRole('heading').getByRole('button').waitFor();
+  },
   'bodyweight-editing': async (page) => {
+    await openBodyweight(page);
     const change = page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) });
     if ((await change.count()) === 0) {
       throw new Error(
@@ -664,6 +692,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await change.click();
   },
   'bodyweight-clear-armed': async (page) => {
+    await openBodyweight(page);
     await page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) }).click();
     await page.getByLabel(/^Weight \(/).fill('');
     await page.getByRole('button', { name: BODYWEIGHT_COPY.clearLabel }).waitFor();
@@ -672,6 +701,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   'bodyweight-cleared': async (page) => {
     // Retry-safe across the three widths: only the first finds a Change to clear.
+    await openBodyweight(page);
     const change = page.getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) });
     if ((await change.count()) > 0) {
       await change.click();
@@ -682,6 +712,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   'bodyweight-editing-refused': async (page) => {
     const section = page.getByRole('region', { name: BODYWEIGHT_COPY.heading });
+    await openBodyweight(page);
     await section
       .getByRole('button', { name: changePrefix(BODYWEIGHT_COPY.changeSubject) })
       .click();
@@ -1169,8 +1200,15 @@ function practiceSection(page: Page) {
 }
 
 /** Type the practice minutes and tap ✓ unless the row is already logged (the three widths share one day). */
+/** A logged Bodyweight arrives folded to one line (12c-iii PR 2): open it before acting on it. */
+async function openBodyweight(page: Page): Promise<void> {
+  await openIfCollapsed(bodyweightSection(page), BODYWEIGHT_COPY.heading);
+}
+
 async function logPracticeOnce(page: Page): Promise<void> {
   const life = practiceSection(page);
+  // A practice logged at an earlier width arrives folded after the reload (12c-iii PR 2).
+  await openIfCollapsed(life, LIFE_COPY.heading);
   const tick = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   if ((await tick.count()) > 0) {
     await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill(String(PRACTICE_MINUTES));

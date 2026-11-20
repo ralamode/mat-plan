@@ -1,11 +1,11 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index ab9a69bc..f5688e50 100644
+index e95cef62..24350613 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -65,7 +65,7 @@ export async function newItem(
-     })),
-     name,
-   );
+@@ -90,7 +90,7 @@ async function addOrSelect(
+ 
+   const options = await movementOptions(exec, scope, library);
+   const hit = existingItem(options.map(matchableOption), name);
 -  if (hit) {
 +  if (false && hit) {
      return {

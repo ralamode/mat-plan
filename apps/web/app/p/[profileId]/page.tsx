@@ -8,15 +8,14 @@ import { DayScreen } from '@/components/day/day-screen';
 import { dayPageView, lookAheadFallsBack, offersProgramsLink } from '@/components/day/day-notices';
 import { NotOnAProgram } from '@/components/day/not-on-a-program';
 import { ProgramLine } from '@/components/day/program-line';
-import { PROGRAMS_PATH } from '@/components/program-builder/routes';
+import { programPath, PROGRAMS_PATH } from '@/components/program-builder/routes';
 import { ExportControl } from '@/components/profiles/export-control';
 import { AppShell } from '@/components/layout/app-shell';
 import { TimeZoneSync } from '@/components/layout/tz-sync';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
-import { localDayIso, localWeekStartIso } from '@/lib/date';
+import { localDayIso } from '@/lib/date';
 import { dayPageFlags, resolveViewedDay } from '@/lib/entries/declared-day';
-import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { getDayPlan } from '@/lib/dal/day/day';
 import { householdState } from '@/lib/dal/household';
 import { dayClearEvents, lastBodyweight, listEntriesForDay } from '@/lib/dal/entries';
@@ -47,8 +46,13 @@ import { ClearDayBanner } from './clear-day-banner';
 import { clearedNoticeLine } from './clear-day-notice';
 import { LifeSection } from './life-section';
 import { DayNav } from './day-nav';
-import { amendRowAction, logRowAction, retickRowAction, untickRowAction } from './row-actions';
-import { WeeklyAdherence } from './weekly-adherence';
+import {
+  amendRowAction,
+  logRowAction,
+  reorderProgramsAction,
+  retickRowAction,
+  untickRowAction,
+} from './row-actions';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -111,12 +115,10 @@ export default async function TodayPage({
     today,
     profile.archived,
   );
-  const weekStart = localWeekStartIso(day);
-  // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
-  // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
-  const [entries, adherence, clears] = await Promise.all([
+  // Independent reads → one round-trip (hot page, INP/LCP budget). The weekly ramp read left with the
+  // "This week" card (FAM-1 12f PR 4, D21).
+  const [entries, clears] = await Promise.all([
     listEntriesForDay(profile.id, day),
-    getWeeklyAdherence(profile.id, weekStart),
     // V1-9b B2: the day's clears, newest first, for the banner and the notice's cleared sentence.
     dayClearEvents(profile.id, day),
   ]);
@@ -135,9 +137,9 @@ export default async function TodayPage({
   const lastWeight =
     bodyweight.length === 0 && writable ? await lastBodyweight(profile.id, day) : null;
 
-  // V1-24 3b-page: the day page is Bodyweight and Life. The routine still chooses the life
-  // activities (`profile.routine`, resolved by the DAL); its strength and check-in keys render
-  // nothing here until FAM-1 brings the program's workouts.
+  // V1-24 3b-page: the routine still chooses the Life activities (`profile.routine`, resolved by the
+  // DAL). Since FAM-1 12f PR 5 its catalog is `strength` and Wrestling practice; `strength` renders
+  // nothing here, because the day's workouts come from the program.
   const lifeKeys = buildRoutineBlocks(profile.routine.order).flatMap((block) =>
     block.kind === 'life' ? block.keys : [],
   );
@@ -153,13 +155,14 @@ export default async function TodayPage({
     athleteName: profile.name,
   });
 
-  // The day screen's writes (FAM-1 12b's Server Actions, and 12d's Change). Program order
-  // (`reorderPrograms`) arrives at 15c: an action left out hides its control (plan §6).
+  // The day screen's writes (FAM-1 12b's Server Actions, 12d's Change and 15c's Program order). An
+  // action left out hides its control (plan §6).
   const dayActions = {
     logRow: logRowAction,
     untickRow: untickRowAction,
     retickRow: retickRowAction,
     amendRow: amendRowAction,
+    reorderPrograms: reorderProgramsAction,
   };
 
   return (
@@ -266,8 +269,8 @@ export default async function TodayPage({
       />
 
       {/* FAM-1 13d's placed parts (D34): the programs line with Program order, and "Not on a
-          program.", above Bodyweight. Program order arrives at 15c (`reorderPrograms`). */}
-      <ProgramLine plan={plan} actions={dayActions} />
+          program.", above Bodyweight. Each name on the line links to its program's page (15c, D49). */}
+      <ProgramLine plan={plan} actions={dayActions} programHrefFor={programPath} />
       <NotOnAProgram
         plan={plan}
         programsHref={
@@ -303,8 +306,6 @@ export default async function TodayPage({
           by person who programmed the workout / day"). Not mounted for an athlete on no program
           with no rows to show: it would be an empty landmark under a hidden heading, every day. */}
       {view.screen ? <DayScreen plan={plan} actions={dayActions} /> : null}
-
-      {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
 
       {/* 🔴 **This slot used to link the ROUTINE EDITOR; PROF-1 a-r replaces it** (acceptance
           criterion 11 / M30: nothing in the app links to `/routine` until ACT-1 replaces that editor;

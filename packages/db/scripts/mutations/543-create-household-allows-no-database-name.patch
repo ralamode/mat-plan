@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index feddd632..6cbce27e 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -919,7 +919,7 @@ const createHousehold: Correction = {
+       }
+       // A URL with no database name connects wherever `$PGDATABASE` points, which may BE the preview:
+       // the refusal above cannot see it, so this one refuses it (CAT-3 R0, D1).
+-      if (correctionTargetDatabaseIsUnnamed()) {
++      if (correctionTargetDatabaseIsUnnamed() && false) {
+         throw new CorrectionRefusal(
+           'the target URL names no database, so which one would be written is unknown; nothing written',
+         );

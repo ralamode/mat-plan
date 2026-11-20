@@ -11,7 +11,13 @@ import {
 } from '../lib/constants';
 import { formatDayLong } from '../lib/date';
 
-import { bodyweightSection, changePrefix, isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
+import {
+  bodyweightSection,
+  changePrefix,
+  isoDaysAgo,
+  openIfCollapsed,
+  SEED_PROFILE_ROUTE,
+} from './steps';
 
 /**
  * Day navigation (V1-15).
@@ -57,6 +63,8 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   // A writable day offers the weigh-in: the field, or once logged, Change. A read-only day shows
   // neither, so this is the assertion that can fail.
   const section = bodyweightSection(page);
+  // The export spec may have logged that day first, so it can arrive folded (FAM-1 12c-iii).
+  await openIfCollapsed(section, BODYWEIGHT_COPY.heading);
   await expect(
     section
       .getByLabel('Weight', { exact: true })

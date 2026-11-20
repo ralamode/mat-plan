@@ -267,6 +267,15 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A journey that builds its own athlete and program failed twice before it reached what it tested
+  (FAM-1 12c-iii, #761).** (1) Put on timed out finding the new athlete's checkbox: `addAthlete` had
+  not landed when the spec read `page.url()` and moved on. (2) Then "no rows to tick": `locator.count()`
+  read zero because the day page was still behind its loading skeleton. → `count()` (and `all()`)
+  never wait; assert something visible first (`await expect(region).toBeVisible()`, then
+  `await expect(rows.first()).toBeVisible()`) before counting. After `addAthlete`, wait for the new
+  athlete's `<h1>` before reading the URL, as the Program order journey does. Diagnose from the
+  failure screenshot (`test-results/…/test-failed-1.png`): a skeleton there means "too early", not
+  "wrong selector".
 - **A Server Action form submitted before hydration answered `Invalid Server Actions request.` and
   nothing showed: the cause was our own `Referrer-Policy: no-referrer`.** → Under it every browser
   (Fetch, "append a request `Origin` header") sends a native form POST with `Origin: null`, even
@@ -693,6 +702,16 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Next.js 16
 
+- **One Back press does nothing after a sheet closes, but only when a Server Action ran while it was
+  open.** → Next's router rewrites the current history entry after the action's revalidation with
+  `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`), so
+  any custom `history.state` key (the Sheet's `sheet`/`doc`) is dropped at the same URL. Code that
+  pops "its" entry by key then skips the pop. Found 2026-11-19 (the item picker's "+ New item", then
+  Close); Put on was not observed failing. **Fix:** remember the URL the
+  entry was pushed at and pop when the entry is ours by key OR still at that URL
+  (`components/ui/sheet.tsx`). **Diagnose:** log `history.state` before and after the action in a
+  browser; jsdom has no router, so only an e2e step shows it.
+
 - **A CSP "Applying inline style violates … style-src" on a page that looks fine, intermittent, and
   matching nothing in our bundle, is Next's built-in 404 fallback.** → Its `HTTPAccessErrorFallback`
   styles itself with an un-nonced `<style>` (hash **`sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY=`**)
@@ -767,6 +786,13 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   at the moment of risk is not a control; this one was re-derived correctly three times and applied
   wrongly anyway. When a convention keeps failing, the next version of it is a script with a
   self-test, not a better-worded paragraph.
+
+  ⚠️ **`pnpm probe` cannot restore an UNTRACKED file** (FAM-1 15c follow-up, 2026-11-20). Its
+  snapshot, `git stash create`, holds tracked paths only, so a probe aimed at a new file never
+  `git add`ed mutates it and has nothing to read it back from: five mutations stayed in a new
+  component, and the probes after them reported red baselines and missing literals. → **Commit a new
+  file (or at least `git add` it) before probing it**, and after a probe batch check `git status`
+  for the probed file before trusting the next result.
 
 ## Guards that pass while guarding nothing
 

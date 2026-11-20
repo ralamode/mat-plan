@@ -31,7 +31,7 @@ export function isPracticeEntry(entry: Pick<EntryDTO, 'activityKey'>): boolean {
 
 /**
  * Every entry on the day for one of `activityKeys`, in the DAL's order (oldest first). Which
- * activities the page SHOWS (no Wake) is `LifeSection`'s rule, not this one's.
+ * activities the page SHOWS is the routine catalog's rule (no Wake since FAM-1 12f PR 5), not this one's.
  */
 export function loggedLifeActivities(
   entries: readonly EntryDTO[],

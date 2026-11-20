@@ -15,6 +15,25 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
+
+- **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at
+  `MAX_HOUSEHOLD_ATHLETES` (25). Specs that add an athlete (`athletes.spec.ts`,
+  `form-before-hydration.spec.ts`, `bodyweight-receipt.spec.ts`, `day-navigation.spec.ts`,
+  `clear-day.spec.ts`, the program-builder specs and others) now spend about 22 of those slots on a
+  fresh run, as lane C counted, and archiving frees none. A retried spec re-adds its athletes, so
+  with about 3 slots left a couple of retries in one run reach the cap. Then `createProfile` answers
+  `full`, and the retry fails looking like the feature under test broke.
+- **Impact:** test-only, but it turns flakes into misattributed failures, and every new add-athlete
+  spec shrinks the margin.
+- **The fix, one of:**
+  - raise the e2e household's cap through the fixture or seed: a test-only household limit, never
+    the production `MAX_HOUSEHOLD_ATHLETES`;
+  - or have specs reuse athletes: one shared per-run athlete per need, created once, instead of one
+    per test.
+- **Trigger:** the next spec that adds an athlete must pick one of the two.
+- **Severity:** low (test-only; the suite fits today).
+
 ### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
 
 - **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
@@ -215,7 +234,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
   (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
   `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
-  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user is `lib/checkins`.
+  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user was `lib/checkins`.
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
 - **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
@@ -695,6 +714,8 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   `components/day/program-order-dialog.tsx` appends U+00A0 too (13d). Its region is `Sheet`'s `status`
   prop (`components/ui/sheet.tsx`), which has no key, so moving it means adding one there. Lane C's,
   at 15c, which wires that dialog.
+  ✅ **Closed (FAM-1 15c PR 1, 2026-11-20)**: `Sheet` takes `statusKey`, passed to its region as
+  `messageKey`, and the dialog's status is `{ text, n }`. No U+00A0 idiom is left.
 - **Severity:** low.
 
 ### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
