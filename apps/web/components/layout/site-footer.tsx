@@ -1,7 +1,5 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -52,8 +50,6 @@ import { cn } from '@/lib/utils';
  * instead of overflowing. `min-h-11` on each link is the gate's pattern, and the footer sits OUTSIDE
  * `<main>`, so the a11y spec's `expectLinkTapTargets` counts are untouched.
  */
-const PerfProbe = dynamic(() => import('./perf-probe'), { ssr: false });
-
 export function SiteFooter({ inShell = false }: { inShell?: boolean } = {}) {
   const pathname = usePathname();
   // ✅ **The `/sign-in` suppression is GONE at `UI-5`, and `usePathname()` is still here.** The
@@ -104,7 +100,6 @@ export function SiteFooter({ inShell = false }: { inShell?: boolean } = {}) {
           </li>
         ))}
       </ul>
-      <PerfProbe />
     </footer>
   );
 }
