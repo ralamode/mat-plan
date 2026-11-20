@@ -22,6 +22,8 @@ import { cn } from '@/lib/utils';
  * - **The action submits the form in the body** (`form=`): the Sheet renders its footer outside
  *   `children`, so Enter in a field and the button send the same form.
  * - **Inactive is `aria-disabled`**, reachable, and a tap says why through `message`.
+ * - **Narrow columns stack**: below 20rem (a container query) the action sits above Cancel, so
+ *   neither clips at 200% zoom on a phone; at 100% on a 360px phone they stay side by side.
  * - **`lead`**, when given, is a line above the message, in view with the action (Put on's
  *   "Starting: names", step 15), and describes the action before the message does. The action
  *   wraps a long unbroken name (`NAME_WRAP_CLASS`).
@@ -49,7 +51,7 @@ export function SheetFormFooter({
 }) {
   const leadId = `${messageId}-lead`;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="@container flex flex-col gap-2">
       {lead ? <div id={leadId}>{lead}</div> : null}
       <Announcer
         id={messageId}
@@ -57,7 +59,10 @@ export function SheetFormFooter({
         // NAME_WRAP_CLASS: a message can name a program, up to its full length, at 360px.
         className={cn('text-sm font-medium', NAME_WRAP_CLASS, message ? 'min-h-5' : 'h-0')}
       />
-      <div className="grid grid-cols-2 gap-2">
+      {/* Side by side while the column holds two 44px buttons; stacked, action first, below 20rem:
+          at 200% zoom on a 390px phone (195 CSS px) two columns would clip "Cancel". 20rem is
+          root-relative, so 100% text at 360px (a 328px column) stays side by side. */}
+      <div className="grid grid-cols-2 gap-2 @max-xs:grid-cols-1">
         <Button
           type="submit"
           form={formId}

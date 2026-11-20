@@ -165,6 +165,25 @@ describe('Put someone on (FAM-1 10b)', () => {
     ).toBeTruthy();
   });
 
+  it('someone ticked back on gets no order hint: they go back where they were (invariant 19)', () => {
+    const lastOff = familyProgramAfterTakeOff.athletes.find((a) => a.lastDay)!;
+    const off = familyProgramAfterTakeOff.candidates.find(
+      (c) => c.profilePublicId === lastOff.profilePublicId,
+    )!;
+    const withKeeps: ProgramView = {
+      ...familyProgramAfterTakeOff,
+      candidates: familyProgramAfterTakeOff.candidates.map((c) =>
+        c.profilePublicId === off.profilePublicId ? { ...c, keeps: ['Stretching'] } : c,
+      ),
+    };
+    page({ takeOff: vi.fn() }, withKeeps);
+    openDialog();
+    fireEvent.click(box(lastOff.name));
+    // They keep another program, so the switch hint shows; the order hint does not.
+    expect(within(dialog()).getByText(switchHintText(['Stretching']))).toBeTruthy();
+    expect(within(dialog()).queryByText(orderHintText(familyProgram.name))).toBeNull();
+  });
+
   it('ticking someone who keeps another program explains the order, and how to switch', () => {
     page({ takeOff: vi.fn() });
     openDialog();
@@ -383,12 +402,12 @@ describe('Put someone on, on real data (FAM-1 15)', () => {
     expect(screen.getByRole('status').textContent).toContain('today');
   });
 
-  it('the order hint says where the program goes until a Put on can place it (6d-iii)', () => {
+  it('the order hint says the program goes by the Programs list order (6d-iii, D41)', () => {
     page({ takeOff: vi.fn() });
     openDialog();
     fireEvent.click(box(adult.name));
     expect(within(dialog()).getByText(orderHintText(familyProgram.name)).textContent).toBe(
-      `${familyProgram.name} goes after their other programs on their day page.`,
+      `On their day page, ${familyProgram.name} goes in by the order of your Programs list. Their other programs keep their order.`,
     );
   });
 });
