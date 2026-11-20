@@ -190,6 +190,8 @@ expect "PR raised a baseline to the measurement: warned" 0 '::warning::bundle: b
 expect "PR raised a baseline: its own section" 0 '### Baseline changed in this PR'
 expect "PR raised a baseline: vs main's column shows the growth" 0 "| /p/[profileId] | 19600 | 19600 | 0 | +8.8 KiB |"
 fresh; setb "/" 1257; expect "PR padded a baseline by NOISE_BYTES + 1" 1 "must equal this run's measurement within 256 B"
+# Once any row changes, EVERY row must be the measurement: a stale row beside a changed one fails.
+fresh; grow "$PROFILE_CHUNK" 4000; setb "/" 1001; expect "a stale row beside a changed one fails" 1 "baseline for /p/[profileId] is"
 fresh; setb "/" 1256; expect "a changed baseline within NOISE_BYTES of the measurement passes (CI build noise)" 0 'raised by +256 B in this PR'
 fresh; setb "/" 743; expect "a changed baseline NOISE_BYTES + 1 below the measurement fails" 1 "must equal this run's measurement within 256 B"
 fresh; BS="$BASE_NONE"; expect "base has no baseline file" 0 'baseline introduced'

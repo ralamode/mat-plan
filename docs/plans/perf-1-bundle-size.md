@@ -316,9 +316,8 @@ to get numbers: the baseline comes from CI (R2), and `pnpm build` uses the one h
 - **U1. Determinism.** ❌ **Settled false (2026-11-19).** Runs 44648199695 and 44650574370 built the
   same app source (the commits between them touched only `.github/` and docs) and differed by 4 B
   on the all-chunks row and 2 B on `/p/new` and `/settings`. Step 5b allows `NOISE_BYTES`.
-- **U2.** ✅ **Settled true:** run 44648199695's build wrote the stats file, and all 16 routes were read.
-- **U2. CI's build writes the stats file** (the Turbopack branch, `index.js:2854`). Probe: RED probe
-  2, plus the first run's summary.
+- **U2. CI's build writes the stats file** (the Turbopack branch, `index.js:2854`). ✅ **Settled
+  true:** run 44648199695's build wrote it, and all 16 routes were read.
 - **U3. The per-route sum matches what a browser fetches.** Probe: in Playwright, sum the JS bytes
   transferred for `/p/[profileId]` on a prod build. This affects the absolute numbers, not the deltas.
   The `(all client chunks)` row covers lazily loaded code whatever the answer turns out to be.
@@ -384,4 +383,11 @@ No P0. Each P1 was proven by a `pnpm probe` that came back GREEN before the fix 
 ### U1 re-review (2026-11-19)
 
 U1 came back false, so step 5b's "exactly" became "within `NOISE_BYTES` (256 B)", as the plan said it
-would, and went back to the lens that raised B1 (security), with correctness. Their verdicts are below.
+would, and went back to the lens that raised B1 (security).
+
+| #   | Lens     | Critique (short)                                                                                                                                            | Verdict      | Resolution                                                                               |
+| --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
+| U1a | security | Does 256 B reopen B1? No: a changed baseline is anchored to this run's measurement, so a pad is at most 256 B once per row and never stacks; each is warned | **holds**    | Kept 256; a smaller value trades a trivial headroom for a flake risk on one pair of runs |
+| U1b | security | "Changed rows within noise, unchanged rows exact" is a no-op or a flake                                                                                     | **rejected** | Kept "every row within noise once any row changes"                                       |
+| U1c | security | No case leaves a stale row beside a changed one                                                                                                             | **accepted** | "a stale row beside a changed one fails"                                                 |
+| U1d | security | U2 appeared twice; this section said verdicts followed and none did                                                                                         | **accepted** | One U2 bullet; this table                                                                |
