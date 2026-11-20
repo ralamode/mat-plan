@@ -6,14 +6,20 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ASSET_EXT,
   barrelNames,
+  blindSpots,
+  CODE_EXT,
   compilerOptionsOf,
+  exportedNames,
   importsOf,
+  lineOf,
   REPO_DIR,
   unwrapExpression,
+  type GraphRefusal,
   type ImportKind,
   type ImportRef,
-} from './source-scan';
+} from './import-graph';
 
 /**
  * 🔴 **Who may import what from `@mat-plan/db` and the action modules, checked on the resolved
@@ -21,17 +27,21 @@ import {
  * `program-tables-stay-dark.test.ts`, `lib/dal/day/importers.test.ts` and `lib/dal/entries.test.ts`
  * held as regexes on specifier text.
  *
- * Every specifier is resolved the way the compiler resolves it (`importsOf`, `test/source-scan.ts`),
+ * Every specifier is resolved the way the compiler resolves it (`importsOf`, `test/import-graph.ts`),
  * so a pin compares FILES: a comment in the braces, a backtick, `require (`, a dot segment
  * (`@mat-plan/./db`), a path through `node_modules` or an `@/` walking out of `apps/web` all land on
  * the same file and get the same answer. A first-party specifier that does not resolve fails closed.
  *
- * - **The pins:** `apps/web` reaches `packages/db` only through its entry; the entry publishes nothing
- *   from `erasure/`; each name in `ALLOWED_IN` is imported only where it lists; no whole-package form
- *   (`import * as`, `export *`, `import()`, `require`, `typeof import`); neither DAL re-exports a lane
- *   P name; each module in `MODULES` has only its listed importers; no `'use client'` file reaches
- *   the package or the program DAL; no non-test file reaches a test file; `packages/shared` and
- *   `packages/engine` do not reach `packages/db`.
+ * - **Where an import may land is an allow-list.** From `apps/web`: its own scanned files and tracked
+ *   assets, third-party `node_modules/`, `packages/shared/src/`, `packages/engine/src/`, and
+ *   `packages/db/src/index.ts`. From `packages/shared` and `packages/engine`: their own `src/` and
+ *   third-party `node_modules/`. From `packages/db/src/index.ts`'s closure: `packages/db/src/`,
+ *   shared and engine `src/`, third-party. Anything else (`packages/evals`, `packages/db/scripts`,
+ *   `.github/scripts`, a test file) is refused, so the graph never stops at a package boundary.
+ * - **The pins:** the entry publishes nothing from `erasure/`; each name in `ALLOWED_IN` is imported
+ *   only where it lists; no whole-package form (`import * as`, `export *`, `import()`, `require`,
+ *   `typeof import`); neither DAL re-exports a lane P name; each module in `MODULES` has only its
+ *   listed importers; no `'use client'` file reaches the package or the program DAL.
  * - **The premises** the resolver's answer rests on (the alias, the resolution options, the
  *   manifests' `exports`/`imports`, `next.config`'s bundler keys) are assertions: if one breaks, the
  *   resolver may disagree with the bundler, and this file says so.
@@ -41,13 +51,14 @@ import {
  *   object literal, `cache(x)`).
  *
  * **Scoped** (D7): CI and pre-push skip it only when `.github/scripts/changed-scopes.mjs`'s
- * `importPinsInScope` finds no changed file it reads (`RUN_IMPORT_PINS=false`). Anything else runs it,
- * and every run on `main` does.
+ * `runImportPins` says no changed file can change its answer. Anything else runs it, and every run
+ * on `main` does.
  */
 
 /** The package's one entry: `packages/db/package.json`'s `exports['.']`, pinned below. */
 const DB_INDEX = 'packages/db/src/index.ts';
 const DB_DIR = 'packages/db/';
+const DB_SRC = 'packages/db/src/';
 const ERASURE = 'packages/db/src/erasure/';
 const LANE_P_BARRELS = [
   'packages/db/src/writers/program/index.ts',
@@ -56,12 +67,21 @@ const LANE_P_BARRELS = [
 const PROGRAM_DAL = 'apps/web/lib/dal/program/';
 const DAY_DAL = 'apps/web/lib/dal/day/';
 const ENTRIES_DAL = 'apps/web/lib/dal/entries.ts';
+const WEB = 'apps/web/';
 const WEB_TEST = 'apps/web/test/';
 const DAY_PAGE = 'apps/web/app/p/[profileId]/page.tsx';
+/**
+ * The one reviewed landing outside the packages: `apps/web/scripts/` (the local e2e and screenshot
+ * runners, never bundled) take the machine-wide heavy-run slot from `.github/scripts/heavy-slot.mjs`
+ * (DX-18). Keyed on the importing directory and the exact target.
+ */
+const SCRIPTS_MAY_LAND = { from: 'apps/web/scripts/', to: '.github/scripts/heavy-slot.mjs' };
+/** Shared code any package may import, and third-party code (a realpath under the root store). */
+const SHARED_SOURCES = ['packages/shared/src/', 'packages/engine/src/'];
+const THIRD_PARTY = 'node_modules/';
 
-const CODE = /\.[cm]?[jt]sx?$/;
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;
-/** A path segment that is exactly one of these is not source. */
+/** A path segment that is exactly one of these is not source, and is never tracked. */
 const NOT_SOURCE = /(?:^|\/)(?:node_modules|\.next)(?:\/|$)/;
 
 /** Lane P's names, read from the two barrels (D4). Asserted readable below, never thrown on. */
@@ -131,23 +151,34 @@ const EXCEPTION = {
   detail: 'computed import(/* @vite-ignore */ registryFile)',
 };
 
-type Violation = { file: string; line: number; rule: string; detail: string };
+type Violation = GraphRefusal & { file: string };
 const message = (v: Violation) => `${v.file}:${v.line} ${v.rule}: ${v.detail}`;
 const within = (file: string, where: string) =>
   where.endsWith('/') ? file.startsWith(where) : file === where;
+const under = (file: string, dirs: readonly string[]) => dirs.some((d) => file.startsWith(d));
 
+const git = (...args: string[]) =>
+  execFileSync('git', args, { cwd: REPO_DIR, encoding: 'utf8' }).split('\0').filter(Boolean);
+/** Every tracked path under `paths`, whatever its kind. */
+const trackedAll = (...paths: string[]) => git('ls-files', '-z', '--', ...paths);
+/** The tracked code files under `paths`. A tracked `node_modules` or `.next` path fails a test below. */
 const tracked = (...paths: string[]) =>
-  execFileSync('git', ['ls-files', '-z', '--', ...paths], { cwd: REPO_DIR, encoding: 'utf8' })
-    .split('\0')
-    .filter((f) => f && CODE.test(f) && !NOT_SOURCE.test(f));
+  trackedAll(...paths).filter((f) => CODE_EXT.test(f) && !NOT_SOURCE.test(f));
 
+let domainCache: string[] | undefined;
 /** The scan's domain: every tracked non-test code file under `apps/web`. */
-const webDomain = () => tracked('apps/web').filter((f) => !TEST_FILE.test(f));
+const webDomain = () => (domainCache ??= tracked('apps/web').filter((f) => !TEST_FILE.test(f)));
+let landingCache: Set<string> | undefined;
+/** Where an `apps/web` import may land inside `apps/web`: the domain and its tracked assets. */
+const webLanding = () =>
+  (landingCache ??= new Set([
+    ...webDomain(),
+    ...trackedAll('apps/web').filter((f) => ASSET_EXT.test(f) && !NOT_SOURCE.test(f)),
+  ]));
 
 /** `export { x }`, `export const v = x` (unwrapped, `.bind` too) and `export default x` of a name. */
 function reexportsOf(sf: ts.SourceFile, names: readonly string[]) {
   const hits: { line: number; name: string }[] = [];
-  const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
   const bound = (e: ts.Expression): ts.Expression => {
     for (;;) {
       e = unwrapExpression(e);
@@ -161,7 +192,7 @@ function reexportsOf(sf: ts.SourceFile, names: readonly string[]) {
     }
   };
   const hit = (n: ts.Node, name: string) =>
-    names.includes(name) && hits.push({ line: lineOf(n), name });
+    names.includes(name) && hits.push({ line: lineOf(sf, n), name });
   for (const st of sf.statements) {
     if (ts.isExportDeclaration(st) && st.exportClause && ts.isNamedExports(st.exportClause))
       for (const e of st.exportClause.elements) hit(e, (e.propertyName ?? e.name).text);
@@ -181,19 +212,19 @@ function reexportsOf(sf: ts.SourceFile, names: readonly string[]) {
   return hits;
 }
 
-/** Every pin, for one `apps/web` file (repo-relative), read from disk or from `text`. */
-function violations(file: string, text?: string): Violation[] {
-  const { imports, unresolved, unfollowable, client, sf } = importsOf(join(REPO_DIR, file), text);
-  const out: Violation[] = [];
+/**
+ * Every pin, for one `apps/web` file (repo-relative), read from disk or from `text`. `landing` is
+ * where an import may land inside `apps/web`; a fixture passes its own.
+ */
+function violations(file: string, text?: string, landing = webLanding()): Violation[] {
+  const graph = importsOf(join(REPO_DIR, file), text);
+  const out: Violation[] = blindSpots(graph).map((b) => ({ file, ...b }));
   const v = (line: number, rule: string, detail: string) => out.push({ file, line, rule, detail });
-  for (const u of unresolved)
-    v(u.line, 'unresolved first-party', u.spec === null ? `computed ${u.text}` : `'${u.spec}'`);
-  for (const u of unfollowable) v(u.line, 'unfollowable', u.detail);
-  for (const i of imports) {
+  for (const i of graph.imports) {
     const r = i.resolved;
     if (r === null) continue;
-    if (r.startsWith(DB_DIR) && r !== DB_INDEX) v(i.line, 'deep packages/db', r);
-    if (r === DB_INDEX) {
+    if (TEST_FILE.test(r)) v(i.line, 'test file', r);
+    else if (r === DB_INDEX) {
       if (WHOLE_PACKAGE.has(i.kind)) v(i.line, 'whole-package', i.kind);
       else
         for (const n of i.names) {
@@ -201,14 +232,20 @@ function violations(file: string, text?: string): Violation[] {
           if (where && !where.some((w) => within(file, w)))
             v(i.line, 'name', `${n} → ${where.length ? `only ${where.join(', ')}` : 'nowhere'}`);
         }
-    }
-    if (client && (r.startsWith(DB_DIR) || r.startsWith(PROGRAM_DAL))) v(i.line, 'client', r);
+    } else if (r.startsWith(DB_DIR)) v(i.line, 'deep packages/db', r);
+    else if (r.startsWith(WEB)) {
+      if (r.startsWith(WEB_TEST) && !file.startsWith(WEB_TEST)) v(i.line, 'test helper', r);
+      else if (!landing.has(r)) v(i.line, 'outside the domain', r);
+    } else if (
+      !under(r, [THIRD_PARTY, ...SHARED_SOURCES]) &&
+      !(file.startsWith(SCRIPTS_MAY_LAND.from) && r === SCRIPTS_MAY_LAND.to)
+    )
+      v(i.line, 'outside the graph', r);
+    if (graph.client && (r.startsWith(DB_DIR) || r.startsWith(PROGRAM_DAL))) v(i.line, 'client', r);
     for (const m of MODULES) if (m.files.includes(r) && !m.may(file)) v(i.line, 'module', r);
-    if (TEST_FILE.test(r)) v(i.line, 'test file', r);
-    else if (r.startsWith(WEB_TEST) && !file.startsWith(WEB_TEST)) v(i.line, 'test helper', r);
   }
   if (within(file, PROGRAM_DAL) || within(file, DAY_DAL))
-    for (const h of reexportsOf(sf, LANE_P)) v(h.line, 're-export', h.name);
+    for (const h of reexportsOf(graph.sf, LANE_P)) v(h.line, 're-export', h.name);
   return out;
 }
 
@@ -216,23 +253,32 @@ function violations(file: string, text?: string): Violation[] {
 const found = (file: string, text: string) =>
   violations(file, text).map((x) => `${x.rule}: ${x.detail}`);
 
-/** A packages/shared or packages/engine file: it reaches no `packages/db` file, and resolves. */
+/**
+ * A packages/shared or packages/engine file: it may land only in their own `src/` and third-party
+ * code, never on a test file, and it must resolve.
+ */
 function packageViolations(file: string, text?: string): string[] {
-  const { imports, unresolved, unfollowable } = importsOf(join(REPO_DIR, file), text);
-  return [
-    ...unresolved.map((u) => `${file}:${u.line} unresolved first-party: ${u.spec ?? u.text}`),
-    ...unfollowable.map((u) => `${file}:${u.line} unfollowable: ${u.detail}`),
-    ...imports
-      .filter((i) => i.resolved?.startsWith(DB_DIR))
-      .map((i) => `${file}:${i.line} packages/db: ${i.resolved}`),
-  ];
+  const graph = importsOf(join(REPO_DIR, file), text);
+  const out = blindSpots(graph).map((b) => `${file}:${b.line} ${b.rule}: ${b.detail}`);
+  for (const i of graph.imports) {
+    const r = i.resolved;
+    if (r === null) continue;
+    if (TEST_FILE.test(r)) out.push(`${file}:${i.line} test file: ${r}`);
+    else if (!under(r, [THIRD_PARTY, ...SHARED_SOURCES]))
+      out.push(`${file}:${i.line} outside the graph: ${r}`);
+  }
+  return out;
 }
 
 /** An edge that exists at run time: not `import type`, `export type … from` or `typeof import`. */
 const isRuntimeEdge = (i: ImportRef) => !i.typeOnly && i.kind !== 'type';
 
-/** `index.ts`'s runtime import closure inside `packages/db/src/`, and what it could not follow. */
-function dbClosure() {
+/**
+ * `index.ts`'s import closure inside `packages/db/src/`: what it reaches at run time in `erasure/`,
+ * and what it could not follow, which includes any edge out of `packages/db/src/` other than into
+ * shared or engine `src/` or third-party code. `overrides` reads a file's text from a fixture.
+ */
+function dbClosure(overrides: Record<string, string> = {}) {
   const seen = new Set<string>();
   const stack = [DB_INDEX];
   const intoErasure: string[] = [];
@@ -241,18 +287,39 @@ function dbClosure() {
     const file = stack.pop()!;
     if (seen.has(file)) continue;
     seen.add(file);
-    const { imports, unresolved, unfollowable } = importsOf(join(REPO_DIR, file));
-    blind.push(
-      ...unresolved.map((u) => `${file}:${u.line} ${u.spec ?? u.text}`),
-      ...unfollowable.map((u) => `${file}:${u.line} ${u.detail}`),
-    );
-    for (const i of imports) {
-      if (!i.resolved?.startsWith('packages/db/src/') || !isRuntimeEdge(i)) continue;
-      if (i.resolved.startsWith(ERASURE)) intoErasure.push(`${file}:${i.line} → ${i.resolved}`);
-      stack.push(i.resolved);
+    const graph = importsOf(join(REPO_DIR, file), overrides[file]);
+    blind.push(...blindSpots(graph).map((b) => `${file}:${b.line} ${b.rule}: ${b.detail}`));
+    for (const i of graph.imports) {
+      const r = i.resolved;
+      if (r === null || under(r, [THIRD_PARTY, ...SHARED_SOURCES])) continue;
+      if (!r.startsWith(DB_SRC)) {
+        blind.push(`${file}:${i.line} out of packages/db/src: ${r}`);
+        continue;
+      }
+      if (!isRuntimeEdge(i)) continue;
+      if (r.startsWith(ERASURE)) intoErasure.push(`${file}:${i.line} → ${r}`);
+      stack.push(r);
     }
   }
   return { seen, intoErasure, blind };
+}
+
+/** Every name `next.config.ts` could configure a bundler alias through, anywhere in its AST (S5). */
+const BUNDLER_KEY =
+  /^(?:webpack|turbopack|resolveAlias|alias|modularizeImports|transpilePackages)$/;
+function bundlerKeys(text: string): string[] {
+  const file = ts.createSourceFile('next.config.ts', text, ts.ScriptTarget.Latest, true);
+  const keys: string[] = [];
+  const walk = (n: ts.Node): void => {
+    if (
+      (ts.isIdentifier(n) || ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) &&
+      BUNDLER_KEY.test(n.text)
+    )
+      keys.push(n.text);
+    ts.forEachChild(n, walk);
+  };
+  walk(file);
+  return keys;
 }
 
 let treeScan: Violation[] | undefined;
@@ -264,10 +331,16 @@ const isException = (x: Violation) =>
 const C = 'apps/web/components/program-builder/x.tsx';
 const PROGRAM_X = `${PROGRAM_DAL}x.ts`;
 const DAY_X = `${DAY_DAL}x.ts`;
+const SHARED_X = 'packages/shared/src/x.ts';
 const ONLY_PROGRAM = `only ${PROGRAM_DAL}`;
 const ONLY_DAY = `only ${DAY_DAL}`;
+const GRAPH = `${ERASURE}graph.ts`;
 /** U1: on a case-insensitive filesystem (macOS) a miscased specifier resolves; on Linux it does not. */
 const CASE_INSENSITIVE = !ts.sys.useCaseSensitiveFileNames;
+
+/** One fixture: a file's text, read as if it sat at `at`, and exactly what it is refused for. */
+type Fixture = { at: string; text: string; want: string[] };
+const fixture = (at: string, text: string, ...want: string[]): Fixture => ({ at, text, want });
 
 describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
   'the program-tables import pins, on the resolved import graph',
@@ -302,27 +375,22 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         });
       });
 
-      it('next.config.ts configures no bundler alias', () => {
-        const file = join(REPO_DIR, 'apps/web/next.config.ts');
-        const sf = ts.createSourceFile(
-          file,
-          readFileSync(file, 'utf8'),
-          ts.ScriptTarget.Latest,
-          true,
-        );
-        const keys: string[] = [];
-        const walk = (n: ts.Node): void => {
-          if (
-            (ts.isPropertyAssignment(n) ||
-              ts.isShorthandPropertyAssignment(n) ||
-              ts.isMethodDeclaration(n)) &&
-            /^['"]?(?:webpack|turbopack|resolveAlias|alias)['"]?$/.test(n.name.getText(sf))
-          )
-            keys.push(n.name.getText(sf));
-          ts.forEachChild(n, walk);
-        };
-        walk(sf);
-        expect(keys, BUNDLER_MAY_DISAGREE).toEqual([]);
+      it('next.config.ts names no bundler key, anywhere in its AST', () => {
+        const text = readFileSync(join(REPO_DIR, 'apps/web/next.config.ts'), 'utf8');
+        expect(bundlerKeys(text), BUNDLER_MAY_DISAGREE).toEqual([]);
+      });
+
+      it.each([
+        ['const c = { webpack(c) { return c; } };', 'webpack'],
+        ["const c = { ['webpack']: (c) => c };", 'webpack'],
+        ['const c = {}; c.webpack = (c) => c;', 'webpack'],
+        ["const k = 'turbopack'; const c = { [k]: 1 };", 'turbopack'],
+        ['const c = { experimental: { turbo: { resolveAlias: {} } } };', 'resolveAlias'],
+        ["const c = { modularizeImports: { '@mat-plan/db': {} } };", 'modularizeImports'],
+        ["const c = { transpilePackages: ['x'] };", 'transpilePackages'],
+        ['const c = { get alias() { return {}; } };', 'alias'],
+      ])('the bundler-key walk sees %s', (text, key) => {
+        expect(bundlerKeys(text)).toEqual([key]);
       });
     });
 
@@ -348,6 +416,13 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         ]);
       });
 
+      it('every OVERRIDES name is one the package publishes, so no row guards nothing', () => {
+        const published = exportedNames(DB_INDEX);
+        expect(Object.keys(OVERRIDES).filter((n) => !published.has(n))).toEqual([]);
+        expect(published.has('saveWorkout')).toBe(true);
+        expect(published.has('notAPublishedName')).toBe(false);
+      });
+
       it('reads an alias, a type, and refuses what it cannot read (fixtures)', () => {
         const at = join(REPO_DIR, LANE_P_BARRELS[0]);
         expect(barrelNames(at, "export { a as b, type T } from './x';")).toEqual({
@@ -364,8 +439,9 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
     });
 
     describe('the tree', () => {
-      it('scans a real tree', () => {
+      it('scans a real tree, and tracks nothing under node_modules or .next', () => {
         expect(webDomain().length).toBeGreaterThan(200);
+        expect(trackedAll('apps/web').filter((f) => NOT_SOURCE.test(f))).toEqual([]);
       });
 
       it('apps/web is clean, apart from the one reviewed computed import', () => {
@@ -377,16 +453,29 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         ).toHaveLength(1);
       });
 
-      it('packages/shared and packages/engine reach no packages/db file', () => {
-        // Tests excluded: nothing may import one (the "no non-test file reaches a test file" row).
+      it('packages/shared and packages/engine land only in their own src/ and third-party code', () => {
+        // Their tests are skipped: a test is in no graph until a file imports it, and the
+        // `test file` rule refuses that, here and in apps/web.
         const files = tracked('packages/shared/src', 'packages/engine/src').filter(
           (f) => !TEST_FILE.test(f),
         );
         expect(files.length).toBeGreaterThan(50);
         expect(files.flatMap((f) => packageViolations(f))).toEqual([]);
-        expect(
-          packageViolations('packages/shared/src/x.ts', "import { db } from '../../db/src/index';"),
-        ).toEqual(['packages/shared/src/x.ts:1 packages/db: packages/db/src/index.ts']);
+      });
+
+      it.each([
+        ["import { db } from '../../db/src/index';", 'outside the graph: packages/db/src/index.ts'],
+        ["export { a } from './units.test';", 'test file: packages/shared/src/units.test.ts'],
+        [
+          "export { a } from '../../evals/src/index';",
+          'outside the graph: packages/evals/src/index.ts',
+        ],
+        [
+          "export { a } from '../../../apps/web/lib/dal/program/reads';",
+          'outside the graph: apps/web/lib/dal/program/reads.ts',
+        ],
+      ])('a shared file: %s', (text, want) => {
+        expect(packageViolations(SHARED_X, text)).toEqual([`${SHARED_X}:1 ${want}`]);
       });
     });
 
@@ -407,19 +496,34 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         expect(blind).toEqual([]);
       });
 
+      it('an edge out of packages/db/src is blind, and an erasure edge is found (fixtures)', () => {
+        const index = readFileSync(join(REPO_DIR, DB_INDEX), 'utf8');
+        const plus = (line: string) => dbClosure({ [DB_INDEX]: `${index}\n${line}` });
+        const out = plus("export { x } from '../scripts/corrections/registry';");
+        expect(out.blind).toEqual([
+          expect.stringMatching(
+            /^packages\/db\/src\/index\.ts:\d+ out of packages\/db\/src: packages\/db\/scripts\/corrections\/registry\.ts$/,
+          ),
+        ]);
+        expect(plus("export { x } from './erasure/graph';").intoErasure).toEqual([
+          expect.stringMatching(/ → packages\/db\/src\/erasure\/graph\.ts$/),
+        ]);
+      });
+
       it('a type-only import is no edge; a value import is (fixtures and the real one)', () => {
         const file = join(REPO_DIR, 'packages/db/src/queries/movement-ownership.ts');
-        const real = importsOf(file).imports.find((i) => i.resolved === `${ERASURE}graph.ts`);
-        expect(real?.line).toBe(3);
+        const real = importsOf(file).imports.find((i) => i.resolved === GRAPH);
+        expect(real).toBeDefined();
         expect(isRuntimeEdge(real!)).toBe(false);
         const value = importsOf(file, "import { IdIn } from '../erasure/graph';").imports[0]!;
-        expect(value.resolved).toBe(`${ERASURE}graph.ts`);
+        expect(value.resolved).toBe(GRAPH);
         expect(isRuntimeEdge(value)).toBe(true);
       });
     });
 
-    describe('every spelling lands on the file it names (fixtures, § Probes)', () => {
-      it.each([
+    const NAME_SAVE = `name: saveWorkout → ${ONLY_PROGRAM}`;
+    const ROWS: Record<string, Fixture[]> = {
+      'every spelling of the package has its names checked': [
         '@mat-plan/db',
         '@mat-plan/./db',
         '@mat-plan/x/../db',
@@ -427,268 +531,281 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         '@mat-plan/db/',
         '../../node_modules/@mat-plan/db',
         '@/../../packages/db/src',
-      ])("'%s' is the package: its names are checked", (spec) => {
-        expect(found(C, `import { saveWorkout } from '${spec}';`)).toEqual([
-          `name: saveWorkout → ${ONLY_PROGRAM}`,
-        ]);
-      });
-
-      it.each([
+      ].map((spec) => fixture(C, `import { saveWorkout } from '${spec}';`, NAME_SAVE)),
+      'a deep packages/db import, however spelled': [
         '@mat-plan/./db/src/erasure/graph',
         '../../node_modules/@mat-plan/db/src/erasure/graph',
         '@/../../packages/./db/src/erasure/graph',
-      ])("'%s' is a deep packages/db import", (spec) => {
-        expect(found(C, `import { x } from '${spec}';`)).toEqual([
-          `deep packages/db: ${ERASURE}graph.ts`,
-        ]);
-      });
-
-      it.each([
+      ].map((spec) => fixture(C, `import { x } from '${spec}';`, `deep packages/db: ${GRAPH}`)),
+      'an unresolved first-party specifier fails closed': [
         '@mat-plan/db/.',
         '@mat-plan/db/src/erasure/graph',
         '#internal/x',
         './nope',
         './nope.css',
-      ])("'%s' does not resolve: fail closed", (spec) => {
-        expect(found(C, `import { x } from '${spec}';`)).toEqual([
-          `unresolved first-party: '${spec}'`,
-        ]);
-      });
-
-      it('a miscased specifier: the package on a case-insensitive filesystem, else unresolved (U1)', () => {
-        expect(found(C, "import { saveWorkout } from '@mat-plan/DB';")).toEqual(
-          CASE_INSENSITIVE
-            ? [`name: saveWorkout → ${ONLY_PROGRAM}`]
-            : ["unresolved first-party: '@mat-plan/DB'"],
-        );
-        expect(found(C, "import { a } from '@/App/Programs/actions';")).toEqual(
-          CASE_INSENSITIVE
-            ? ['module: apps/web/app/programs/actions.ts']
-            : ["unresolved first-party: '@/App/Programs/actions'"],
-        );
-      });
-
-      it.each([
+        '@/README.md',
+        'react/../@mat-plan/db',
+      ].map((spec) =>
+        fixture(C, `import { x } from '${spec}';`, `unresolved first-party: '${spec}'`),
+      ),
+      'outside the graph: no landing beyond the allow-list': [
+        fixture(
+          C,
+          "import { x } from '@/../../packages/evals/src/index';",
+          'outside the graph: packages/evals/src/index.ts',
+        ),
+        fixture(
+          C,
+          "import { x } from '@/../../.github/scripts/changed-scopes.mjs';",
+          'outside the graph: .github/scripts/changed-scopes.mjs',
+        ),
+        fixture(
+          C,
+          "import { x } from '@/../../packages/db/scripts/corrections/registry';",
+          'deep packages/db: packages/db/scripts/corrections/registry.ts',
+        ),
+        fixture(
+          C,
+          "import { slot } from '@/../../.github/scripts/heavy-slot.mjs';",
+          'outside the graph: .github/scripts/heavy-slot.mjs',
+        ),
+        fixture(
+          'apps/web/scripts/x.ts',
+          "import { slot } from '../../../.github/scripts/heavy-slot.mjs';",
+        ),
+        fixture(C, "import { x } from '@mat-plan/shared';"),
+        fixture(C, "import styles from '@/app/globals.css';"),
+      ],
+      'every form of the package as a whole': (
+        [
+          ["const m = require ('@mat-plan/db');", 'require'],
+          ['const m = require(`@mat-plan/db`);', 'require'],
+          ["import m = require('@mat-plan/db');", 'require'],
+          ["const m = (require as any)('@mat-plan/db');", 'require'],
+          ["const m = require!('@mat-plan/db');", 'require'],
+          ["const m = await import('@mat-plan/db');", 'dynamic'],
+          ['const m = await import(`@mat-plan/db`);', 'dynamic'],
+          ["type M = typeof import('@mat-plan/db');", 'type'],
+          ["import * as db from '@mat-plan/db';", 'star'],
+          ["export * from '@mat-plan/db';", 'star'],
+          ["export * as db from '@mat-plan/db';", 'star'],
+        ] as const
+      ).flatMap(([text, kind]) =>
+        [C, PROGRAM_X].map((at) => fixture(at, text, `whole-package: ${kind}`)),
+      ),
+      'every spelling of an import: names checked': [
         'import { saveWorkout } from `@mat-plan/db`;',
         "import { /* a */ saveWorkout /* b */ } from /* c */ '@mat-plan/db';",
         "import {\n  // a\n  saveWorkout,\n} from '@mat-plan/db';",
         "import { 'saveWorkout' as s } from '@mat-plan/db';",
         "export { saveWorkout } from '@mat-plan/db';",
-      ])('%s: names checked', (text) => {
-        expect(found(C, text)).toEqual([expect.stringMatching(/^name: saveWorkout → /)]);
-      });
-
-      it.each([
-        ["const m = require ('@mat-plan/db');", 'require'],
-        ['const m = require(`@mat-plan/db`);', 'require'],
-        ["import m = require('@mat-plan/db');", 'require'],
-        ["const m = (require as any)('@mat-plan/db');", 'require'],
-        ["const m = require!('@mat-plan/db');", 'require'],
-        ["const m = await import('@mat-plan/db');", 'dynamic'],
-        ['const m = await import(`@mat-plan/db`);', 'dynamic'],
-        ["type M = typeof import('@mat-plan/db');", 'type'],
-        ["import * as db from '@mat-plan/db';", 'star'],
-        ["export * from '@mat-plan/db';", 'star'],
-        ["export * as db from '@mat-plan/db';", 'star'],
-      ])('%s: whole-package %s, everywhere, the DALs included', (text, kind) => {
-        expect(found(C, text)).toEqual([`whole-package: ${kind}`]);
-        expect(found(PROGRAM_X, text)).toEqual([`whole-package: ${kind}`]);
-      });
-
-      it("(require)('…erasure/graph') is resolved like require", () => {
-        expect(found(C, "const g = (require)('@mat-plan/./db/src/erasure/graph');")).toEqual([
-          `deep packages/db: ${ERASURE}graph.ts`,
-        ]);
-      });
-
-      it('a computed import fails closed', () => {
-        expect(found(C, 'const m = await import(p);')).toEqual([
-          'unresolved first-party: computed import(p)',
-        ]);
-      });
-    });
-
-    describe('a loader the graph cannot follow is refused (fixtures)', () => {
-      it.each([
-        ["const p = require.resolve('x');", 'require.resolve'],
-        ["const c = require.context('.');", 'require.context'],
-        ["const c = import.meta.webpackContext('.');", 'import.meta.webpackContext'],
-        ["const m = module.require('x');", 'module.require'],
-        ["const r = require['resolve'];", "require['resolve']"],
-        ["const r = module['require'];", "module['require']"],
-        ["const c = import.meta['webpackContext'];", "import.meta['webpackContext']"],
-        ['const r = require;', 'require (not a direct call with a literal)'],
-        ['type R = typeof require;', 'require (not a direct call with a literal)'],
-        ['const m = require(p);', 'require (not a direct call with a literal)'],
-        [
-          'const m = __non_webpack_require__(p);',
-          '__non_webpack_require__ (not a direct call with a literal)',
-        ],
-      ])('%s', (text, detail) => {
-        expect(found(C, text)).toEqual([`unfollowable: ${detail}`]);
-      });
-
-      it('createRequire, named or through the default import', () => {
-        expect(found(C, "import { createRequire } from 'node:module';")).toEqual([
+      ].map((text) => fixture(C, text, NAME_SAVE)),
+      'a loader the graph cannot follow': [
+        fixture(
+          C,
+          "const g = (require)('@mat-plan/./db/src/erasure/graph');",
+          `deep packages/db: ${GRAPH}`,
+        ),
+        fixture(C, 'const m = await import(p);', 'unresolved first-party: computed import(p)'),
+        ...(
+          [
+            ["const p = require.resolve('x');", 'require.resolve'],
+            ["const c = require.context('.');", 'require.context'],
+            ["const c = import.meta.webpackContext('.');", 'import.meta.webpackContext'],
+            ["const m = module.require('x');", 'module.require'],
+            ["const r = require['resolve'];", "require['resolve']"],
+            ["const r = module['require'];", "module['require']"],
+            ["const c = import.meta['webpackContext'];", "import.meta['webpackContext']"],
+            ['const r = require;', 'require (not a direct call with a literal)'],
+            ['type R = typeof require;', 'require (not a direct call with a literal)'],
+            ['const m = require(p);', 'require (not a direct call with a literal)'],
+            [
+              'const m = __non_webpack_require__(p);',
+              '__non_webpack_require__ (not a direct call with a literal)',
+            ],
+            ["import { createRequire } from 'some-shim';", 'createRequire'],
+            ["import { builtinModules } from 'node:module';", "import of 'node:module'"],
+            ["import Module from 'module';", "import of 'module'"],
+            ['const m = import.meta;', 'import.meta (not a member access)'],
+          ] as const
+        ).map(([text, detail]) => fixture(C, text, `unfollowable: ${detail}`)),
+        fixture(
+          C,
+          "import mod from 'node:module';\nconst r = mod.createRequire(x);",
+          "unfollowable: import of 'node:module'",
           'unfollowable: createRequire',
-        ]);
-        expect(found(C, "import mod from 'node:module';\nconst r = mod.createRequire(x);")).toEqual(
-          ['unfollowable: createRequire'],
-        );
-      });
-
-      it('a property or method named require is not a loader', () => {
-        expect(
-          found(C, 'const o = { require: 1 };\no.require;\nclass K {\n  require() {}\n}'),
-        ).toEqual([]);
-      });
-    });
-
-    describe('ALLOWED_IN: each name, only where it lists (fixtures)', () => {
-      it('the day DAL: its own names and workoutInHousehold, and nothing else of lane P', () => {
-        expect(found(DAY_X, "import { workoutInHousehold, logRow } from '@mat-plan/db';")).toEqual(
-          [],
-        );
-        expect(
-          found(DAY_X, "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';"),
-        ).toEqual([`name: saveWorkout → ${ONLY_PROGRAM}`]);
-      });
-
-      it("the program DAL: lane P's names, not the day's, and no ownership helper", () => {
-        expect(
-          found(PROGRAM_X, "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';"),
-        ).toEqual([]);
-        expect(found(PROGRAM_X, "import { resolveDayPlan } from '@mat-plan/db';")).toEqual([
+        ),
+        fixture(
+          C,
+          "const m = (import.meta as any).webpackContext('.');",
+          'unfollowable: (import.meta as any).webpackContext',
+          'unfollowable: import.meta (not a member access)',
+        ),
+        fixture(C, 'const o = { require: 1 };\no.require;\nclass K {\n  require() {}\n}'),
+        fixture(C, 'const u = import.meta.url;'),
+      ],
+      'ALLOWED_IN: each name, only where it lists': [
+        fixture(DAY_X, "import { workoutInHousehold, logRow } from '@mat-plan/db';"),
+        fixture(
+          DAY_X,
+          "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';",
+          NAME_SAVE,
+        ),
+        fixture(PROGRAM_X, "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';"),
+        fixture(
+          PROGRAM_X,
+          "import { resolveDayPlan } from '@mat-plan/db';",
           `name: resolveDayPlan → ${ONLY_DAY}`,
-        ]);
-        expect(found(PROGRAM_X, "import { liveTemplateBlockIn } from '@mat-plan/db';")).toEqual([
+        ),
+        fixture(
+          PROGRAM_X,
+          "import { liveTemplateBlockIn } from '@mat-plan/db';",
           'name: liveTemplateBlockIn → nowhere',
-        ]);
-      });
-
-      it('a sibling directory is not the DAL; readLiveSets is entries.ts alone', () => {
-        expect(
-          found('apps/web/lib/dal/dayx/x.ts', "import { workoutInHousehold } from '@mat-plan/db';"),
-        ).toEqual([`name: workoutInHousehold → only ${PROGRAM_DAL}, ${DAY_DAL}`]);
-        expect(found(C, "import { readLiveSets } from '@mat-plan/./db';")).toEqual([
+        ),
+        fixture(
+          'apps/web/lib/dal/dayx/x.ts',
+          "import { workoutInHousehold } from '@mat-plan/db';",
+          `name: workoutInHousehold → only ${PROGRAM_DAL}, ${DAY_DAL}`,
+        ),
+        fixture(
+          C,
+          "import { readLiveSets } from '@mat-plan/./db';",
           `name: readLiveSets → only ${ENTRIES_DAL}`,
-        ]);
-        expect(found(ENTRIES_DAL, "import { readLiveSets } from '@mat-plan/db';")).toEqual([]);
-      });
-
-      it('a type counts; an unlisted name is free', () => {
-        expect(found(C, "import type { MovementOption } from '@mat-plan/db';")).toEqual([
+        ),
+        fixture(ENTRIES_DAL, "import { readLiveSets } from '@mat-plan/db';"),
+        fixture(
+          C,
+          "import type { MovementOption } from '@mat-plan/db';",
           `name: MovementOption → ${ONLY_PROGRAM}`,
-        ]);
-        expect(found(C, "import { db, profiles } from '@mat-plan/db';")).toEqual([]);
-      });
-    });
-
-    describe('neither DAL re-exports a lane P name (fixtures)', () => {
-      const IMPORT = "import { workoutInHousehold } from '@mat-plan/db';\n";
-      it.each([
-        "export { workoutInHousehold as 'isOurs' };",
-        'export { workoutInHousehold as isOurs };',
-        'export const a = workoutInHousehold as typeof workoutInHousehold;',
-        'export const a = workoutInHousehold.bind(null);',
-        'export const a = workoutInHousehold!;',
-        'export default workoutInHousehold;',
-      ])('%s', (text) => {
-        expect(found(DAY_X, IMPORT + text)).toEqual(['re-export: workoutInHousehold']);
-      });
-
-      it('from the package too; a wrapper call is not unwrapped', () => {
-        expect(found(DAY_X, "export { workoutInHousehold } from '@mat-plan/db';")).toEqual([
+        ),
+        fixture(C, "import { db, profiles } from '@mat-plan/db';"),
+      ],
+      'neither DAL re-exports a lane P name': [
+        ...[
+          "export { workoutInHousehold as 'isOurs' };",
+          'export { workoutInHousehold as isOurs };',
+          'export const a = workoutInHousehold as typeof workoutInHousehold;',
+          'export const a = workoutInHousehold.bind(null);',
+          'export const a = workoutInHousehold!;',
+          'export default workoutInHousehold;',
+        ].map((text) =>
+          fixture(
+            DAY_X,
+            `import { workoutInHousehold } from '@mat-plan/db';\n${text}`,
+            're-export: workoutInHousehold',
+          ),
+        ),
+        fixture(
+          DAY_X,
+          "export { workoutInHousehold } from '@mat-plan/db';",
           're-export: workoutInHousehold',
-        ]);
-        expect(
-          found(
-            PROGRAM_X,
-            "import { readWorkoutDraft } from '@mat-plan/db';\nexport const getX = cache(readWorkoutDraft);",
-          ),
-        ).toEqual([]);
-      });
-    });
-
-    describe('MODULES: only the listed importers (fixtures)', () => {
-      it.each([
-        ["import { a } from '@/app/programs/actions';", 'actions.ts'],
-        ["import { a } from '@/../web/app/programs/actions';", 'actions.ts'],
-        ["import { a } from '@/./lib/../app/programs/actions.contract';", 'actions.contract.ts'],
-        ["import { a } from '../../app/programs/actions.ts';", 'actions.ts'],
-        ["import '../../app/programs/actions';", 'actions.ts'],
-      ])('%s from a component', (text, target) => {
-        expect(found(C, text)).toEqual([`module: apps/web/app/programs/${target}`]);
-      });
-
-      it('a page under app/programs/ may; the layout may not', () => {
-        expect(
-          found(
-            'apps/web/app/programs/[programId]/page.tsx',
-            "import { P } from '../actions.contract';",
-          ),
-        ).toEqual([]);
-        expect(
-          found('apps/web/app/programs/layout.tsx', "import { P } from './actions.contract';"),
-        ).toEqual(['module: apps/web/app/programs/actions.contract.ts']);
-      });
-
-      it('the row actions: the day page only', () => {
-        expect(found(C, "import { a } from '@/app/p/[profileId]/row-actions';")).toEqual([
+        ),
+        // A wrapper call is not unwrapped (`reads.ts`'s `cache(async function …)`).
+        fixture(
+          PROGRAM_X,
+          "import { readWorkoutDraft } from '@mat-plan/db';\nexport const getX = cache(readWorkoutDraft);",
+        ),
+      ],
+      'MODULES: only the listed importers': [
+        ...(
+          [
+            ["import { a } from '@/app/programs/actions';", 'actions.ts'],
+            ["import { a } from '@/../web/app/programs/actions';", 'actions.ts'],
+            [
+              "import { a } from '@/./lib/../app/programs/actions.contract';",
+              'actions.contract.ts',
+            ],
+            ["import { a } from '../../app/programs/actions.ts';", 'actions.ts'],
+            ["import '../../app/programs/actions';", 'actions.ts'],
+          ] as const
+        ).map(([text, target]) => fixture(C, text, `module: apps/web/app/programs/${target}`)),
+        fixture(
+          'apps/web/app/programs/[programId]/page.tsx',
+          "import { P } from '../actions.contract';",
+        ),
+        fixture(
+          'apps/web/app/programs/layout.tsx',
+          "import { P } from './actions.contract';",
+          'module: apps/web/app/programs/actions.contract.ts',
+        ),
+        fixture(
+          'apps/web/app/programs/actions.registry.ts',
+          "import { a } from './actions';",
+          'module: apps/web/app/programs/actions.ts',
+        ),
+        fixture(
+          C,
+          "import { a } from '@/app/p/[profileId]/row-actions';",
           'module: apps/web/app/p/[profileId]/row-actions.ts',
-        ]);
-        expect(found(DAY_PAGE, "import { a } from './row-actions';")).toEqual([]);
+        ),
+        fixture(DAY_PAGE, "import { a } from './row-actions';"),
         // Its registry is not an importer either (lane C, #785).
-        expect(
-          found(
-            'apps/web/app/p/[profileId]/row-actions.registry.ts',
-            "import { a } from './row-actions';",
+        fixture(
+          'apps/web/app/p/[profileId]/row-actions.registry.ts',
+          "import { a } from './row-actions';",
+          'module: apps/web/app/p/[profileId]/row-actions.ts',
+        ),
+      ],
+      "a 'use client' file reaches neither the package nor the program DAL": [
+        ...[
+          "'use client';\n",
+          "// a comment\n/* another */\n'use client';\n",
+          '\'use strict\'\n"use client"\n',
+        ].map((prologue) =>
+          fixture(
+            C,
+            `${prologue}import { g } from '@/lib/dal/program/reads';`,
+            'client: apps/web/lib/dal/program/reads.ts',
           ),
-        ).toEqual(['module: apps/web/app/p/[profileId]/row-actions.ts']);
-      });
-
-      it('neither program registry imports the actions module', () => {
-        expect(
-          found('apps/web/app/programs/actions.registry.ts', "import { a } from './actions';"),
-        ).toEqual(['module: apps/web/app/programs/actions.ts']);
-      });
-    });
-
-    describe("a 'use client' file reaches neither the package nor the program DAL (fixtures)", () => {
-      const READS = "import { g } from '@/lib/dal/program/reads';";
-      it.each([
-        `'use client';\n${READS}`,
-        `// a comment\n/* another */\n'use client';\n${READS}`,
-        `'use strict'\n"use client"\n${READS}`,
-      ])('%s', (text) => {
-        expect(found(C, text)).toEqual(['client: apps/web/lib/dal/program/reads.ts']);
-      });
-
-      it('the package, from a client file', () => {
-        expect(found(C, "'use client';\nimport { db } from '@mat-plan/db';")).toEqual([
-          `client: ${DB_INDEX}`,
-        ]);
-      });
-
-      it.each([
-        `${READS}\n'use client';`,
-        `const s = 'use client';\n${READS}`,
-        `'use client';\nimport { g } from '@/lib/dal/day/day';`,
-      ])('not a client import of the program DAL: %s', (text) => {
-        expect(found(C, text)).toEqual([]);
-      });
-    });
-
-    describe('a non-test file reaches no test file (fixtures)', () => {
-      it('a *.test.* file, or apps/web/test/ from outside it', () => {
-        expect(found(C, "import { a } from '@/app/programs/actions.test';")).toEqual([
+        ),
+        fixture(C, "'use client';\nimport { db } from '@mat-plan/db';", `client: ${DB_INDEX}`),
+        fixture(C, "import { g } from '@/lib/dal/program/reads';\n'use client';"),
+        fixture(C, "const s = 'use client';\nimport { g } from '@/lib/dal/program/reads';"),
+        fixture(C, "'use client';\nimport { g } from '@/lib/dal/day/day';"),
+      ],
+      'a non-test file reaches no test file': [
+        fixture(
+          C,
+          "import { a } from '@/app/programs/actions.test';",
           'test file: apps/web/app/programs/actions.test.ts',
-        ]);
-        expect(found(C, "import { code } from '@/test/source-scan';")).toEqual([
+        ),
+        fixture(
+          C,
+          "import { a } from '@/../../packages/shared/src/units.test';",
+          'test file: packages/shared/src/units.test.ts',
+        ),
+        fixture(
+          C,
+          "import { code } from '@/test/source-scan';",
           'test helper: apps/web/test/source-scan.ts',
-        ]);
-        expect(found('apps/web/test/x.ts', "import { code } from './source-scan';")).toEqual([]);
+        ),
+        fixture('apps/web/test/x.ts', "import { code } from './source-scan';"),
+      ],
+    };
+
+    describe.each(Object.keys(ROWS))('%s (fixtures)', (group) => {
+      it.each(ROWS[group]!)('$text @ $at', ({ at, text, want }) => {
+        expect(found(at, text)).toEqual(want);
       });
+    });
+
+    it('an apps/web file outside the domain and its assets is refused (fixture)', () => {
+      const text = "import { g } from '@/lib/dal/day/day';";
+      expect(violations(C, text).map(message)).toEqual([]);
+      expect(violations(C, text, new Set()).map((x) => `${x.rule}: ${x.detail}`)).toEqual([
+        'outside the domain: apps/web/lib/dal/day/day.ts',
+      ]);
+    });
+
+    it('a miscased specifier: the package on a case-insensitive filesystem, else unresolved (U1)', () => {
+      expect(found(C, "import { saveWorkout } from '@mat-plan/DB';")).toEqual(
+        CASE_INSENSITIVE ? [NAME_SAVE] : ["unresolved first-party: '@mat-plan/DB'"],
+      );
+      expect(found(C, "import { a } from '@/App/Programs/actions';")).toEqual(
+        CASE_INSENSITIVE
+          ? ['module: apps/web/app/programs/actions.ts']
+          : ["unresolved first-party: '@/App/Programs/actions'"],
+      );
     });
 
     describe('the real files the pins rest on (non-vacuity)', () => {

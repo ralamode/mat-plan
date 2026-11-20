@@ -372,8 +372,9 @@ build`; default-to-run). Override with the
   stalls "pending" ([plan](./docs/plans/ci-e2e-auto-skip.md)).
 - **The import-pins guard** (`apps/web/test/program-imports.test.ts`, who may import what from
   `@mat-plan/db` and the action modules) is the one test the suite scopes: on a PR (`run_import_pins`)
-  and pre-push it runs only when `importPinsInScope` ([changed-scopes.mjs](./.github/scripts/changed-scopes.mjs))
-  finds a changed file it reads, and every run on `main` runs it. A scoping, not a loosening.
+  and pre-push it runs only when `runImportPins` ([changed-scopes.mjs](./.github/scripts/changed-scopes.mjs),
+  one predicate for both) finds a changed file it reads or any non-inert `.github/` change, and every
+  run on `main` runs it. A scoping, not a loosening.
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking API/DB
   changes.
 - **No personal names in PRs, plans, ADRs, changelog fragments or commit messages.** Write the role —

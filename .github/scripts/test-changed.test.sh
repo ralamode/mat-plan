@@ -78,6 +78,15 @@ if has "$out" 'scanner: apps/web/test/program-imports.test.ts'; then
   ok 'an apps/web change runs the import-pins guard'
 else bad 'apps/web change: the import-pins guard' "$out"; fi
 
+# The same predicate as CI's run_import_pins: a workflow change runs it too.
+reset
+put .github/workflows/x.yml 'name: x'
+g add -A && g commit -qm 'ci: a workflow'
+out="$(dry)"
+if has "$out" 'scanner: apps/web/test/program-imports.test.ts'; then
+  ok 'a workflow change runs the import-pins guard (as CI does)'
+else bad 'workflow change: the import-pins guard' "$out"; fi
+
 # 🔴 The working tree is not the push (2026-11-17: an applied mutation patch made a db push run the
 # editor suites). An uncommitted edit is reported, never traced.
 reset
@@ -145,6 +154,13 @@ if [ "$code" -eq 2 ] && printf '%s' "$out" | grep -qF 'apps/web/test/bypass-is-c
   ! printf '%s' "$out" | grep -qF 'pages-need-a-session'; then
   ok 'a required scanner the grep no longer finds: exit 2, naming it'
 else bad "missing scanner: exit $code" "$out"; fi
+
+reset
+g rm -q apps/web/test/program-imports.test.ts && g commit -qm 'test: drop the guard'
+out="$(cd "$repo" && CI= GITHUB_ACTIONS= node "$script" --base origin/main --dry-run 2>&1)"; code=$?
+if [ "$code" -eq 2 ] && printf '%s' "$out" | grep -qF 'apps/web/test/program-imports.test.ts'; then
+  ok 'the import-pins guard is a required scanner: missing, exit 2, naming it'
+else bad "missing import-pins guard: exit $code" "$out"; fi
 
 # The real repo, dry: the derivation finds every required scanner.
 out="$(cd "$real" && node "$script" --list-scanners 2>&1)"; code=$?

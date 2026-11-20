@@ -97,50 +97,39 @@ printf 'more\n' >>"$R/docs/a.md"
 case_ "a push runs everything" "true true true true" push
 
 # ── run_import_pins (docs/plans/td-program-tables-import-graph.md D7): one case per scope entry ────
-# pins_case <name> <want>: like case_, but compares run_import_pins alone.
-pins_case() {
-  local name="$1" want="$2"
-  g add -A && g commit -qm "$name" --allow-empty
-  local got
+# One case per scope entry, plus the paths it skips: `path|want`, each its own commit on BASE, and
+# only run_import_pins compared. B1: docs/privacy/data-inventory.md skips it, and the privacy-docs
+# test still runs, because it stays in the unscoped program-tables-stay-dark.test.ts.
+PINS_CASES=(
+  "docs/privacy/data-inventory.md|false"
+  "packages/db/scripts/x.ts|false"
+  "packages/evals/src/x.ts|false"
+  ".claude/skills/x.md|false"
+  "apps/web/lib/x.css|true"
+  "packages/db/src/x.ts|true"
+  "packages/shared/src/x.ts|true"
+  "packages/engine/src/x.ts|true"
+  "packages/evals/package.json|true"
+  "packages/evals/tsconfig.json|true"
+  ".npmrc|true"
+  "pnpm-lock.yaml|true"
+  "pnpm-workspace.yaml|true"
+  ".github/scripts/changed-scopes.mjs|true"
+  ".github/workflows/x.yml|true"
+)
+for spec in "${PINS_CASES[@]}"; do
+  IFS='|' read -r path want <<<"$spec"
+  mkdir -p "$(dirname "$R/$path")" && printf '// x\n' >>"$R/$path"
+  g add -A && g commit -qm "pins $path"
   got="$(scopes pull_request "$BASE" | sed -n 's/^run_import_pins=//p')"
-  if [ "$got" = "$want" ]; then ok "import pins: $name → $want"; else no "import pins: $name: want '$want', got '$got'"; fi
+  if [ "$got" = "$want" ]; then ok "import pins: $path → $want"; else no "import pins: $path: want '$want', got '$got'"; fi
   g reset -q --hard "$BASE"
-}
-# B1: the privacy-docs test stays in the unscoped program-tables-stay-dark.test.ts, so a skip here
-# skips no privacy check.
-mkdir -p "$R/docs/privacy" && printf '# inventory\n' >"$R/docs/privacy/data-inventory.md"
-pins_case "docs/privacy/data-inventory.md alone skips them" false
-mkdir -p "$R/packages/db/scripts" && printf 'x\n' >"$R/packages/db/scripts/x.ts"
-pins_case "a packages/db/scripts file skips them" false
-mkdir -p "$R/packages/evals/src" && printf 'x\n' >"$R/packages/evals/src/x.ts"
-pins_case "a packages/evals file skips them" false
-mkdir -p "$R/.claude/skills" && printf 'x\n' >"$R/.claude/skills/x.md"
-pins_case "a .claude/ file skips them" false
-printf 'a {}\n' >"$R/apps/web/lib/x.css"
-pins_case "an apps/web stylesheet runs them" true
-printf 'x\n' >"$R/packages/db/src/x.ts"
-pins_case "a packages/db/src file runs them" true
-mkdir -p "$R/packages/shared/src" && printf 'x\n' >"$R/packages/shared/src/x.ts"
-pins_case "a packages/shared/src file runs them" true
-mkdir -p "$R/packages/engine/src" && printf 'x\n' >"$R/packages/engine/src/x.ts"
-pins_case "a packages/engine/src file runs them" true
-mkdir -p "$R/packages/evals" && printf '{}\n' >"$R/packages/evals/package.json"
-pins_case "a nested package.json runs them" true
-mkdir -p "$R/packages/evals" && printf '{}\n' >"$R/packages/evals/tsconfig.json"
-pins_case "a nested tsconfig.json runs them" true
-printf 'x\n' >"$R/.npmrc"
-pins_case ".npmrc runs them" true
-printf 'x\n' >"$R/pnpm-lock.yaml"
-pins_case "the lockfile runs them" true
-printf 'x\n' >"$R/pnpm-workspace.yaml"
-pins_case "pnpm-workspace.yaml runs them" true
-printf '// x\n' >>"$R/.github/scripts/changed-scopes.mjs"
-pins_case "changed-scopes.mjs runs them" true
+done
 got="$(cd "$R" && node --input-type=module -e "
-  import { importPinsInScope } from './.github/scripts/changed-scopes.mjs';
-  console.log(importPinsInScope([]), importPinsInScope(['docs/a.md']));
+  import { importPinsInScope, runImportPins } from './.github/scripts/changed-scopes.mjs';
+  console.log(importPinsInScope([]), importPinsInScope(['docs/a.md']), runImportPins(['.github/workflows/x.yml']), runImportPins(['.github/SECURITY.md']));
 ")"
-[ "$got" = "true false" ] && ok "import pins: an empty list runs them, a docs list does not" || no "importPinsInScope([]), ([docs]): got '$got'"
+[ "$got" = "true false true false" ] && ok "import pins: an empty list runs them, a docs list does not; a workflow does, an inert .github/ file does not" || no "importPinsInScope / runImportPins: got '$got'"
 
 # Fail-safes that need no commit.
 got="$(scopes pull_request "" | tr '\n' ' ')"
@@ -400,12 +389,20 @@ if grep -nE "(run_(mutations|build|e2e|import_pins)|RUN_(MUTATIONS|BUILD|E2E|IMP
 else
   ok "no workflow, nor the import-pins guard, compares a scope with true"
 fi
-# The guard skips only on a literal 'false': unset, empty or mistyped runs it.
-if grep -qF "process.env.RUN_IMPORT_PINS === 'false'" "$GUARD"; then
-  ok "the import-pins guard skips only on RUN_IMPORT_PINS === 'false'"
+# The guard skips only on a literal 'false': unset, empty or mistyped runs it. The skip is that one
+# exact call, it is never a `runIf`, and it is the only line outside a comment that reads the flag.
+if grep -qF "describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(" "$GUARD"; then
+  ok "the import-pins guard skips only on describe.skipIf(RUN_IMPORT_PINS === 'false')"
 else
-  no "the import-pins guard's skip does not read RUN_IMPORT_PINS === 'false'"
+  no "the import-pins guard's skip is not describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')("
 fi
+if grep -nE '\b(describe|it|test)\.runIf\b' "$GUARD"; then
+  no "the import-pins guard uses runIf (a skip that runs only on a match)"
+else
+  ok "the import-pins guard uses no runIf"
+fi
+reads="$(grep -vE '^[[:space:]]*(\*|//|/\*)' "$GUARD" | grep -c 'RUN_IMPORT_PINS')"
+[ "$reads" -eq 1 ] && ok "the import-pins guard reads RUN_IMPORT_PINS once, outside comments" || no "the import-pins guard reads RUN_IMPORT_PINS $reads times outside comments (want 1)"
 
 echo
 echo "changed-scopes.test.sh: $pass passed, $fail failed"

@@ -801,7 +801,7 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   tsconfig, from an explicit directory, never `process.cwd()`), compare the **resolved file**, and
   fail closed on a first-party specifier that does not resolve. Pin the premises the resolver rests
   on (the alias, `exports`, the bundler config) as assertions. `importsOf` in
-  `apps/web/test/source-scan.ts`; the guard is `apps/web/test/program-imports.test.ts`.
+  `apps/web/test/import-graph.ts`; the guard is `apps/web/test/program-imports.test.ts`.
 
 - 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
   mutation patch is still applied in your worktree.** `pnpm verify` runs `db:mutations`, which
