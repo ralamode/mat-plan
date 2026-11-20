@@ -179,6 +179,12 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
   // Changes nothing: a fresh load still has the original order.
   await page.unroute(routine);
   await page.goto(routine, { waitUntil: 'networkidle' });
+  // Named first, so a replay that ran fails here with its cause: the posted routine (practice removed)
+  // leaves the editor empty, and `routineOrder` would otherwise just time out waiting for a row.
+  await expect(
+    page.getByText('No activities yet', { exact: false }),
+    'a replay ran: the routine was saved',
+  ).toHaveCount(0);
   expect(await routineOrder(page)).toEqual(before);
 });
 

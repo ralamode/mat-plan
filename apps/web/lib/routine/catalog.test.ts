@@ -93,15 +93,19 @@ describe('the day page shows the same Life items for every stored routine (the p
 });
 
 describe('buildRoutineBlocks', () => {
-  it('a run of life keys is one block; strength is a singleton; other namespaces are skipped', () => {
+  it('a contiguous run of life keys is one block; strength splits runs; other namespaces are skipped', () => {
+    // Two life keys stand in for a longer Life list: `buildRoutineBlocks` does not check membership.
     expect(
       buildRoutineBlocks([
-        { key: STRENGTH_KEY },
+        { key: 'life:a' },
         { key: 'checkin:rice_bucket' },
+        { key: 'life:b' },
+        { key: STRENGTH_KEY },
         { key: PRACTICE },
         { key: 'finisher:sled' },
       ]),
     ).toEqual([
+      { kind: 'life', keys: ['a', 'b'] },
       { kind: 'strength' },
       { kind: 'life', keys: [ACTIVITY_TYPE_KEYS.wrestling_practice] },
     ]);
@@ -149,7 +153,10 @@ describe('savedOrder — what Save sends', () => {
   });
 
   it('saves strength alone, as the never-empty member, when nothing is left', () => {
-    expect(savedOrder(routine([]), [])).toEqual(buildDefaultRoutine([STRENGTH_KEY]));
+    // The reachable path: an athlete who stored practice alone removes it.
+    expect(savedOrder(routine([{ key: PRACTICE }]), [])).toEqual(
+      buildDefaultRoutine([STRENGTH_KEY]),
+    );
   });
 });
 

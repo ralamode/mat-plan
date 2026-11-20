@@ -67,7 +67,7 @@ export const ROUTINE_CATALOG: readonly string[] = [
  * "the neutral default", so a profile creator leaves it NULL. `strength` alone may still be written, by
  * `savedOrder`, as the catalog's never-empty member when an editor save leaves nothing listed: that is
  * a saved routine, not the first-run default. If PROF-1 / TEN-1 / ONB-2 ever needs to WRITE a starter
- * routine from `packages/db`, this const and the two registries it derives from have to move to
+ * routine from `packages/db`, this const and the registry it derives from (`LIFE_ACTIVITIES`) have to move to
  * `packages/shared` first — `packages/db` cannot import `apps/web`.
  */
 export const NEUTRAL_DEFAULT_KEYS: readonly string[] = [STRENGTH_KEY];
@@ -165,8 +165,10 @@ export function routineCatalogItems(): RoutineCatalogItem[] {
  * carried along. `initial` is the athlete's resolved routine and `listed` the editor's current items.
  *
  * - **Carried:** every item of `initial` whose key the editor does not list (today `strength`), kept at
- *   its place among the listed ones and with its `conditional` marker, so a day-conditional strength
- *   stays day-conditional through a save that never showed it.
+ *   its slot and with its `conditional` marker, so a day-conditional strength stays day-conditional
+ *   through a save that never showed it. The listed items fill `initial`'s listed slots in the editor's
+ *   order, and any extra ones follow; with more than one listed item, a carried item's place relative
+ *   to a given listed item can therefore shift.
  * - **Nothing left** (no listed item and nothing carried): `strength` alone, as the catalog's
  *   never-empty member. An empty order is not authorable (the write path refuses it), and the read side
  *   would otherwise re-expand it.
