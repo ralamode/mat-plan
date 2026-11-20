@@ -60,10 +60,11 @@ async function openLitCard(page: Page): Promise<void> {
     await page.route('**/sign-in', async (route) => {
       const res = await route.fetch();
       const headers = res.headers();
+      // Only style-src's nonce: Clerk's scripts still load, its injected <style> is refused.
       headers['content-security-policy'] = headers['content-security-policy']!.replace(
-        /'nonce-[^']+'/g,
-        "'nonce-AAAAAAAAAAAAAAAAAAAAAA'",
-      ).replace(/style-src [^;]*/, "style-src 'self'");
+        /(style-src[^;]*?)'nonce-[^']+'/,
+        "$1'nonce-AAAAAAAAAAAAAAAAAAAAAA'",
+      );
       await route.fulfill({ response: res, headers });
     });
   }
