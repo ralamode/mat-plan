@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 5ae24dd7..21546819 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1289,7 +1289,7 @@ const legacyMovement = () =>
+   and(
+     movementIsGlobal(),
+     or(
+-      sql`(${movementIsCatalog()}) IS NOT TRUE`,
++      sql`true`,
+       inArray(schema.movements.publicId, [...MOVEMENT_SEED_PUBLIC_IDS]),
+     ),
+   );
