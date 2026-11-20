@@ -351,8 +351,7 @@ a would-fail change are each skipped and counted.
 - **Q8. One alarm.** The report's count of movements with a seed id reads the list PR 3 deletes. It
   is the only check that sees an old built-in on a shared slug that was hand-given a kind of
   training. Recommended: keep it as a count of `movements` rows whose id has the seed's prefix
-  (`SEED_PUBLIC_ID_PREFIX`, which every seeded movement's id carries), so it no longer needs the
-  list. Gate 4 removes the restore path; a hand `UPDATE` remains, and the corrections rules are its
+  (`SEED_PUBLIC_ID_PREFIX`, which every seeded movement's id carries), so it no longer needs the list. It is an alarm that must read 0, and is never used to select rows for a write or a delete. That is why the prefix is sound here, while `catalog-movements.ts:391-396` and `registry.ts:674-677` forbid it as a selector; PR 3 rewrites those comments to say so. Gate 4 removes the restore path; a hand `UPDATE` remains, and the corrections rules are its
   control.
 
 ## Review-response log
@@ -397,3 +396,8 @@ finding is accepted.
 | 27  | safety, P2      | An Applied row records too little once the code is gone                               | Each row cites its PR and last commit                                              |
 | 28  | safety, P2      | The rehearsal's copy of production, and what may be pasted from it                    | A3 point 7; a Risks entry                                                          |
 | 29  | both, P2        | Wording: "unchanged", the gates cell, mutation 505, Q8's "no path"                    | Corrected                                                                          |
+
+**Round 3, 2026-11-20.** A final check by both lenses on draft 3: the safety lens said SHIP, and the
+correctness lens found one non-blocking gap. Both of their last points are applied: the two pins on
+the shadow count's filter (mutation 518 and A2-i's E5 pin), and why a prefix count is sound as an
+alarm where the code forbids it as a selector.
