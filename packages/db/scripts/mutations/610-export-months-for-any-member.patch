@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
+index 2bd7533b..08e73a00 100644
+--- a/packages/db/src/queries/export-month.ts
++++ b/packages/db/src/queries/export-month.ts
+@@ -415,7 +415,6 @@ export function loggedMonths(
+       and(
+         isLiveProfile(args.profilePublicId, args.scope),
+         isNull(schema.entries.deletedAt),
+-        isOwnerOf(args.scope),
+       ),
+     )
+     .orderBy(sql`to_char(${schema.entries.activityDate}, 'YYYY-MM') desc`);

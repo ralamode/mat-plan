@@ -276,25 +276,6 @@ export type ProgramOnDay = { blockId: number; programPublicId: string; name: str
  */
 export type CurrentProgram = ProgramOnDay & { activeFrom: string; activeTo: string | null };
 
-/**
- * `DayPlan.currentPrograms` (R7): each program the athlete is on now or starts later, ONCE, placed
- * by its open or upcoming row's `idx`, else by its closed row's (`schema.ts` → `programAssignments`).
- * **Ordered `(rank, idx, id)`** (ADR 0007 Amendment 5): every program that stays (an open or upcoming
- * row) comes before every program ending today, then by `idx`, then by row id.
- * Exported within `queries/day/` for step 6c's program order, its second consumer.
- */
-/**
- * **A program ends today** (ADR 0007 Amendment 5; C37): its placing row has a last day and has
- * started. The one rule for `currentPrograms`' rank (such programs sort after every one that stays)
- * and for `DayPlan.currentPrograms[].endsToday`, so the two can never disagree.
- */
-function programEndsToday(
-  row: { activeFrom: string; activeTo: string | null },
-  today: string,
-): boolean {
-  return row.activeTo !== null && row.activeFrom <= today;
-}
-
 export type CurrentProgramRow = Pick<
   DayAssignment,
   | 'id'
@@ -307,6 +288,13 @@ export type CurrentProgramRow = Pick<
   | 'current'
 >;
 
+/**
+ * `DayPlan.currentPrograms` (R7): each program the athlete is on now or starts later, ONCE, placed
+ * by its open or upcoming row's `idx`, else by its closed row's (`schema.ts` → `programAssignments`).
+ * **Ordered `(rank, idx, id)`** (ADR 0007 Amendment 5): every program that stays (an open or upcoming
+ * row) comes before every program ending today, then by `idx`, then by row id.
+ * Exported within `queries/day/` for step 6c's program order, its second consumer.
+ */
 export function currentPrograms(
   assignments: readonly CurrentProgramRow[],
   today: string,
@@ -333,6 +321,18 @@ export function currentPrograms(
       activeFrom: a.activeFrom,
       activeTo: a.activeTo,
     }));
+}
+
+/**
+ * **A program ends today** (ADR 0007 Amendment 5; C37): its placing row has a last day and has
+ * started. The one rule for `currentPrograms`' rank (such programs sort after every one that stays)
+ * and for `DayPlan.currentPrograms[].endsToday`, so the two can never disagree.
+ */
+function programEndsToday(
+  row: { activeFrom: string; activeTo: string | null },
+  today: string,
+): boolean {
+  return row.activeTo !== null && row.activeFrom <= today;
 }
 
 /**

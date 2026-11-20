@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index bdfda4da..ee805e95 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -395,7 +395,7 @@ async function lockedCreate(
+   input: Parameters<typeof addProfile>[2],
+ ): Promise<CreateProfileResult> {
+   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
+-  await setLocalLockTimeout(exec);
++  void setLocalLockTimeout;
+   // Held until the transaction ends. Reached through the household row, so the tenant id is never
+   // unwrapped here. No row means the household is gone (an erasure mid-call): `refused`, so the
+   // count never runs without the lock.

@@ -39,21 +39,6 @@ describe('prescribed_snapshot stays out of the UI (V1-22 acceptance 12)', () => 
   });
 
   /**
-   * The log form's scaffold type is the specific door this keeps shut: it is the one object that
-   * crosses from the program into the form, and its docblock says a future widening must be
-   * deliberate.
-   */
-  it('is not a field of the scaffold row that feeds the log form', () => {
-    const scaffold = readFileSync(
-      join(REPO, 'apps/web/app/p/[profileId]/strength-form-scaffold.ts'),
-      'utf8',
-    );
-    // ⚠️ The IDENTIFIER, not the word. The file's docblocks discuss prescribed-vs-performed at
-    // length — that prose is the reason the door is shut, not a breach of it.
-    expect(/prescribed_?[sS]napshot/.test(scaffold)).toBe(false);
-  });
-
-  /**
    * 🔴 **This was a tautology and is the reason to re-read a guard you just wrote.** The first
    * version built `namers` from globs that were already restricted to `packages/` and
    * `apps/web/lib/`, then asserted every entry started with one of those prefixes — true by

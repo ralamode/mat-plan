@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/day/log-row.ts b/packages/db/src/writers/day/log-row.ts
+index 23f0a3d8..34ef4b54 100644
+--- a/packages/db/src/writers/day/log-row.ts
++++ b/packages/db/src/writers/day/log-row.ts
+@@ -414,7 +414,7 @@ export async function logRow(
+         const revived = await tx.transaction(async (sp) => {
+           const [row] = await sp
+             .update(schema.entries)
+-            .set({ ...UNHIDE, clientId: write.clientId, ...frozen, updatedAt: sql`now()` })
++            .set({ ...UNHIDE, ...frozen, updatedAt: sql`now()` })
+             .where(
+               and(
+                 eq(schema.entries.id, pick.id),

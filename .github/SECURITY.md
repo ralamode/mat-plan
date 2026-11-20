@@ -125,14 +125,34 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     authorization and there is not meant to be: profile tiles are a UX switch, not a security
     boundary (AGENTS.md). The shared access code is also still shared and still unrevocable; `1d`
     deletes it.
+- **Accepted residual: a write's day window takes "today" from the client's `tz` cookie** _(the
+  maintainer, 2026-11-19; found by `V1-9b` B2's security lens)_. Every write bounded by the writable
+  window (today and yesterday; today only for Clear this day) reads today through
+  `getActiveLocalDay()`, and the zone is whatever valid IANA name the request's cookie names. So a
+  crafted POST widens its window by one date (briefly two): three consecutive dates (briefly four)
+  instead of two for a today-and-yesterday write, and two (briefly three) instead of one for Clear
+  this day. Always only inside the caller's **own** household: the household boundary above is unaffected. It has held since V1-6c
+  (#50). Accepted, not mitigated: the window is a product rule about which days are editable, not an
+  authorization boundary.
 - Public/URL/API IDs are **UUIDv7** (non-enumerable → anti-IDOR).
 - **Middleware is NOT the auth boundary** (CVE-2025-29927) — the real checks live in the DAL, on
   every read and write. Keep Next.js patched.
 
 ## Sensitive data
 
-- Kid **bodyweight** is privileged: never returned outside the household operator, never logged,
-  never included in the LLM/MCP payload unless a scoped, explicit purpose requires it.
+- **Bodyweight** is privileged, for every profile: never returned to anyone outside the household,
+  never logged, and never included in the LLM/MCP payload unless a scoped, explicit purpose requires
+  it. No **access** rule here branches on age (`ID-1` keep-open item 5). _(Reworded with the
+  maintainer, 2026-11-19.)_
+  - **In the app**, anyone signed in to the household may see it.
+  - **The export** goes to the household's owner logins only. The authority is the membership row's
+    role, read once by `getHouseholdScope()` and narrowed by `ownerScope()` in `buildExportEntries`;
+    `isOwnerOf` on `loggedMonths` makes a scope cast past that narrowing read zero months (`db:verify`
+    plus mutation 610). It reads no column, so it is not a database-side check. "Owner" is every login
+    a correction bound as owner, not necessarily one person. An adult athlete's access to their own is
+    `ID-1`'s question.
+  - **A future product rule, recorded for `ID-1`:** any feed or sharing feature never shows a child's
+    bodyweight; an adult may choose to publish their own.
 
 ## Input
 
@@ -353,7 +373,7 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 - **A `high` or `critical` advisory in the PRODUCTION dependency tree fails the build** (SEC-5,
   [plan](../docs/plans/sec-5-verify-in-ci.md)); this is the one statement of the rule. **Scope** is
   the `--prod` tree only, the **threshold** is `high`, and the **trigger** is every pull request and
-  every push to `main` — `pnpm audit:check` in `ci.yml`'s `quality` job, the same command local
+  every CI run on `main` (a burst of pushes coalesces to at most two, each auditing the whole tree) — `pnpm audit:check` in `ci.yml`'s `quality` job, the same command local
   `pnpm verify` runs, so there is one definition and not two. The dev tree is deliberately **not**
   gated: it holds a `high` whose patched version was never published, so gating it would wedge `main`
   with no edit that unwedges it ([tech-debt](../docs/tech-debt.md)).

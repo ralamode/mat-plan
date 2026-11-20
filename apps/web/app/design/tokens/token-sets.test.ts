@@ -223,10 +223,13 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
  * ⚠️ This is a **characterization test, not an endorsement.** AGENTS.md's rule for this PR was
  * "report a contrast failure, do not loosen the test", and the honest report is a number that fails
  * loudly if anyone changes it. Neither pair is rendered by any route today, which is the only reason
- * `e2e/a11y.spec.ts` has been green: the `destructive` button variant's one call site (V1-24 3b-bw,
- * `bodyweight-amend.tsx`'s Clear) overrides its fill to `bg-transparent`, so the failing pair is not
- * rendered, and no screen puts `text-muted-foreground` on
- * `bg-muted`. The preview page deliberately does NOT render either pair — rendering them would
+ * `e2e/a11y.spec.ts` has been green: no screen puts red text on a red tint (the `destructive` button
+ * has been a solid fill since V1-9b B2-prep, pinned in `app/destructive-tokens.test.ts`), and none
+ * puts `text-muted-foreground` on `bg-muted`.
+ *
+ * ⚠️ The two tint figures may be wrong: `withAlpha` blends in linear light, browsers in gamma space,
+ * where the same pair measures about 3.99 light / 4.63 dark (`status-line.tsx` records a measured
+ * 3.97:1). UI-3 re-measures them; nothing restates them elsewhere. The preview page deliberately does NOT render either pair — rendering them would
  * redden the gate over a pre-existing defect this PR is not allowed to fix (changing `--destructive`
  * or `--muted` would change the live app's appearance, which UI-4 promised not to do).
  *
@@ -243,9 +246,9 @@ describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to
     expect(ratio).toBeLessThan(AA_NORMAL);
   });
 
-  it('the destructive BUTTON variant is 4.39:1 in light mode (needs 4.5)', () => {
-    // `buttonVariants.destructive` is `bg-destructive/10 text-destructive` — the text sits on a 10%
-    // tint of itself over the page background.
+  it('red text on a 10% red tint is 4.39:1 in light mode (needs 4.5)', () => {
+    // The old `destructive` button's look (`bg-destructive/10 text-destructive`), no longer the
+    // button: the text sits on a 10% tint of itself over the page background. A UI-3 input.
     const ratio = ratioOf(
       root['destructive']!,
       withAlpha(root['destructive']!, 10),
@@ -255,7 +258,7 @@ describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to
     expect(ratio).toBeLessThan(AA_NORMAL);
   });
 
-  it('…and 3.04:1 in dark mode, on a card', () => {
+  it('…and on a 20% tint, 3.04:1 in dark mode, on a card', () => {
     const ratio = ratioOf(
       dark['destructive']!,
       withAlpha(dark['destructive']!, 20),

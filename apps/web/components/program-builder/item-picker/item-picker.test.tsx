@@ -22,6 +22,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }
 import { householdPickerOptions, pickerOptions } from '@/app/design/program/picker-options';
 import type { MovementOptionDTO } from '@/lib/movements/movement-option';
 import { MOVEMENT_PICKER_COPY } from '@/lib/movements/movement-picker-copy';
+import { expandBrowse } from '@/test/movement-picker-fixtures';
 
 import {
   addedText,
@@ -91,7 +92,19 @@ const opener = () =>
   [...document.querySelectorAll('button')].find(
     (button) => button.textContent === ITEM_PICKER_COPY.open,
   )!;
-const openPicker = () => fireEvent.click(opener());
+/** Opens the sheet as a person does: the browse tree's groups as they start. */
+const openSheet = () => fireEvent.click(opener());
+/**
+ * Opens the picker with every browse group open (CAT-3 B3): the preview's list is longer than
+ * `BROWSE_OPEN_AT_MOST`, so its kinds and families start closed, and most tests here are about the
+ * selection, not the tree (movement-picker's own suite covers that).
+ */
+const openPicker = () => {
+  openSheet();
+  // A full workout opens nothing: there is then no sheet to open groups in.
+  const dialog = document.querySelector('[role="dialog"]');
+  if (dialog) expandBrowse(dialog);
+};
 const sheet = () => screen.getByRole('dialog');
 const row = (name: string) =>
   within(sheet()).getByRole('checkbox', { name: new RegExp(`^${name}`) });
@@ -490,7 +503,11 @@ describe('the item picker (FAM-1 9)', () => {
 
     it('after Create, focus is on the item’s row; after Cancel, on the create button', async () => {
       editor();
-      openForm();
+      // A plain open: the custom section holds more than five, so it starts folded, and only the
+      // new selection's seed (CAT-3 B3) can put the row on screen to take focus.
+      openSheet();
+      search('Bear crawl');
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
       fireEvent.change(within(sheet()).getByLabelText(ITEM_PICKER_COPY.tracks), {
         target: { value: TRACKING_TYPE.reps },
       });
@@ -818,9 +835,60 @@ describe('the item picker (FAM-1 9)', () => {
       expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false');
     });
 
-    it('Enter in the search ticks the one match and says so', async () => {
+    /** The browse group a row is drawn in: the disclosure in the heading above its list. */
+    const groupOf = (el: HTMLElement) =>
+      el.closest('ul')!.parentElement!.previousElementSibling!.querySelector('button')!;
+
+    it('🔴 Select on a ticked item in a closed group focuses its row (CAT-3 B3: reveal)', () => {
       editor();
       openPicker();
+      fireEvent.click(row('Wall sit'));
+      expect(row('Wall sit').getAttribute('aria-checked')).toBe('true');
+      // The person closes the group the ticked row is in: the row leaves the screen.
+      fireEvent.click(groupOf(row('Wall sit')));
+      expect(within(sheet()).queryByRole('checkbox', { name: /^Wall sit/ })).toBeNull();
+      fireEvent.click(within(sheet()).getByRole('button', { name: ITEM_PICKER_COPY.newItem }));
+      const name = within(sheet()).getByLabelText(ITEM_PICKER_COPY.name);
+      fireEvent.change(name, { target: { value: 'wall sit' } });
+      fireEvent.keyDown(name, { key: 'Enter' });
+      // Already ticked: Select changes no selection, so only `reveal` can open the group.
+      fireEvent.click(
+        within(sheet()).getByRole('button', { name: selectExistingText('Wall sit') }),
+      );
+      expect(document.activeElement).toBe(row('Wall sit'));
+    });
+
+    it('🔴 a full workout: the new item, not ticked, is focused in a custom section the person closed', async () => {
+      const almost = {
+        ...heavyADraft,
+        items: Array.from({ length: MAX_WORKOUT_ITEMS - 1 }, (_, i) => ({
+          ...heavyADraft.items[4]!,
+          prescriptionClientId: `00000000-0000-7000-8000-0000000${String(1000 + i)}`,
+        })),
+      };
+      editor({}, almost);
+      openSheet();
+      search('Sprawls');
+      fireEvent.click(row('Sprawls'));
+      search('');
+      // The custom section holds more than five; close it if the tick's seed opened it.
+      const custom = within(sheet()).getByRole('button', {
+        name: (n) => n.startsWith(MOVEMENT_PICKER_COPY.household + ','),
+      });
+      if (custom.getAttribute('aria-expanded') === 'true') fireEvent.click(custom);
+      expect(custom.getAttribute('aria-expanded')).toBe('false');
+      search('Bear crawl');
+      fireEvent.click(within(sheet()).getByRole('button', { name: newItemLabel('Bear crawl') }));
+      typeReps();
+      pressCreate();
+      await waitFor(() => expect(document.activeElement).toBe(row('Bear crawl')));
+      expect(row('Bear crawl').getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('Enter in the search ticks the one match and says so', async () => {
+      editor();
+      // A plain open: the cleared search shows the closed tree, and the tick's seed opens its groups.
+      openSheet();
       search('Wall sit');
       fireEvent.keyDown(within(sheet()).getByRole('searchbox'), { key: 'Enter' });
       await waitFor(() =>

@@ -216,6 +216,18 @@ export const MAX_PROGRAM_WORKOUTS = 50;
 export const MAX_DAY_SLOTS = 30;
 
 /**
+ * **The longest list a reorder may send** (maintainer, 2026-11-19: "cap at 50"). A structural
+ * bound, not one of the caps above: a longer `programOrderSchema.programPublicIds` fails the
+ * parse, so a huge body is refused as `invalid` before anything is read or written. Nothing answers
+ * `limit_reached` for it.
+ *
+ * ⚠️ **It is NOT a cap on how many programs an athlete may be on.** Put on has none. An athlete on
+ * more than 50 current programs could not reorder, because the writer takes the full list or
+ * nothing. That is accepted: 50 is far above any real use.
+ */
+export const MAX_ORDER_PROGRAMS = 50;
+
+/**
  * **Whether a household already has `MAX_HOUSEHOLD_ITEMS` items of its own**, from the item
  * picker's options: the one count the server (`newItem`), the picker's own "full" line and the
  * preview's fake are to share, so the three cannot come to disagree about which options are the
@@ -525,12 +537,18 @@ export type TakeOff = z.infer<typeof takeOffSchema>;
  * **The full order, every time**: `programPublicIds` must be a permutation of the athlete's
  * `DayPlan.currentPrograms`, each program once. The schema refuses a repeat; the writer refuses
  * (`invalid`) a list that leaves one out or names one the athlete is not on.
+ *
+ * **At most `MAX_ORDER_PROGRAMS` ids** (maintainer, 2026-11-19: "cap at 50"): a longer list fails
+ * the parse, so the action answers `invalid` before the writer runs. It bounds the body, not the
+ * programs an athlete may be on.
  */
 export const programOrderSchema = z.object({
   profilePublicId: lowerCaseUuidSchema,
-  programPublicIds: z.array(lowerCaseUuidSchema).min(1).refine(distinct, {
-    message: 'each program once',
-  }),
+  programPublicIds: z
+    .array(lowerCaseUuidSchema)
+    .min(1)
+    .max(MAX_ORDER_PROGRAMS)
+    .refine(distinct, { message: 'each program once' }),
 });
 export type ProgramOrder = z.infer<typeof programOrderSchema>;
 
