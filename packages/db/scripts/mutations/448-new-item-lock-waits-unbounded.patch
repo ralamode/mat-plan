@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
+index 10198006..6e073206 100644
+--- a/packages/db/src/writers/program/new-item.ts
++++ b/packages/db/src/writers/program/new-item.ts
+@@ -78,7 +78,7 @@ async function addOrSelect(
+   library: readonly CatalogMovement[],
+ ): Promise<NewItemResult> {
+   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
+-  await setLocalLockTimeout(exec);
++  void setLocalLockTimeout;
+   // Held until the transaction ends. Reached through the household row, so the tenant id is never
+   // unwrapped here. No row means the household is gone: `not_found`, so the count below never runs
+   // without the lock.

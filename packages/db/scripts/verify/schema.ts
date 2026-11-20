@@ -66,8 +66,7 @@ import {
   assignmentDueOn,
   assignmentOnDay,
 } from '../../src/queries/program-assignments';
-import { householdHasProgram, programDayRows } from '../../src/queries/program-day';
-import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import { programDayRows } from '../../src/queries/program-day';
 import { prescribedSnapshotsFor } from '../../src/writers/prescribed-snapshot';
 import {
   ASSIGNMENT_OPEN_UNIQUE_INDEX,
@@ -124,8 +123,7 @@ import {
  * - step 4a-ii ✅: the append arbiters, the row arbiter, the recreated superset-order index under a
  *   purge, the one-way CHECKs, and the two cross-household audits (ADR 0007 A2 §6, A3);
  * - step 4b: the XOR both ways, slot keys, quantity keys, the scoped `client_id`;
- * - step 5b ✅: the legacy reads are byte-identical with a newer template block present, and
- *   `householdHasProgram` counts legacy blocks only;
+ * - step 5b ✅: the legacy reads are byte-identical with a newer template block present;
  * - step 5: assignments and erasure.
  *
  * What a module can rely on when it runs, and the helpers to import, are in `./harness` →
@@ -1228,55 +1226,6 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
   console.log(
     '✓ FAM-1 5b: programDayRows and the snapshot writer read the legacy block only, byte-identical with a newer template block on the same day',
   );
-
-  // householdHasProgram counts LEGACY blocks only, in a household of its own.
-  await rolledBack(async (tx) => {
-    const exec = asTx(tx);
-    const pg = asDb(tx);
-    const [hh] = await tx
-      .insert(schema.households)
-      .values({ publicId: newId(), name: 'FAM-1 5b probe' })
-      .returning({ id: schema.households.id });
-    const FRESH_SCOPE = householdScopeForScript(hh.id);
-    assert.equal(
-      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
-      false,
-      'FAM-1 5b: no blocks: no program',
-    );
-    const clientId = newId();
-    await insertProgramBlockOwnedBy(exec, FRESH_SCOPE, {
-      clientId,
-      slug: 'fam-1-5b-only-template',
-      name: 'T',
-      notes: null,
-    });
-    const t = await programBlockByClientId(exec, FRESH_SCOPE, clientId);
-    assert.ok(t && !t.deleted, 'FAM-1 5b: the template block exists and is live');
-    assert.equal(
-      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
-      false,
-      'FAM-1 5b: a template block alone is not "a program" for this read',
-    );
-    const [legacyBlock] = await tx
-      .insert(schema.programBlocks)
-      .values({ publicId: newId(), householdId: hh.id, slug: 'fam-1-5b-legacy', name: 'L' })
-      .returning({ id: schema.programBlocks.id });
-    assert.equal(
-      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
-      true,
-      'FAM-1 5b: a live legacy block is',
-    );
-    await tx
-      .update(schema.programBlocks)
-      .set({ deletedAt: new Date() })
-      .where(eq(schema.programBlocks.id, legacyBlock.id));
-    assert.equal(
-      await householdHasProgram(pg, { scope: FRESH_SCOPE }),
-      false,
-      'FAM-1 5b: a hidden legacy block is not',
-    );
-  });
-  console.log('✓ FAM-1 5b: householdHasProgram counts a live legacy block, never a template one');
 }
 
 // ── FAM-1 step 4a-ii ────────────────────────────────────────────────────────────────────────────────

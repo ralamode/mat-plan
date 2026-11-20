@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   BUILDER_COPY,
+  COPY_COPY,
   copyTitle,
   copyToLabel,
   EDITOR_COPY,
@@ -13,7 +14,6 @@ import {
   startingNamesText,
 } from '../components/program-builder/builder-text';
 import { PROGRAMS_PATH } from '../components/program-builder/routes';
-import { APP_HOME_PATH } from '../lib/constants';
 import {
   expectLinkTargets,
   expectNoAxeViolations,
@@ -21,6 +21,7 @@ import {
   expectTapTargets,
 } from './a11y-checks';
 import { DESKTOP_VIEWPORT, expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
+import { openPrograms } from './steps';
 
 /**
  * FAM-1 7b-i and 7b-ii — the builder's four real pages (the Programs list, a program's page, a
@@ -47,12 +48,7 @@ async function expectTheBar(page: Page, context: string): Promise<void> {
 
 /** Home → Programs → the fixture program, by taps; answers the program page's URL. */
 async function reachProgram(page: Page): Promise<string> {
-  await page.goto(APP_HOME_PATH);
-  await page
-    .getByRole('navigation', { name: 'Household' })
-    .getByRole('link', { name: BUILDER_COPY.programsNavLink })
-    .click();
-  await expect(page).toHaveURL(PROGRAMS_PATH);
+  await openPrograms(page);
   await page.getByRole('link', { name: familyProgram.name }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(familyProgram.name);
   return page.url();
@@ -95,6 +91,20 @@ test('the Copy dialog meets the a11y bar at 360px', async ({ page }) => {
   await expectTapTargets(page, 'Copy dialog');
   // The sheet is fixed: the document-level check cannot see inside it.
   await expectNoOverflowWithin(dialog, 'Copy dialog');
+
+  // The footer: side by side at 360px; stacked, action first, at 200% zoom on a 390px phone (195
+  // CSS px), where two columns would clip "Cancel" (`SheetFormFooter`'s container query).
+  const action = dialog.getByRole('button', { name: COPY_COPY.copy, exact: true });
+  const cancel = dialog.getByRole('button', { name: BUILDER_COPY.cancel, exact: true });
+  const [a, c] = [await action.boundingBox(), await cancel.boundingBox()];
+  expect(a && c && Math.abs(a.y - c.y) < 2, 'the footer buttons sit side by side at 360px').toBe(
+    true,
+  );
+  await page.setViewportSize({ width: 195, height: 422 });
+  const [a2, c2] = [await action.boundingBox(), await cancel.boundingBox()];
+  expect(a2 && c2 && c2.y >= a2.y + a2.height, 'Cancel sits under the action at 195px').toBe(true);
+  await expectNoOverflowWithin(dialog, 'Copy dialog at 195px');
+  await page.setViewportSize(NARROW_VIEWPORT);
 });
 
 test('the Put-on dialog meets the a11y bar at 360px, with the longest program name', async ({

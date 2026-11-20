@@ -2,9 +2,16 @@
 
 > Backlog: [plan.md](../plan.md) row FAM-1, row 12c-iii of [the FAM-1 plan](./fam-1-family-program.md)
 > (`fam-1-family-program.md:631`), decision D38 (`:97`). Branch for this plan:
-> `docs/fam-1-12c-iii-collapse-plan`. Lane C builds it. Two code PRs, named **12c-iii PR 1 and PR 2**.
+> `docs/fam-1-12c-iii-collapse-plan`. Two code PRs, named **12c-iii PR 1 and PR 2**. **Lane C builds PR 1;
+> lane B builds PR 2** _(lane C's hand-over, cleared by the board on 2026-11-20 under the maintainer's rule
+> on idle lanes; until then lane C built both)_. PR 2's files are in lane S's sections and lane C's
+> area, so they are lane B's guest edits: lane S and lane C each read their hunks, and Q1's clearance for
+> PR 2's edits in lane S's files passes to lane B.
 >
-> **Plan only. No code until the maintainer approves it.** Drafted by the plan owner on 2026-11-19 at
+> ✅ **Both PRs are merged** (2026-11-20): PR 1 as #761 and PR 2 as #765. They were the last of FAM-1's 72. Owed after them: the by-hand screen-reader pass in the test plan (the maintainer's, after merge by their
+> choice), and a small follow-up from #761's review.
+>
+> **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes. Panel round 1 is applied; its log is at the end.
 
 ## Where this sits
@@ -259,7 +266,7 @@ to `owed.test.ts` for the reader, which PR 1 deletes.
 | `apps/web/e2e/program-builder.spec.ts`                                   | EDIT       | `:334-338` ticks a one-item workout, reloads and reads the ✓. That workout MUST now arrive collapsed: the spec asserts the line, then `openCollapsed`, then reads the ✓. The journey also renames its copied workout to a 30-character unbroken name in the editor (the name field it fills at `:146`), so the line is measured at 360px (`:56`) with the longest name; _unverified_ that the copy's editor is reachable with the spec's helpers. **Lane B's spec** (`docs/features/program-builder.md:7`): a guest edit by lane C that lane B reviews. The board's clearance (Q1) covered lane S's files only, so this one is Q4 |
 | `docs/features/day-page.md`                                              | EDIT       | A new invariant (the fold is page state, decided at mount, hidden not unmounted, never offered while busy), the new files, the differences from the prototype (Q2, and the hidden body), and `openCollapsed` under "Changing it"                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-### 12c-iii PR 2: Bodyweight and Life (≈ 370 lines, about 240 of them tests; after PR 1)
+### 12c-iii PR 2: Bodyweight and Life (≈ 370 lines, about 240 of them tests; after PR 1; lane B builds it)
 
 | Path                                                    | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -276,7 +283,8 @@ to `owed.test.ts` for the reader, which PR 1 deletes.
 **Walked and needing no edit**, because the helpers above open first: `e2e/global.setup.ts:48` (it
 logs a warm-up weight on Athlete Two's today, so later visits there arrive with Bodyweight
 collapsed), `export-full-day.spec.ts:126`, `:132`, `log-bodyweight.spec.ts:69-117` (one visit; its
-reload at `:183` reads only the date) and `a11y.spec.ts:369-372` (the helper leaves the receipt open,
+reload at `:183` reads only the date; _as built_, its heading checks at `:55-57` and `:205-207` did
+need an edit: a folded heading is named "Bodyweight, 72.5 lb", so both find the region instead) and `a11y.spec.ts:369-372` (the helper leaves the receipt open,
 so the scan at `:374` still sees it).
 
 Neither PR edits `page.tsx`, `packages/shared/src/program/` or `apps/web/app/design/program/`. Each
@@ -306,6 +314,8 @@ chart in its description, and screenshots of both states at three widths.
 - **e2e at 360px:** the new tests, each with axe, tap targets and no sideways scroll in both states,
   as `day-page.spec.ts:258-260` does, and the builder journey's 30-character name. The preview walk
   covers the collapsed card (§6). By hand, before each merge: one pass with a phone's screen reader.
+  _As it went: the maintainer chose one pass after both had merged ("Merge, I'll check both after
+  (Recommended)", 2026-11-20, relayed by the board). It is owed, covering #761 and #765._
 - **`components/day/owed.test.ts`:** this step adds no line and deletes none. An opened finished part
   is reached by a tap, which the preview walk cannot load (`program-preview-a11y.spec.ts:18-22`);
   each PR's own e2e checks it. If an e2e slips out of its PR, that PR adds an `it.todo` for "12c-iii:
@@ -346,8 +356,9 @@ chart in its description, and screenshots of both states at three widths.
 - **Q1, for lane S (through the board): who edits lane S's files?** In PR 1, `logged-value-row.tsx`
   (the tick moves out, no visual change). In PR 2, the two sections, `single-value-amend.tsx` and
   `single-value-live.tsx` (one line each), their two test files, the three helpers in `e2e/steps.ts`
-  and `bodyweight-receipt.spec.ts`. **Answered by the board (2026-11-19): lane C makes them as guest edits, and lane S reviews.**
-- **Q2, for the maintainer: six differences from the accepted prototype.** Recommended: yes to all.
+  and `bodyweight-receipt.spec.ts`. **Answered by the board (2026-11-19; the builder of PR 2 is lane B since L63): lane C makes them as guest edits, and lane S reviews.**
+- **Q2, answered by the maintainer (2026-11-19): "Accept all six (Recommended)".** The six
+  differences from the accepted prototype are (a), (b), (c), (d), (f) and (g); FAM-1 plan decision D50.
   - (a) Opening or collapsing is not spoken as "Opened" or "Collapsed": a screen reader reads the
     button that takes focus, which says the same thing once.
   - (b) No visible change: the heading level of a workout's line matches the rest of the app.

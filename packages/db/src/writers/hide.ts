@@ -17,12 +17,14 @@ import {
   PRACTICE_DAY_UNIQUE_INDEX,
 } from '../schema';
 import { bodyweightSlot } from './bodyweight';
-import type { Executor } from './executor';
+import { setLocalLockTimeout, type Executor } from './executor';
 import { isLiveProfile } from './ownership';
 import { isUniqueViolationOn } from './unique-violation';
 
 /**
- * V1-9b — **the only RUNTIME writer of `entries.deleted_at`** (ADR 0008 decision 3.3).
+ * V1-9b — **the only RUNTIME module that HIDES an entry** (ADR 0008 decision 3.3). The one other
+ * runtime write of `entries.deleted_at` is FAM-1 11c-ii's revive, private to `day/log-row.ts`, which
+ * only clears it, through `UNHIDE`, so the reader audit stays finite.
  *
  * ⚠️ "The only writer" would be false, and a privacy lens caught it: the bodyweight de-dup
  * correction (`scripts/corrections/registry.ts`) writes it too — as an operator action, and it has
@@ -61,8 +63,7 @@ const uuidArray = (ids: readonly string[]) => sql`${sql.param(ids)}::uuid[]`;
  * 🔴 **The one un-hide (V1-9b B2-0).** Every writer that makes a hidden entry live sets this, so the
  * hide reason goes in the same statement as `deleted_at`: a live row with a reason is refused by
  * `ENTRY_HIDE_REASON_HIDDEN_CHECK` (`23514`). `no-bare-unhide.test.ts` fails on any other
- * un-hide in this package or the app's DAL. FAM-1 11c's D35 revive (`day/log-row.ts`, not built yet)
- * must spread it: whichever of 11c and B2-0 lands second makes that edit.
+ * un-hide in this package or the app's DAL. FAM-1 11c-ii's D35 revive (`day/log-row.ts`) spreads it.
  */
 export const UNHIDE = { deletedAt: null, hideReason: null } as const;
 
@@ -171,7 +172,8 @@ async function hideRows(
     // COMMITTED. A review lens traced it. The lock makes the second transaction wait, re-read the
     // rows with their new `deleted_at`, and take the replay branch below — which is what Decision 6
     // says a replay is. `OF entries` so only entry rows lock, never `profiles`: locking a profile
-    // would serialise every write for that athlete.
+    // would serialise every write for that athlete (`FOR UPDATE`; `clearDay`'s `FOR SHARE` does not
+    // conflict with an insert's `KEY SHARE`).
     .for('update', { of: schema.entries });
 
   if (owned.length !== args.entryPublicIds.length) return { notFound: true };
@@ -443,7 +445,8 @@ async function restoreOne(
   });
 
   // 1 · Lock the item, scoped. `FOR UPDATE` on the entries row only — the join to `profiles` is the
-  //     ownership seam and locking a profile row would serialise every write for that athlete.
+  //     ownership seam and locking a profile row would serialise every write for that athlete
+  //     (`FOR UPDATE`; `clearDay`'s `FOR SHARE` does not conflict with an insert's `KEY SHARE`).
   const [item] = await exec
     .select({
       id: schema.entries.id,
@@ -528,8 +531,11 @@ async function restoreOne(
 
 // ── Clear this day (V1-9b B2-0) ─────────────────────────────────────────────────────────────────
 
-/** `count` is the entries under the token carrying `'clear_day'`, the same on a first call and a replay. */
-export type ClearDayResult = ClearEvent | { notFound: true };
+/**
+ * `count` is the entries under the token carrying `'clear_day'`, the same on a first call and a replay.
+ * `closed`: the athlete is archived (read under a lock in the clear's own transaction).
+ */
+export type ClearDayResult = ClearEvent | { notFound: true } | { closed: true };
 
 /**
  * Hide every live entry of one athlete on one day as ONE event, with the reason `'clear_day'`
@@ -542,14 +548,40 @@ export type ClearDayResult = ClearEvent | { notFound: true };
  *   `notFound`, never another kind of event's token.
  *
  * The writer opens its own transaction, as `clearSingleValue` does: the lock and the hide are one
- * unit. ⚠️ Not here: the writable window and the archived athlete. B2's action refuses those, as the
- * single-value amends do (plan § B2-0).
+ * unit. ⚠️ Not here: the writable window, which needs `today`; the action refuses that
+ * (`clearDayOpenFor`).
+ *
+ * 🔴 **The archived athlete IS checked here, under a lock** (maintainer, 2026-11-19, "fix both"). The
+ * action checks too, but before this transaction: an archive committed in between would let the
+ * clear hide an archived athlete's day, which Restore all then refuses until the athlete is
+ * restored. So the clear first takes the athlete's profile row `FOR SHARE`: a concurrent archive's
+ * UPDATE waits for this clear to commit, and an archive that committed first is seen here, and
+ * answers `{ closed: true }`. Profile before entries, the order the erasure takes its locks in.
+ *
+ * The lock also queues the clear with every other writer of the profile row: restore, rename, the
+ * routine, a soft delete, Put on / Take off / Program order (`lockAthletes`, `FOR NO KEY UPDATE`) and
+ * the erasure (`FOR UPDATE`). It does NOT block an entry insert, whose FK check takes only `KEY SHARE`
+ * on `profiles` (which `FOR SHARE` allows), nor a hide or amend, which takes no profile lock. The order stays cycle-free only while no writer locks
+ * entries and then takes a profile lock stronger than `KEY SHARE`; `db:verify` pins the mode and
+ * the order from this source (PGlite cannot show a wait), and the wait is bounded
+ * (`setLocalLockTimeout`).
  */
 export async function clearDay(
   exec: Executor,
   args: { profilePublicId: string; scope: HouseholdScope; day: string },
 ): Promise<ClearDayResult> {
   return exec.transaction(async (tx) => {
+    // A stuck profile writer (an erasure mid-flight) must not hang the request: bound the wait.
+    await setLocalLockTimeout(tx);
+    // The athlete first, locked against a concurrent archive (see the docblock). A profile outside
+    // the scope reads nothing here and falls through to the entries read, which finds nothing.
+    const [athlete] = await tx
+      .select({ archivedAt: schema.profiles.archivedAt })
+      .from(schema.profiles)
+      .where(isLiveProfile(args.profilePublicId, args.scope))
+      .for('share');
+    if (athlete && athlete.archivedAt !== null) return { closed: true };
+
     const live = await tx
       .select({ publicId: schema.entries.publicId })
       .from(schema.entries)

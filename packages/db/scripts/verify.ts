@@ -146,6 +146,7 @@ import {
 import {
   assertGlobalCheckMatchesMigration,
   verifyCatalogMigrationFacts,
+  verifyCatalogSeedOnAFreshDatabase,
   verifyCatalogTables,
 } from './verify/catalog';
 import { verifyDay } from './verify/day';
@@ -154,14 +155,16 @@ import { verifyErasure } from './verify/erasure';
 import {
   asPg,
   assertCheckCoversConst,
-  captureWarnings,
+  captureOutput,
   assertRefTableMatches,
   asTx,
   columnCatalogShape,
   columnsOf,
   db,
   expectRejectedBy,
+  lockTimeoutSetBy,
   orFail,
+  asOwner,
   rolledBack,
   type VerifyContext,
 } from './verify/harness';
@@ -239,6 +242,9 @@ console.log('✓ migration applied to PGlite');
 // V1-1b re-add below. HERE for the same reason as the block above: from the V1-1b simulation on, the
 // constraint in the database is this file's, not the migration's.
 const migratedGlobalCheckDef = await verifyCatalogMigrationFacts();
+
+// CAT-3 A2-i E1: the catalog writer on a database with no global movement yet, all rolled back.
+await verifyCatalogSeedOnAFreshDatabase();
 
 // OPS-2 Proof A: production's seed on a fork's first run, before any fixture seed below.
 await verifySeedOnAFreshDatabase();
@@ -2524,7 +2530,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 
   const months = await loggedMonths(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-    scope: A_SCOPE,
+    scope: asOwner(A_SCOPE, 'V1-13 loggedMonths'),
   });
   assert.ok(
     months.some((m) => m.month === '2026-03'),
@@ -5403,7 +5409,10 @@ const TEN1_READS_1C: readonly Ten1Read[] = [
     'loggedMonths (which months the export writes at all)',
     bwOwner,
     VERIFY_PROFILE_PUBLIC_ID,
-    (profilePublicId, scope) => loggedMonths(asPg, { profilePublicId, scope }),
+    // FAM-1 export follow-up: narrowed inside the lambda, so the row still reads household B's
+    // owner against A's profile (zero months by `isLiveProfile`, not by the owner gate).
+    (profilePublicId, scope) =>
+      loggedMonths(asPg, { profilePublicId, scope: asOwner(scope, 'TEN-1 loggedMonths') }),
   ],
 ];
 
@@ -7108,7 +7117,7 @@ console.log(
     'TEN-2c guard fixture: at least one curated movement is referenced by nothing, so (b) can delete it and watch the seed restore it',
   );
 
-  // `captureWarnings` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
+  // `captureOutput` lives in the harness since OPS-2 PR 1 (its second caller, `verify/seed.ts`).
 
   // (a) 🔴 THE BASELINE, INVERTED — the absorb the guard existed to detect is GONE.
   // Until 0017 this asserted that a global catalog insert whose slug a household already owns is
@@ -7168,7 +7177,7 @@ console.log(
     [],
     'TEN-2c guard fixture: the curated row for the shadowed slug is absent before the seed runs — otherwise "the curated row lands" would hold because it never left',
   );
-  const guardMessage = await captureWarnings(async () => {
+  const guardMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
   assert.deepEqual(
@@ -7183,12 +7192,19 @@ console.log(
   );
   assert.match(
     guardMessage,
-    /ALSO owned by a household/,
+    /share a legacy seed slug/,
     'TEN-2c SHADOW REPORT: …and it still REPORTS the shadowing, as a console.warn rather than a throw — `migrate.yml` seeds PRODUCTION on every push to `main`, where a throw turns the job red on every subsequent push and cannot clear itself by re-running',
   );
+  // CAT-3 A2-i (spec rule 7): the report is COUNTS ONLY. It used to name the seed slug, but that slug
+  // is also the household's own row's slug, which says what they typed. The operator lists the rows
+  // from their own console (docs/runbooks.md → "the seed's shadow guard fired").
   assert.ok(
-    guardMessage.includes(shadowed.slug),
-    'TEN-2b: …and the warning NAMES the seed slug, so the operator knows which catalog row is shadowed',
+    /\b1 household-owned movement\(s\) share a legacy seed slug/.test(guardMessage),
+    'TEN-2c SHADOW REPORT: …it COUNTS the shadowed row (CAT-3 A2-i: counts only)',
+  );
+  assert.ok(
+    !guardMessage.includes(shadowed.slug),
+    'TEN-2b / CAT-3 A2-i: …and the report does NOT name the slug — a slug a household also holds says what that household typed, and this log is public',
   );
   // 🔴 Privacy: the message lands in a WORLD-READABLE Actions log (`migrate.yml` runs `db:seed`
   // against production on every push to `main`, in a public repo). Seed slugs come from a public
@@ -7205,12 +7221,13 @@ console.log(
   await db
     .delete(schema.movements)
     .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'));
-  const quietMessage = await captureWarnings(async () => {
+  const quietMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
-  assert.equal(
-    quietMessage,
-    '',
+  // What the test means, not "prints nothing": since CAT-3 A2-i the seed also prints its catalog
+  // counts, which A2-ii's fixture seed will do on every run.
+  assert.ok(
+    !/share a legacy seed slug|share a library slug/.test(quietMessage),
     'TEN-2c: …and with no shadow the seed warns about NOTHING — the report is a report, not noise on every run',
   );
   assert.equal(
@@ -7227,7 +7244,7 @@ console.log(
   console.log(
     '✓ TEN-2c SEED SHADOW REPORT, three directions: the ABSORB IS GONE (a global catalog insert whose ' +
       'slug a household owns now lands alongside it — TEN-2b’s baseline, inverted), `seed()` INSERTS ' +
-      'the curated row and WARNS instead of throwing (naming the seed slug, never the household’s free ' +
+      'the curated row and WARNS instead of throwing (as counts only, never a slug or the household’s free ' +
       'text, because that log is world-readable), and with no shadow it warns about nothing and stays ' +
       'idempotent. No DDL left in this block',
   );
@@ -8504,11 +8521,24 @@ console.log(
     'PROF-1 b: an ARCHIVED athlete is still renameable — archive is not a lock',
   );
   assert.deepEqual(
-    await loggedMonths(asPg, { profilePublicId: B_P, scope: A_SCOPE }),
+    await loggedMonths(asPg, { profilePublicId: B_P, scope: asOwner(A_SCOPE, 'PROF-1 b') }),
     [{ month: '2026-07' }],
     'PROF-1 b: …and the export path still returns an ARCHIVED athlete’s months (criterion 5) — the ' +
       'month this athlete logged, not merely "an array": fold archived_at into isLiveProfile and ' +
       'this returns [] while an Array.isArray check would stay green',
+  );
+
+  // (5b) 🔴 THE EXPORT IS THE OWNER'S (FAM-1 export follow-up, plan PR B; the maintainer's Q1,
+  // 2026-11-19). `loggedMonths` takes an `OwnerScope` and its WHERE carries `isOwnerOf`, so the real
+  // member scope pushed past the type by a cast reads NO months, and the DAL builds no file. The
+  // cast is the archive proof's (`A_MEMBER_SCOPE as unknown as OwnerScope`): it is the only way in.
+  assert.deepEqual(
+    await loggedMonths(asPg, {
+      profilePublicId: B_P,
+      scope: A_MEMBER_SCOPE as unknown as OwnerScope,
+    }),
+    [],
+    'FAM-1 export: a member scope cast past the type reads no months, so no export file is built',
   );
 
   // (6) RESTORE IS ANY-MEMBER (decision M1). The member who could not archive CAN restore, with no
@@ -8793,11 +8823,13 @@ await rolledBack(async (tx) => {
   // (1) The lock, keyed by the household. `asTx(tx)`, never `asPg`: on one connection a query on the
   //     pool inside this transaction would wait forever. createProfile's own transaction is a
   //     savepoint here, and an xact lock taken in a savepoint is held until the outer one ends.
-  await createProfile(asTx(tx), A_SCOPE, {
-    name: 'TD Cap Lock Probe',
-    kind: PROFILE_KIND.kid,
-    clientId: newId(),
-  });
+  const { set: timeoutSet } = await lockTimeoutSetBy(tx, () =>
+    createProfile(asTx(tx), A_SCOPE, {
+      name: 'TD Cap Lock Probe',
+      kind: PROFILE_KIND.kid,
+      clientId: newId(),
+    }),
+  );
   const [key] = (await tx.execute(sql`select hashint8(${households[0].id}::bigint) as k`))
     .rows as Array<{ k: number }>;
   const locks = (
@@ -8812,6 +8844,10 @@ await rolledBack(async (tx) => {
         Number(l.o) === (Number(key!.k) + 2 ** 32) % 2 ** 32,
     ),
     'TD athlete cap: createProfile holds the household-athletes advisory lock, keyed by its household',
+  );
+  assert.ok(
+    timeoutSet,
+    'TD lock timeout: createProfile sets lock_timeout before it waits on the household-athletes lock',
   );
 });
 
@@ -10127,9 +10163,10 @@ const REPLAY_REFUSED = /no live row for client_id/;
     scope: hideScope,
     month: monthOf(AUDIT_DAY),
   });
+  const hideOwner = asOwner(hideScope, 'V1-9b B1-1b');
   const beforeMonths = await loggedMonths(asPg, {
     profilePublicId: hideProfilePublicId,
-    scope: hideScope,
+    scope: hideOwner,
   });
   assert.ok(beforeStrength.length > 0, 'V1-9b B1-1b: the audit fixture is in the export');
 
@@ -10180,7 +10217,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
   assert.ok(hasAuditMonth(beforeMonths), 'V1-9b B1-1b: the audit month is in loggedMonths before');
   assert.ok(
     !hasAuditMonth(
-      await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideScope }),
+      await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideOwner }),
     ),
     "V1-9b B1-1b: 🔴 hide the month's only entry and loggedMonths DROPS the month (criterion 16)",
   );
@@ -10207,7 +10244,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
       'value preserved (criterion 16, the self-serve half)',
   );
   assert.deepEqual(
-    await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideScope }),
+    await loggedMonths(asPg, { profilePublicId: hideProfilePublicId, scope: hideOwner }),
     beforeMonths,
     'V1-9b B1-1b: …and loggedMonths has the month back',
   );

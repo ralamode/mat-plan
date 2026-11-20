@@ -76,8 +76,8 @@ export type HouseholdScope = {
  *
  * ⚠️ **The type is not the whole guard, and must not be sold as one.** A brand stops an accidental
  * widening and an inline literal; a one-word `as OwnerScope` still compiles (it is a subtype), so
- * `src/scope.test.ts` guards the cast lexically instead — `ownerScope()` here and one named forgery
- * in `verify.ts` are the only places it may appear.
+ * `src/scope.test.ts` guards the cast lexically instead — `ownerScope()` here and the named forgeries
+ * in `verify.ts` (PROF-1 b-s, PROF-1 b, the FAM-1 export) are the only places it may appear.
  *
  * ⚠️ **The owner conjunct in `writers/ownership.ts` is NOT a database-side second check** — this
  * docblock said it was. It emits `$1 = $2` over the scope's own role field and reads no column; see

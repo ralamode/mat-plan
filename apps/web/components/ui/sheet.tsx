@@ -84,6 +84,12 @@ export type SheetProps = {
   /** A polite live region INSIDE the sheet (criterion 46). Pass a settled value. */
   status?: string;
   /**
+   * A new number re-announces `status` even when its text is the same, passed to the region as
+   * `Announcer`'s `messageKey` (FAM-1 15c: "Morning moved to 1 of 2" twice in a row). Omitted, the
+   * region renders as before.
+   */
+  statusKey?: number;
+  /**
    * Where focus goes when the sheet OPENS. Defaults to the title.
    *
    * 🔴 **Added at PICK-1 PR 3, the first consumer that needs it — and the default is what makes this
@@ -97,8 +103,8 @@ export type SheetProps = {
    *
    * ⚠️ **A consumer must not point this at a text input on touch.** Focusing a field raises the
    * on-screen keyboard over the list the sheet exists to show (criterion 18). The picker passes its
-   * search ref only when `matchMedia('(pointer: coarse)')` is false, and leaves the default on a
-   * phone.
+   * search ref only when `prefersFineFocus()` (`lib/a11y/pointer.ts`) is true, and leaves the
+   * default on a phone.
    */
   initialFocus?: RefObject<HTMLElement | null>;
   /**
@@ -121,6 +127,17 @@ export type SheetProps = {
    * surface carries the palette it is demonstrating.
    */
   dataTokens?: string;
+  /**
+   * Whether landing on this sheet's history entry reopens it: Forward after a close, or the restore
+   * on mount after a cross-route Back. Default `true`, the Android convention below.
+   *
+   * `false` is for a sheet whose trigger the page has since hidden (Program order, once fewer than
+   * two programs stay: FAM-1 15c follow-up). Reopening it would put a dialog on screen that the page
+   * no longer offers. **On `popstate` the entry is bounced with `history.back()`**, so Forward is a
+   * no-op and leaves no dead entry above the page; **on mount it simply stays shut** and never
+   * bounces, since a mount is not a history move the person made.
+   */
+  reopenFromHistory?: boolean;
 };
 
 /**
@@ -137,8 +154,7 @@ let openSheets = 0;
  * `Close` was written out three times: the header's ✕ `aria-label`, `FooterFallback`'s button, and
  * the picker's own copy module. A consumer that passes its own `footer` still has to end it with
  * Close (panel 2 · 7), so it needs the same word this file uses, and "the same word" is a constant,
- * not a coincidence. ⚠️ `STRENGTH_COPY.close` in `lib/constants.ts` is a DIFFERENT control — an open
- * toggle whose own docblock explains why it says Close and not Cancel — and stays where it is.
+ * not a coincidence.
  */
 export const SHEET_COPY = { close: 'Close' } as const;
 
@@ -278,7 +294,12 @@ function useFooterHeight(node: HTMLElement | null): void {
  * landed-on entry LACKS `__NA` (`:61-72`) — which Next's own entry does not. An earlier plan called
  * this "unverified on Next 16.4"; it is verified by source, and the e2e asserts no `load` fired.
  */
-function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean) => void): void {
+function useBackGesture(
+  open: boolean,
+  id: string,
+  onOpenChange: (open: boolean) => void,
+  reopenFromHistory: boolean,
+): void {
   /**
    * One definition of "the top entry is mine", so the four call sites below cannot drift apart.
    *
@@ -319,9 +340,29 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    if (!open && isOurEntry()) onOpenChange(true);
-  }, [open, isOurEntry, onOpenChange]);
+    // A refused reopen stays shut, and never bounces: a mount is not a history move.
+    if (!open && reopenFromHistory && isOurEntry()) onOpenChange(true);
+  }, [open, isOurEntry, onOpenChange, reopenFromHistory]);
 
+  /**
+   * 🔴 **Where this sheet pushed its entry, so a close can still pop it after Next rewrites it.** A
+   * server action that revalidates while the sheet is open (the item picker's "+ New item", Program
+   * order's arrows) makes Next's router `replaceState` the current entry with
+   * `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`),
+   * which drops `sheet` and `doc`. `isOurEntry()` then reads false at close, the pop below was
+   * skipped, and one Back press did nothing (proved in a browser, 2026-11-19). The URL is what that
+   * rewrite keeps, so a close pops when the entry is still ours by key OR by URL. A Back press and a
+   * navigation clear this: the first has already left the entry, the second has another URL on top.
+   *
+   * It is set whenever the open sheet owns the top entry, not only when it pushes one: a sheet
+   * reopened onto its entry (the restore on mount, or Forward through the listener) owns it too.
+   *
+   * ⚠️ **The URL is not the entry.** Two cases would pop the wrong one, and no consumer makes either
+   * today: a sheet that stays open while another entry is pushed at the same URL, and nested sheets
+   * where the outer closes first. The key-only check could do neither; if a consumer ever does, key
+   * the match on `navigation.currentEntry.key` (it survives `replaceState` and changes on a push).
+   */
+  const pushedAt = useRef<string | null>(null);
   /**
    * 🔴 **One ALWAYS-ON listener, syncing both directions** — and the first draft got this wrong in a
    * way only the e2e could show. It checked the history state on MOUNT, which never fires: Next
@@ -335,16 +376,23 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     const sync = () => {
       const isOurs = isOurEntry();
-      if (isOurs && !open) onOpenChange(true);
-      else if (!isOurs && open) onOpenChange(false);
+      if (isOurs && !open) {
+        // Refused (`reopenFromHistory` false): step back off the entry, so Forward does nothing.
+        if (reopenFromHistory) onOpenChange(true);
+        else window.history.back();
+      } else if (!isOurs && open) {
+        pushedAt.current = null;
+        onOpenChange(false);
+      }
     };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
-  }, [open, isOurEntry, onOpenChange]);
+  }, [open, isOurEntry, onOpenChange, reopenFromHistory]);
 
   useEffect(() => {
     if (!open) return;
     if (!isOurEntry()) window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
+    pushedAt.current = window.location.href;
   }, [open, id, isOurEntry]);
 
   /**
@@ -356,14 +404,19 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
    * pushed on top of the stranded entry, so closing THAT one popped back onto the first and
    * **reopened a sheet the user had already dismissed.**
    *
-   * The `state.sheet === id` guard makes the two close paths that must NOT pop self-evident: a
-   * `popstate` close has already left our entry, and a navigation close has a route entry on top.
+   * It pops when the top entry is still ours, by its key or, after Next rewrote it, by the URL it
+   * was opened at (`pushedAt`). The two close paths that must NOT pop fail both: a `popstate` close
+   * has already left our entry (and cleared `pushedAt`), and a navigation close has a route entry on
+   * top at another URL.
    */
   const wasOpen = useRef(open);
   useEffect(() => {
     const closed = wasOpen.current && !open;
     wasOpen.current = open;
-    if (closed && isOurEntry()) window.history.back();
+    if (!closed) return;
+    const pushed = pushedAt.current;
+    pushedAt.current = null;
+    if (isOurEntry() || (pushed !== null && window.location.href === pushed)) window.history.back();
   }, [open, isOurEntry]);
 }
 
@@ -396,10 +449,12 @@ export function Sheet({
   headerExtra,
   footer,
   status,
+  statusKey,
   initialFocus,
   onEscapeKeyDown,
   onReturned,
   dataTokens,
+  reopenFromHistory = true,
 }: SheetProps) {
   // 🔴 A callback ref, NOT `useRef` — `useVisualViewport`'s docblock has the reason, and it is the
   // difference between the keyboard geometry running and silently doing nothing.
@@ -412,7 +467,7 @@ export function Sheet({
   // The footer's measured height, for the scroller's `scroll-padding-bottom` (see the render).
   const [footerNode, setFooterNode] = useState<HTMLDivElement | null>(null);
   useFooterHeight(footerNode);
-  useBackGesture(open, id, onOpenChange);
+  useBackGesture(open, id, onOpenChange, reopenFromHistory);
 
   useEffect(() => {
     if (!open) return;
@@ -600,7 +655,7 @@ export function Sheet({
           {/* Criterion 46. INSIDE the content, because Radix `aria-hidden`s every sibling of the
               portal while this is open, so a page-level region is dropped by a screen reader.
               `Announcer` rather than a fifth hand-rolled `<p role="status">` — see its docblock. */}
-          <Announcer id={sheetStatusId(id)} message={status ?? ''} />
+          <Announcer id={sheetStatusId(id)} message={status ?? ''} messageKey={statusKey} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

@@ -1,17 +1,6 @@
 ---
 feature: Strength logging
 owns:
-  - apps/web/app/p/[profileId]/strength-form.tsx
-  - apps/web/app/p/[profileId]/strength-form-scaffold.ts
-  - apps/web/app/p/[profileId]/strength-form-supersets.ts
-  - apps/web/app/p/[profileId]/strength-form-untouched.ts
-  - apps/web/app/p/[profileId]/set-fields.tsx
-  - apps/web/app/p/[profileId]/set-mode-toggles.tsx
-  - apps/web/app/p/[profileId]/editable-set.tsx
-  - apps/web/app/p/[profileId]/movement-line.tsx
-  - apps/web/app/p/[profileId]/strength-section.tsx
-  - apps/web/app/p/[profileId]/strength-session-receipt.tsx
-  - apps/web/app/p/[profileId]/set-display.ts
   - packages/shared/src/strength.ts
   - packages/shared/src/strength-session.ts
   # PICK-1 PR 2: the movement-name rules invariant 9 describes (MOVEMENT_NAME_MAX,
@@ -31,14 +20,13 @@ owns:
 
 # Strength logging
 
-**Read this before changing the log form, the set schema, or the strength writer.**
+**Read this before changing the set schema, the session schema, or the strength writer.**
 
-> ⚠️ **Off the day page since V1-24 3b-page (2026-11-15).** `StrengthSection`, the form, the program
-> card and the session receipts are **unmounted**: nothing renders them, and nobody can log a strength
-> session in the app until FAM-1 12f deletes them (12d and 13b rebuild strength on the new page). `logStrengthSessionAction`, its
-> writer and their Vitest and `db:verify` coverage stay. The e2e that drove the form
-> (`scaffold-submit.spec.ts`, `day-nav-form-state.spec.ts`, the strength tests in `a11y.spec.ts`)
-> was deleted with it. [tech-debt.md](../tech-debt.md) holds the expiry, FAM-1 12f.
+> ⚠️ **No screen logs through this path.** The day page logs and changes strength rows through the
+> FAM-1 row writer ([day-writers.md](./day-writers.md)). FAM-1 12f PR 3 removed the two actions
+> that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the schemas, the DAL
+> functions and the writer below stay with their Vitest and `db:verify` coverage, with no caller,
+> until [`LEGACY-1`](../plan.md#legacy-1) retires the path (the maintainer, 2026-11-19, Q4).
 
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
@@ -55,14 +43,13 @@ mutation `34` proves that proof can fail.
 
 ⚠️ **A session logged as "Not a programmed day" takes no snapshot at all**, because the legacy
 fallback keys on `sessions.day_role` and emits `''` for the whole session — snapshotting it would
-make the two paths disagree on a shape the form produces in one tap. Everything else with an
+make the two paths disagree on a shape the schema accepts. Everything else with an
 asserted day role freezes, including a movement the day does not program.
 
 ## What this is
 
-A kid on a gym floor logs a strength session: some movements, each with some sets, each set a number
-of reps against some kind of load. It is the app's most-used write path and its most-constrained UI —
-one hand, a phone at 360px, sometimes an eight-year-old.
+A strength session: some movements, each with some sets, each set a number of reps against some kind
+of load, validated at the boundary and written in one transaction.
 
 "Some kind of load" is the whole difficulty. A load is not always a number: it can be bodyweight, a
 band, a box height, a hold duration, or bodyweight **plus** a weighted vest.
@@ -71,81 +58,48 @@ band, a box height, a hold duration, or bodyweight **plus** a weighted vest.
 
 ```mermaid
 flowchart TD
-  subgraph client["client — 'use client'"]
-    FORM["strength-form.tsx<br/>movements[] + SetVals[]"]
-    FIELDS["set-fields.tsx<br/>reps × weight inputs"]
-    CHIPS["set-mode-toggles.tsx<br/>BW · band → booleans"]
-    SCAFFOLD["strength-form-scaffold.ts<br/>V1-19 'Start today's program'"]
-    SUPERSETS["strength-form-supersets.ts<br/>grouping + dissolve"]
-  end
-
   subgraph boundary["boundary — packages/shared"]
     SETSCHEMA["strength.ts<br/>strengthSetSchema<br/>(structured — no parseLoad)"]
     SESSIONSCHEMA["strength-session.ts<br/>logStrengthSessionSchema"]
   end
 
   subgraph server["server"]
-    ACTION["actions.ts<br/>logStrengthSessionAction"]
-    DAL["lib/dal/entries.ts<br/>logStrengthSession"]
+    DAL["lib/dal/entries.ts<br/>logStrengthSession · editStrengthSet"]
     WRITER["writers/strength-session.ts<br/>ONE transaction"]
+    EDIT["writers/strength-session.ts<br/>updateStrengthSetById"]
   end
 
   subgraph db["postgres"]
     SESS[(sessions)] --> ENT[(entries)] --> SETS[(entry_sets)] --> QTY[(entry_set_quantities)]
   end
 
-  SCAFFOLD -.->|"names + blank rows only<br/>NEVER loads"| FORM
-  FORM --> FIELDS & CHIPS
-  SUPERSETS <--> FORM
-  FORM -->|"hidden JSON field"| ACTION
-  ACTION --> SESSIONSCHEMA --> SETSCHEMA
-  ACTION --> DAL --> WRITER --> db
-
-  READ["set-display.ts<br/>formatSetLine · isEditableSet"] --> EDIT["editable-set.tsx"]
-  db -.->|"SetDTO"| READ
-  EDIT -->|"editStrengthSetAction"| WRITER
+  DAL --> SESSIONSCHEMA --> SETSCHEMA
+  DAL --> WRITER --> db
+  DAL --> EDIT --> db
 ```
 
 ## Files
 
-| File                           | What it is for                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `strength-form.tsx`            | The whole client form: movement cards, set rows, collapse state, the summary line. ~800 lines.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `strength-form-scaffold.ts`    | V1-19. Turns today's program into blank cards. **Structure only — never a load or a rep count.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `strength-form-supersets.ts`   | Superset grouping, and `dissolveSmallSupersets` when a group drops below 2 members.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `strength-form-untouched.ts`   | V1-27. The ONE "touched" judgement and all it drives: card and trailing-set drops, each input's `required`, `isSubmitBlocked`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `set-fields.tsx`               | The shared `reps × weight` input pair — used by BOTH the log form and the V1-9 edit form.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `set-mode-toggles.tsx`         | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `set-display.ts`               | `formatSetLine` (the read line), `isEditableSet` (whether Change is offered) and `lockedReason` (why not).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `editable-set.tsx`             | The per-set amend: **Change**, a stacked editor, focus return, its own status region (V1-24 3a-i).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `movement-line.tsx`            | One movement's label, status and sets; the Locked reason line. Renders **every** entry kind in the list, not only strength.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `strength-section.tsx`         | Today's strength section (V1-24 3a-ii): h2, a receipt per session, then the form island (open on an empty day, else collapsed). **`programNote?` (PROF-1 a-g)** renders directly under the h2, before the form — the one case where an empty card needs a reason (an adult in a household that programs). `undefined` for everyone else; the policy itself is enforced in the query, see [programming.md](./programming.md) invariant 8. ⚠️ It renders `profile.name`, so it carries **`NAME_WRAP_CLASS`** (`lib/constants.ts`) — the wrap rule PROF-1 D11 gives every name renderer, landed across all of them at `a-r`. 🔴 **It shipped with `break-words`, which was the WRONG utility**, while citing D11 in its own comment: the two break lines identically, but only `overflow-wrap: anywhere` lets a break count toward `min-content`, and `break-words` had no `min-w-0` companion to lift the flex floor. One exported constant now, because nine hand-written copies across three PRs is how that drift happens. |
-| `strength-session-receipt.tsx` | One session, rendered by BOTH the section (`placement="section"`: focus id, "Saved", one Locked line) and the list.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `shared/strength.ts`           | `strengthSetSchema` — reps, an optional magnitude and the two mode flags.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `shared/strength-session.ts`   | The session envelope: movements, supersets, client ids, the pairing refines.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `shared/movements.ts`          | The movement-name rules (invariant 9) and the movement patterns. **Also `TRACKING_TYPES`** (FAM-1 0a): how an item is tracked, with its labels, and `DEFAULT_TRACKING_TYPE`, the type an item made with none named gets (the column's default). Since FAM-1 step 3, `movements.tracking_type` carries it, CHECK-pinned to the array (a change is a migration); the shapes that read it are in `packages/shared/src/program/` ([plan §2, §4](../plans/fam-1-family-program.md)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `shared/quantity-slots.ts`     | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions. ⚠️ **`primary` accepts `count` since FAM-1 step 3** (a Count item's plain number), but `LOGGABLE_DIMENSIONS` (`units.ts`) excludes it **by name**, so this form and its schema are unchanged: the form still offers mass, length and time only, and the five length units it had (the new `mi` is excluded by name too).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `writers/strength-session.ts`  | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`. Its set and quantity rows are written by `insertEntrySetRows` in `writers/session-rows.ts` (FAM-1 11a, extracted for the 11b row writer), which since 11b takes each set's quantities: this writer maps a set's weight to one PRIMARY quantity in the movement's unit (none for a set with no weight), so the rows it writes are unchanged. FAM-1 11c-i adds `updateEntrySetRows` beside it, for the day page's Change ([day-writers.md](./day-writers.md) invariant 23).                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| File                          | What it is for                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared/strength.ts`          | `strengthSetSchema` — reps, an optional magnitude and the two mode flags.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `shared/strength-session.ts`  | The session envelope: movements, supersets, client ids, the pairing refines.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `shared/movements.ts`         | The movement-name rules (invariant 9) and the movement patterns. **Also `TRACKING_TYPES`** (FAM-1 0a): how an item is tracked, with its labels, and `DEFAULT_TRACKING_TYPE`, the type an item made with none named gets (the column's default). Since FAM-1 step 3, `movements.tracking_type` carries it, CHECK-pinned to the array (a change is a migration); the shapes that read it are in `packages/shared/src/program/` ([plan §2, §4](../plans/fam-1-family-program.md)).                                                                                                                                                                                                                                               |
+| `shared/quantity-slots.ts`    | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions. ⚠️ **`primary` accepts `count` since FAM-1 step 3** (a Count item's plain number), but `LOGGABLE_DIMENSIONS` (`units.ts`) excludes it **by name**, so the session schema is unchanged: it still accepts mass, length and time only, and the five length units it had (the new `mi` is excluded by name too).                                                                                                                                                                                                                                                                                                                |
+| `writers/strength-session.ts` | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`. Its set and quantity rows are written by `insertEntrySetRows` in `writers/session-rows.ts` (FAM-1 11a, extracted for the 11b row writer), which since 11b takes each set's quantities: this writer maps a set's weight to one PRIMARY quantity in the movement's unit (none for a set with no weight), so the rows it writes are unchanged. FAM-1 11c-i adds `updateEntrySetRows` beside it, for the day page's Change ([day-writers.md](./day-writers.md) invariant 23). Since 11c-ii the row writer's revive also calls `insertEntrySetRows`, on the entry it brings back, after soft-deleting that entry's live set. |
 
 ## Invariants
 
 These hold **across** files and are invisible from any single one. Breaking one is how this feature
 regresses.
 
-1. **The LLM never authors a load.** AGENTS.md's one inviolable product rule. The scaffold carries
-   `ScaffoldRow` with no `load` field at all, so "the authored load never crosses into client state"
-   is enforced by the **type**, not by care. Do not add one.
-
-   **Row COUNT is not an authored value.** `DEFAULT_SCAFFOLD_SETS` (V1-23 PR 1) makes a prescription
-   with no `sets` scaffold three blank rows instead of one. That is form structure, the same category
-   as the movement name the scaffold already places — every `reps`/`weight` in those rows is still
-   empty, which is what the confirm-gate actually rests on. `strength-form-scaffold.test.ts` asserts
-   blankness across the wider structure, including the null-`sets` shape, so widening it again cannot
-   quietly smuggle a value in.
+1. **The LLM never authors a load.** AGENTS.md's one inviolable product rule. The session schema
+   carries only what the request typed; nothing in this path copies `prescription_targets.load` into
+   a set. The frozen prescription (above) is a rendering stored on the entry, never a set's value.
 
 2. **A set must carry a load, and blank is unrepresentable.** Enforced by `strengthSetSchema`'s
-   superRefine — `weight !== null || isBodyweight || isBand`. A set with reps and no load renders
-   `5 × ?` and `isEditableSet` then refuses to fix it: permanently unrecoverable, because **there is
+   superRefine — `weight !== null || isBodyweight || isBand`. A set with reps and no load has no
+   quantity, and `updateStrengthSetById` then refuses to fix it: permanently unrecoverable, because **there is
    no delete action in this app.** This was `parseLoad`'s first branch until PR 4a split the load
    across three fields, which removed the single-field invariant and made the rule explicit.
 
@@ -156,21 +110,16 @@ regresses.
    (a BW set with an out-of-range number has two faults and gets two messages). Moving the blank
    check into the session refine would double it (probed by the V1-30 panel).
 
-   **Corollary: `required` on the weight input must be FALSE whenever a mode is toggled.** A
-   `required` field that must be empty blocks the native submit with an invisible error — see Traps.
-
-3. **`isEditableSet` and `updateStrengthSetById`'s WHERE must stay identical.** The client half is
-   advisory; the SQL half is the boundary. They are two expressions of one predicate in two languages,
-   and the docblocks on both say so. Change one, change the other. **And `lockedReason` (V1-24 3a-i)**:
-   it states WHY a set has no Change, derived from the same clauses in the same order, and a test pins
-   `isEditableSet(s) === (lockedReason(s) === null)`. A wrong reason is worse than none. (⚠️ The two
-   halves are not quite identical today: the client requires exactly one quantity and the SQL guard
-   doesn't check the count, filed as V1-36.)
-   🔴 **One clause is server-only on purpose: the SQL refuses a PROGRAM row** (`programRow()`, which a
-   purge leaves set). A program row's numbers belong to the day page's Change (`amendRow`), which
-   holds the writable window and the program checks; no client renders a program row through this
-   path, so `isEditableSet` has nothing to mirror. `db:verify`'s "TD fix-a-set" block, mutations `449`
-   and `450`.
+3. **`updateStrengthSetById`'s WHERE is the whole edit guard.** It edits only a live, owned, `done`
+   set with reps, no mode, and one live PRIMARY quantity in a mass unit; anything else matches no row
+   and answers `null`, a typed refusal. Change what a set can be, and decide here whether it stays
+   editable.
+   Nothing on the client mirrors it: the old form's `isEditableSet` was deleted at FAM-1 12f, and the
+   comments in `shared/strength.ts` and `shared/units.ts` now say "the edit path", and the writer's
+   say its WHERE is the boundary.
+   🔴 **It also refuses a PROGRAM row** (`programRow()`, which a purge leaves set). A program row's
+   numbers belong to the day page's Change (`amendRow`), which holds the writable window and the
+   program checks. `db:verify`'s "TD fix-a-set" block, mutations `449` and `450`.
 
 4. **Every magnitude lives in `entry_set_quantities`, never on the set.** Since GAP-3 (#139) there is
    no `weight_num`, no `weight_label`, no `seconds`. The two MODES (`is_bodyweight`, `is_band`) are
@@ -179,39 +128,21 @@ regresses.
 
 4b. **The unit belongs to the MOVEMENT; its dimension is DERIVED from it.** There is no per-set unit
 and no stored dimension on the movement — `UNIT_DIMENSION_BY_CODE[unit]` is the single source, so
-the pair can never disagree with `units(code, dimension)`. The form asks "Measuring?" first and
-then offers only `loggableUnitsOf(d)`, which makes a squat-logged-in-seconds **unlikely** (a
-deliberate change of Measuring), not impossible. **The athlete picks the dimension; the catalog's
-`unit_default` only seeds it**, and the server never checks one against the other (ADR 0004
+the pair can never disagree with `units(code, dimension)`. **The request names the unit; the catalog's
+`unit_default` is only a suggestion**, and the server never checks one against the other (ADR 0004
 addendum, V1-30). **Offerable ⊆ accepted ⊆ exportable** is enforced by the chain test in
 `packages/shared/src/units.test.ts`, which runs the wired `sessionMovementSchema.shape.unit`
 ([V1-30 plan](../plans/v1-30-loggable-units.md)). On a non-mass movement BW / band are refused: they
 are modes of a weight (see invariant 2 for where each half of that lives).
 
-**V1-30b-i — and the FORM now offers only what the server keeps.** Three things follow the dimension,
-all derived from the one unit, so none can disagree with it:
+Two rules follow the unit:
 
-- **The load-mode chips are UNMOUNTED on a non-mass card** (`strength-form.tsx`, guarded by
-  `isMassUnit`) — not CSS-hidden, because a hidden checkbox left in the tab order is the
-  "form appears dead" trap this guide records twice. The server's refine 6 stays the backstop for a
-  crafted body.
-- **A MEASURING change clears every set's load modes in the SAME state update that changes the unit**
-  (`setDimensionUnit`). That is where the guarantee lives: no state can ever pair `isBodyweight` with
-  a non-mass unit. Changing the unit WITHIN mass (lb → kg) clears nothing — it never crosses a
-  dimension, so it keeps `patchMovement`.
-- **The field word is per dimension** — `QUANTITY_FIELD_WORD` in `apps/web/lib/constants.ts`, feeding
-  both the placeholder and `quantityInputLabel`. Mass output is **byte-identical** to V1-30
-  ("… weight in lb"), so every existing mass locator holds. ⚠️ `QUANTITY_FIELD_WORD` is the **third**
-  per-dimension word map, beside `LOGGABLE_DIMENSION_LABELS` (the Measuring option) and
-  `LOGGABLE_DIMENSION_NOUNS` (running copy). Each serves a different surface on purpose; respelling
-  one must not garble the others.
 - **One precision for every unit.** `QUANTITY_DECIMALS = 3` in `packages/shared/src/units.ts` feeds
-  both the field's `step` and the server's format-check regex, so the browser refuses exactly where
-  the server would. It replaced a `step="0.5"` sized for barbell plates that blocked `6.25 ft`,
-  `1.25 min` and `61.25 kg`. **`PLAIN_DECIMAL` / `isPlainDecimal`** (same file, FAM-1 contract
+  the server's format-check regex. It replaced a `step="0.5"` sized for barbell plates that blocked
+  `6.25 ft`, `1.25 min` and `61.25 kg`. **`PLAIN_DECIMAL` / `isPlainDecimal`** (same file, FAM-1 contract
   change C2) are built from it too: the shape of a quantity typed into a TEXT field (`5`, `5.5`,
-  `.5`; not `-5`, `1e3`, `5.`), for the FAM-1 day page and workout editor. ⚠️ Not this form's
-  check: `strength.ts` keeps its own pattern, which refuses `.5`. Do not merge the two without
+  `.5`; not `-5`, `1e3`, `5.`), for the FAM-1 day page and workout editor. ⚠️ Not the strength
+  schema's check: `strength.ts` keeps its own pattern, which refuses `.5`. Do not merge the two without
   deciding that on purpose. **`WHOLE_NUMBER` / `isWholeNumber`** (same file) is the matching shape
   check for reps as typed: digits only.
 - **V1-30b-ii — the stored-value ceiling is PER UNIT, and it lives in the SESSION refine.** A set
@@ -239,7 +170,7 @@ all derived from the one unit, so none can disagree with it:
    duplicate.** The five `client_id` uniques were `WHERE deleted_at IS NULL`, so a hidden row left
    the index and the replay inserted a twin; they are now non-partial, so the hidden row still
    **holds** the id, the insert no-ops on conflict, and `reselectLiveByClientId` throws
-   `no live row for client_id`. ⚠️ **Today that throw reaches `error.tsx` and the form is lost** —
+   `no live row for client_id`. ⚠️ **Today that throw reaches `error.tsx`** —
    `V1-9b` B1-2 is the chunk that turns it into a typed envelope. `db:verify`'s B0 case asserts the
    refusal and a committed mutation patch (`39`) proves it can fail. Why an identity and not a slot:
    `write-path.md` invariant 6.
@@ -262,8 +193,8 @@ all derived from the one unit, so none can disagree with it:
    movement is resolved by public id in `packages/db` and the writer receives `movements.name` **from
    the row**; absent ⇒ today's typed path (`findOrCreateMovement`) runs, which is what the picker's
    "use as typed" becomes. The full rule, the two phases and the in-transaction re-check live in
-   [write-path.md](./write-path.md) invariant 14 — this guide owns only what it means for the form
-   and the schema:
+   [write-path.md](./write-path.md) invariant 14 — this guide owns only what it means for the
+   schema:
 
    - **The typed-name rules apply ONLY to a typed name.** `movementName` keeps a label shape
      (`movementLabelSchema`: trim, non-empty, `MOVEMENT_NAME_MAX`); the comma/line-break guard and the
@@ -273,151 +204,39 @@ all derived from the one unit, so none can disagree with it:
      the household cannot fix it until `MOV-1`. Refusing it would make a row unusable by its owner.
      Since FAM-1 14a the comma rule is an input rule only: the export quotes a comma in the
      `movement` column (RFC 4180, `csv/row.ts`) instead of failing, as it once did.
-   - **The path is `['movements', i, 'movementName']`.** The action's `Movement N: <message>` mapping
-     keys on a numeric `path[1]`, so a check that reported at `['movements', i]` would silently turn
-     every one of these messages into something unlocatable.
-   - **The field is OPTIONAL on the wire and `actions.ts` is not edited.** It rides inside
-     `parsed.data.movements`, which the action forwards wholesale. ⚠️ **zod strips unknown keys**, so
-     a field missing from the schema vanishes silently and every picked movement falls back to the
-     typed path with every gate green — which is why `actions.test.ts` asserts the DAL received the
-     **value**, with `toMatchObject` on the whole argument rather than `objectContaining` (a key that
-     is simply absent satisfies the latter).
+   - **The path is `['movements', i, 'movementName']`.** The removed action's `Movement N: <message>`
+     mapping keyed on a numeric `path[1]`; any future caller that maps issues to rows must too.
+   - **The field is OPTIONAL on the wire.** It rides inside `parsed.data.movements`, forwarded
+     wholesale. ⚠️ **zod strips unknown keys**, so a field missing from the schema vanishes silently
+     and every picked movement falls back to the typed path with every gate green — which is why
+     `strength-session-schema.test.ts` pins the strip-mode trap (the action test that asserted the DAL
+     received the value went with the action in FAM-1 12f PR 3).
    - ⚠️ **Two deliberate copy/behaviour changes.** An emoji- or digit-only typed name is now refused,
-     and `MOVEMENT_NAME_MESSAGES.missing` reads **"Choose a movement."** — after PR 4 the field is a
-     button that opens a picker, so "enter" names an interaction the screen no longer offers.
-
-5b. **The strength section is the day's record; the form is an island inside it (V1-24 3a-ii).**
-
-- **One renderer, two placements.** `StrengthSessionReceipt` renders a session in the section and in
-  "Logged entries". While the section is on the page the list's copy is **read-only**, so each set
-  has exactly one Change (and one accessible name).
-- **`StrengthForm` owns open/collapsed**, not the section (a server component can't). It is open
-  with **no toggle** on an empty day, starts **collapsed** behind "Log more strength" once a session
-  exists, and collapses on **its own** successful save. It never collapses because the server's
-  session list changed: another device's session must not hide a typed draft.
-- **Collapsing HIDES the form** (`hidden`), never unmounts it, so **Close** keeps a draft and
-  `aria-controls` stays valid. The body still remounts on `${day}:${gen}` after a save (fresh
-  idempotency keys), and the island is keyed on the day by the section.
-- **A save is announced and focused from the action's own result** (`savedId`, the session's public
-  id), once that id appears in the section's props, and it **leads with the receipt's heading**
-  ("Strength A session 2 saved: …") so a second session with the same movements is still a text
-  change. The day page's old `SavedAnnouncer` was NOT used (it ignored value→value changes, parent B5); it is deleted since V1-24 3b-life-a.
-- **Names and "logged", in `lib/entries/activity-totals.ts`:** `movementNames` is the ONE display
-  builder for "Already saved for this day" and the announcement (skipped marked, repeats removed);
-  `loggedMovements` is the shared notion of "logged" (done vs skipped) that 3a-iii's fill filter
-  reuses. Neither surface builds names inline.
+     and `MOVEMENT_NAME_MESSAGES.missing` reads **"Choose a movement."** — the field it names is a
+     picker, so "enter" names an interaction no screen offers.
 
 ## Traps
 
 Real ones, each with the file to look at.
 
-- **⚠️ Clearing a load mode can UN-TOUCH a set, and that is correct.** V1-30b-i's Measuring change
-  drops `isBodyweight`, and a BW-only set is _touched_ precisely because of that flag. So switching a
-  BW-only scaffolded card to Time makes every row untouched → the card becomes **droppable**
-  (`isUntouchedScaffold`) and the summary loses a movement; if it was in a superset, serialization
-  also dissolves it (`dissolveSmallSupersets`). On a **named** hand-added card the typed name keeps it
-  undroppable, so every row is required and the form blocks instead. Neither is a bug: no typed number
-  is ever lost, the chips visibly vanish, and the cleared rows are visibly blank on an open card. Each
-  shape is pinned by a case-table test in `strength-form.test.tsx` running through
-  `expectSummaryAgrees`.
-- **⚠️ Filtering the load modes at SERIALIZATION instead of clearing them in state was tried and
-  rejected.** State would still count a BW-only set as touched while the wire carried a blank set the
-  server refuses — invisible "touched" state, the V1-19 collapsed-card wedge — and the V1-27 summary
-  would disagree with what was sent. Clearing in state keeps every V1-27 predicate correct by
-  construction. Do not "optimise" it back.
+- **⚠️ A BODYWEIGHT set cannot be corrected, by anyone, ever.** `updateStrengthSetById`'s WHERE
+  refuses a set with `is_bodyweight` — and there is **no delete action in the app**. So a mis-tapped BW
+  is permanent data. Found by real use on 2026-09-28 (V1-24): an athlete logged `20 × BW` KB swings
+  that were `10 × 20 lb` and had no way back. The guard is correct in intent — a numeric edit would
+  misrepresent a genuinely bodyweight set — but "refuse the edit" plus "no delete" adds up to
+  "unrecoverable", which is not what either half intended. The fix is V1-26 PR-B.
 
-- **⚠️ A BODYWEIGHT set cannot be corrected, by anyone, ever.** `isEditableSet` opens with
-  `!set.isBodyweight` and `updateStrengthSetById`'s WHERE mirrors it — and there is **no delete action
-  in the app**. So a mis-tapped BW is permanent data. Found by real use on 2026-09-28 (V1-24): Ray
-  logged `20 × BW` KB swings that were `10 × 20 lb` and had no way back. The guard is correct in
-  intent — a numeric edit would misrepresent a genuinely bodyweight set — but "refuse the edit" plus
-  "no delete" adds up to "unrecoverable", which is not what either half intended. Since V1-24 3a-i the row states its reason and the recovery route (`AMEND_COPY.locked`,
-  `lockedRecovery` in `lib/constants.ts`), which steers away from re-logging, the move that makes it
-  permanent twice. The fix is V1-26 PR-B.
-
-- **~~The form does not read the movement's `isBodyweight` / `unitDefault`.~~** ✅ **Fixed, V1-26
-  PR-A.** `programDayRows` now selects both, and they ride `ProgramDayDTO` → `ScaffoldRow` →
-  `scaffoldMovements`. The declaration lands on the **Unit select**, and a BW tap on a
-  catalog-declared-loaded movement raises a non-blocking note.
-
-  **⚠️ It is carried on the UNIT, and NEVER as a pre-tapped BW chip — this is load-bearing.**
-  `isUntouchedScaffold` requires `!s.isBodyweight`, so a scaffolded set seeded `isBodyweight: true` is
-  permanently "touched", survives `dropUntouchedMovements`, and blocks submit behind a collapsed
-  card whose `required` reps input is unmounted (the trap two bullets down, at a scale of 25 rows).
-  Both review panels found this independently. A unit has none of that problem and is strictly better
-  besides: it is **visible** in the select and the athlete can override it, where a pre-tapped chip is
-  invisible state. `strength-form-scaffold.test.ts` pins "no set is ever pre-seeded `isBodyweight`"
-  directly, and `e2e/scaffold-submit.spec.ts` asserts the submit itself in a real browser — jsdom
-  never runs native constraint validation, so only the e2e can see this class of failure.
-
-- **✅ Doing SOME of a movement's sets submits (V1-27, fixed).** It used to block: `reps` was
-  unconditionally `required` and there was no per-**set** drop. Now the **trailing** untouched sets (the
-  empty rows after the last touched set) are not `required` and are not sent — dropped at serialization,
-  never in state. Only trailing rows, so every sent set's index still equals its on-screen number and the
-  server's `set M` labels stay right. A gap, a half-entered set and a named all-blank card still block.
-  The line above **Log strength** states what will be logged, from the post-drop payload — the real
-  safeguard, because a forgotten last set is now logged short (Ray accepted that trade-off; see the
-  [plan](../plans/v1-27-partial-sets.md)). Pinned in a real browser by `e2e/scaffold-submit.spec.ts`.
-
-- **⚠️ `required` now depends on SIBLING rows (V1-27).** Whether set 2 is required depends on whether
-  set 3 is touched: removing set 3 makes set 2 trailing and un-required. So the custom "missing"
-  messages are set DECLARATIVELY from state (a `setCustomValidity` effect in `set-fields.tsx`), never by
-  an `onInvalid` event — an event-set message lingers after the field stops being required, and the form
-  appears dead. They are PER FIELD (`repsMissingMessage` / `weightMissingMessage`): blank reps names the
-  per-set Remove only when it exists (more than one set); the blank number is chosen BY UNIT
-  (`missingQuantityMessage`) — a mass unit names **BW or band**, a time or distance just asks for the number
-  (V1-30 refuses BW there, so "tap BW" would send the kid into a server rejection). "Tap Remove" on the
-  number would point at the movement's Remove (no undo), and "if you didn't do it" invites a fake `0` load. Only the
-  log form passes them; the edit form has no Remove button.
-
-- **⚠️ The summary's blocked state reads `firstBlocker`, which is blind to two things.** It names the FIRST
-  blank required field in on-screen order ("Push-ups set 2 needs finishing." / "Movement 1 needs a
-  name.") — the one the browser's bubble lands on — and reads the same collapse rule the form renders
-  from (`isCollapsed`, the one copy). It
-  agrees with the browser on every blank required field (it reads the same `nameRequired` /
-  `repsRequired` / `weightRequired` the inputs render from), but it cannot see a non-blank invalid value
-  (reps `0` / `2.5` fail native step/min) or a `type=number` field holding partial input (`.` on the iOS
-  decimal pad is `''` in React state and `badInput` to the browser). In both, the browser blocks with its
-  own message while the line says "Logs…". A COLLAPSED gap card is not "needs finishing" either: its
-  inputs are unmounted, so the tap sends and the server refuses it with a message naming the movement.
-
-- **A renamed scaffolded card never collapses again (V1-27).** Renaming clears `scaffolded` (as it clears
-  `declaredLoaded`), so the card counts as hand-added and named: it is never silently dropped, and it can
-  never become an invisible block on a collapsed card. A rename that is then reverted stays hand-added —
-  it errs toward blocking, and Remove clears it.
-
-- **⚠️ Uncontrolled fields survive a DAY navigation — key on the day (V1-28).** V1-15 made day
-  navigation a client-side RSC transition, so `StrengthFormBody` does not remount when only the day
-  changes. It is keyed `` `${day}:${gen}` `` for exactly that reason; `gen` alone (a **submit**
-  counter) left the day-role select reading the day the athlete had navigated AWAY from, and
-  submitting it wrote a `day_role` nobody asserted — the one thing that column exists to guarantee.
-
-  The general rule: **anything in this form using `defaultValue` / `defaultChecked` is only correct
-  because of that key.** `checkin-form.tsx` solves the same problem the other way and says so —
-  _"Checked state is CONTROLLED. `defaultChecked` is not reconciled after mount"_ — which is worth
-  reading before adding an uncontrolled field here.
-
-- **`formatSetLine`'s value+unit comes from the shared `formatValueUnit` (V1-24 PR 1a)** —
-  `lib/entries/format-value-unit.ts`, also used by `entryLabel`, the bodyweight receipt and the e2e
-  assertions. It takes a `Unit`, not a `string`, so a DTO whose unit is typed loosely fails to compile
-  rather than rendering whatever it holds.
-  ⚠️ **It is NOT `@mat-plan/shared/csv`'s `formatQuantity`, and the two must not be merged.** The CSV
-  one emits a **bare** number for `lb`, `85kg` for `kg`, and `20s` for seconds, because those are
-  contract bytes a downstream workflow diffs (and a bare number there means pounds). Using it here would drop the unit off every weight on
-  screen; using the display one there would corrupt the export. A test pins the difference.
+- **`formatValueUnit` (`lib/entries/format-value-unit.ts`, V1-24 PR 1a) is NOT `@mat-plan/shared/csv`'s
+  `formatQuantity`, and the two must not be merged.** The CSV one emits a **bare** number for `lb`,
+  `85kg` for `kg`, and `20s` for seconds, because those are contract bytes a downstream workflow diffs
+  (and a bare number there means pounds). Using it on screen would drop the unit off every weight;
+  using the display one there would corrupt the export. A test pins the difference.
 
 - **A time or distance set is not editable, and recovery means WRITING a correction (V1-30).** The edit
-  guard is mass-only, in the form (`isEditableSet`) and in SQL (`updateStrengthSetById`), and
-  invariant 3 keeps them identical. Before V1-30 no non-mass set could be saved, so this population is
-  new. A typo (`300 sec`) needs a new entry in `packages/db/scripts/corrections/registry.ts`, since
-  there is no generic "fix a set" correction. Making non-mass sets editable is its own backlog row.
-  `db:verify` pins the refusal.
-
-- **`EditableSet`'s collapse-on-success is the shared `useOnActionSuccess` hook (V1-24 PR 1b).** The
-  during-render idiom — adjust state while rendering, so the editor never flashes open over its saved
-  value — had **four** copies before this, one of which called itself _"the strength-form during-render
-  idiom"_ in a comment. All four (and the bodyweight amend) use the hook now; `onSuccess` must still
-  only touch the caller's OWN state.
+  guard is mass-only (`updateStrengthSetById`, invariant 3). Before V1-30 no non-mass set could be
+  saved, so this population is new. A typo (`300 sec`) needs a new entry in
+  `packages/db/scripts/corrections/registry.ts`, since there is no generic "fix a set" correction.
+  Making non-mass sets editable is its own backlog row. `db:verify` pins the refusal.
 
 - **`updateStrengthSetById`'s ownership subselect is `writers/ownership.ts`.** Same predicate as the
   bodyweight amend, extracted when the second caller arrived — which means V1-9's existing
@@ -425,8 +244,8 @@ Real ones, each with the file to look at.
 
   **Since TEN-1 1b the set-edit also takes a `scope`** (`updateStrengthSetById(exec, { …, scope })`),
   which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
-  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()`, so nothing
-  in the form or the action changed. `db:verify`'s TEN-1 write matrix proves the refusal in **both**
+  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()` (no caller
+  since FAM-1 12f PR 3 removed its action). `db:verify`'s TEN-1 write matrix proves the refusal in **both**
   directions with no side effect.
 
 - **`writeStrengthSession`'s in-transaction profile resolve is household-scoped too (TEN-1 1c).** It
@@ -435,8 +254,8 @@ Real ones, each with the file to look at.
   an unknown or soft-deleted profile already got, with the **whole multi-table graph rolled back**.
   `db:verify` asserts both directions and that no `sessions` row survived a refusal: a refusal that
   wrote half a session would be worse than a leak, because the athlete's next replay would attach to
-  it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the form, the
-  action and `ResolvedSessionMovement` are all unchanged.
+  it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so
+  `ResolvedSessionMovement` is unchanged (no app caller since FAM-1 12f PR 3).
 
   ✅ **Movement resolution still runs BEFORE this, and it is SCOPED as of `TEN-2b`** — the DAL's
   `findOrCreateMovementId` wrapper is gone (`PICK-1` PR 2 deleted it); `resolveSessionMovements`
@@ -460,10 +279,10 @@ Real ones, each with the file to look at.
     permanently (`ON CONFLICT (slug) DO NOTHING` discards the second household's text, and the seed
     only ever touches its own slugs, so nothing repairs it). Since this function can only ever write
     `is_bodyweight: false` and no `unit_default`, a movement one household typed is declared
-    loaded-with-no-default-unit for everybody — and the **other** household's Today card, read under
-    its own correct scope, renders that string and that declaration
+    loaded-with-no-default-unit for everybody — and the **other** household's program, read under
+    its own correct scope, carries that string and that declaration
     ([programming](./programming.md) invariant 4c). Given the inviolable load rule that is
-    safety-adjacent, not cosmetic: a typo in one household changes which load the form offers in
+    safety-adjacent, not cosmetic: a typo in one household changes how a movement is declared in
     another;
   - **the refused write still commits** — the DAL resolves every movement before
     `writeStrengthSession`, whose in-transaction re-resolve is the actual seam, so a POST the seam
@@ -476,41 +295,6 @@ Real ones, each with the file to look at.
   not read "the writer is scoped" as "the strength write path is tenant-isolated". See
   [write-path](./write-path.md) invariant 2.
 
-- **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
-  submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the
-  collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be
-  legitimately empty is this bug.
-
-- **"Untouched" is computed in ONE place: `isUntouchedSet` (`strength-form-untouched.ts`, V1-27).** It
-  used to be three copies (two card predicates and the collapsed counter), and they had drifted — the
-  counter ignored sub-failure. Every drop, every `required`, the counter and the summary now derive
-  from it. Add a set-level field without teaching `isUntouchedSet` and a set carrying ONLY that field is
-  deleted at submit. PR 4a had to extend all three copies for the mode flags; now it would be one.
-
-- **The set-row count has a DEFAULT and a FLOOR, and they are deliberately different numbers.**
-  `clampSetCount` in `strength-form-scaffold.ts`: `sets == null` → `DEFAULT_SCAFFOLD_SETS` (3);
-  `sets < 1` → **1**. The floor is the BUG-2(b) guard — a zero-row card is the vacuous-truth shape
-  (`[].every(...)` is true) and fails the schema anyway — so collapsing the two branches back into one
-  `?? 1` or `?? 3` breaks a different thing each way. Why 3 is the default: `PROGRAM_SEED` is `open()`
-  on **11 of its 13** prescriptions, so one row per open movement cost ~10 "Add set" taps a session
-  (~20% of the total) while the `filled/total` counter read `0/1 → 1/1` with two sets still to come —
-  lying on the form's only "where am I" signal. See [V1-23's plan](../plans/v1-23-today-focused.md).
-
-- **The row already wraps at 360px.** Usable width is ~294px (`main px-4` + `fieldset px-4`); line 1
-  is ~260px. The card splits into two **explicit** lines rather than trusting flex-wrap, and the
-  second line is already over budget and wrapping. Do the arithmetic against real classNames before
-  adding a control — `text-base` is load-bearing (smaller triggers iOS zoom-on-focus), so there is no
-  free shrink.
-
-- **The a11y CI gate is narrower than it looks.** It measures tap-target **height only**, not width,
-  and it **skips invisible controls**, so anything behind a disclosure passes vacuously. PR 4a closed
-  two of the four gaps: there is now a **360px** case and a **horizontal-overflow** assertion (both
-  proven to fail on a real regression before shipping). Width and the disclosure gap remain.
-
-- **A visually-hidden (`sr-only`) checkbox cannot be driven by Playwright's `.check()`.** Its box is
-  1px, so the actionability check fails. Click the **label** — which is what a person taps anyway, and
-  what `targetOf` measures for the tap-target bar.
-
 - **`packages/db` is typechecked, but only since DX-7 — and `engine` still is not directly.**
   `pnpm typecheck` runs `apps/web`, `packages/db` (its own `tsconfig.json`, covering `scripts/**`
   where the `db:verify` proofs live), `packages/evals` and `packages/shared` (tests included).
@@ -519,9 +303,10 @@ Real ones, each with the file to look at.
   reference in `writers/` or `verify.ts` used to surface only as a runtime crash in `db:verify`; it is
   now a compile error. Run `pnpm verify`.
 
-- **Server Actions are public POSTs.** Page auth does not protect one. Re-validate every field at the
-  boundary; a DB constraint reached by a crafted body is a 500 that discards the athlete's whole
-  session, because the action has no `try/catch` around the writer.
+- **A Server Action is a public POST.** Page auth does not protect one. Any future caller of this
+  path re-validates every field at the boundary: a DB constraint reached by a crafted body is a 500
+  that discards the athlete's whole session unless the action catches the writer's error (the
+  removed `logStrengthSessionAction` did not).
 
 - **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
   `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never
@@ -532,16 +317,14 @@ Real ones, each with the file to look at.
 
 ## Changing it
 
-| If you are…                 | Start here                                                                                                        |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| adding a field to a set     | `SetVals` in `strength-form.tsx` → `isUntouchedSet` (`strength-form-untouched.ts`) → `strengthSetSchema` → writer |
-| changing what a load can be | `shared/strength.ts`, then `set-display.ts` (BOTH functions), then the writer                                     |
-| changing the read line      | `set-display.ts` only — it is single-sourced so the read and edit views cannot disagree                           |
-| adding a measurement role   | `shared/quantity-slots.ts` (const + dimensions) → seed → `db:verify` parity proof                                 |
-| touching the edit path      | `isEditableSet` **and** `updateStrengthSetById` together, always                                                  |
+| If you are…                 | Start here                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| adding a field to a set     | `strengthSetSchema` → `writeStrengthSession` → `insertEntrySetRows`               |
+| changing what a load can be | `shared/strength.ts`, then the writer, then `updateStrengthSetById`'s WHERE       |
+| adding a measurement role   | `shared/quantity-slots.ts` (const + dimensions) → seed → `db:verify` parity proof |
+| touching the edit path      | `updateStrengthSetById`'s WHERE and its `db:verify` fix-a-set proofs, together    |
 
-Then: `pnpm verify` (includes `db:verify` on PGlite, no Docker) and `pnpm e2e:local`. A UI change also
-needs screenshots at mobile/tablet/desktop and a UX panel — see AGENTS.md → "UI PR rules".
+Then: `pnpm verify` (includes `db:verify` on PGlite, no Docker).
 
 ## Background
 

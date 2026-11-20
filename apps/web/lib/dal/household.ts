@@ -264,10 +264,14 @@ let schemaMissingReported = false;
 function shouldReportUnresolved(
   userId: string | null,
   outcome: ScopeOutcome | ScopeMissOutcome | typeof AUTHORITY_OUTCOME,
+  /** Narrows the cap below the outcome: an authority refusal is once per principal PER ACTION. */
+  action?: AuthorityAction,
 ): boolean {
   // No principal collapses to once per process, which is correct rather than a compromise: there is
   // nothing to tell two anonymous callers apart by, and 1c-3b refuses them upstream anyway.
-  const key = `${outcome}:${userId ?? 'anonymous'}`;
+  // The action is in the key so one owner-only act's event never swallows another's (an archive
+  // refusal used to silence a later export refusal from the same login, and the reverse).
+  const key = `${outcome}${action ? `:${action}` : ''}:${userId ?? 'anonymous'}`;
   if (reportedUnresolved.has(key)) return false;
   if (reportedUnresolved.size > REPORT_CAP) return false;
   reportedUnresolved.add(key);
@@ -370,10 +374,24 @@ export async function householdState(): Promise<{
    * not be "is the owner".
    */
   canArchiveAthletes: boolean;
+  /**
+   * **`canExportAthletes`: may this login download an athlete's export** (FAM-1 export follow-up,
+   * plan PR B; the maintainer's Q1, 2026-11-19). Today the owner only, which is the same answer as
+   * `canArchiveAthletes` and deliberately a second boolean: `ID-1` will let an adult member export
+   * their own athlete, and `COACH-1` may archive without owning, so the two will part. The export
+   * control renders only when it is true (`components/profiles/export-control.tsx`).
+   */
+  canExportAthletes: boolean;
 }> {
   const scope = await getHouseholdScope();
-  if (!scope) return { state: HOUSEHOLD_STATE.none, canArchiveAthletes: false };
-  return { state: HOUSEHOLD_STATE.resolved, canArchiveAthletes: ownerScope(scope) !== null };
+  if (!scope)
+    return { state: HOUSEHOLD_STATE.none, canArchiveAthletes: false, canExportAthletes: false };
+  const isOwner = ownerScope(scope) !== null;
+  return {
+    state: HOUSEHOLD_STATE.resolved,
+    canArchiveAthletes: isOwner,
+    canExportAthletes: isOwner,
+  };
 }
 
 /** The one outcome this event reports, named so the tag and the cap key cannot drift apart. */
@@ -382,6 +400,8 @@ const AUTHORITY_OUTCOME = 'owner_only';
 /** The authority-refused acts. One string per surface, so an alert can key on it. */
 export const AUTHORITY_ACTION = {
   archiveProfile: 'archive_profile',
+  /** FAM-1 export follow-up: a non-owner asked for an athlete's export. */
+  exportProfile: 'export_profile',
 } as const;
 
 type AuthorityAction = (typeof AUTHORITY_ACTION)[keyof typeof AUTHORITY_ACTION];
@@ -425,7 +445,9 @@ type AuthorityAction = (typeof AUTHORITY_ACTION)[keyof typeof AUTHORITY_ACTION];
  */
 export async function reportAuthorityRefusal(action: AuthorityAction): Promise<void> {
   try {
-    if (!shouldReportUnresolved((await getCurrentUser())?.userId ?? null, AUTHORITY_OUTCOME))
+    if (
+      !shouldReportUnresolved((await getCurrentUser())?.userId ?? null, AUTHORITY_OUTCOME, action)
+    )
       return;
     Sentry.captureMessage('athlete authority refused', {
       level: 'warning',
@@ -512,7 +534,8 @@ export type ScopeMissArgs =
  * idiom in `lib/sentry-scrub.ts`.
  *
  * ⚠️ **What it must never carry**, each for its own reason:
- * - **a profile name or any logged value** — SECURITY.md: kid bodyweight is privileged, never logged;
+ * - **a profile name or any logged value** — SECURITY.md → Sensitive data: bodyweight is privileged,
+ *   never logged;
  * - **any `DrizzleQueryError`** — SEC-3's scar: its message embeds query params and has already
  *   shipped a kid's bodyweight to Sentry once. The probe below therefore catches its own errors.
  *   `lib/sentry-scrub.ts` strips denied headers and anything named `params`, but it has **no

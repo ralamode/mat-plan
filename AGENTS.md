@@ -316,14 +316,14 @@ movement picker.
 - **`pnpm verify` — optional before a PR** (CI runs all of it, DX-18). Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it):
-  `format:check` → `lint` → `typecheck` → `test` → `eval` → `db:verify` → `db:mutations` → `skills:check`
+  `format:check` → `lint` → `typecheck` → `test` → `eval` → `db:check` (snapshot parent collisions) → `db:verify` → `db:mutations` → `skills:check`
   (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist; each red flag cites its incident) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)). In CI it
   is the `mutations` matrix plus `mutations-total`, skipped on a PR only when
   [changed-scopes.mjs](./.github/scripts/changed-scopes.mjs) says no patch can be affected, and run in
-  full on every push to `main`.
+  full on `main`, where a burst of pushes coalesces into at most two runs (DX-18 D6, revised).
   **This section is the one list of where each gate runs**; other docs point here rather than
   restating it. `skills:check`, `guards:test` (every guard self-test `package.json` lists) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
@@ -343,7 +343,7 @@ movement picker.
   through. Bare `pnpm --filter web e2e` provisions no database — use `e2e:local`.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
-  `next build` · gitleaks · (DB) drift check + `db:verify` · `audit:check` · `skills:check` ·
+  `next build` · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
   `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run
@@ -453,7 +453,8 @@ Queue: ONE unapplied migration on main at a time. Merge the next only after migr
   PENDING run and drops older pending ones, so two quick merges apply together, in one transaction.
 Where it runs: GitHub Actions is the SINGLE migrator, on merge to main, against the DIRECT/unpooled
   Neon string. NEVER in the Vercel build (concurrent preview builds would race / DDL the wrong DB).
-CI gates: `generate` leaves a clean tree (drift guard) + `db:verify` on PGlite +
+CI gates: `drizzle-kit check` (snapshot parent collisions) + `generate` leaves a clean tree (drift
+  guard) + `db:verify` on PGlite +
   Squawk on new migrations + the e2e job's migrate+seed against an empty Postgres service. Where each
   gate runs, and which is NOT wired: "Local hooks vs CI merge-gates" above.
 Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside

@@ -8,6 +8,7 @@ import {
   MAX_PROGRAM_WORKOUTS,
   newId,
   PROGRAM_REFUSAL,
+  programsByStay,
   programViewSchema,
   QUANTITY_SLOT,
   ROW_REFUSAL,
@@ -36,7 +37,9 @@ import {
   newWorkoutEmpty,
   programsList,
   todayStretchingFirst,
+  todayThreeProgramsOneEnding,
   todayTwoPrograms,
+  unitEditedAfterLogging,
   workoutLeftTheWeek,
   yesterdayEditedAfterLogging,
 } from '@mat-plan/shared/program/fixtures';
@@ -782,6 +785,48 @@ describe('the fake DayActions: un-tick, re-tick and Change', () => {
     expect(rows.find((row) => row.set === open.set)?.logged?.values.quantities[0]?.unit).toBe('kg');
   });
 
+  it('🔴 holds both rules on the fixture of that state: unit-edited-after-logging (C28)', async () => {
+    // The fixture needs no hand edit: its bench reads kg and its two logged sets are in lb.
+    const before = unitEditedAfterLogging;
+    const bench = itemOf(before, 'DB bench press').item;
+    const logged = bench.rows[0]?.logged;
+    if (!logged) throw new Error('the fixture logs the bench press');
+    expect([bench.unit, logged.values.quantities[0]?.unit]).toEqual(['kg', 'lb']);
+    const { actions, plan } = day(before);
+    const kg = (value: number) => ({ ...lb(value), unit: 'kg' as const });
+    const amend = (values: RowWrite['values']) =>
+      actions.amendRow({
+        profilePublicId: before.profilePublicId,
+        entryPublicId: logged.entryPublicId,
+        values,
+      });
+
+    // A Change on a row logged in lb: a kg number is refused, an lb number is stored.
+    expect(await amend({ reps: 8, quantities: [kg(14)] })).toEqual({
+      ok: false,
+      reason: ROW_REFUSAL.bad_value,
+    });
+    expect(plan()).toBe(before);
+    const values = { reps: 8, quantities: [lb(30)] };
+    expect(await amend(values)).toEqual({
+      ok: true,
+      entryPublicId: logged.entryPublicId,
+      values,
+    });
+
+    // An empty ✓ on a set not logged yet takes the prescription as it reads now: 12.5 kg.
+    const ticked = succeeded(await actions.logRow(tick(before, 'DB bench press')));
+    expect(ticked.values).toEqual({ reps: 8, quantities: [kg(12.5)] });
+    const rows = itemOf(plan(), 'DB bench press').item.rows;
+    expect(rows.map((row) => row.logged?.values.quantities[0]?.unit ?? null)).toEqual([
+      'lb',
+      'lb',
+      'kg',
+      null,
+    ]);
+    expect(dayPlanSchema.parse(plan())).toEqual(plan());
+  });
+
   it('Change keeps the old number when the new one is blank or not a number', async () => {
     const { actions, plan } = day(everyTypeOnce);
     const { entryPublicId } = loggedBench();
@@ -856,6 +901,46 @@ describe('the fake DayActions: the switch and the program order', () => {
     expect(plan().currentPrograms).toEqual(before.currentPrograms);
     expect(plan().programs).toEqual(before.programs);
     expect(plan().workouts.map((w) => w.name)).toEqual(['Barbell day', 'Camp lifts']);
+  });
+
+  it('🔴 moves the two programs that stay, and leaves the one ending today below them (C37)', async () => {
+    const before = todayThreeProgramsOneEnding;
+    const { staying, ending } = programsByStay(before.currentPrograms);
+    expect([staying.length, ending.length]).toEqual([2, 1]);
+    const ids = (list: typeof staying) => list.map((p) => p.programPublicId);
+    const { actions, plan } = day(before);
+    // Asked for: the program ending today first, then the two that stay, swapped.
+    const result = await actions.reorderPrograms({
+      profilePublicId: before.profilePublicId,
+      programPublicIds: [...ids(ending), ...ids(staying).reverse()],
+    });
+    expect(result).toEqual({ ok: true });
+    // The two that stay swapped; the one ending today is where it was, still flagged.
+    expect(plan().currentPrograms).toEqual([...[...staying].reverse(), ...ending]);
+    expect(programsByStay(plan().currentPrograms).ending).toEqual(ending);
+    expect(plan().programs.map((p) => [p.name, p.order])).toEqual([
+      ['Stretching', 0],
+      ['Family program', 1],
+      ['Tournament prep', 2],
+    ]);
+    expect(plan().workouts.map((w) => w.name)).toEqual([
+      'Evening stretch',
+      'Morning habits',
+      'Heavy B',
+      'Conditioning',
+      'Prep drills',
+    ]);
+    expect(dayPlanSchema.parse(plan())).toEqual(plan());
+
+    // Asked for with the ending one in the middle: the same answer, since it cannot move.
+    const [first, second] = ids(staying);
+    const again = await actions.reorderPrograms({
+      profilePublicId: before.profilePublicId,
+      programPublicIds: [first!, ...ids(ending), second!],
+    });
+    expect(again).toEqual({ ok: true });
+    expect(plan().currentPrograms).toEqual(before.currentPrograms);
+    expect(plan().workouts).toEqual(before.workouts);
   });
 
   it('refuses an order that is not the athlete’s full list', async () => {

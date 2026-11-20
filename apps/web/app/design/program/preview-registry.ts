@@ -96,6 +96,31 @@ export function dayPreviewHrefFor(current: PreviewSelection): (profilePublicId: 
   };
 }
 
+/** Where the day preview's Programs link goes: the preview's own Programs list. */
+export const PREVIEW_PROGRAMS_HREF = previewHref({
+  screen: 'programs-list',
+  fixture: 'programs-list',
+  failNext: false,
+});
+
+/**
+ * Where a program's name on the day preview goes (FAM-1 15c, plan D49): the first Program page
+ * fixture that is that program, or the preview's Programs list when the fixtures hold no page for
+ * it. Built from the contract's fixture list, never from a request, so every link the line shows
+ * is a state this route lists.
+ *
+ * The real page passes `programPath`, which opens `/programs/<id>`. The preview has no such
+ * route, so it opens the nearest state it has, as the athlete switcher and the Programs link do.
+ */
+export function programPreviewHref(programPublicId: string): string {
+  const fixture = Object.entries(PROGRAM_VIEW_FIXTURES).find(
+    ([, view]) => view.programPublicId === programPublicId,
+  )?.[0];
+  return fixture
+    ? previewHref({ screen: 'program', fixture, failNext: false })
+    : PREVIEW_PROGRAMS_HREF;
+}
+
 /** A short name for one state: `day · today-two-programs · the next write fails`. */
 export function previewLabel({ screen, fixture, failNext }: PreviewSelection): string {
   return `${screen} · ${fixture}${failNext ? ' · the next write fails' : ''}`;

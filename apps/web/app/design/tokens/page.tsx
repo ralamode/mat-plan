@@ -1,15 +1,10 @@
 import type { Metadata } from 'next';
 
-import { DAY_ROLES, type DayRole } from '@mat-plan/shared';
-
-import { ProgramReference } from '@/app/p/[profileId]/program-reference';
-import type { ProgramDayDTO } from '@/lib/programming/program-day';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireSession } from '@/lib/dal/session';
 
 import { AA_LARGE, AA_NORMAL, formatRatio, ratioOf, toHex } from './contrast';
 import { ButtonsCell, FieldsCell, SetCell, SurfacesCell } from './inventory';
-import { SetRowDemo } from './set-row-demo';
 import { PALETTE_TOKENS, SCOPED_SETS, TOKEN_SETS } from './token-sets';
 import './token-sets.css';
 
@@ -49,50 +44,6 @@ export const metadata: Metadata = {
   // Not indexable. Gated too, so this is belt and braces — but the gate is a stopgap, not authz.
   robots: { index: false, follow: false },
 };
-
-/**
- * The card's rows, covering `formatPrescription`'s three shapes: sets + reps, a movement-only
- * prescription, and one carrying a verbatim coach-authored load. Literals, not a DAL read — this page
- * holds no household data.
- */
-const PROGRAM_ROWS: readonly ProgramDayDTO[] = [
-  {
-    idx: 0,
-    movementName: 'Back Squat',
-    sets: 4,
-    targetReps: '5',
-    load: '~75-85',
-    isBodyweight: false,
-    unitDefault: 'lb',
-  },
-  {
-    idx: 1,
-    movementName: 'Pull-Up',
-    sets: 3,
-    targetReps: 'AMRAP',
-    load: 'BW',
-    isBodyweight: true,
-    unitDefault: null,
-  },
-  {
-    idx: 2,
-    movementName: 'Farmer Carry',
-    sets: null,
-    targetReps: null,
-    load: null,
-    isBodyweight: false,
-    unitDefault: 'lb',
-  },
-];
-
-/**
- * One day role per set, so `ProgramReference`'s internal `program-<role>-heading` id stays unique
- * across the four copies. Four identical ids would make every card's `aria-labelledby` resolve to the
- * first card's heading — invalid HTML, and a screen-reader user hearing one card's name four times.
- * The alternative was adding an id-prefix prop to a guide-owned component; using the roles it already
- * accepts costs nothing and shows the label slot varying, which is part of the card.
- */
-const ROLE_FOR_SET: readonly DayRole[] = DAY_ROLES.slice(0, TOKEN_SETS.length) as DayRole[];
 
 /** The text pairs whose ratio decides whether a set is usable. Same list the unit test asserts. */
 const TEXT_PAIRS = [
@@ -141,8 +92,6 @@ export default async function TokenSetsPage() {
               ['Buttons', 'buttons'],
               ['Form fields', 'fields'],
               ['Surfaces', 'surfaces'],
-              ['Strength set row', 'set-row'],
-              ['Day card', 'day-card'],
             ].map(([label, id]) => (
               <li key={id}>
                 <a href={`#${id}`} className="text-primary underline-offset-4 hover:underline">
@@ -316,45 +265,6 @@ export default async function TokenSetsPage() {
             <li key={set.id}>
               <SetCell set={set}>
                 <SurfacesCell setId={set.tokens ? set.id : undefined} />
-              </SetCell>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section id="set-row" aria-labelledby="set-row-heading" className="flex flex-col gap-4">
-        <h2 id="set-row-heading" className="text-xl font-semibold tracking-tight">
-          Strength set row
-        </h2>
-        <p className="text-muted-foreground max-w-prose text-sm">
-          The real <code>SetRepsWeightFields</code> and <code>SetModeToggles</code>, not a copy —
-          the densest row in the app, and the one the density and radius axes actually act on.
-          Stacked full width, because this row needs ~294px of the 328px a 360px phone has.
-        </p>
-        <ul className="flex flex-col gap-3">
-          {TOKEN_SETS.map((set) => (
-            <li key={set.id}>
-              <SetCell set={set}>
-                <SetRowDemo ariaLabel={`${set.name} set 1`} />
-              </SetCell>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section id="day-card" aria-labelledby="day-card-heading" className="flex flex-col gap-4">
-        <h2 id="day-card-heading" className="text-xl font-semibold tracking-tight">
-          Day card
-        </h2>
-        <p className="text-muted-foreground max-w-prose text-sm">
-          The real <code>ProgramReference</code>, fed literal prescriptions. Each card carries a
-          different day role so its heading id stays unique across the four copies.
-        </p>
-        <ul className="flex flex-col gap-3">
-          {TOKEN_SETS.map((set, i) => (
-            <li key={set.id}>
-              <SetCell set={set}>
-                <ProgramReference dayRole={ROLE_FOR_SET[i]!} rows={PROGRAM_ROWS} />
               </SetCell>
             </li>
           ))}

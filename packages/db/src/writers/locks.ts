@@ -4,7 +4,8 @@
  * purposes never wait on each other by accident. Add a lock here, with its own number, never inline.
  *
  * Transaction-scoped locks only (`_xact_`): the app runs behind PgBouncer, where a session-scoped
- * lock could outlive the request that took it.
+ * lock could outlive the request that took it. Call `setLocalLockTimeout` (`executor.ts`) first in
+ * the same transaction, so a wait on the lock is bounded.
  */
 export const ADVISORY_LOCK = {
   /** A household's own items: `newItem` counts and adds them one at a time (`writers/program/new-item.ts`). */

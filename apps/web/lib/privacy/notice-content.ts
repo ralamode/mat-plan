@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-19. This is a beta."
+            "text": "Last updated: 2026-11-20. This is a beta."
           }
         ]
       }
@@ -313,7 +313,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " screen, opened from the home screen): anyone\nsigned in to your household can create and rename a program, write and change its workouts, add\na movement of your own, set its week and copy a workout, and put an athlete on a program or take\nthem off it. What is\nstored: a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. A movement name someone in your household types with \"+ New item\" is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\nIn the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so is an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,\nrestore, export or erase them, and they stay until the program or the household is removed.\n"
+              "text": " screen, opened from the home screen): anyone\nsigned in to your household can create and rename a program, write and change its workouts, add\na movement of your own, set its week and copy a workout, put an athlete on a program or take\nthem off it, and, from an athlete's page, change the order their programs show in. What is\nstored: a program's name, its\nworkouts' names and descriptions, the label you give a workout on a day of the week, and, when you\ncopy a workout from another of your programs, that program's name as it was when you copied it.\nFor each exercise in a workout: its instructions and rest note, the name you give a group of\nexercises done together, and the targets you set (sets, reps, and a weight, time, distance or\ncount). These belong to the household, so removing one athlete does not\nremove them; deleting the household does. A movement name someone in your household types with \"+ New item\" is added to the list that anyone signed in to your household picks from, and it\nstays in that list whether or not any program still uses it. It can't be renamed or removed in the\napp. Please type only the name of an exercise, never a person's name or anything about a child.\nIn the builder, a workout taken off a day of the week or moved to another day (with its label) is hidden, not erased, and so is an exercise you remove from a workout or swap for another, a target you clear and a workout you save with nothing in it. These pile up: nothing in the app can show,\nrestore, export or erase them, and they stay until the program or the household is removed.\n"
             },
             {
               "k": "strong",
@@ -326,16 +326,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ": which athlete is on it, from which day and through which day, and on\nwhich days of the week. That belongs to the athlete, and goes with them if they are removed. Taking\nan athlete off a program keeps the record that they were on it. If they had not started yet, or the\nprogram only started that day and nothing was logged in it, the record is hidden rather than kept on the athlete's list; it is\nstill held until the athlete or the household is erased.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged.\n"
-            },
-            {
-              "k": "em",
-              "children": [
-                {
-                  "k": "text",
-                  "text": "(Nothing in the live app logs a workout yet: the day page that does is being built. This line is\nhere because the schema is public and you would otherwise find these tables.)"
-                }
-              ]
+              "text": ": which athlete is on it, from which day and through which day, and on\nwhich days of the week. That belongs to the athlete, and goes with them if they are removed. Taking\nan athlete off a program keeps the record that they were on it. If they had not started yet, or the\nprogram only started that day and nothing was logged in it, the record is hidden rather than kept on the athlete's list; it is\nstill held until the athlete or the household is erased.\nWhen an athlete logs a workout, its name as it was that day, and the name you gave a group of\nexercises done together, are kept with the session, so renaming or deleting the workout later\ndoes not change what was logged."
             }
           ]
         }
@@ -616,7 +607,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           "children": [
             {
               "k": "text",
-              "text": "The adult owns the account, and is the one who can export the data or have it deleted."
+              "text": "A household owner can export the data or have it deleted. Today every adult given a sign-in to\nthe household is an owner, so a household can have more than one."
             }
           ]
         }
@@ -710,7 +701,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ", through the shared login."
+              "text": ": anyone signed in to it, each with their own sign-in, sees every athlete's\nhistory in the app, weigh-ins included. Only a household owner can download an athlete's export."
             }
           ]
         }
@@ -925,13 +916,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "Anyone signed in to your household can download any athlete's full history"
+                  "text": "Anyone signed in to your household can see any athlete's full history in the app"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this\nversion is that getting in takes "
+              "text": " — including\na child tapping a sibling's tile — "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "and only a household owner can download it."
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " Today every\nadult given a sign-in to a household is its owner, so anyone signed in can still download; the\nlimit applies once people can be invited as members. The tiles are a convenience, not a lock. What is new in this\nversion is that getting in takes "
             },
             {
               "k": "strong",
@@ -1657,7 +1661,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " on today or yesterday (tap Change, empty the field, tap Clear): that\nhides it, and the app "
+        "text": " on today or yesterday (tap Change, empty the field, tap its Clear button): that\nhides it, and the app "
       },
       {
         "k": "strong",
@@ -1708,13 +1712,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "What is being built, so you know what to expect."
+            "text": "Clear this day."
           }
         ]
       },
       {
         "k": "text",
-        "text": " A "
+        "text": " On "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "today's"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " page, "
       },
       {
         "k": "strong",
@@ -1727,7 +1744,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " control, which hides\neverything logged on one day at once. Unlike a cleared weigh-in or practice, a cleared day can be "
+        "text": " hides every entry logged for that\nathlete on that day, at once, after you type a word to confirm. Nothing is erased. Unlike a cleared\nweigh-in or practice, a cleared day can be "
       },
       {
         "k": "strong",
@@ -1740,7 +1757,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ":\na banner offers "
+        "text": ": a banner offers "
       },
       {
         "k": "strong",
@@ -1753,7 +1770,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " while that day is today or yesterday (after that, the day stays\nhidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been\nlogged in that day's place — when that happens the app will say so rather than fail quietly. There\nwill be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its\nfield, as above. Two things are worth saying plainly about every clear:"
+        "text": " while that\nday is today or yesterday, so a day cleared today can be put back until the end of tomorrow. After\nthat the entries stay hidden and out of the export; a full copy on request includes them, and\nnothing short of deleting the athlete or the household removes them (though a cleared workout row\nticked again is written over, below). The offer survives a reload,\nbecause nothing about it is held on your phone. Things worth saying plainly:"
       }
     ]
   },
@@ -1775,7 +1792,47 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " The app does\nnot record who cleared what, and anyone signed in to your household can open any athlete. So a child\ncan clear a weigh-in or a practice and a parent will not see it either. ⚠️ That is still the honest shape of it:\nper-person sign-in is now the only way in, but the app records no author on an entry, so sign-in\nalone did not fix this one."
+              "text": " Anyone\nsigned in to your household can clear any athlete's day, and restore it, unless that athlete is\narchived. The app does not record who did either. ⚠️ Per-person sign-in is now the only way in,\nbut the app records no author on an entry, so sign-in alone did not fix this."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "A restore sometimes cannot bring an entry back"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": ", when something has since been logged in its\nplace; the app says so rather than failing quietly. And ticking a cleared workout row again writes\nthe new numbers over the cleared ones."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "A workout's name and its \"how it felt\" note stay."
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " Clearing hides the day's entries, an\nentry's own note included. The workout's name, its group names and any \"how it felt\" note stay\nwith the day until the athlete or household is deleted."
             }
           ]
         }
@@ -1795,7 +1852,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " A cleared item stays in the database, out of sight and out of the export,\nuntil a removal that runs a set number of days later is built."
+              "text": " A cleared entry stays in the database, out of sight and out of the\nexport, until a removal that runs a set number of days later is built."
             }
           ]
         }
@@ -1838,7 +1895,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Open an athlete's page and use the export. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
+        "text": "Open an athlete's page and use the export. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Only a household owner can download an export."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Today\nevery adult given a sign-in to a household is an owner, so this changes nothing for anyone yet; it\napplies once people can be invited as members. Then an adult who is not an owner can ask for a copy of\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "their own"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " data (below); a child's copy goes only to an owner. Anyone signed in to the household\nstill sees weigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the\nstrength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins\n(habits, counts and any wake-up time, written as a time of day). A workout an\nathlete logs from a program has one row per exercise in the strength log, with the "
       },
       {
         "k": "strong",
@@ -1900,7 +1983,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. Their export is on the "
+        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. A household owner finds their export on the "
       },
       {
         "k": "strong",
@@ -1913,7 +1996,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " screen, beside their\nname. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty\nfile — an empty zip looks exactly like a download that failed."
+        "text": "\nscreen, beside their name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty\nfile — an empty zip looks exactly like a download that failed."
       }
     ]
   },
@@ -1984,7 +2067,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " who has the link or who looks in Household settings, and their export still works. "
+        "text": " who has the link or who looks in Household settings, and the owner can still export them. "
       },
       {
         "k": "strong",
@@ -2389,6 +2472,95 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           ]
         }
       ]
+    ]
+  },
+  {
+    "k": "h2",
+    "children": [
+      {
+        "k": "text",
+        "text": "What changed on 19 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Clear this day is in the app."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " On today's page, it hides every entry logged for an athlete that\nday, after you type a word to confirm, and "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Restore all"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " puts them back while the day is today or\nyesterday. Anyone signed in to the household can do either. Nothing is erased; see \"How long we\nkeep it\" above."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Removed two notes that said no page logged a workout yet."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " The day page has logged workouts since\nan athlete could be put on a program, so a workout logged there is kept and exported as this notice\ndescribes."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Only a household owner can download an athlete's export."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Any other sign-in is refused the\ndownload, and the export link is not shown to it. Everyone signed in to the household still sees\nevery athlete's history in the app, weigh-ins included. Today every adult given a sign-in to a\nhousehold is its owner, so nobody's access changes yet: this is a rule that now exists, for when\npeople can be invited as members. An adult member exporting their own data is planned for later.\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The export is also rate-limited per signed-in person"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", with room to export every athlete of a full\nhousehold before deleting anything."
+      }
     ]
   },
   {
@@ -2817,7 +2989,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " against the retirement of the shared access code, which changed\nwho can get in, what Upstash is sent, and what a refused sign-up leaves behind.\n"
+        "text": " against the retirement of the shared access code, which changed\nwho can get in, what Upstash is sent, and what a refused sign-up leaves behind. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Re-reviewed\n2026-11-19"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " against the export becoming the household owners' and its rate limit, and against\nClear this day "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(both pending the maintainer's re-read)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ".\n"
       },
       {
         "k": "strong",

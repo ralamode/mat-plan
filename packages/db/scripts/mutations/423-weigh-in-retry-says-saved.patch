@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/bodyweight.ts b/packages/db/src/writers/bodyweight.ts
+index 8a39715c..ad8f6d2c 100644
+--- a/packages/db/src/writers/bodyweight.ts
++++ b/packages/db/src/writers/bodyweight.ts
+@@ -227,7 +227,8 @@ export async function insertBodyweightEntry(
+   args: BodyweightInsertArgs,
+ ): Promise<{ id: string } | { dayTaken: true }> {
+   const result =
+-    (await attemptBodyweightEntry(exec, args)) ?? (await attemptBodyweightEntry(exec, args));
++    (await attemptBodyweightEntry(exec, args)) ??
++    (await attemptBodyweightEntry(exec, args).then((r) => (r && 'dayTaken' in r ? { id: args.publicId } : r)));
+   if (result !== null) return result;
+ 
+   // (c), twice: DO NOTHING suppressed a conflict that is neither — never answer with something plausible.

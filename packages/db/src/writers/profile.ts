@@ -14,7 +14,7 @@ import {
   isOwnerOf,
   profileByClientId,
 } from './ownership';
-import type { Executor } from './executor';
+import { setLocalLockTimeout, type Executor } from './executor';
 import { ADVISORY_LOCK } from './locks';
 
 /** What both archive writers return — the row's public id and the stored `archived_at`, or `null`. */
@@ -372,8 +372,8 @@ async function addProfile(
  *
  * `addProfile` reads the count and then inserts. Unlocked, N adds at once from one household all read
  * `count < MAX_HOUSEHOLD_ATHLETES` and all insert (the limiter fails open, so it never bounded that).
- * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, exactly as `newItem`
- * does for its items (#605), so a second add at the same moment waits, then counts the first add's
+ * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, as `newItem` does for
+ * its items (#605; `newItem` also reads the household row `FOR KEY SHARE`, which this read does not yet), so a second add at the same moment waits, then counts the first add's
  * committed row; a same-key twin finds its twin's row at the replay step. That is why the replay lookup
  * runs AFTER the lock, not before it.
  *
@@ -394,6 +394,8 @@ async function lockedCreate(
   scope: HouseholdScope,
   input: Parameters<typeof addProfile>[2],
 ): Promise<CreateProfileResult> {
+  // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
+  await setLocalLockTimeout(exec);
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
   // unwrapped here. No row means the household is gone (an erasure mid-call): `refused`, so the
   // count never runs without the lock.

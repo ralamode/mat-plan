@@ -22,10 +22,12 @@ import {
 import {
   parsePreview,
   PREVIEW_FAIL_NEXT,
+  PREVIEW_PROGRAMS_HREF,
   PREVIEW_SCREENS,
   previewEntries,
   previewHref,
   PROGRAM_PREVIEW_PATH,
+  programPreviewHref,
 } from './preview-registry';
 
 /** A URL's search params in the shape Next hands a page. */
@@ -89,12 +91,67 @@ describe('the preview registry', () => {
   });
 });
 
+describe('where a program’s name goes on the day preview (FAM-1 15c, D49)', () => {
+  const listed = new Set(previewEntries().map(previewHref));
+  /** The program whose page a preview link opens, read back through the route's own parser. */
+  const pageProgramOf = (href: string): string | undefined => {
+    const selection = parsePreview(
+      Object.fromEntries(new URL(href, 'http://preview').searchParams),
+    );
+    if (selection?.screen !== 'program') return undefined;
+    const views: Record<string, { programPublicId: string }> = PROGRAM_VIEW_FIXTURES;
+    return views[selection.fixture]?.programPublicId;
+  };
+
+  it('a program the preview has a page for opens its first Program page state', () => {
+    expect(programPreviewHref(familyProgram.programPublicId)).toBe(
+      previewHref({ screen: 'program', fixture: 'family-program', failNext: false }),
+    );
+  });
+
+  it('🔴 every Program page fixture’s program opens a page of that program', () => {
+    for (const [fixture, view] of Object.entries(PROGRAM_VIEW_FIXTURES)) {
+      expect(pageProgramOf(programPreviewHref(view.programPublicId)), fixture).toBe(
+        view.programPublicId,
+      );
+    }
+  });
+
+  it('a program with no page state opens the preview’s Programs list', () => {
+    expect(PREVIEW_PROGRAMS_HREF).toBe(
+      previewHref({ screen: 'programs-list', fixture: 'programs-list', failNext: false }),
+    );
+    expect(programPreviewHref('00000000-0000-4000-8000-000000000000')).toBe(PREVIEW_PROGRAMS_HREF);
+  });
+
+  it('🔴 every program a day fixture names links to a state this route lists', () => {
+    const paged = new Set(Object.values(PROGRAM_VIEW_FIXTURES).map((v) => v.programPublicId));
+    let withPage = 0;
+    let withoutPage = 0;
+    for (const [fixture, plan] of Object.entries(DAY_PLAN_FIXTURES)) {
+      for (const program of plan.programs) {
+        const href = programPreviewHref(program.programPublicId);
+        expect(listed.has(href), `${fixture} · ${program.name}`).toBe(true);
+        // A page of its own when the fixtures hold one, the list otherwise: never a guess.
+        const hasPage = paged.has(program.programPublicId);
+        expect(href === PREVIEW_PROGRAMS_HREF, `${fixture} · ${program.name}`).toBe(!hasPage);
+        // And the page it opens is THAT program's, not just any Program page state.
+        if (hasPage)
+          expect(pageProgramOf(href), `${fixture} · ${program.name}`).toBe(program.programPublicId);
+        if (hasPage) withPage += 1;
+        else withoutPage += 1;
+      }
+    }
+    // Both arms are real: the day fixtures name the Family program and at least one other.
+    expect(withPage).toBeGreaterThan(0);
+    expect(withoutPage).toBeGreaterThan(0);
+  });
+});
+
 describe('the picker-options fixture', () => {
-  /** In both lists and logged the same way: one row each, the library's, under the item's id. */
-  const SHARED = ['Goblet squat', 'Side plank'];
-  /** In both lists and logged differently: the household's item stays, the library's is left out. */
-  const KEPT_AS_ITEM = ['Jump rope', 'Easy run'];
-  const library = CATALOG_FIXTURE.filter((entry) => !KEPT_AS_ITEM.includes(entry.name));
+  /** In both lists, and logged the same way in both: one row each, the library's, under the item's id. */
+  const SHARED = ['Goblet squat', 'Side plank', 'Jump rope', 'Easy run'];
+  const library = CATALOG_FIXTURE;
   const itemNamed = (name: string) => {
     const item = FIXTURE_ITEMS.find((candidate) => candidate.name === name);
     if (!item) throw new Error(`no fixture item named ${name}`);
@@ -103,7 +160,7 @@ describe('the picker-options fixture', () => {
 
   it('lists the test library and the prototype’s items, each movement once', () => {
     expect(pickerOptions).toEqual([...catalogPickerOptions, ...householdPickerOptions]);
-    expect(catalogPickerOptions).toHaveLength(CATALOG_FIXTURE.length - KEPT_AS_ITEM.length);
+    expect(catalogPickerOptions).toHaveLength(CATALOG_FIXTURE.length);
     expect(householdPickerOptions).toHaveLength(FIXTURE_ITEM_KEYS.length - SHARED.length);
     expect(new Set(pickerOptions.map((option) => option.publicId)).size).toBe(pickerOptions.length);
     // No two rows answer to one name: the real read never lists an item a library row shadows.
@@ -152,7 +209,7 @@ describe('the picker-options fixture', () => {
     const inBoth = FIXTURE_ITEMS.filter((item) =>
       CATALOG_FIXTURE.some((entry) => movementNameKey(entry.name) === movementNameKey(item.name)),
     );
-    expect(inBoth.map((item) => item.name).sort()).toEqual([...SHARED, ...KEPT_AS_ITEM].sort());
+    expect(inBoth.map((item) => item.name).sort()).toEqual([...SHARED].sort());
     for (const name of SHARED) {
       const item = itemNamed(name);
       const rows = pickerOptions.filter((option) => option.name === name);
@@ -161,22 +218,7 @@ describe('the picker-options fixture', () => {
       // The pair logs the same way, or every fixture that names the item would show the wrong card.
       expect(rows[0]?.trackingType, name).toBe(item.trackingType);
     }
-    // A pair that logs differently: the fixtures' item is the row, as they log it.
-    for (const name of KEPT_AS_ITEM) {
-      const item = itemNamed(name);
-      const entry = CATALOG_FIXTURE.find((candidate) => candidate.name === name);
-      expect(entry?.trackingType, name).not.toBe(item.trackingType);
-      expect(
-        pickerOptions.filter((option) => option.name === name),
-        name,
-      ).toEqual([
-        expect.objectContaining({
-          owner: 'household',
-          publicId: item.itemPublicId,
-          trackingType: item.trackingType,
-        }),
-      ]);
-    }
+    // No pair logs differently: the module would have thrown on import (see `picker-options.ts`).
     // Every other library row keeps the test library's own id.
     for (const entry of library.filter((candidate) => !SHARED.includes(candidate.name))) {
       expect(pickerOptions.find((option) => option.name === entry.name)?.publicId).toBe(
@@ -202,17 +244,23 @@ describe('the picker-options fixture', () => {
         supervision: entry.supervision ?? null,
       });
     }
-    // Reached by the fixture item's id for a shared name.
-    expect((await previewHowTo(itemNamed('Goblet squat').itemPublicId))?.name).toBe('Goblet squat');
+    // Reached by the fixture item's id for every shared name whose entry has steps.
+    const sharedWithSteps = SHARED.filter(
+      (name) => CATALOG_FIXTURE.find((entry) => entry.name === name)?.instructions !== undefined,
+    );
+    expect(sharedWithSteps.length).toBeGreaterThan(1);
+    for (const name of sharedWithSteps) {
+      expect((await previewHowTo(itemNamed(name).itemPublicId))?.name, name).toBe(name);
+    }
     // Nothing for a row with no instructions, a household's item, or an id that is not listed.
     const noSteps = library.find((entry) => entry.instructions === undefined);
     const noStepsRow = catalogPickerOptions.find((option) => option.name === noSteps?.name);
     expect(await previewHowTo(noStepsRow?.publicId ?? 'missing')).toBeNull();
     expect(await previewHowTo(householdPickerOptions[0]?.publicId ?? 'missing')).toBeNull();
     expect(await previewHowTo('019826b4-0000-7000-8000-00000000ffff')).toBeNull();
-    // 🔴 A library row that is NOT listed (its name is the household's item here) gives nothing
-    // by its own id, though its entry has steps: the read answers for listed rows only.
-    for (const name of KEPT_AS_ITEM) {
+    // 🔴 A library row listed under the household item's id gives nothing by the test library's own
+    // id for it, though its entry has steps: the read answers for the ids it lists, and no other.
+    for (const name of sharedWithSteps) {
       const entry = CATALOG_FIXTURE.find((candidate) => candidate.name === name);
       expect(
         await previewHowTo(CATALOG_FIXTURE_IDS[entry?.slug ?? ''] ?? 'missing'),

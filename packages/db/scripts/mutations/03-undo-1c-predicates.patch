@@ -14,10 +14,10 @@ index 375b52eb..bd73c56d 100644
    if (!profile) throw new Error('Profile not found');
  
 diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
-index ae691e2c..792efccd 100644
+index 2bd7533b..3688f410 100644
 --- a/packages/db/src/queries/export-month.ts
 +++ b/packages/db/src/queries/export-month.ts
-@@ -145,7 +145,8 @@ export function strengthMonthRows(
+@@ -147,7 +147,8 @@ export function strengthMonthRows(
        )
        .where(
          and(
@@ -27,7 +27,7 @@ index ae691e2c..792efccd 100644
            isNull(schema.entries.deletedAt),
            gte(schema.entries.activityDate, from),
            lt(schema.entries.activityDate, to),
-@@ -319,7 +320,8 @@ export function checkinMonthRows(
+@@ -328,7 +329,8 @@ export function checkinMonthRows(
      .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
      .where(
        and(
@@ -37,7 +37,7 @@ index ae691e2c..792efccd 100644
          isNull(schema.entries.deletedAt),
          isNull(schema.entries.movementId),
          not(bodyweightEntry()),
-@@ -358,7 +360,8 @@ export function bodyweightMonthRows(
+@@ -372,7 +374,8 @@ export function bodyweightMonthRows(
      .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
      .where(
        and(
@@ -47,15 +47,16 @@ index ae691e2c..792efccd 100644
          isNull(schema.entries.deletedAt),
          bodyweightEntry(),
          gte(schema.entries.activityDate, from),
-@@ -386,6 +389,7 @@ export function loggedMonths(
-     .selectDistinct({ month: sql<string>`to_char(${schema.entries.activityDate}, 'YYYY-MM')` })
-     .from(schema.entries)
+@@ -413,7 +416,8 @@ export function loggedMonths(
      .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
--    .where(and(isLiveProfile(args.profilePublicId, args.scope), isNull(schema.entries.deletedAt)))
-+    .where(and(eq(schema.profiles.publicId, args.profilePublicId),
-+        isNull(schema.profiles.deletedAt), isNull(schema.entries.deletedAt)))
-     .orderBy(sql`to_char(${schema.entries.activityDate}, 'YYYY-MM') desc`);
- }
+     .where(
+       and(
+-        isLiveProfile(args.profilePublicId, args.scope),
++        eq(schema.profiles.publicId, args.profilePublicId),
++        isNull(schema.profiles.deletedAt),
+         isNull(schema.entries.deletedAt),
+         isOwnerOf(args.scope),
+       ),
 diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
 index 17f2c2a4..aaa1e4c3 100644
 --- a/packages/db/src/queries/program-day.ts

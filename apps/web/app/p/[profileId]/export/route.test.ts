@@ -66,6 +66,14 @@ describe('GET /p/[profileId]/export', () => {
     expect(checkExportLimit).not.toHaveBeenCalled();
   });
 
+  it('🔴 a refused export (not the household’s owner) is the one miss, byte for byte', async () => {
+    vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+    const signedOut = await answer(await call());
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce({ id: ID } as never);
+    vi.mocked(buildExportZip).mockResolvedValueOnce(null);
+    expect(await answer(await call())).toEqual(signedOut);
+  });
+
   it('🔴 past the limit: 429, never cached, and no zip is built', async () => {
     vi.mocked(getProfileByPublicId).mockResolvedValueOnce({ id: ID } as never);
     vi.mocked(checkExportLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });

@@ -28,6 +28,7 @@ vi.mock('./db', () => ({ db: recording.db }));
 const FIXTURE_PRINCIPAL = 'user_recordingDbFixturePrincipal';
 vi.mock('./session', () => ({ getCurrentUser: async () => ({ userId: FIXTURE_PRINCIPAL }) }));
 
+import { LOCK_TIMEOUT } from '@mat-plan/db';
 import { PROFILE_KIND } from '@mat-plan/shared';
 
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
@@ -189,6 +190,13 @@ describe("createAthlete — the lock and all three of the create's queries carry
     expect(begin, 'the transaction opened after the lock').toBeLessThan(lock);
     const commit = recording.queries.findIndex((q, i) => i > lock && /^commit/i.test(q.text));
     expect(commit, 'no commit after the lock').toBeGreaterThan(at(/^insert into "profiles"/i));
+    // The lock wait is bounded, and the bound is set inside the same transaction, before the wait.
+    // `true` is what makes it transaction-local: a session-level setting would stay on the pooled
+    // server connection (PgBouncer) and bound the next client's transactions too.
+    const timeout = at(/set_config\('lock_timeout', \$1, true\)/);
+    expect(timeout, 'no transaction-local lock_timeout was set').toBeGreaterThan(begin);
+    expect(timeout, 'lock_timeout was set after the lock').toBeLessThan(lock);
+    expect(recording.queries[timeout]!.values).toEqual([LOCK_TIMEOUT]);
   });
 
   it('the client_id read is scoped, and bound to the household the resolver found', async () => {

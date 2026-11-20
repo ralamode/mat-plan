@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { uuidSchema } from '../../id';
+import { CATALOG_FIXTURE_OPTIONS } from '../../catalog/fixture';
 import { TRACKING_TYPES } from '../../movements';
 import { QUANTITY_SLOT } from '../../quantity-slots';
-import { dayPlanSchema, showsOnlyLogged, type DayPlan } from '../day-shapes';
-import { hasSetRows } from '../pieces';
+import { dayPlanSchema, programsByStay, showsOnlyLogged, type DayPlan } from '../day-shapes';
+import { existingItem, hasSetRows, loggedRowUnit } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import {
   MAX_DAY_SLOTS,
@@ -51,8 +52,10 @@ import {
   programView,
   sundayRestStretchOnly,
   todayStretchingFirst,
+  todayThreeProgramsOneEnding,
   todayTwoPrograms,
   tomorrowReadOnly,
+  unitEditedAfterLogging,
   WORKOUT_DRAFT_FIXTURES,
   workoutLeftTheWeek,
   yesterdayEditedAfterLogging,
@@ -84,6 +87,7 @@ const loggedSets = (plan: DayPlan, workoutName: string, itemName: string) =>
     .rows.filter((row) => row.logged !== null)
     .map((row) => row.set);
 const lb = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'lb', value });
+const kg = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'kg', value });
 const min = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'min', value });
 const sec = (value: number) => ({ slot: QUANTITY_SLOT.primary, unit: 'sec', value });
 
@@ -127,6 +131,10 @@ describe('every fixture round-trips through its own schema', () => {
       'every-type-once',
       // C32 and C37, not a prototype state: the library's coach label, and a program ending today.
       'coach-label-program-ending-today',
+      // Not prototype states: three programs, one ending today (for the Program order dialog), and
+      // a unit edited after logging (C28).
+      'today-three-programs-one-ending',
+      'unit-edited-after-logging',
     ]);
     expect(Object.keys(WORKOUT_DRAFT_FIXTURES)).toEqual(['heavy-a-draft', 'new-workout-empty']);
     expect(Object.keys(PROGRAM_LIST_FIXTURES)).toEqual([
@@ -919,6 +927,7 @@ describe('where a DayPlan fixture comes from (C17)', () => {
       'archived-athlete-today',
       'archived-athlete-nothing-logged',
       'coach-label-program-ending-today',
+      'unit-edited-after-logging',
     ]);
   });
 
@@ -1187,13 +1196,19 @@ describe('coach-label-program-ending-today (C32, C37)', () => {
   });
 
   it('in every fixture, a program ending today is after every program that stays', () => {
-    let flagged = 0;
-    for (const other of Object.values(DAY_PLAN_FIXTURES)) {
+    const flagged: string[] = [];
+    for (const [name, other] of Object.entries(DAY_PLAN_FIXTURES)) {
       const ends = other.currentPrograms.map((p) => p.endsToday === true);
       expect(ends).toEqual([...ends].sort((a, b) => Number(a) - Number(b)));
-      flagged += ends.filter(Boolean).length;
+      // The same thing, asked of the shape's own split: staying first, then ending, is the list.
+      const { staying, ending } = programsByStay(other.currentPrograms);
+      expect([...staying, ...ending], name).toEqual(other.currentPrograms);
+      if (ending.length > 0) flagged.push(name);
     }
-    expect(flagged).toBe(1);
+    expect(flagged).toEqual([
+      'coach-label-program-ending-today',
+      'today-three-programs-one-ending',
+    ]);
   });
 
   describe('the builder’s rules, on worlds no fixture holds', () => {
@@ -1279,6 +1294,213 @@ describe('coach-label-program-ending-today (C32, C37)', () => {
     expect(dayPlanSchema.safeParse(withFlag(true)).success).toBe(true);
     expect(dayPlanSchema.safeParse(withFlag(false)).success).toBe(false);
     expect(dayPlanSchema.safeParse(withFlag(null)).success).toBe(false);
+  });
+});
+
+describe('today-three-programs-one-ending: two programs that stay, one whose last day is today', () => {
+  const plan = todayThreeProgramsOneEnding;
+  const source = DAY_PLAN_FIXTURE_SOURCES['today-three-programs-one-ending'];
+
+  it('is Athlete One’s today, writable, on three programs', () => {
+    expect(plan).toMatchObject({
+      profilePublicId: fixtureIds.athlete('a1'),
+      day: FIXTURE_TODAY,
+      today: FIXTURE_TODAY,
+      writable: true,
+      future: false,
+      onProgram: 'yes',
+      // The two that stay are there tomorrow.
+      canGoForward: true,
+    });
+    expect(plan.currentPrograms).toHaveLength(3);
+  });
+
+  it('🔴 flags exactly one program, and lists it last though it is second in the athlete’s order', () => {
+    expect(source.world.assign[source.athlete]?.map((a) => a.prog)).toEqual(['p1', 'p920', 'p2']);
+    expect(plan.currentPrograms).toEqual([
+      { programPublicId: fixtureIds.program('p1'), name: 'Family program' },
+      { programPublicId: fixtureIds.program('p2'), name: 'Stretching' },
+      { programPublicId: fixtureIds.program('p920'), name: 'Tournament prep', endsToday: true },
+    ]);
+    // Absent on a program that stays, never `false`.
+    expect(plan.currentPrograms.filter((p) => 'endsToday' in p)).toHaveLength(1);
+    expect(plan.currentPrograms.at(-1)?.endsToday).toBe(true);
+  });
+
+  it('🔴 splits into two programs that stay and one that ends, by programsByStay', () => {
+    const { staying, ending } = programsByStay(plan.currentPrograms);
+    expect(staying.map((p) => p.name)).toEqual(['Family program', 'Stretching']);
+    expect(ending.map((p) => p.name)).toEqual(['Tournament prep']);
+  });
+
+  it('has a workout today on each of the three, in the programs’ order', () => {
+    expect(plan.programs.map((p) => [p.name, p.order])).toEqual([
+      ['Family program', 0],
+      ['Stretching', 1],
+      ['Tournament prep', 2],
+    ]);
+    for (const program of plan.currentPrograms) {
+      const due = plan.workouts.filter((w) => w.programPublicId === program.programPublicId);
+      expect(due.length, program.name).toBeGreaterThan(0);
+      expect(due.every((w) => w.scheduled)).toBe(true);
+    }
+    expect(outline(plan)).toEqual([
+      ['Morning', 'Morning habits'],
+      ['After lunch', 'Heavy B'],
+      ['Evening', 'Conditioning'],
+      ['Evening', 'Evening stretch'],
+      [null, 'Prep drills'],
+    ]);
+  });
+
+  it('holds Prep drills with every row open: nothing is logged in the program that ends', () => {
+    const prep = workout(plan, 'Prep drills');
+    expect(prep.progress).toEqual({ done: 0, total: 5 });
+    expect(prep.items.map((i) => [i.name, i.prescribedText, i.rows.length])).toEqual([
+      ['Stance-motion drill', '', 1],
+      ['Sprawls', '3 × 10', 3],
+      ['Jump rope', '5 min', 1],
+    ]);
+    expect(prep.items.flatMap((i) => i.rows).every((row) => row.logged === null)).toBe(true);
+  });
+
+  it('is today-two-programs in every other part', () => {
+    const { currentPrograms: _current, programs, workouts, ...rest } = plan;
+    const { currentPrograms: _theirs, ...others } = todayTwoPrograms;
+    expect({ ...rest, programs: programs.slice(0, 2), workouts: workouts.slice(0, 4) }).toEqual(
+      others,
+    );
+    expect(workouts).toHaveLength(5);
+  });
+
+  it('is a fixed world: no edit after logging, and the seed’s entries', () => {
+    expect(source.before).toBeNull();
+    expect(source.world.entries).toEqual(
+      DAY_PLAN_FIXTURE_SOURCES['today-two-programs'].world.entries,
+    );
+    // `to` is the first day off, so the last day is today.
+    expect(source.world.assign[source.athlete]?.find((a) => a.prog === 'p920')?.to).toBe(
+      '2026-11-15',
+    );
+  });
+});
+
+describe('unit-edited-after-logging: a prescription’s unit changed after its rows were logged (C28)', () => {
+  const plan = unitEditedAfterLogging;
+  const bench = item(plan, 'Heavy A', 'DB bench press');
+  const vest = item(plan, 'Morning habits', 'Vest weight');
+
+  it('🔴 reads the bench in kg now: its unit, its target and its text', () => {
+    expect(bench.unit).toBe('kg');
+    expect(bench.target).toEqual({ reps: 8, quantities: [kg(12.5)] });
+    expect(bench.prescribedText).toBe('4 × 8 @ 12.5 kg');
+  });
+
+  it('🔴 keeps the logged sets in the pounds they were logged in, against the text of that day', () => {
+    expect(loggedSets(plan, 'Heavy A', 'DB bench press')).toEqual([1, 2]);
+    for (const row of bench.rows.slice(0, 2)) {
+      expect(row.logged?.values).toEqual({ reps: 8, quantities: [lb(27.5)] });
+      expect(row.logged?.prescribedText).toBe('4 × 8 @ 25 lb');
+      expect(loggedRowUnit(bench.trackingType, row.logged!.values)).toBe('lb');
+    }
+  });
+
+  it('🔴 leaves two prescribed sets unlogged, which a ✓ would log in kg', () => {
+    expect(bench.rows.map((row) => [row.set, row.logged !== null])).toEqual([
+      [1, true],
+      [2, true],
+      [3, false],
+      [4, false],
+    ]);
+    // PREVIOUS is what was logged, so it stays in pounds.
+    expect(bench.rows[3]?.previous).toEqual({ reps: 7, quantities: [lb(25)] });
+  });
+
+  it('holds the same case on a type with one row: the vest reads kg, its row is in lb', () => {
+    expect(vest).toMatchObject({ trackingType: 'count', unit: 'kg', prescribedText: '5 kg' });
+    expect(vest.target).toEqual({ reps: null, quantities: [kg(5)] });
+    expect(vest.rows).toHaveLength(1);
+    expect(vest.rows[0]?.logged?.values).toEqual({ quantities: [lb(10)] });
+    expect(vest.rows[0]?.logged?.prescribedText).toBe('10 lb');
+  });
+
+  it('🔴 holds every logged row whose unit is not its item’s, and no other fixture holds one', () => {
+    const offUnit = (other: DayPlan) =>
+      other.workouts.flatMap((w) =>
+        w.items.flatMap((i) =>
+          i.rows
+            .filter((row) => row.logged && row.logged.values.quantities.length > 0)
+            .filter((row) => loggedRowUnit(i.trackingType, row.logged!.values) !== i.unit)
+            .map((row) => `${i.name} ${row.set}`),
+        ),
+      );
+    for (const [name, other] of Object.entries(DAY_PLAN_FIXTURES)) {
+      expect(offUnit(other), name).toEqual(
+        name === 'unit-edited-after-logging'
+          ? ['Vest weight 1', 'DB bench press 1', 'DB bench press 2']
+          : [],
+      );
+    }
+  });
+
+  it('is yesterday-half-done in every other part', () => {
+    // The two items differ in their unit, target and text, and in nothing else: same ids, notes,
+    // superset and rows.
+    const withoutTheEdit = (other: DayPlan) => ({
+      ...other,
+      workouts: other.workouts.map((w) => ({
+        ...w,
+        items: w.items.map((i) =>
+          i.name === 'DB bench press' || i.name === 'Vest weight'
+            ? { ...i, unit: null, target: null, prescribedText: '' }
+            : i,
+        ),
+      })),
+    });
+    expect(plan).not.toEqual(yesterdayHalfDone);
+    expect(withoutTheEdit(plan)).toEqual(withoutTheEdit(yesterdayHalfDone));
+    expect(item(yesterdayHalfDone, 'Heavy A', 'DB bench press').unit).toBe('lb');
+  });
+
+  it('is the seeded world with those two units edited, and nothing logged since', () => {
+    const { world, before } = DAY_PLAN_FIXTURE_SOURCES['unit-edited-after-logging'];
+    expect(before).toBe(DAY_PLAN_FIXTURE_SOURCES['yesterday-half-done'].world);
+    const changed = world.programs.flatMap((p) =>
+      p.workouts.flatMap((w) =>
+        w.items
+          .filter(
+            (it) =>
+              JSON.stringify(it) !==
+              JSON.stringify(
+                workoutOf(programOf(before!, p.id), w.wid).items.find((b) => b.iid === it.iid),
+              ),
+          )
+          .map((it) => [w.name, it.iid, it.unit]),
+      ),
+    );
+    expect(changed).toEqual([
+      ['Morning habits', 'vest', 'kg'],
+      ['Heavy A', 'dbbench', 'kg'],
+    ]);
+  });
+
+  it('🔴 the builder reads a weight in pounds unless the world names its unit', () => {
+    // Every other weight of every fixture world names none, so nothing else moved.
+    const { world } = DAY_PLAN_FIXTURE_SOURCES['unit-edited-after-logging'];
+    const weights = world.programs.flatMap((p) =>
+      p.workouts.flatMap((w) =>
+        w.items.filter((it) => world.catalog[it.iid].type === 'weight_reps'),
+      ),
+    );
+    expect(weights.filter((it) => it.unit !== undefined).map((it) => it.iid)).toEqual(['dbbench']);
+    expect(item(plan, 'Heavy A', 'Goblet squat').unit).toBe('lb');
+    // What the world names must be a unit: the builder parses it, as it does a Count's.
+    const stone = edit(world, (draft) => {
+      for (const it of workoutOf(programOf(draft, 'p1'), 'w2').items) {
+        if (it.iid === 'dbbench') it.unit = 'stone';
+      }
+    });
+    expect(() => dayPlan(stone, 'a1', plan.day)).toThrow();
   });
 });
 
@@ -1666,5 +1888,27 @@ describe('PROGRAM_VIEW_FIXTURE_SOURCES and PROGRAM_LIST_FIXTURE_SOURCES (C36)', 
     ]);
     expect(Object.isFrozen(PROGRAM_VIEW_FIXTURE_SOURCES)).toBe(true);
     expect(Object.isFrozen(PROGRAM_LIST_FIXTURE_SOURCES)).toBe(true);
+  });
+});
+
+describe('the fixture world and the test library (CAT-3 A2-ii)', () => {
+  it('🔴 an item the test library also answers to logs the way that entry does', () => {
+    // On a fixtures database the seed resolves each item by name through `newItem`, which selects
+    // a library row that name finds whatever its type; the seed then skips the whole program when
+    // an item comes back as another type. A pair that differs drops that program from every
+    // fixtures database. `existingItem` is `newItem`'s own rule: an exact name, an exact alias, or
+    // a short form.
+    const library = CATALOG_FIXTURE_OPTIONS.map((option) => ({ ...option, isCatalog: true }));
+    const inBoth = FIXTURE_ITEMS.flatMap((item) => {
+      const hit = existingItem(library, item.name);
+      return hit ? [{ item, hit }] : [];
+    });
+    // Not vacuous: the two lists do share names, and the pairs are the ones the picker fixture names.
+    expect(inBoth.map(({ item }) => item.name).sort()).toEqual(
+      ['Easy run', 'Goblet squat', 'Jump rope', 'Side plank'].sort(),
+    );
+    for (const { item, hit } of inBoth) {
+      expect(hit.trackingType, item.name).toBe(item.trackingType);
+    }
   });
 });

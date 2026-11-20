@@ -117,6 +117,12 @@ const from = (
   before: World | null = null,
 ): DayPlanFixtureSource => ({ world, athlete, day, before });
 
+/** A week with one workout on every day, under no label. A new array for each day. */
+function everyDay(wid: string): ProtoProgram['week'] {
+  const slot = () => [{ label: '', wid }];
+  return { 0: slot(), 1: slot(), 2: slot(), 3: slot(), 4: slot(), 5: slot(), 6: slot() };
+}
+
 /** The world of `closed-day-program-since-left`, before Morning habits was renamed. */
 function sinceLeftWorld(): World {
   const world = seedWorld();
@@ -153,16 +159,6 @@ function sinceLeftWorld(): World {
  */
 function coachLabelWorld(): World {
   const base = seedWorld();
-  const slot = (wid: string) => [{ label: '', wid }];
-  const everyDay = (wid: string): ProtoProgram['week'] => ({
-    0: slot(wid),
-    1: slot(wid),
-    2: slot(wid),
-    3: slot(wid),
-    4: slot(wid),
-    5: slot(wid),
-    6: slot(wid),
-  });
   const clean = (): ProtoItem => ({
     iid: 'pushpress',
     note: '',
@@ -233,6 +229,48 @@ function coachLabelWorld(): World {
   });
 }
 const coachLabelBefore = coachLabelWorld();
+
+/**
+ * The world of `today-three-programs-one-ending`: the seeded family, with Athlete One also on
+ * Tournament prep since the switch day and taken off it today. It is SECOND in their own order,
+ * between the two programs that stay. Its items are the prototype's, and nothing is logged in it.
+ */
+function threeProgramsWorld(): World {
+  const base = seedWorld();
+  const prep: ProtoProgram = {
+    id: 'p920',
+    name: 'Tournament prep',
+    workouts: [
+      {
+        wid: 'w920',
+        name: 'Prep drills',
+        desc: 'Light and sharp. About 10 minutes.',
+        rests: {},
+        items: [
+          { iid: 'stance', note: '', ss: null },
+          { iid: 'sprawl', note: '', ss: null, sets: 3, reps: 10 },
+          { iid: 'rope', note: '', ss: null, min: 5 },
+        ],
+      },
+    ],
+    week: everyDay('w920'),
+  };
+  const [first, ...rest] = base.assign.a1 ?? [];
+  if (!first) throw new Error('fixture world: Athlete One is on no program in the seed');
+  return stamped({
+    ...base,
+    programs: [...base.programs, prep],
+    assign: {
+      ...base.assign,
+      a1: [
+        first,
+        // `to` is the first day off: Tournament prep's last day is today.
+        { prog: prep.id, from: FIXTURE_SWITCH_DAY, to: addDays(FIXTURE_TODAY, 1) },
+        ...rest,
+      ],
+    },
+  });
+}
 
 /** A Tuesday four days back: closed, and before Stretching started. Two fixtures stand on it. */
 const CLOSED_TUESDAY = '2026-11-10';
@@ -326,6 +364,21 @@ export const DAY_PLAN_FIXTURE_SOURCES = deepFreeze({
     'a1',
     FIXTURE_TODAY,
     coachLabelBefore,
+  ),
+  'today-three-programs-one-ending': from(threeProgramsWorld(), 'a1', FIXTURE_TODAY),
+  'unit-edited-after-logging': from(
+    edit(seeded, (world) => {
+      // A save can edit a prescription's unit in place (C28): the numbers are the new unit's.
+      for (const item of workoutOf(programOf(world, 'p1'), 'w2').items) {
+        if (item.iid === 'dbbench') Object.assign(item, { unit: 'kg', load: 12.5 });
+      }
+      for (const item of workoutOf(programOf(world, 'p1'), 'w1').items) {
+        if (item.iid === 'vest') Object.assign(item, { unit: 'kg', n: 5 });
+      }
+    }),
+    'a1',
+    YESTERDAY,
+    seeded,
   ),
 } satisfies Record<string, DayPlanFixtureSource>);
 
@@ -457,6 +510,36 @@ export const everyTypeOnce: DayPlan = built('every-type-once');
  */
 export const coachLabelProgramEndingToday: DayPlan = built('coach-label-program-ending-today');
 
+/**
+ * Athlete One's today on three programs, one of which ends today. NOT a prototype state (the
+ * prototype has no program with an end): it is `today-two-programs` with a third program,
+ * Tournament prep, so the Program order dialog has two programs to move and one it cannot.
+ *
+ * - **Tournament prep** is second in the athlete's own order and its last day is today, so it is
+ *   last in `currentPrograms`, with `endsToday: true`: `programsByStay` gives two staying (the
+ *   Family program, Stretching) and one ending.
+ * - **Each of the three has a workout today.** Prep drills comes after the evening stretch, as its
+ *   program does, and nothing is logged in it.
+ * - Every other part of the day is `today-two-programs`.
+ */
+export const todayThreeProgramsOneEnding: DayPlan = built('today-three-programs-one-ending');
+
+/**
+ * `yesterday-half-done` after two prescriptions' units were edited from lb to kg (contract change
+ * C28). NOT a prototype state: the prototype's weights are all in pounds. It is the state where a
+ * logged row is in another unit than its item now logs in.
+ *
+ * - **Heavy A's DB bench press** now reads 4 × 8 @ 12.5 kg: `unit` is `kg` and so is `target`. Its
+ *   two logged sets keep the pounds they were logged in and the text they were logged against;
+ *   sets 3 and 4 are not logged, and a ✓ there is in kg. PREVIOUS stays in pounds: it is what was
+ *   logged.
+ * - **Morning habits' Vest weight** (a Count, one row) now reads 5 kg, and its one row is logged
+ *   at 10 lb. So a type with set rows and a type with one row both hold the case.
+ * - A Change on such a row is judged in the row's own unit (`loggedRowUnit`), never the item's.
+ * - Every other part of the day is `yesterday-half-done`.
+ */
+export const unitEditedAfterLogging: DayPlan = built('unit-edited-after-logging');
+
 function everyTypeWorld() {
   const family = baseProgram();
   const from = (wid: string, iid: ProtoItem['iid']): ProtoItem => {
@@ -473,20 +556,11 @@ function everyTypeWorld() {
     from('w1', 'neck'),
     from('w4', 'sprint'),
   ];
-  const everyDay = () => [{ label: '', wid: 'w900' }];
   const program: ProtoProgram = {
     id: 'p900',
     name: 'Every type',
     workouts: [{ wid: 'w900', name: 'One of each', desc: '', rests: {}, items }],
-    week: {
-      0: everyDay(),
-      1: everyDay(),
-      2: everyDay(),
-      3: everyDay(),
-      4: everyDay(),
-      5: everyDay(),
-      6: everyDay(),
-    },
+    week: everyDay('w900'),
   };
   return stamped({
     ...seedWorld(),
@@ -668,6 +742,8 @@ export const DAY_PLAN_FIXTURES = {
   'future-preview': futurePreview,
   'every-type-once': everyTypeOnce,
   'coach-label-program-ending-today': coachLabelProgramEndingToday,
+  'today-three-programs-one-ending': todayThreeProgramsOneEnding,
+  'unit-edited-after-logging': unitEditedAfterLogging,
 } as const satisfies Record<keyof typeof DAY_PLAN_FIXTURE_SOURCES, DayPlan>;
 
 export const WORKOUT_DRAFT_FIXTURES = {

@@ -59,8 +59,7 @@ import {
   insertWorkoutOwnedBy,
   programBlockByClientId,
 } from '../../src/writers/ownership';
-import { saveWeek, saveWorkout } from '../../src/writers/program';
-import { shiftIntoBand } from '../../src/writers/program/shift-band';
+import { reorderPrograms, saveWeek, saveWorkout } from '../../src/writers/program';
 import { insertEntrySetRows } from '../../src/writers/session-rows';
 import { activityTypeIdOf, entriesInAnotherProfilesSession, expectOk, inSavepoint } from './day';
 import { asDb, asTx, rolledBack, type VerifyTx } from './harness';
@@ -102,8 +101,8 @@ import { entriesOnForeignPrescriptions, sessionsOnForeignWorkouts } from './sche
  * an unlogged row ticks through `logRow` with the returned ids, a logged set answers `slot_taken`,
  * and a returned `entryPublicId` un-ticks through `untickRow`.
  *
- * 12a-i proves the eleven fixtures whose `before` is `null`, and in `verifyRules` the two whose only
- * change is an archive. **12a-ii** replays the other four (`verifyReplays`): `before` seeded and
+ * 12a-i proves the twelve fixtures whose `before` is `null`, and in `verifyRules` the two whose only
+ * change is an archive. **12a-ii** replays the other six (`verifyReplays`): `before` seeded and
  * logged, a calibration save, the change made with lane P's writers, then the same comparison; and
  * `verifyReplayRules` proves what only a replay reaches (plan § 12a-ii). The groups are
  * `./fixture-groups.ts`'s, derived from the sources.
@@ -663,9 +662,9 @@ async function verifyRules(): Promise<void> {
       ],
       'FAM-1 12a R7: a program ending today goes after the ones that stay, before and after a put-on',
     );
-    // A reopen (the ids run against the order): X (20, row 8) is taken off and put back on, which
-    // reopens its OLDER row at the last place, after Y (21, row 9); Y is then taken off today and Z
-    // (22, row 10, the newest) put on, so X compacts onto Y's 0.
+    // The ids run against the order: X (20, row 8, the OLDER row) has been moved after Y (21, row 9)
+    // by a reorder; Y is then taken off today and Z (22, row 10, the newest) put on, so X compacts
+    // onto Y's 0. (Under D41 a Put on reopens a row at its old place, so a reorder is what makes it.)
     assert.deepEqual(
       [
         order([row(9, 21, 0, FIXTURE_TODAY), row(8, 20, 1, null)]),
@@ -675,7 +674,7 @@ async function verifyRules(): Promise<void> {
         [20, 21],
         [20, 22, 21],
       ],
-      'FAM-1 12a R7: the order holds when the ids run against it (a reopen)',
+      'FAM-1 12a R7: the order holds when the ids run against it (after a reorder)',
     );
     // The PLACING row's days ride with each program (lane P's program view reads them): one program
     // with a row ending today at 0 and an upcoming row at 2 is placed by the upcoming one.
@@ -1974,36 +1973,31 @@ async function replay(tx: VerifyTx, seeded: Seeded, world: World, changes: Chang
 }
 
 /**
- * The reorder, by a direct `idx` update (the board's Q6, 2026-11-17; 6d's writer is not built),
- * through lane P's own band (`shiftIntoBand`), so no two live rows ever share an `idx`. Then the
- * board's condition 1: the athlete's OPEN assignments, the rows the order index covers, have dense
- * `idx` values from 0, a state 6d's writer could leave.
+ * The reorder, through lane P's own writer, `reorderPrograms` (6d-ii), in the order the world lists the
+ * athlete's assignments. Q6's stand-in (a direct `idx` update, the board, 2026-11-17) is gone with the
+ * writer's arrival. Then the board's condition 1, kept as a check on the writer: the athlete's OPEN
+ * assignments, the rows the order index covers, have dense `idx` values from 0.
  */
 async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: string, name: string) {
-  const profileId = seeded.profiles.get(athlete)!.id;
+  const profile = seeded.profiles.get(athlete)!;
+  const programPublicIds = [
+    ...new Set(
+      (world.assign[athlete] ?? []).map((a) => seeded.ids.get(fixtureIds.program(a.prog))!),
+    ),
+  ];
+  expectProgramOk(
+    await reorderPrograms(
+      asTx(tx),
+      seeded.scope,
+      { profilePublicId: profile.publicId, programPublicIds },
+      world.today,
+    ),
+    `FAM-1 12a-ii ${name}: reorderPrograms replays ${athlete}'s order`,
+  );
   const live = and(
-    eq(schema.programAssignments.profileId, profileId),
+    eq(schema.programAssignments.profileId, profile.id),
     isNull(schema.programAssignments.deletedAt),
   );
-  const rows = await tx
-    .select({
-      id: schema.programAssignments.id,
-      blockId: schema.programAssignments.blockId,
-      activeFrom: schema.programAssignments.activeFrom,
-    })
-    .from(schema.programAssignments)
-    .where(live);
-  await shiftIntoBand(asTx(tx), schema.programAssignments, live);
-  for (const [idx, a] of (world.assign[athlete] ?? []).entries()) {
-    const row = rows.find(
-      (r) => r.blockId === seeded.blocks.get(a.prog) && r.activeFrom === a.from,
-    );
-    assert.ok(row, `FAM-1 12a-ii ${name}: ${athlete}'s ${a.prog} assignment is seeded`);
-    await tx
-      .update(schema.programAssignments)
-      .set({ idx })
-      .where(eq(schema.programAssignments.id, row.id));
-  }
   const open = await tx
     .select({ idx: schema.programAssignments.idx })
     .from(schema.programAssignments)
@@ -2012,7 +2006,7 @@ async function reorder(tx: VerifyTx, seeded: Seeded, world: World, athlete: stri
   assert.deepEqual(
     open.map((r) => r.idx),
     open.map((_, i) => i),
-    `FAM-1 12a-ii ${name}: the reorder leaves dense idx from 0 on the open assignments, as 6d's writer would (Q6)`,
+    `FAM-1 12a-ii ${name}: the reorder leaves dense idx from 0 on the open assignments`,
   );
 }
 
