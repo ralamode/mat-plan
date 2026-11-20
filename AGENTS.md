@@ -323,7 +323,7 @@ movement picker.
   test that cannot fail is worse than none ([TEN-1](./docs/plans/ten-1-household-scope.md)). In CI it
   is the `mutations` matrix plus `mutations-total`, skipped on a PR only when
   [changed-scopes.mjs](./.github/scripts/changed-scopes.mjs) says no patch can be affected, and run in
-  full on every push to `main`.
+  full on `main`, where a burst of pushes coalesces into at most two runs (DX-18 D6, revised).
   **This section is the one list of where each gate runs**; other docs point here rather than
   restating it. `skills:check`, `guards:test` (every guard self-test `package.json` lists) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and

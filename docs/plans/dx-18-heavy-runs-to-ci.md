@@ -208,7 +208,8 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
 - **When it runs:**
   - on a PR, when `run_mutations` (D7) is not `false`;
   - on **every push to main, all shards, unconditionally.** A red run then sits on the commit that
-    caused it. A final job opens or updates one issue, "mutation gate red on main", in a job that
+    caused it _(until the 2026-11-19 revision under Concurrency: runs now coalesce, so a red run
+    covers a range)_. A final job opens or updates one issue, "mutation gate red on main", in a job that
     holds only `issues: write`.
 - **As built after #700 (2026-11-19, CI runs queued for most of an hour):** a `mutations-plan` job runs
   the scopes once and outputs `run_mutations` and the shard list, written once in its "Shard count"
@@ -222,6 +223,11 @@ busyMessage)` and `release()`. #554's per-worktree lock in `mutations.mjs` moves
   `github.sha`. GitHub keeps only one _pending_ run per group even without cancelling (AGENTS.md
   records this for `migrate.yml`), so a shared group would drop a middle commit's shards on quick
   merges.
+  - **Revised (maintainer, 2026-11-19):** pushes to main now share one group on purpose, so a burst
+    of merges costs at most two runs and the middle commits' runs are dropped. The newest run checks
+    everything before it, and a red run covers the commits since the last green one, narrowed with
+    `db:mutations --only <n>`. Eleven queued main runs had held every PR behind them; the trade and
+    its numbers are in [dx-18-mutation-savings.md](./dx-18-mutation-savings.md).
 - **The runner flags,** added to `mutations.mjs` on top of #554's journal:
   - `--shard i/n` and `--only <range|substring>`;
   - `--list-paths`, which prints the union of the paths the patches touch, through #554's

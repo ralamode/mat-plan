@@ -5,12 +5,15 @@ on:
   push:
     branches: [main]
 
-# A pull request cancels its own older run. A push to main never cancels, and each commit gets its
-# own group: GitHub keeps only one PENDING run per group even without cancelling (AGENTS.md records
-# it for migrate.yml), so a shared group would drop a middle commit's mutation shards on quick merges
-# and the red run would not sit on the commit that caused it (DX-18 D6).
+# A pull request cancels its own older run. Pushes to main share ONE group and never cancel a run
+# in progress: GitHub keeps only one PENDING run per group (AGENTS.md records it for migrate.yml), so
+# a burst of merges costs at most two runs, the one going and the newest, and the pending runs
+# between them are dropped. The newest run checks every commit before it, so a red run covers the
+# commits since the last green one; `db:mutations --only <n>` narrows it to the patch, then the
+# commit. That is the maintainer's revision of DX-18 D6 (2026-11-19), which gave each commit its own
+# group: eleven queued main runs had held every pull request behind them.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default; the gitleaks job widens to read PRs.
@@ -767,7 +770,8 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           title='mutation gate red on main'
-          body="The mutation proof failed on $SHA: $RUN_URL"
+          # Main's runs coalesce (DX-18 D6 as revised), so a red run may cover several merges.
+          body="The mutation proof failed on $SHA, which may include every commit since the last green main run: $RUN_URL. Narrow it with \`pnpm --filter @mat-plan/db db:mutations --only <n>\` on the failing patch."
           # The plain listing, not --search: search indexing lags, so two quick red pushes would
           # each miss the other's issue and open two.
           number="$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title \
