@@ -8,7 +8,7 @@
 > area, so they are lane B's guest edits: lane S and lane C each read their hunks, and Q1's clearance for
 > PR 2's edits in lane S's files passes to lane B.
 >
-> ✅ **Both PRs are merged** (2026-11-20): PR 1 as #761 and PR 2 as #765. They were the last of FAM-1's 72. Owed after them: the by-hand screen-reader pass of §6 (the maintainer's, after merge by their
+> ✅ **Both PRs are merged** (2026-11-20): PR 1 as #761 and PR 2 as #765. They were the last of FAM-1's 72. Owed after them: the by-hand screen-reader pass in the test plan (the maintainer's, after merge by their
 > choice), and a small follow-up from #761's review.
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
