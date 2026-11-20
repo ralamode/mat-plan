@@ -71,6 +71,10 @@ export * from './writers/day';
 // DAL. By NAME, never `export *` from `queries/day`
 // (E7): its other modules take internal ids the caller must already have proved owned.
 export { prescriptionLiveIn, resolveDayPlan, type ResolvedDayPlan } from './queries/day';
+// Tech debt "Two reads of a logged row's live sets": the two-query read of live sets and their
+// quantities, shared by the day page's DAL read and `readRowValues`. It takes internal ids already
+// proved owned, so `lib/dal/entries.test.ts` pins its one app importer (`lib/dal/entries.ts`).
+export { type LiveSet, type LiveSetQuantity, readLiveSets } from './queries/live-sets';
 // FAM-1 lane P (6a-ii; the board's seam turn): the program writers behind ProgramActions and the
 // builder's reads, each through the lane's own barrel, so the lane's helpers stay in the package.
 export * from './writers/program';

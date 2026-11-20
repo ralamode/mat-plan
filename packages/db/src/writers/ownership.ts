@@ -222,6 +222,16 @@ export function movementIsGlobal() {
   return isNull(schema.movements.householdId);
 }
 
+/**
+ * `household_id IS NULL AND modality IS NOT NULL`: a **library** row (`CAT-3` spec rule 2), written
+ * only by the catalog seed (`seedCatalog`). Not a slug test: the 35 legacy global rows have no
+ * `modality`, and a slug cannot tell the two apart once they share one. The one predicate the seed,
+ * the option read (P11-ii) and the proofs use.
+ */
+export function movementIsCatalog() {
+  return and(movementIsGlobal(), isNotNull(schema.movements.modality));
+}
+
 /** `movements.household_id IS NOT NULL` — any household's own namespace. */
 export function movementIsOwned() {
   return isNotNull(schema.movements.householdId);
@@ -277,9 +287,8 @@ export function movementIsAvailableTo(scope: HouseholdScope) {
  * `scope.householdId`, which is why it belongs in this module — `scope.test.ts` asserts exactly one
  * module does.
  *
- * Its consumers: `householdHasProgram` (whose one caller is the add-athlete form,
- * `apps/web/app/p/new/page.tsx`, wording the Child option by whether the household has a legacy
- * program), `liveTemplateBlockIn` below, and the template-block helpers.
+ * Its consumers: `liveTemplateBlockIn` below and the template-block helpers. (`householdHasProgram`
+ * was one until FAM-1 12f deleted it with its last caller.)
  */
 export function programBlockInHousehold(scope: HouseholdScope) {
   return eq(schema.programBlocks.householdId, scope.householdId);

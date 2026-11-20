@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * Per-kid routine contract (V1-18). A routine is an ORDERED list of activity keys the kid works
  * through; the Today page renders it in order, reusing the existing logging forms (PR 1b). This module
- * is catalog-AGNOSTIC on purpose: `CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS` live app-side (React-adjacent) and
- * are themselves derived, so `shared` owns only the grammar + pure builders — the concrete ordered
+ * is catalog-AGNOSTIC on purpose: `LIFE_ACTIVITY_KEYS` lives app-side (React-adjacent) and is itself
+ * derived, so `shared` owns only the grammar + pure builders — the concrete ordered
  * catalog (and thus the default routine) is derived app-side and passed IN, so it can never drift out of
  * sync (the second occurrence would be a bug: there is exactly one catalog source).
  *
@@ -18,7 +18,8 @@ export const STRENGTH_KEY = 'strength';
 
 /** The display label for the strength block. Homed here (next to `STRENGTH_KEY`) because the strength
  *  singleton has no per-item registry — unlike check-ins/life, whose labels live on their registry objects.
- *  The coach editor's catalog (`routineCatalogItems`) sources it here rather than re-typing "Strength". */
+ *  Since FAM-1 12f PR 5 the routine editor lists Life items only, so no screen shows it; it stays for
+ *  the callerless `entry-label.ts`'s wording of an old entry. */
 export const STRENGTH_LABEL = 'Strength';
 
 /** The current routine-config shape version. Named so the literal `1` can't drift across the schema, the

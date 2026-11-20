@@ -72,9 +72,11 @@ The app is used on a phone, on a gym floor, often on poor signal. Speed is usabi
   (no layout shift); lazy-load what is below the fold or behind an interaction; no new dependency
   without checking what it adds to the client bundle and whether it tree-shakes; no render-blocking
   third-party scripts.
-- **Enforced by:** review today. **Planned:** `PERF-1` — land ADR 0001's deferred real-user Web Vitals
-  (production-only, per its 2026-08-11 amendment) and fail CI on a client-bundle size budget (before
-  Beta 1); `PERF-2` — Lighthouse CI on the main app pages (before the pilot).
+- **Enforced by:** CI for client JavaScript bytes: `PERF-1` (b) fails a PR that moves a route's first-load
+  JS, or the total client chunks, past a committed baseline (the `quality` job's "Bundle size" step).
+  Review for the rest. **Planned:** `PERF-1` (a) — land ADR 0001's deferred real-user Web Vitals
+  (production-only, per its 2026-08-11 amendment; before Beta 1); `PERF-2` — Lighthouse CI on the main
+  app pages (before the pilot).
 
 ## 6 · Phone first, then wider
 

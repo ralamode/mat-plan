@@ -96,7 +96,7 @@ export async function resolveDayPlan(
     today: string;
     /**
      * C32: the movement library the database was seeded from, read by slug for each GLOBAL movement's
-     * `supervision` label. The DAL passes `CATALOG_MOVEMENTS`; the proofs pass the test library.
+     * `supervision` label. The DAL passes the library in effect (`CATALOG_LIBRARY`, K29); the proofs pass the test library.
      * Handed in, so the query never decides which library a database holds.
      */
     catalog: readonly CatalogMovement[];

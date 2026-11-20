@@ -1,7 +1,12 @@
 import { ENTRY_STATUS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
-import { type CheckinInsertValue, writeCheckinEntries } from './checkin';
+import {
+  CHECKIN_CLIENT_ID_NOT_UUID,
+  CHECKIN_CLIENT_IDS_REPEAT,
+  type CheckinInsertValue,
+  writeCheckinEntries,
+} from './checkin';
 import type { Executor } from './executor';
 
 /**
@@ -39,18 +44,20 @@ describe('writeCheckinEntries — a repeated client_id', () => {
   ])('refuses two items sharing an id %s, before any statement', async (_label, twin) => {
     await expect(
       writeCheckinEntries(untouched, { profileId: 1, values: [item(ID), item(twin)] }),
-    ).rejects.toThrow('check-in client_ids repeat within one submit');
+    ).rejects.toThrow(CHECKIN_CLIENT_IDS_REPEAT);
   });
 });
 
 describe('writeCheckinEntries — an id in another spelling', () => {
-  // Postgres reads both as the same uuid and prints it hyphenated, so the classifier would miss them.
+  // Postgres reads the first two as the same uuid and prints it hyphenated, so the classifier would
+  // miss them; the third is hyphenated but its variant digit is outside RFC 9562, which zod refuses.
   it.each([
     ['in braces', `{${ID}}`],
     ['without hyphens', ID.replaceAll('-', '')],
+    ['with a non-RFC variant digit', `${ID.slice(0, 19)}c${ID.slice(20)}`],
   ])('refuses an id %s, before any statement', async (_label, spelling) => {
     await expect(
       writeCheckinEntries(untouched, { profileId: 1, values: [item(spelling)] }),
-    ).rejects.toThrow('check-in client_id is not a hyphenated uuid');
+    ).rejects.toThrow(CHECKIN_CLIENT_ID_NOT_UUID);
   });
 });

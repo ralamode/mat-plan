@@ -165,11 +165,11 @@ describe('an id has one spelling after the parse (C25)', () => {
   it('takes a uuid in either case and hands it back in lower case', () => {
     const quiet = lower(A_PROGRAM);
     const shouted = upper(A_PROGRAM);
-    // The premise: the two differ, they are one id to anything that folds case, and the app-wide
-    // schema keeps whichever case it was given.
+    // The premise: the two differ, and they are one id to anything that folds case. The app-wide
+    // schema folds it too since the root fix (`../id.ts`); it kept the caller's spelling until then.
     expect(shouted).not.toBe(quiet);
     expect(shouted.toLowerCase()).toBe(quiet);
-    expect(uuidSchema.parse(shouted)).toBe(shouted);
+    expect(uuidSchema.parse(shouted)).toBe(quiet);
     expect(lowerCaseUuidSchema.parse(shouted)).toBe(quiet);
     expect(lowerCaseUuidSchema.parse(quiet)).toBe(quiet);
     // Still a uuid check: lower-casing is all it adds.
@@ -190,7 +190,7 @@ describe('an id has one spelling after the parse (C25)', () => {
     expect(parsed).toEqual(schema.parse(lower(input)));
   });
 
-  it('🔴 no shape reads an id with the case-keeping schema', () => {
+  it("🔴 no shape names an id any way but the contract's", () => {
     // The table above covers the schemas that exist. This covers the next field added: the two
     // shape files have one way to say "an id", and it is `lowerCaseUuidSchema`.
     for (const file of ['./program-shapes.ts', './day-shapes.ts']) {

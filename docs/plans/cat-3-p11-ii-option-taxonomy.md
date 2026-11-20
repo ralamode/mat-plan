@@ -147,7 +147,7 @@ get table taxonomy, so an old built-in is never given `equipment: []` (which mea
   the fixture library is read with it, and production refuses anything else. **When and how it is built
   is Amendment 1, A1.1 and Q5**: its own PR, with A2-ii, not P11-ii-a. Declined by the spec owner:
   disjoint fixture slugs.
-- **Q2, with the maintainer.** The spec owner recommends (A): the vocabulary's order (`EQUIPMENT`,
+- **Q2, decided: (A)** _(maintainer, roadmap thread's chat, 2026-11-19: "2. Yes to both"; spec K31; #716)_. The spec owner recommended (A): the vocabulary's order (`EQUIPMENT`,
   `MUSCLES`), in the read and in `catalogOptionOf`. Measured on main when asked (326 entries then; the library has grown since): 14 entries list
   equipment out of vocabulary order (so 14 rows would word "what it needs" differently), and 54
   list secondary muscles out of order (no screen shows those today). The spec gives the authored
@@ -312,7 +312,7 @@ its own vitest file. Its cases:
   - (B) The same timing, with the variable as A1.1 specifies.
   - Either way, K29's "Lane P builds it in P11-ii-a" becomes "in its own PR, with A2-ii".
 
-  **Spec owner's answer (2026-11-19): (A)**, now with the maintainer, since K29 records their "ok" on a
+  **Decided: (A)** _(the spec owner, then the maintainer, roadmap thread's chat, 2026-11-19: "2. Yes to both"; spec K29 reworded in #716)_, first put to the maintainer since K29 records their "ok" on a
   mechanism first described as a setting. Plan on (A). Nothing P11-ii-a builds depends on it. Its two
   conditions bind the K29 PR:
   1. The rule's proof names every database it admits (`embedded-pg`, CI's smoke, the preview) and
@@ -435,3 +435,11 @@ A fresh reviewer that wrote none of the amendment (Opus 5.5). No P0.
 | P2-4       | The original (a2) was unedited                                                                          | **accepted**: "unchanged at the DTO"                                                                       |
 | P2-5       | Who owns A2-i conflicted                                                                                | **accepted**: lane P, with the decision cited (the spec owner updates the A2 row)                          |
 | P2-6, P2-7 | `:159-170`; the stale "326"                                                                             | **accepted**                                                                                               |
+
+### P11-ii-b as built (#767, 2026-11-20)
+
+- **Builder:** lane E, handed over by lane P with the board. Lane P reviewed.
+- **Q4's retirement of the stays-dark `describe`:** lane A is retired, so the board cleared it in lane A's place (2026-11-20).
+- **(b4) has no `db:verify` proof of its own.** `catalogTaxonomyOf`'s parse throws are vitest cases. What makes them unreachable is `verify/catalog.ts`'s S1 parity (both ways, pinned by mutation 321), and a one-way copy in `verify/program.ts` would only take 321's first failure (lane P's review, P1-2).
+- **The (b3) anchor is `weighted_dip`:** `incline_dumbbell_press` is not in the library at 587. Its equipment and its secondary muscles are both authored out of the vocabulary's order.
+- **(b5), measured:** 610 options (the 12 library slugs that are also old built-ins list once) are 208,098 bytes; 1,000 options (above today's list) are 347,404. Both have ceilings in `picker.test.ts`.

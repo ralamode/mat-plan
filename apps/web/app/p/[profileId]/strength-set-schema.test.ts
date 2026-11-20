@@ -148,8 +148,8 @@ describe('strengthSetSchema — the structured load', () => {
 });
 
 describe('strengthSetSchema — a set must carry SOME load (replaces parseLoad blank-check)', () => {
-  // Without this the unrecoverable state returns: reps with no load renders `5 × ?`, and
-  // `isEditableSet` then refuses to fix it — permanently, since the app has no delete action.
+  // Without this the unrecoverable state returns: reps with no load renders `5 × ?`, and the
+  // set-edit path refuses to fix it — permanently, since the app has no delete action.
   it('REJECTS reps with no weight and no mode', () => {
     const r = strengthSetSchema.safeParse({ reps: '5' });
     expect(r.success).toBe(false);

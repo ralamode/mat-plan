@@ -3,12 +3,14 @@
 import { supersetLabels, type DayItem, type DayWorkout } from '@mat-plan/shared';
 import { memo, useState } from 'react';
 
-import { itemCountText, NAME_WRAP_CLASS } from '@/lib/constants';
+import { FOCUS_TARGET_CLASS, itemCountText, NAME_WRAP_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
+import { CollapseButton, CollapsedLine } from './collapsed-line';
 import { DAY_COPY } from './day-copy';
 import { ItemCard } from './item-card';
 import { useDay } from './day-context';
+import { useCollapse } from './use-collapse';
 import { itemKeyOf } from './use-row';
 
 /**
@@ -24,6 +26,13 @@ import { itemKeyOf } from './use-row';
  * **Supersets** (13b): neighbouring items of one group sit together under "Superset A", with each
  * item's ordinal label (A1, A2: `supersetLabels`, the contract's rule) and the group's rest after
  * them.
+ *
+ * **A workout finished when the person arrives folds to one line** (12c-iii, D38; `useCollapse`):
+ * "Morning habits · Morning · 10 of 10", a tap opens it, and an open finished workout offers
+ * "Collapse" while nothing in it is busy (a write in flight, a Change typed, an added set). Finished
+ * means every row logged, none failed, on a day that can be logged. The body is **hidden, never
+ * unmounted**: each row holds this visit's typed text and un-tick token. The region keeps the
+ * workout's bare name in both states (its label is the name's own span).
  */
 export const WorkoutCard = memo(function WorkoutCard({
   workout,
@@ -32,6 +41,7 @@ export const WorkoutCard = memo(function WorkoutCard({
   programName,
   notSaved,
   future,
+  busy = false,
 }: {
   workout: DayWorkout;
   workoutKey: string;
@@ -39,8 +49,20 @@ export const WorkoutCard = memo(function WorkoutCard({
   programName: string | null;
   notSaved: number;
   future: boolean;
+  /** A row of it has work not saved yet: "Collapse" is not offered (12c-iii §4). */
+  busy?: boolean;
 }) {
+  const { readOnly } = useDay();
   const { done, total } = workout.progress;
+  const finished = !readOnly && total > 0 && done >= total && notSaved === 0;
+  // "Collapse" keeps its slot on any workout that can be logged and has rows, held (in place but
+  // unusable) until finished and while busy: so it never comes or goes under a thumb (12c-iii review).
+  const slot = !readOnly && !future && total > 0;
+  const held = busy || !finished;
+  const { folded, bodyId, lineRef, collapseRef, nameRef, open, collapse } = useCollapse(
+    finished,
+    held,
+  );
   const progress = future
     ? itemCountText(workout.items.length)
     : total === 0
@@ -52,72 +74,105 @@ export const WorkoutCard = memo(function WorkoutCard({
   const labels = supersetLabels(items);
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t pt-4">
-      {workout.label || programName ? (
+      {/* The slot line, only when open: folded, the line carries the label or the program. */}
+      {!folded && (workout.label || programName) ? (
         <p className="text-muted-foreground flex flex-wrap justify-between gap-x-3 text-xs font-medium tracking-wide">
           <span className={cn('uppercase', NAME_WRAP_CLASS)}>{workout.label}</span>
           {programName ? <span className={NAME_WRAP_CLASS}>{programName}</span> : null}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h3 id={headingId} className={cn('text-lg font-semibold', NAME_WRAP_CLASS)}>
-          {workout.name}
+      {folded ? (
+        <h3 className="text-lg font-semibold">
+          <CollapsedLine
+            name={workout.name}
+            nameId={headingId}
+            detail={workout.label ?? programName}
+            count={DAY_COPY.progress(done, total)}
+            bodyId={bodyId}
+            lineRef={lineRef}
+            onOpen={open}
+          />
         </h3>
-        {progress || notSaved > 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {progress}
-            {notSaved > 0 ? (
-              <>
-                {progress ? <span aria-hidden="true"> · </span> : null}
-                <span className="text-destructive">{DAY_COPY.notSaved(notSaved)}</span>
-              </>
+      ) : (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <h3 className={cn('text-lg font-semibold', NAME_WRAP_CLASS)}>
+            {/* The focus target when the line or "Collapse" goes by itself (`useCollapse`). */}
+            <span id={headingId} ref={nameRef} tabIndex={-1} className={FOCUS_TARGET_CLASS}>
+              {workout.name}
+            </span>
+          </h3>
+          {/* 44px tall on any day that can be logged, so "Collapse" coming never moves the rows. */}
+          <div className={cn('flex items-center gap-x-1', slot && 'min-h-11')}>
+            {progress || notSaved > 0 ? (
+              <p className="text-muted-foreground text-sm">
+                {progress}
+                {notSaved > 0 ? (
+                  <>
+                    {progress ? <span aria-hidden="true"> · </span> : null}
+                    <span className="text-destructive">{DAY_COPY.notSaved(notSaved)}</span>
+                  </>
+                ) : null}
+              </p>
             ) : null}
+            {slot ? (
+              <CollapseButton
+                name={workout.name}
+                bodyId={bodyId}
+                collapseRef={collapseRef}
+                onCollapse={collapse}
+                held={held}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
+      {/* Hidden, never unmounted: the rows keep this visit's typed text and un-tick tokens. */}
+      <div id={bodyId} hidden={folded} className="flex flex-col gap-3">
+        {workout.description ? (
+          <p className={cn('text-muted-foreground text-sm', NAME_WRAP_CLASS)}>
+            {workout.description}
           </p>
         ) : null}
-      </div>
-      {workout.description ? (
-        <p className={cn('text-muted-foreground text-sm', NAME_WRAP_CLASS)}>
-          {workout.description}
-        </p>
-      ) : null}
-      <ul className="flex flex-col gap-3">
-        {groupsOf(items).map((group) => {
-          const cards = group.map(({ item, index }) => (
-            <ItemCard
-              key={itemKeyOf(item)}
-              workout={workout}
-              workoutKey={workoutKey}
-              item={item}
-              label={labels[index] ?? null}
-            />
-          ));
-          const superset = group[0]!.item.superset;
-          // A group of one (only one of its items shown, on a closed day) keeps its container and
-          // its rest line, as v12 does, so its label is never unexplained.
-          if (!superset) return cards;
-          const letter = supersetLetterOf(labels[group[0]!.index] ?? '');
-          const rest = workout.restAfter[superset.group];
-          return (
-            // Keyed by its first item: a group whose items are not neighbours shows as two runs, and
-            // an item added above it must not remount it (typed text and un-tick tokens live inside).
-            <li
-              key={`superset:${itemKeyOf(group[0]!.item)}`}
-              className="border-primary border-l-2 pl-3"
-            >
-              <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-                {DAY_COPY.superset(letter)}
-              </p>
-              <ul aria-label={DAY_COPY.superset(letter)} className="flex flex-col gap-3">
-                {cards}
-              </ul>
-              {rest ? (
-                <p className={cn('text-muted-foreground mt-2 text-sm', NAME_WRAP_CLASS)}>
-                  {DAY_COPY.rest(rest)}
+        <ul className="flex flex-col gap-3">
+          {groupsOf(items).map((group) => {
+            const cards = group.map(({ item, index }) => (
+              <ItemCard
+                key={itemKeyOf(item)}
+                workout={workout}
+                workoutKey={workoutKey}
+                item={item}
+                label={labels[index] ?? null}
+              />
+            ));
+            const superset = group[0]!.item.superset;
+            // A group of one (only one of its items shown, on a closed day) keeps its container and
+            // its rest line, as v12 does, so its label is never unexplained.
+            if (!superset) return cards;
+            const letter = supersetLetterOf(labels[group[0]!.index] ?? '');
+            const rest = workout.restAfter[superset.group];
+            return (
+              // Keyed by its first item: a group whose items are not neighbours shows as two runs, and
+              // an item added above it must not remount it (typed text and un-tick tokens live inside).
+              <li
+                key={`superset:${itemKeyOf(group[0]!.item)}`}
+                className="border-primary border-l-2 pl-3"
+              >
+                <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
+                  {DAY_COPY.superset(letter)}
                 </p>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+                <ul aria-label={DAY_COPY.superset(letter)} className="flex flex-col gap-3">
+                  {cards}
+                </ul>
+                {rest ? (
+                  <p className={cn('text-muted-foreground mt-2 text-sm', NAME_WRAP_CLASS)}>
+                    {DAY_COPY.rest(rest)}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 });

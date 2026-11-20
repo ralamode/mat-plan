@@ -1,4 +1,5 @@
 import { PROGRAM_REFUSAL } from '@mat-plan/shared';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
 import { familyProgram, heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -250,7 +251,8 @@ describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
     expect(vi.mocked(copyWorkout).mock.calls[0]).toEqual([db, SCOPE, copy()]);
     const item = { name: 'Bear crawl', trackingType: TRACKING_TYPE.reps };
     await newHouseholdItem(item);
-    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item]);
+    // The same library the picker's read gets (K23); the K29 PR derives it from the database.
+    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item, CATALOG_MOVEMENTS]);
     expect(reportWeekMiss).not.toHaveBeenCalled();
     expect(reportCopyMiss).not.toHaveBeenCalled();
   });

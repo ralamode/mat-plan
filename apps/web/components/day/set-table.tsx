@@ -16,7 +16,7 @@ import { ChangeInput, hasRowStatus, RowStatus } from './change-parts';
 import { DAY_COPY } from './day-copy';
 import { fieldsOf, fieldText, valueParts, type RowField } from './row-values';
 import { changeRowProps, useChange } from './use-change';
-import { rowAccess, rowName, useRow } from './use-row';
+import { itemKeyOf, rowAccess, rowName, useRow } from './use-row';
 import {
   CARD_CLASS,
   fieldHeader,
@@ -25,9 +25,13 @@ import {
   ON_TINT_BUTTON_FOCUS_CLASS,
   RowInput,
   OtherUnitLine,
+  OtherUnitNote,
   QuantityCellText,
+  rowUnitLine,
   secondaryText,
   Tick,
+  useOtherUnitNote,
+  type UnitNote,
   TINT_CLASS,
   useFocusRefusedField,
 } from './row-parts';
@@ -97,6 +101,14 @@ export function SetItem({
   // A row beyond the page's data that is not logged: an added set not ticked yet, or an extra
   // set un-ticked. One at a time, so Add set waits for it.
   const pendingExtra = rows.some((r) => !fromPage.has(r.set));
+  // 12c-iii: an added set not ticked keeps its workout open ("Collapse" is not offered).
+  const { setRowBusy } = day;
+  const extraKey = `${workoutKey}/${itemKeyOf(item)}/extra`;
+  useEffect(() => {
+    if (!pendingExtra) return;
+    setRowBusy(extraKey, true);
+    return () => setRowBusy(extraKey, false);
+  }, [pendingExtra, extraKey, setRowBusy]);
   // The next set past the highest shown: the rows need not run without a gap.
   const nextSet = Math.max(0, ...rows.map((r) => r.set)) + 1;
   const canAdd = canLog && !pendingExtra && nextSet <= MAX_SETS_PER_MOVEMENT;
@@ -106,6 +118,9 @@ export function SetItem({
   // Previous is for choosing what to log: none on a day that cannot be written (D33), and none for
   // a removed item, which cannot be logged again (its `previous` is always null).
   const showPrevious = writable && item.prescriptionPublicId !== null;
+  // The other-unit note, once for the item under its heading (#688 follow-up), kept for the visit.
+  const noteUnit = useOtherUnitNote(item);
+  const noteId = useId();
 
   // The added row's first field takes focus once it is on screen, and only then.
   useEffect(() => {
@@ -117,6 +132,7 @@ export function SetItem({
   return (
     <li className={cn(CARD_CLASS, allDone && LOGGED_CARD_CLASS, onTint && TINT_CLASS)}>
       <ItemHeading item={item} label={label} onTint={onTint} />
+      {noteUnit ? <OtherUnitNote item={item} from={noteUnit} id={noteId} onTint={onTint} /> : null}
       <table className="mt-2 w-full table-fixed border-collapse text-sm">
         <caption className="sr-only">{item.name}</caption>
         <colgroup>
@@ -161,6 +177,7 @@ export function SetItem({
               showPrevious={showPrevious}
               onTint={onTint}
               onMessage={reportMessage}
+              unitNote={noteUnit ? { id: noteId, unit: noteUnit } : undefined}
               focusRef={row.set === nextSet - 1 && !fromPage.has(row.set) ? addedFocus : undefined}
             />
           ))}
@@ -212,6 +229,7 @@ function SetRow({
   showPrevious,
   onTint,
   onMessage,
+  unitNote,
   focusRef,
 }: {
   workout: DayWorkout;
@@ -223,6 +241,8 @@ function SetRow({
   onTint: boolean;
   /** Reports whether this row shows a message, so the card drops its tint. */
   onMessage: (set: number, has: boolean) => void;
+  /** The item's other-unit note, when it shows: a logged row in its unit points at it (`rowUnitLine`). */
+  unitNote?: UnitNote;
   focusRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const inputs = useRef<Partial<Record<RowField, HTMLInputElement | null>>>({});
@@ -243,7 +263,7 @@ function SetRow({
   }, [hasMessage, onMessage, set]);
   const shownValues = r.logged ?? r.kept;
   // The second line: Change's or a message (`status`), then the other-unit line when the row has one.
-  const unitLine = r.otherUnit !== null;
+  const unitLine = rowUnitLine(r, errorId, unitNote);
   const changeFields = change.fields;
   const previous = row.previous ? valueParts(row.previous) : null;
 
@@ -281,7 +301,7 @@ function SetRow({
                 name={name}
                 lineId={errorId}
                 described={status}
-                unitLine={unitLine}
+                unitLineId={unitLine.id}
                 tickRef={tickRef}
                 inputRef={(el) => {
                   inputs.current[field] = el;
@@ -315,6 +335,7 @@ function SetRow({
                 field={field}
                 name={name}
                 errorId={errorId}
+                unitNote={unitNote}
                 tickRef={tickRef}
                 inputRef={(el) => {
                   inputs.current[field] = el;
@@ -335,12 +356,13 @@ function SetRow({
               described={status}
               label={name}
               errorId={errorId}
+              unitNote={unitNote}
               tickRef={tickRef}
             />
           </div>
         </td>
       </tr>
-      {status || unitLine ? (
+      {status || unitLine.own ? (
         <tr {...changeRowProps(rowId, change)}>
           <td
             colSpan={fields.length + (showPrevious ? 3 : 2)}
@@ -358,7 +380,13 @@ function SetRow({
                 underTickClassName={UNDER_TICK_CLASS}
               />
             ) : null}
-            <OtherUnitLine r={r} item={item} errorId={errorId} onTint={onTint} />
+            <OtherUnitLine
+              r={r}
+              item={item}
+              errorId={errorId}
+              unitNote={unitNote}
+              onTint={onTint}
+            />
           </td>
         </tr>
       ) : null}

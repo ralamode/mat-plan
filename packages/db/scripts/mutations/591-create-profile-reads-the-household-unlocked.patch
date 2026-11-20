@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 2ff6c433..d334c633 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -412,8 +412,7 @@ async function lockedCreate(
+       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
+     })
+     .from(schema.households)
+-    .where(householdRowIs(scope))
+-    .for('key share');
++    .where(householdRowIs(scope));
+   if (locked.length !== 1) return { ok: false, reason: 'refused' };
+   return addProfile(exec, scope, input);
+ }

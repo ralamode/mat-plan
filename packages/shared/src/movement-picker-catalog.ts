@@ -52,7 +52,7 @@ export const MOVEMENT_PICKER_GROUP_LABELS: Record<MovementPickerGroup, string> =
 /** How many of an athlete's recent movements the picker offers before the browse list. */
 export const RECENT_MOVEMENTS_LIMIT = 5;
 
-type MovementPickerEntry = {
+export type MovementPickerEntry = {
   readonly group: MovementPickerGroup;
   /** Short names people type. Matched EXACTLY by key, so `rdl` hits and `rd` does not. */
   readonly aliases?: readonly string[];
@@ -142,4 +142,14 @@ export function movementPickerSlugsByGroup(group: MovementPickerGroup): readonly
   return MOVEMENT_SEED_ROWS.filter((row) => MOVEMENT_PICKER_ENTRIES[row.slug]?.group === group).map(
     (row) => row.slug,
   );
+}
+
+/**
+ * The picker map's entry for a slug that may not be one of its keys (any movement's slug): `undefined`
+ * for every slug but the old built-ins'. One guarded lookup, instead of a cast at each caller.
+ */
+export function pickerEntryOf(slug: string): MovementPickerEntry | undefined {
+  return Object.hasOwn(MOVEMENT_PICKER_ENTRIES, slug)
+    ? MOVEMENT_PICKER_ENTRIES[slug as keyof typeof MOVEMENT_PICKER_ENTRIES]
+    : undefined;
 }

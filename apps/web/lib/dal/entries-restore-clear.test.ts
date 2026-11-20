@@ -124,6 +124,11 @@ describe('clearDayEntries (V1-9b B2)', () => {
     expect(await clearDayEntries(CLEAR)).toEqual({ count: 0 });
   });
 
+  it('passes the writer’s closed (archived under its lock) through', async () => {
+    clearDay.mockResolvedValueOnce({ closed: true });
+    expect(await clearDayEntries(CLEAR)).toEqual({ closed: true });
+  });
+
   it('answers 0 when a replay’s count raced a Restore all to 0', async () => {
     clearDay.mockResolvedValueOnce({ hiddenAt: ARGS.hiddenAt, count: 0 });
     expect(await clearDayEntries(CLEAR)).toEqual({ count: 0 });

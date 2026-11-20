@@ -50,6 +50,9 @@ export const DAY_COPY = {
   },
   /** What the other-unit line asks to have fixed, by the row's type (12d-iii). */
   otherUnitNoun: { load: 'load', distance: 'distance', number: 'number' },
+  /** 12c-iii (D38): a finished part's word for folding to one line, and its name. */
+  collapse: 'Collapse',
+  collapseLabel: (name: string) => `Collapse ${name}`,
   done: 'Done',
   doneMark: 'Done ✓',
   lastTime: 'Last time',
@@ -136,17 +139,43 @@ export function athleteNameOf(plan: DayPlan): string {
  */
 export const PROGRAM_COPY = {
   line: (names: readonly string[]) =>
-    `${names.length === 1 ? 'Program' : 'Programs'}: ${names.join(VALUE_JOINER)}`,
+    `${PROGRAM_COPY.lineLabel(names.length)} ${names.join(VALUE_JOINER)}`,
+  /** The line's label alone, for the line whose names are links (15c, D49). */
+  lineLabel: (count: number) => `${count === 1 ? 'Program' : 'Programs'}:`,
   order: 'Program order',
   orderTitle: (athlete: string) => `${athlete}’s programs`,
   orderExplainer:
-    'The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week.',
+    'The day page lists these programs’ workouts in this order. Inside a program, workouts follow the order set in its week. A program added later goes where it sits in the Programs list.',
+  /**
+   * The note above the programs that end today (15c, D47; the prototype's words): listed last, no
+   * arrows, not counted in "N of M".
+   */
+  endingNote: (count: number) =>
+    count > 1
+      ? 'These come off after today, so they are listed last and can’t be moved.'
+      : 'This one comes off after today, so it is listed last and can’t be moved.',
   moveUp: (program: string) => `Move ${program} up`,
   moveDown: (program: string) => `Move ${program} down`,
   moved: (program: string, place: number, of: number) => `${program} moved to ${place} of ${of}`,
   orderFailed: SAVE_FAILED,
   /** A reorder refused because the athlete's programs changed elsewhere: the page re-reads them. */
   orderStale: `${STALE} Here are the programs now.`,
+  /**
+   * The dialog's only body text once nothing stays to order (15c follow-up; maintainer, 2026-11-20):
+   * a re-read while it is open took the athlete off every program (`orderEmpty`) or left only
+   * programs ending today (`orderAllEnding`). It replaces the explainer and the lists, and wins over
+   * `orderStale`.
+   */
+  orderEmpty: (athlete: string) =>
+    `${athlete} isn’t on a program now, so there’s nothing to order.`,
+  orderAllEnding: (athlete: string) =>
+    `${athlete}’s programs all come off after today, so there’s nothing to order.`,
+  /**
+   * Approved by the maintainer (2026-11-20, 15c follow-up). Under Program order when its dialog's
+   * code could not be loaded (a dropped connection on the gym floor): the button stays, and a tap
+   * tries again. No existing line fits: `orderFailed` says a save failed, and nothing was saved.
+   */
+  orderOpenFailed: 'Couldn’t open. Try again.',
   done: DAY_COPY.done,
   switcher: 'Switch athlete',
   /**
