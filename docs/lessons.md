@@ -689,6 +689,16 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Next.js 16
 
+- **One Back press does nothing after a sheet closes, but only when a Server Action ran while it was
+  open.** → Next's router rewrites the current history entry after the action's revalidation with
+  `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`), so
+  any custom `history.state` key (the Sheet's `sheet`/`doc`) is dropped at the same URL. Code that
+  pops "its" entry by key then skips the pop. Found 2026-11-19 (the item picker's "+ New item", then
+  Close); Put on was fine only because it closes before the rewrite. **Fix:** remember the URL the
+  entry was pushed at and pop when the entry is ours by key OR still at that URL
+  (`components/ui/sheet.tsx`). **Diagnose:** log `history.state` before and after the action in a
+  browser; jsdom has no router, so only an e2e step shows it.
+
 - **A CSP "Applying inline style violates … style-src" on a page that looks fine, intermittent, and
   matching nothing in our bundle, is Next's built-in 404 fallback.** → Its `HTTPAccessErrorFallback`
   styles itself with an un-nonced `<style>` (hash **`sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY=`**)

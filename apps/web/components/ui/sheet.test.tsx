@@ -593,9 +593,41 @@ describe('Sheet — the back gesture', () => {
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
     render(<Harness withLink />);
     openAndCapture();
-    // Stand in for the router pushing a route entry over ours.
-    window.history.pushState({ some: 'route' }, '');
+    // Stand in for the router pushing a route entry over ours. A real one has another URL: Next
+    // replaces, never pushes, for a navigation to the URL already shown (`app-router.js`).
+    const here = window.location.pathname;
+    window.history.pushState({ some: 'route' }, '', '/elsewhere');
     await closeVia(() => fireEvent.click(headerClose()));
+    expect(back).not.toHaveBeenCalled();
+    window.history.replaceState(null, '', here);
+    back.mockRestore();
+  });
+
+  /**
+   * 🔴 **A server action while the sheet is open, then a close** (proved in a browser, 2026-11-19:
+   * the item picker's "+ New item", then Close, left one dead Back press). Next's router rewrites the
+   * current entry without `sheet` (`preserveCustomHistoryState: false`), at the same URL.
+   */
+  it('still pops its entry when the router rewrote it at the same URL while open', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    render(<Harness consumerClose />);
+    openAndCapture();
+    window.history.replaceState({ __NA: true }, '');
+    await closeVia(() => fireEvent.click(screen.getByRole('button', { name: 'Use as typed' })));
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+  });
+
+  it('a Back press after that rewrite closes it without popping a second entry', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    render(<Harness />);
+    openAndCapture();
+    window.history.replaceState({ __NA: true }, '');
+    // The browser has gone back to the entry under ours: same URL, not ours.
+    await closeVia(() =>
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { __NA: true } })),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(back).not.toHaveBeenCalled();
     back.mockRestore();
   });

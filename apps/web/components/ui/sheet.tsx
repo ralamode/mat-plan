@@ -332,11 +332,25 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
    * Back ONTO our entry reopens; back OFF it closes. The listener cannot be scoped to `open`, or the
    * reopening half can never run.
    */
+  /**
+   * 🔴 **Where this sheet pushed its entry, so a close can still pop it after Next rewrites it.** A
+   * server action that revalidates while the sheet is open (the item picker's "+ New item", Program
+   * order's arrows) makes Next's router `replaceState` the current entry with
+   * `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`),
+   * which drops `sheet` and `doc`. `isOurEntry()` then reads false at close, the pop below was
+   * skipped, and one Back press did nothing (proved in a browser, 2026-11-19). The URL is what that
+   * rewrite keeps, so a close pops when the entry is still ours by key OR by URL. A Back press and a
+   * navigation clear this: the first has already left the entry, the second has another URL on top.
+   */
+  const pushedAt = useRef<string | null>(null);
   useEffect(() => {
     const sync = () => {
       const isOurs = isOurEntry();
       if (isOurs && !open) onOpenChange(true);
-      else if (!isOurs && open) onOpenChange(false);
+      else if (!isOurs && open) {
+        pushedAt.current = null;
+        onOpenChange(false);
+      }
     };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
@@ -344,7 +358,10 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
 
   useEffect(() => {
     if (!open) return;
-    if (!isOurEntry()) window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
+    if (!isOurEntry()) {
+      window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
+      pushedAt.current = window.location.href;
+    }
   }, [open, id, isOurEntry]);
 
   /**
@@ -363,7 +380,10 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     const closed = wasOpen.current && !open;
     wasOpen.current = open;
-    if (closed && isOurEntry()) window.history.back();
+    if (!closed) return;
+    const pushed = pushedAt.current;
+    pushedAt.current = null;
+    if (isOurEntry() || (pushed !== null && window.location.href === pushed)) window.history.back();
   }, [open, isOurEntry]);
 }
 
