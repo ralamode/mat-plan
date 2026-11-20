@@ -189,9 +189,11 @@ fresh; grow "$PROFILE_CHUNK" 9000; setb "/p/[profileId]" 19600; setb "(all clien
 expect "PR raised a baseline to the measurement: warned" 0 '::warning::bundle: baseline for /p/[profileId] raised by +8.8 KiB in this PR'
 expect "PR raised a baseline: its own section" 0 '### Baseline changed in this PR'
 expect "PR raised a baseline: vs main's column shows the growth" 0 "| /p/[profileId] | 19600 | 19600 | 0 | +8.8 KiB |"
-fresh; setb "/" 1001; expect "PR padded a baseline (not the measurement)" 1 "must equal this run's measurement"
+fresh; setb "/" 1257; expect "PR padded a baseline by NOISE_BYTES + 1" 1 "must equal this run's measurement within 256 B"
+fresh; setb "/" 1256; expect "a changed baseline within NOISE_BYTES of the measurement passes (CI build noise)" 0 'raised by +256 B in this PR'
+fresh; setb "/" 743; expect "a changed baseline NOISE_BYTES + 1 below the measurement fails" 1 "must equal this run's measurement within 256 B"
 fresh; BS="$BASE_NONE"; expect "base has no baseline file" 0 'baseline introduced'
-fresh; BS="$BASE_NONE"; setb "/" 2000; expect "an introduced baseline must be the measurement" 1 "must equal this run's measurement"
+fresh; BS="$BASE_NONE"; setb "/" 2000; expect "an introduced baseline must be the measurement" 1 "must equal this run's measurement within 256 B"
 fresh; BS=0000000000000000000000000000000000000001; expect "BASE_SHA names a missing commit" 2 'cannot read the base'
 fresh; BS=; expect "BASE_SHA empty (push): no vs main's column" 0 "!vs main's baseline"
 fresh; BS=; setb "/" 1001; expect "BASE_SHA empty (push): no baseline-change check" 0 '| / | 1001 | 1000 | -1 B |'
@@ -254,6 +256,9 @@ setb '/t```x' 600; expect "a backtick run in a route cannot close the <details> 
 out="$(node --input-type=module -e "import * as G from '$guard'; console.log(G.TOLERANCE_BYTES)" 2>&1)"
 if [ "$out" = 8192 ]; then printf '✓ TOLERANCE_BYTES is 8192, and importing runs nothing\n'
 else printf '✗ TOLERANCE_BYTES: want "8192", got\n%s\n' "$out"; fails=$((fails + 1)); fi
+out="$(node --input-type=module -e "import * as G from '$guard'; console.log(G.NOISE_BYTES)" 2>&1)"
+if [ "$out" = 256 ]; then printf '✓ NOISE_BYTES is 256\n'
+else printf '✗ NOISE_BYTES: want "256", got\n%s\n' "$out"; fails=$((fails + 1)); fi
 
 [ "$fails" -eq 0 ] && printf '\ncheck-bundle-size self-test: all passed\n' && exit 0
 printf '\ncheck-bundle-size self-test: %s failed\n' "$fails"

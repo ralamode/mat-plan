@@ -31,7 +31,10 @@
  *
  * THE BASELINE IS PR-CONTROLLED, so on a PR (`BASE_SHA` set) it is also compared with the base's
  * copy: each changed route gets a `::warning::`, and a baseline the PR changed (or introduced) must
- * EQUAL this run's measurement, or the step fails. That stops padding a baseline to make room. The
+ * EQUAL this run's measurement within NOISE_BYTES, or the step fails. That stops padding a baseline
+ * to make room (by more than NOISE_BYTES, a thirty-second of the budget). Two CI builds of one app
+ * source differ by a few bytes (2–4 B on three rows, PERF-1's U1, 2026-11-19), so "equal" cannot be
+ * exact. The
  * only way to update it is to paste the measured JSON from the step summary's <details> block.
  * On a push (`BASE_SHA` empty) the base comparison is skipped.
  *
@@ -60,6 +63,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const TOLERANCE_BYTES = 8 * 1024;
+/** How far a changed baseline may sit from this run's measurement: CI's build-to-build noise, with room. */
+export const NOISE_BYTES = 256;
 const ALL_CHUNKS_ROW = '(all client chunks)';
 const BASELINE_FILE = '.github/bundle-baseline.json';
 const STATS_KEYS = ['firstLoadChunkPaths', 'firstLoadUncompressedJsBytes', 'route'];
@@ -304,9 +309,12 @@ function run({ nextDir, buildOutcome, baseSha, onCi }) {
     for (const line of changed) warnings.push(`::warning::bundle: ${line}`);
     if (changed.length) {
       for (const [route, bytes] of Object.entries(before)) {
-        if (Object.hasOwn(after.routes, route) && after.routes[route] !== bytes) {
+        if (
+          Object.hasOwn(after.routes, route) &&
+          Math.abs(after.routes[route] - bytes) > NOISE_BYTES
+        ) {
           errors.push(
-            `::error::bundle: baseline for ${esc(route)} is ${commas(bytes)} but this run measured ${commas(after.routes[route])}; a baseline changed in this PR must equal this run's measurement (paste the <details> block)`,
+            `::error::bundle: baseline for ${esc(route)} is ${commas(bytes)} but this run measured ${commas(after.routes[route])}; a baseline changed in this PR must equal this run's measurement within ${NOISE_BYTES} B (paste the <details> block)`,
           );
         }
       }

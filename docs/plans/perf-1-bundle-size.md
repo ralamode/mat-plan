@@ -148,9 +148,10 @@ so a crash can never look like a pass. It runs only when it is the main module, 
    - 5a. Each route whose PR baseline differs from the base's gets
      `::warning::bundle: baseline for <route> raised by +N KiB in this PR` (or "lowered", or "added").
    - 5b. If the PR's baseline differs from the base's at all (or was introduced), **every entry must
-     equal this run's measurement exactly, or exit 1**. That stops padding a baseline to make room,
-     and stops hand edits. "Exactly" depends on U1. If U1 turns out false, this has to become "within
-     the measured noise", and the panel has to see that again before this ships.
+     equal this run's measurement within `NOISE_BYTES` (256 B), or exit 1**. That stops padding a
+     baseline to make room, and stops hand edits. U1 came back false (2–4 B between two CI builds of
+     one app source, on three rows, 2026-11-19), so "exactly" became "within the measured noise",
+     re-reviewed below.
 6. **Compare** each measured row with the PR's baseline. A row that is new or missing exits 1, with
    "add it" or "remove it". If `|after − before| > TOLERANCE_BYTES`, exit 1, with
    `::error::bundle: /p/[profileId] +12.4 KiB (1,009,905 → 1,022,601); budget ±8.0 KiB`. A shrink fails
@@ -278,9 +279,9 @@ to get numbers: the baseline comes from CI (R2), and `pnpm build` uses the one h
   `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is inlined at build time (`apps/web/lib/env.ts:94-108`). So the
   baseline is always pasted from CI's summary. Production's absolute numbers differ from CI's by a
   constant, and the deltas are unaffected.
-- **R3. Two builds of the same commit differ** (U1). Every PR would flake, and step 5b's "exactly"
-  could never pass. Probe this before merge (U1). If it fails, the tolerance has to absorb the measured
-  noise, and 5b is re-panelled.
+- **R3. Two builds of the same app source differ** (U1, confirmed 2026-11-19: 2–4 B on the
+  all-chunks row, `/p/new` and `/settings`, between runs 44648199695 and 44650574370). The 8 KiB
+  tolerance absorbs it; step 5b allows `NOISE_BYTES` (256 B), re-reviewed below.
 - **R4. Creep is billed to whichever PR crosses the line.** Accepted; the cumulative delta is in the
   table.
 - **R5. The check is not required.** No check is (`AGENTS.md:343`). The "CI green" bar in `review-pr`
@@ -312,8 +313,10 @@ to get numbers: the baseline comes from CI (R2), and `pnpm build` uses the one h
 
 ## Unverified claims (the panel attacks these first)
 
-- **U1. Determinism.** Two CI builds of one SHA give byte-identical chunks. Probe: re-run `quality`
-  on the same SHA and diff the two `<details>` blocks.
+- **U1. Determinism.** ❌ **Settled false (2026-11-19).** Runs 44648199695 and 44650574370 built the
+  same app source (the commits between them touched only `.github/` and docs) and differed by 4 B
+  on the all-chunks row and 2 B on `/p/new` and `/settings`. Step 5b allows `NOISE_BYTES`.
+- **U2.** ✅ **Settled true:** run 44648199695's build wrote the stats file, and all 16 routes were read.
 - **U2. CI's build writes the stats file** (the Turbopack branch, `index.js:2854`). Probe: RED probe
   2, plus the first run's summary.
 - **U3. The per-route sum matches what a browser fetches.** Probe: in Playwright, sum the JS bytes
@@ -377,3 +380,8 @@ No P0. Each P1 was proven by a `pnpm probe` that came back GREEN before the fix 
 | I7  | P2       | The plan named a branch, a fragment and a size that were not what was built, and left the split trigger unanswered.         | Branch, fragment name and size updated; the split trigger answered in § Size estimate; this sub-log added.                        |
 | I8  | P2       | The roadmap row restated the mechanism and the tolerance; the roadmap is a pointer document.                                | Cut to the id, the PR and the column.                                                                                             |
 | I9  | P2       | A route name containing a backtick run could close the `<details>` block's code fence.                                      | The fence is one backtick longer than the longest run in the JSON (at least three). Case added.                                   |
+
+### U1 re-review (2026-11-19)
+
+U1 came back false, so step 5b's "exactly" became "within `NOISE_BYTES` (256 B)", as the plan said it
+would, and went back to the lens that raised B1 (security), with correctness. Their verdicts are below.
