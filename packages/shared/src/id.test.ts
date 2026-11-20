@@ -26,7 +26,8 @@ describe('uuidSchema folds case (one spelling after every parse)', () => {
   });
 
   // The hide and restore writers count the rows an `IN` matches against the ids sent, so two
-  // spellings of one entry used to read as a missing entry (`notFound`).
+  // spellings of one entry would read as a missing entry (`notFound`). No endpoint parses these
+  // schemas yet, so the gap was latent here.
   it.each([
     ['hideEntriesSchema', hideEntriesSchema, {}],
     ['restoreHiddenSchema', restoreHiddenSchema, { hiddenAt: '2026-11-17T18:04:05.123456Z' }],
