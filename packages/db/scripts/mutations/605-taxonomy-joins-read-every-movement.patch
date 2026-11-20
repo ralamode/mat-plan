@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index d6f4ce49..ede24e07 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -193,7 +193,7 @@ export async function catalogTaxonomyRows(
+         code: schema.movementEquipment.equipmentCode,
+       })
+       .from(schema.movementEquipment)
+-      .where(inArray(schema.movementEquipment.movementId, [...ids])),
++      .where(sql`true`),
+     muscles(MUSCLE_ROLE.primary),
+     muscles(MUSCLE_ROLE.secondary),
+   ]);

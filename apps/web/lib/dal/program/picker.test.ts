@@ -1,6 +1,9 @@
 import {
   catalogHowToOf,
+  catalogOptionOf,
   equipmentInOrder,
+  MOVEMENT_SEED_ROWS,
+  pickerEntryOf,
   TRACKING_TYPE,
   type CatalogOptionTaxonomy,
   type Unit,
@@ -279,5 +282,69 @@ describe('getHowTo: one option’s steps, resolved among the caller’s own opti
     vi.mocked(movementOptions).mockResolvedValueOnce([builtIn({ slug: WITH_STEPS.slug })]);
     const data = await getItemPickerData();
     expect(data!.options.every((o) => !('instructions' in o))).toBe(true);
+  });
+});
+
+/**
+ * CAT-3 P11-ii-b (b5): the size of what the picker is handed, measured over the real library plus the
+ * 35 old built-ins (the read's shape, built here from `catalogOptionOf`), and at 500 options. JSON
+ * length stands in for the RSC payload; household item names are free text, so this is never measured
+ * on production. The figures go in the PR body; the ceilings are what a regression would cross.
+ */
+describe('(b5) the picker payload, measured', () => {
+  const asRead = (index: number, e: (typeof CATALOG_MOVEMENTS)[number]) => {
+    const o = catalogOptionOf(e, `019826b4-0000-7000-8000-${String(index).padStart(12, '0')}`);
+    return {
+      publicId: o.publicId,
+      owner: 'catalog' as const,
+      slug: e.slug,
+      name: o.name,
+      trackingType: o.trackingType,
+      unitDefault: o.unitDefault,
+      isBodyweight: o.isBodyweight,
+      aliases: o.aliases,
+      taxonomy: {
+        modality: o.modality,
+        pattern: o.pattern,
+        equipment: o.equipment,
+        primaryMuscle: o.primaryMuscle,
+        secondaryMuscles: o.secondaryMuscles,
+      },
+      supervision: o.supervision,
+      hasInstructions: o.hasInstructions,
+    } satisfies MovementOption;
+  };
+  const oldRows = MOVEMENT_SEED_ROWS.map(
+    (r) =>
+      ({
+        publicId: r.publicId,
+        owner: 'catalog',
+        slug: r.slug,
+        name: r.name,
+        trackingType: r.trackingType,
+        unitDefault: r.unitDefault,
+        isBodyweight: r.isBodyweight,
+        group: pickerEntryOf(r.slug)!.group,
+        aliases: pickerEntryOf(r.slug)?.aliases ?? [],
+        taxonomy: null,
+        supervision: null,
+        hasInstructions: false,
+      }) satisfies MovementOption,
+  );
+  const bytesOf = async (options: MovementOption[]) => {
+    vi.mocked(movementOptions).mockResolvedValueOnce(options);
+    return Buffer.byteLength(JSON.stringify(await getItemPickerData()), 'utf8');
+  };
+
+  it('the real library plus the 35 old built-ins, and 500 options', async () => {
+    const real = [...CATALOG_MOVEMENTS.map((e, i) => asRead(i, e)), ...oldRows];
+    const five = Array.from({ length: 500 }, (_, i) =>
+      asRead(i, CATALOG_MOVEMENTS[i % CATALOG_MOVEMENTS.length]!),
+    );
+    // Measured 2026-11-20: 622 options, 210,162 bytes; 500 options, 173,463 (about 347 each). The
+    // ceilings leave about 15%: carrying each option's steps (rule 11, P16) would cross them many times.
+    expect(real.length).toBe(CATALOG_MOVEMENTS.length + MOVEMENT_SEED_ROWS.length);
+    expect(await bytesOf(real), 'the real library and the old built-ins').toBeLessThan(240_000);
+    expect(await bytesOf(five), '500 library options').toBeLessThan(200_000);
   });
 });

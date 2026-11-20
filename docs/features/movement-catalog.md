@@ -25,15 +25,19 @@ lane N's ([catalog-data.md](./catalog-data.md)).
 | `seedCatalog` (`seed.ts`)                      | The library's one writer (A2-i), called by `seedReference` with the list it is given; production's `seed()` gives it `[]` until A2-ii.                                  |
 | `movementIsCatalog()` (`writers/ownership.ts`) | Rule 2's predicate: global and `modality IS NOT NULL`. Never a slug test.                                                                                               |
 
-All four tables are empty of catalog rows in production until A2-ii switches the seed on, and nothing
-in `apps/` reads them until P11-ii (`apps/web/test/program-tables-stay-dark.test.ts`).
+All four tables are empty of catalog rows in production until A2-ii switches the seed on. Since
+CAT-3 P11-ii-b the picker's read reads the two join tables (`catalogTaxonomyRows` in
+`queries/program/movement-options.ts`); the stays-dark scan that held them unread until then is retired,
+and that read's proofs (`verify/program.ts`, (b1)–(b4), mutations `605`–`608`) replace it.
 
 ## Invariants
 
 1. **A join row has no `household_id`.** It belongs to whoever owns its movement, and erasure finds it
    through `movement_id` (`erasure/graph.ts` → `movementsOf`). Never denormalise it.
 2. **A join row is read only through a movement the scope may see** (`movementIsAvailableTo`), never
-   selected by code alone. Otherwise a muscle or equipment filter crosses households once households
+   selected by code alone. The picker's read meets this by reading join rows for the ids its catalog
+   arm listed (global, live, catalog rows) and nothing else, and its assembly throws on a row for any
+   other id (P11-ii-b (b2)). Otherwise a muscle or equipment filter crosses households once households
    have taxonomy of their own.
 3. **A household's own movement has no modality and no join rows in Beta 0.** The database refuses the
    modality (`movements_household_row_has_no_modality`); the join rows are held by `db:verify` (S4). A
