@@ -28,7 +28,7 @@ const CARD_TIMEOUT_MS = 20_000;
  * The links in `<main>` on the lit card, counted from production. A change in either direction is
  * drift worth a look (Clerk added a link, or one vanished).
  */
-const EXPECTED_LINKS = 4;
+const EXPECTED_LINKS = process.env.DRIFT_RED === 'links' ? 5 : 4;
 
 /**
  * Clerk's own links that miss the 44px bar, measured on production 2026-11-20 (the first live runs of
@@ -51,9 +51,23 @@ const isZodEvalProbe = (v: string) => /^script-src(-elem)? eval @[^ ]*\/_next\/s
 
 const googleButton = (page: Page) => page.getByRole('button', { name: /google/i });
 
+// TEMPORARY red proofs (removed before merge): DRIFT_RED breaks one thing the check must catch.
+const RED = process.env.DRIFT_RED ?? '';
+
 /** Open `/sign-in` and wait for Clerk's card, saying which of our fallbacks shows if it never comes. */
 async function openLitCard(page: Page): Promise<void> {
-  await page.goto(SIGN_IN_PATH);
+  if (RED === 'styles') {
+    await page.route('**/sign-in', async (route) => {
+      const res = await route.fetch();
+      const headers = res.headers();
+      headers['content-security-policy'] = headers['content-security-policy']!.replace(
+        /'nonce-[^']+'/g,
+        "'nonce-AAAAAAAAAAAAAAAAAAAAAA'",
+      ).replace(/style-src [^;]*/, "style-src 'self'");
+      await route.fulfill({ response: res, headers });
+    });
+  }
+  await page.goto(RED === 'card' ? '/privacy' : SIGN_IN_PATH);
   try {
     await googleButton(page).waitFor({ state: 'visible', timeout: CARD_TIMEOUT_MS });
   } catch {
