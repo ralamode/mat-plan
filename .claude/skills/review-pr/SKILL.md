@@ -169,7 +169,10 @@ with no rule citation is taste. Mark it P2, or drop it.
 11. **Performance / CWV.** The budget is AGENTS.md's (UI PR rules → web performance). CI measures only
     client JS bytes (the `quality` job's "Bundle size" step; what it measures is
     `check-bundle-size.mjs`'s header): cite its delta and "vs main's baseline" columns, and any
-    `baseline … raised` warning, which needs a reason in the PR. The timings are not measured, so look
+    `baseline … raised` warning. **A PR that changes `.github/bundle-baseline.json` must say why in its
+    body** (what grew, and why that cost is worth it); a raise with no stated reason is a P2, and a
+    raise the diff does not explain (no new dependency, client component or route) is a question to
+    the author before shipit. The timings are not measured, so look
     for the causes: client JS where RSC works, unbounded queries on a hot path (`profile_id, date`),
     layout shift from late content, images without `next/image`. **A performance claim nobody
     measured reads _not measured_**, in the PR and in the review, never "faster" or "no impact".
