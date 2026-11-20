@@ -390,6 +390,11 @@ export async function getTodayPrograms(
   in the same `Promise.all`. `StrengthSection` (`strength-section.tsx:40-50`) renders one `ProgramReference`
   per due program, each headed with "{program} · {workout}" (criterion 43); the heading stays inside
   `<summary>` (programming invariant 1b).
+  ⚠️ _2026-11-19:_ `strength-section.tsx` and `program-reference.tsx` were deleted by FAM-1 12f PR 1
+  (#725), with `lib/dal/programming.ts` and `lib/programming/program-day.ts` in the block above. The
+  day page now gets an athlete's workouts from the day resolver (`getDayPlan`). This section needs
+  re-scoping against [day-page](../features/day-page.md) and [day-writers](../features/day-writers.md)
+  when the plan is revised.
 - **"Which workout?" when two are due** (UX lens 1 B1). A `<select>` above the form, labelled "Which
   workout?", one option per due program reading "{program} · {workout}", **defaulting to the first due
   program**. Each option's value carries the `blockPublicId` and the role, so two programs with the same role

@@ -83,7 +83,7 @@ export type SetDTO = {
   isBand: boolean;
   quantities: SetQuantityDTO[];
   // GAP-1 P1-1b. Carried so the read seam can tell a `sub_failure` set from a `done` one — WITHOUT it
-  // per-set status is unrenderable and `isEditableSet` can't refuse to edit one. Typed as the full
+  // per-set status is unrenderable and the set-edit path can't refuse one. Typed as the full
   // `EntryStatus` (not the narrower SetStatus) because this is a READ of whatever the column holds,
   // including a value written before the boundary narrowed; the write path is where the subset applies.
   status: EntryStatus;

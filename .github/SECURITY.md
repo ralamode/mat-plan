@@ -373,7 +373,7 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 - **A `high` or `critical` advisory in the PRODUCTION dependency tree fails the build** (SEC-5,
   [plan](../docs/plans/sec-5-verify-in-ci.md)); this is the one statement of the rule. **Scope** is
   the `--prod` tree only, the **threshold** is `high`, and the **trigger** is every pull request and
-  every push to `main` — `pnpm audit:check` in `ci.yml`'s `quality` job, the same command local
+  every CI run on `main` (a burst of pushes coalesces to at most two, each auditing the whole tree) — `pnpm audit:check` in `ci.yml`'s `quality` job, the same command local
   `pnpm verify` runs, so there is one definition and not two. The dev tree is deliberately **not**
   gated: it holds a `high` whose patched version was never published, so gating it would wedge `main`
   with no edit that unwedges it ([tech-debt](../docs/tech-debt.md)).

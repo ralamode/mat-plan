@@ -391,6 +391,21 @@ only way a notice about minors' health data is worth anything.
 > §8 too: a failed entry or athlete write no longer puts the row's values in Vercel's runtime log
 > (`quietDbErrors`). Less reaches that log, so the notice, which promises no more than §8, stays true.
 
+> 🔴 **§4 / §5 / §6 / §8 re-read 2026-11-19 for `V1-9b` B2-ii** ([plan](../plans/v1-9b-delete-and-restore.md)):
+> Clear this day has its screen. No column, processor or retention change.
+>
+> - **§4:** a clear's time (`deleted_at` as six-digit UTC text) reaches the browser as the banner's
+>   key for Restore all, with its count; the dialog's summary is counts and workout names the page
+>   already shows. The audience is the household's, as for every day read.
+> - **§5:** any member can clear an athlete's today and restore a clear while the day is today or
+>   yesterday; the app records no author.
+> - **§6:** a cleared day's entries leave the export, as every hidden row does, but unlike a cleared
+>   weigh-in they can be restored in the app while the day is open; after that the full copy is the
+>   way back.
+> - **§8:** a clear hides entries only. The workout's `sessions` row (its frozen name, any `feel`
+>   note) and its `supersets` rows stay, until the athlete or household is erased.
+>   The notice says each of these (its "Clear this day" paragraph).
+
 > 🔴 **§5 re-read 2026-11-19 for `V1-9b` B2-i** ([plan](../plans/v1-9b-delete-and-restore.md)):
 > no column, processor, reader audience or retention change. Clear this day is built
 > (`clearDayAction`, `app/p/[profileId]/clear-day-actions.ts`) with **no screen until B2-ii**; any
@@ -706,11 +721,11 @@ put it back. `CAT-3`'s fresh start (K7) removes the seeded household with everyt
 one place in the app tree (a committed data correction)". There are now **three** writers of
 `entries.deleted_at`, and the distinction between them is what matters here:
 
-| Writer                                                            | Reachable by                                                                                                                                                                                                                                                                                                                                                                                                                     | Touches production?       |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                                                                                                                                                                                                                        | **yes** — it has been run |
-| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. The next caller is B2's Clear this day; Beta 0 has no per-item Delete. Restore all (`clear-day-actions.ts`, B1-2) is built and has no caller until B2-ii. Clear this day's action (`clearDayAction`, B2-i: today only, any member) is built too, with no screen until B2-ii. | **yes, from 3b-bw**       |
-| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                                                                                                                                                                                                                        | no                        |
+| Writer                                                            | Reachable by                                                                                                                                                                                                                                                                                                                                          | Touches production?       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `packages/db/scripts/corrections/registry.ts` (bodyweight de-dup) | an operator, deliberately, with a dry run                                                                                                                                                                                                                                                                                                             | **yes** — it has been run |
+| `packages/db/src/writers/hide.ts` (`V1-9b`)                       | **the app, from V1-24 3b-bw**: a blank Save on a weigh-in clears it, and from 3b-life-a on a wrestling practice, through `writers/single-value.ts`. Clear this day (`clearDayAction`, B2-i: today only, any member) and Restore all (`restoreClearAction`, B1-2: today and yesterday) are on the day page since B2-ii; Beta 0 has no per-item Delete. | **yes, from 3b-bw**       |
+| `apps/web/scripts/screenshot-ephemeral.ts`                        | a developer, against a throwaway database                                                                                                                                                                                                                                                                                                             | no                        |
 
 ⚠️ **Updated 2026-11-16 (V1-24 3b-bw).** The app now writes `deleted_at`: clearing a weigh-in on the
 day page (Change, empty the field, Clear) **hides** that one row through `hideEntries`. The app does
@@ -841,7 +856,9 @@ rows included; a wake-up time is written as a time of day).
 - **Soft-deleted ("hidden") rows.** Every export query filters `deleted_at IS NULL`, so a hidden entry
   is absent from the zip while still held in the database. **User-facing since V1-24 3b-bw:** a
   cleared weigh-in (and from 3b-life-a a cleared practice) leaves the export, and the app offers no restore for it, so the full copy on request
-  (which includes hidden rows) is the household's only way to get it back
+  (which includes hidden rows) is the household's only way to get it back. **A cleared day (V1-9b
+  B2)** leaves the export too, but **Restore all** brings it back in the app while the day is today
+  or yesterday; after that, the full copy is the way back
   ([ADR 0008](../decisions/0008-deletion.md), "a hide must never remove the export path").
 - A profile with readiness rows but no entries exports an **empty zip** (`loggedMonths` keys off
   `entries`).
