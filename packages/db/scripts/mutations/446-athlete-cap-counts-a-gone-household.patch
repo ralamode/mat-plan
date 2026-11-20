@@ -1,12 +1,11 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index db52fe78..92f3a168 100644
+index 2ff6c433..4b532113 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
-@@ -406,6 +406,6 @@ async function lockedCreate(
-     })
+@@ -414,6 +414,5 @@ async function lockedCreate(
      .from(schema.households)
-     .where(householdRowIs(scope));
+     .where(householdRowIs(scope))
+     .for('key share');
 -  if (locked.length !== 1) return { ok: false, reason: 'refused' };
-+
    return addProfile(exec, scope, input);
  }

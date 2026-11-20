@@ -8697,6 +8697,33 @@ console.log(
   );
   assert.equal(await countIn(households[0].id), aBefore + 1, 'PROF-1 a-1w: …and still one row');
 
+  // The household row is read FOR KEY SHARE, so an erasure mid-call answers `refused`, never a 23503.
+  // Waiting is unprovable on PGlite's one connection; the lock MODE is not: a locking read takes
+  // RowShareLock on the table and a plain SELECT does not. 🔴 A fresh transaction, and a REPLAY (no
+  // insert): any insert of a row that references `households` runs a foreign-key check that takes
+  // RowShareLock too and would hide a missing lock (mutation 591).
+  await rolledBack(async (tx) => {
+    const again = await createProfile(asTx(tx), A_SCOPE, {
+      name: 'A-1 Athlete Lock Probe',
+      kind: PROFILE_KIND.kid,
+      clientId: A_KEY,
+    });
+    assert.deepEqual(
+      again,
+      { ok: true, publicId: createdId },
+      'PROF-1 a-1w: the lock proof is a replay (no insert takes a foreign-key lock)',
+    );
+    const modes = (
+      await tx.execute(
+        sql`select mode from pg_locks where locktype = 'relation' and relation = 'households'::regclass and pid = pg_backend_pid()`,
+      )
+    ).rows as Array<{ mode: string }>;
+    assert.ok(
+      modes.some((l) => l.mode === 'RowShareLock'),
+      'PROF-1 a-1w: the household row is read FOR KEY SHARE, so an erasure mid-call is refused',
+    );
+  });
+
   // (3) A replay still resolves after the athlete is ARCHIVED — archive is not a delete, and the
   // key is not freed by it.
   const owner = ownerScope(A_SCOPE);
