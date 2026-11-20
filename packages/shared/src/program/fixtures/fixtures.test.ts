@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { uuidSchema } from '../../id';
+import { CATALOG_FIXTURE_OPTIONS } from '../../catalog/fixture';
 import { TRACKING_TYPES } from '../../movements';
 import { QUANTITY_SLOT } from '../../quantity-slots';
 import { dayPlanSchema, programsByStay, showsOnlyLogged, type DayPlan } from '../day-shapes';
-import { hasSetRows, loggedRowUnit } from '../pieces';
+import { existingItem, hasSetRows, loggedRowUnit } from '../pieces';
 import { prescribedText } from '../prescribed-text';
 import {
   MAX_DAY_SLOTS,
@@ -1887,5 +1888,27 @@ describe('PROGRAM_VIEW_FIXTURE_SOURCES and PROGRAM_LIST_FIXTURE_SOURCES (C36)', 
     ]);
     expect(Object.isFrozen(PROGRAM_VIEW_FIXTURE_SOURCES)).toBe(true);
     expect(Object.isFrozen(PROGRAM_LIST_FIXTURE_SOURCES)).toBe(true);
+  });
+});
+
+describe('the fixture world and the test library (CAT-3 A2-ii)', () => {
+  it('🔴 an item the test library also answers to logs the way that entry does', () => {
+    // On a fixtures database the seed resolves each item by name through `newItem`, which selects
+    // a library row that name finds whatever its type; the seed then skips the whole program when
+    // an item comes back as another type. A pair that differs drops that program from every
+    // fixtures database. `existingItem` is `newItem`'s own rule: an exact name, an exact alias, or
+    // a short form.
+    const library = CATALOG_FIXTURE_OPTIONS.map((option) => ({ ...option, isCatalog: true }));
+    const inBoth = FIXTURE_ITEMS.flatMap((item) => {
+      const hit = existingItem(library, item.name);
+      return hit ? [{ item, hit }] : [];
+    });
+    // Not vacuous: the two lists do share names, and the pairs are the ones the picker fixture names.
+    expect(inBoth.map(({ item }) => item.name).sort()).toEqual(
+      ['Easy run', 'Goblet squat', 'Jump rope', 'Side plank'].sort(),
+    );
+    for (const { item, hit } of inBoth) {
+      expect(hit.trackingType, item.name).toBe(item.trackingType);
+    }
   });
 });

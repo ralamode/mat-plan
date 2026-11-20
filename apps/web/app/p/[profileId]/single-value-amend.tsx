@@ -3,6 +3,7 @@
 import { isBlankEntry, type Unit } from '@mat-plan/shared';
 import { useActionState, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import { useSectionBusy } from '@/components/day/collapsible-section';
 import { Button } from '@/components/ui/button';
 import { InlineEditActions } from '@/components/ui/inline-edit-actions';
 import { AMEND_COPY, changeLabel, INPUT_CLASS, type SingleValueCopy } from '@/lib/constants';
@@ -117,6 +118,8 @@ export function SingleValueAmend({
     },
     NOT_SUBMITTED,
   );
+  // An open editor or a save in flight holds the section's "Collapse" (FAM-1 12c-iii §5).
+  useSectionBusy(editing || pending);
   const [value, setValue] = useState(String(logged.value));
   // The outcome as of the last open: an error from a PREVIOUS open (submit 845, Cancel, reopen)
   // must not reappear under a correct value, and `useActionState` never resets on its own.
