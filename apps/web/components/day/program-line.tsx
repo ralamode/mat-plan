@@ -18,8 +18,9 @@ import { ProgramOrderButton } from './program-order-button';
  * 2026-11-19), laid out as the prototype has it: a muted "Programs:" label, then each name as
  * "Name ›" with no commas, the "›" hidden from a screen reader so a link's name is the program's
  * alone (`PROGRAM_NAME_LINK_CLASS` has why it is not underlined). The names are a list (`ul`, not
- * labelled: the label is beside it), wrapping under one another after the label, 10px apart and 4px
- * between lines. A short name moves to the next line whole, and a long one wraps inside its link.
+ * labelled: the label is beside it), in one wrapping row with the label, so a wrapped name comes
+ * back under the label: 10px apart, 4px between rows. A short name moves to the next row whole, and
+ * a long one wraps inside its link.
  * Without it the names are one line of text ("Programs: Family program, Stretching").
  *
  * **Program order shows** when the viewed day has two or more programs, the day is writable, the
@@ -52,15 +53,21 @@ export function ProgramLine({
   return (
     <div className="flex flex-col items-start gap-1 empty:hidden">
       {named && programHrefFor ? (
-        <div className="flex items-start gap-x-2.5 text-sm">
-          {/* As tall as a link, so the label sits on the first line of names. */}
-          <span className="text-muted-foreground flex min-h-11 shrink-0 items-center">
+        // One wrapping row, as the prototype's: the label is its first item and the names flow
+        // after it, a wrapped name coming back under the label. Inline flow rather than
+        // `display: contents` on the list, which has dropped a list's role in some browsers; the
+        // margins are the prototype's gaps (10px across, 4px between rows).
+        <div className="-my-0.5 text-sm">
+          <span className="text-muted-foreground my-0.5 mr-2.5 inline-flex min-h-11 items-center align-top">
             {PROGRAM_COPY.lineLabel(plan.programs.length)}
           </span>
           {/* `role="list"`: Safari drops list semantics from a list styled without markers. */}
-          <ul role="list" className="flex min-w-0 flex-wrap gap-x-2.5 gap-y-1">
+          <ul role="list" className="inline">
             {plan.programs.map((program) => (
-              <li key={program.programPublicId}>
+              <li
+                key={program.programPublicId}
+                className="my-0.5 mr-2.5 inline-flex max-w-full align-top last:mr-0"
+              >
                 <Link
                   href={programHrefFor(program.programPublicId)}
                   className={PROGRAM_NAME_LINK_CLASS}

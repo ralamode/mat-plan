@@ -908,16 +908,32 @@ describe('ProgramLine and the Program order dialog', () => {
       const items = within(list).getAllByRole('listitem');
       expect(items).toHaveLength(todayTwoPrograms.programs.length);
       for (const item of items) expect(within(item).getAllByRole('link')).toHaveLength(1);
-      expect(label.parentElement?.textContent).not.toContain(VALUE_JOINER);
+      // No joiner of any kind: not the shared ", ", and no bare comma either.
+      expect(label.parentElement?.textContent).not.toContain(VALUE_JOINER.trim());
+      expect(label.parentElement?.textContent).not.toContain(',');
+      // One wrapping row, the prototype's: the label is its first item, and the list's items flow
+      // in the same inline run after it, so a wrapped name comes back under the label.
+      expect(label.parentElement?.firstElementChild).toBe(label);
+      expect(label.className.split(' ')).toContain('inline-flex');
+      expect(list.className.split(' ')).toContain('inline');
+      for (const item of items) expect(item.className.split(' ')).toContain('inline-flex');
     });
 
     it('each link is the named class: no underline until hover, a 44px target both ways', () => {
       linked();
       const classes = PROGRAM_NAME_LINK_CLASS.split(' ');
       expect(classes).not.toContain('underline');
-      for (const token of ['hover:underline', 'min-h-11', 'min-w-11', 'font-medium']) {
+      for (const token of [
+        'hover:underline',
+        'min-h-11',
+        'min-w-11',
+        'font-medium',
+        'wrap-anywhere',
+      ]) {
         expect(classes).toContain(token);
       }
+      // The prototype's line buttons have no padding (`padding:0`): the row's gaps space them.
+      expect(classes.some((token) => /^p[xylrtb]?-/.test(token))).toBe(false);
       for (const link of screen.getAllByRole('link')) {
         expect(link.className).toBe(PROGRAM_NAME_LINK_CLASS);
         const arrow = link.querySelector('[aria-hidden="true"]');

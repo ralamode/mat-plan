@@ -367,7 +367,8 @@ export const NAV_LINK_CLASS =
 
 /**
  * A program's name on the day page's programs line, as a link to its page ("Family program ›";
- * FAM-1 15c, D49, matched to the prototype's `.txt` buttons).
+ * FAM-1 15c, D49). Matched to the prototype's line buttons (`.txt` with `padding:0`,
+ * `program-order-ends-today.html`): no padding of its own; the line's gaps space the names.
  *
  * 🔴 **No underline until hover, because the "›" after each name marks it as a link** (WCAG 1.4.1:
  * not by colour alone). The name is also the foreground colour on a muted label, so a link never
@@ -379,7 +380,7 @@ export const NAV_LINK_CLASS =
  * `min-w-0` would win over `min-w-11` under `cn`.
  */
 export const PROGRAM_NAME_LINK_CLASS =
-  'text-foreground focus-visible:ring-ring inline-flex min-h-11 min-w-11 items-center rounded-sm px-1 text-sm font-medium wrap-anywhere underline-offset-4 outline-none hover:underline focus-visible:ring-3';
+  'text-foreground focus-visible:ring-ring inline-flex min-h-11 min-w-11 items-center rounded-sm text-sm font-medium wrap-anywhere underline-offset-4 outline-none hover:underline focus-visible:ring-3';
 
 /**
  * A nav ROW — a full-width, bordered, tappable row. `NAV_LINK_CLASS` above is `w-fit` for inline
