@@ -259,20 +259,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   12a's several worlds; the earlier "fold it in at 6c" fix is struck.
 - **Severity:** low. Test-only, one file.
 
-### Two reads of a logged row's live sets and quantities (added 2026-11-16, FAM-1 step 11b)
-
-- **What & why it's debt:** `packages/db/src/queries/day/stored-row-values.ts` (`readRowValues`, the
-  row writer's replay and re-tick answer) and the app DAL's day read
-  (`apps/web/lib/dal/entries.ts`, the live `entry_sets` and then their quantities) are the same two
-  queries with the same load-bearing parent filter. 11b wrote the first in `packages/db` because the
-  writer cannot import the app DAL; folding the DAL onto it changes a lane-S file, so it was left.
-- **Impact:** a change to the parent filter made in one copy (the set-liveness rule) leaves the other
-  reading by the old rule. The writer's copy is guarded by mutation 172; the DAL's is not.
-- **The fix:** the DAL calls `readRowValues` (or a sibling that also returns the set ids and
-  statuses it needs) and keeps only its mapping to DTOs. 12a's day resolver reads through the shared
-  one (`queries/day/day-plan.ts`).
-- **Severity:** low. Two copies of two queries, with a named owner and a mutation on one side.
-
 ### The nav rail unmounts during a switch between athletes (added 2026-11-13)
 
 - **What & why it's debt:** clicking an athlete in `UI-5`'s rail changes the `[profileId]` segment,
