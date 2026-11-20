@@ -1465,7 +1465,7 @@ export const CLEAR_DAY_COPY = {
    * shows any more (the strength form went in #725).
    */
   sessionStays:
-    'A workout’s name, and any note written with it, stays with the day; only the entries are hidden.',
+    'Workout names, and any notes written with them, stay with the day; only the entries are hidden.',
   summaryWorkout: (name: string, count: number) => `${name} (${entriesText(count)})`,
   summaryWeighIns: (n: number) => plural(n, { one: 'bodyweight', other: `${n} weigh-ins` }),
   summaryPractices: (n: number) =>
