@@ -488,7 +488,10 @@ test.describe('A finished workout on real data', () => {
     const region = page.getByRole('region', { name: daily.name, exact: true });
     const collapse = region.getByRole('button', { name: DAY_COPY.collapseLabel(daily.name) });
     // The first ✓ not yet pressed, each time: the query's matches shrink as rows are ticked.
+    // `count()` does not wait: the day page may still be streaming in behind its skeleton.
+    await expect(region).toBeVisible();
     const open = region.getByRole('button', { pressed: false });
+    await expect(open.first()).toBeVisible();
     const rows = await open.count();
     expect(rows, 'the daily stretch has rows to tick').toBeGreaterThan(0);
     for (let left = rows; left > 0; left--) {
