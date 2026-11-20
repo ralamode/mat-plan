@@ -346,7 +346,9 @@ flowchart LR
       removes it when nothing is logged (C15).
     - **Put on on real data** (15 PR 1; the 15 plan's UX panel): `startingNamesText` and, when
       someone new shares targets (the program has athletes, or two start together),
-      `sameTargetsText`, both in the footer (`SheetFormFooter`'s `lead`, which describes the action),
+      `sameTargetsText`, both in the footer (`SheetFormFooter`'s `lead`, which describes the action; the footer lives in
+      `components/ui/sheet-form-footer.tsx` since V1-9b B2-prep, shared with Clear this day, and
+      `PENDING_CLASS` in `components/ui/pending-class.ts`, re-exported by `builder-text.ts`),
       in view with Start. Start counts only who starts (`startLabel(fresh)`). A last day is
       `lastDayText(day, today)`, one rule with "Who's on it". When only athletes taken off today are
       ticked, the radios give way to `PUT_ON_COPY.stayOnNoGap` and the action is `keepLabel` (their

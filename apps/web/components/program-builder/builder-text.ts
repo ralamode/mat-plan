@@ -22,7 +22,7 @@ import {
   type Weekday,
 } from '@mat-plan/shared';
 
-import { HOME_LINK, itemCountText } from '@/lib/constants';
+import { AMEND_COPY, HOME_LINK, itemCountText } from '@/lib/constants';
 import { formatDayShort, onDayText } from '@/lib/date';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { APP_LOCALE } from '@/lib/i18n/locale';
@@ -49,7 +49,8 @@ export const BUILDER_COPY = {
   createProgramForm: 'Create a program',
   create: 'Create',
   creating: 'Creating…',
-  cancel: 'Cancel',
+  /** The app's one Cancel word (`AMEND_COPY.cancel`), also `SheetFormFooter`'s default. */
+  cancel: AMEND_COPY.cancel,
   programName: 'Program name',
   programNamePlaceholder: 'e.g. Family program',
   /**
@@ -90,11 +91,8 @@ export const SAVE_FAILED = 'Couldn’t save. Try again.';
  */
 export const cleanName = (raw: string) => collapseWhitespace(raw).trim();
 
-/**
- * A pending button: `aria-disabled` (a disabled one drops focus to <body>), which `Button` does
- * not style, so it is dimmed here.
- */
-export const PENDING_CLASS = 'aria-disabled:opacity-60';
+/** A pending button's class; defined in `components/ui/pending-class.ts`, re-exported for the builder. */
+export { PENDING_CLASS } from '@/components/ui/pending-class';
 
 /** What a refused name write says, under the field. */
 export function nameRefusal(reason: ProgramRefusal): string {
