@@ -750,10 +750,11 @@ under its own CAT-3 heading).
     one custom match is two to choose from.
 19. **One mapping from an entry to an option** (`catalogOptionOf`, spec P11). The option read
     applies it through `catalogArmOption` (`packages/db/src/queries/program/catalog-arm-option.ts`,
-    since P11-ii-a): the entry's aliases, supervision label and `hasInstructions` on the database
-    row's identity, in the four cases that file tables, and the web DAL copies the result. Since
-    P11-ii-b (#767) a catalog row's modality, pattern, equipment and muscles come from the tables
-    (`catalogTaxonomyOf`), and an old built-in's from the entry on its slug. The read, "How to" and `newItem` take one
+    since P11-ii-a): the const's and the entry's aliases, the supervision label and
+    `hasInstructions` on the database row's identity, in the four cases that file tables, and the
+    web DAL copies the result. Since P11-ii-b (#767) a catalog row's modality, pattern, equipment
+    and muscles come from the tables (`catalogTaxonomyOf`), and an old built-in's from the entry on
+    its slug. The read, "How to" and `newItem` take one
     library, `CATALOG_LIBRARY` in `apps/web/lib/dal/catalog-library.ts`. The option read is
     compared with it, the preview's options are built with it (`CATALOG_FIXTURE_OPTIONS`), and it
     never carries the instructions: an option says `hasInstructions`, and `catalogHowToOf` reads
@@ -761,8 +762,8 @@ under its own CAT-3 heading).
     **Equipment and secondary muscles are listed in the vocabulary's order** (`EQUIPMENT`,
     `MUSCLES`; `equipmentInOrder`, `musclesInOrder`; spec K31, maintainer 2026-11-19), whatever
     order an entry or a table row gives them, so a mapping and a read cannot word one movement's
-    "what it needs" two ways. The read that builds an option from the tables (`catalogTaxonomyOf`) calls the same two
-    functions, after parsing each code with `equipmentSchema` / `muscleSchema`: the two functions
+    "what it needs" two ways. The read's assembly from the tables (`catalogTaxonomyOf`) calls the
+    same two functions, after parsing each code with `equipmentSchema` / `muscleSchema`: the two functions
     leave out a code the vocabulary does not have, without an error. Aliases keep the entry's order.
 20. **"All movements" opens to the kind of training, then a family** (`browseTree`, spec P12):
     for strength the lift pattern under a plain label, for the other kinds the body area of the
