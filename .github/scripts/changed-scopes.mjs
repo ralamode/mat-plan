@@ -75,9 +75,15 @@ const isCatalogDataFile = (f) =>
 
 // The specifier scan and relative resolution of packages/shared/src/test-support/source-graph.ts,
 // in plain JS for the same reason.
-const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-const specifiersOf = (text) =>
-  [...code(text).matchAll(/\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g)].map(([, s]) => s);
+// Line comments first, and only where `//` follows a start of line, a space or punctuation (not a
+// URL's `https://`): a `/*` inside a `//` comment must not swallow the code up to the next `*/`.
+// What survives an unclosed `/*` stays as code, which only makes the walk see more.
+const code = (text) =>
+  text.replace(/(^|[\s;{}(),])\/\/.*$/gm, '$1').replace(/\/\*[\s\S]*?\*\//g, '');
+const SPECIFIER = /\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g;
+const specifiersOf = (text) => [...code(text).matchAll(SPECIFIER)].map(([, s]) => s);
+/** The code with every import specifier blanked: what is left that names the data is a read by path. */
+const withoutSpecifiers = (text) => code(text).replace(SPECIFIER, '');
 const SHARED = '@mat-plan/shared';
 const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/;
 const TEST_FILE = /\.test\.(?:[cm]?[jt]sx?)$/;
@@ -85,10 +91,13 @@ const TEST_FILE = /\.test\.(?:[cm]?[jt]sx?)$/;
  * A code file the walk cannot follow, or that reads the data by path. Any of these answers true:
  * - a non-literal `import(…)`/`require(…)`, or `createRequire`, names a module the scan cannot read;
  * - a path to the data as text (`readFileSync(new URL('…/shipped.json', import.meta.url))`, the way
- *   the proofs read repo files). `@mat-plan/shared/catalog/data` is an import, the walk's to judge.
+ *   the proofs read repo files). Import specifiers are blanked first (`withoutSpecifiers`): an import is the walk's to judge.
  */
-const UNFOLLOWABLE = /\b(?:import|require)\s*\(\s*[^'"\s]|\bcreateRequire\b/;
-const READS_DATA = /(?<!@mat-plan\/shared\/)catalog\/data|shipped\.json|approved\.json/;
+const UNFOLLOWABLE =
+  /\b(?:import|require)\s*\(\s*[^'"\s]|\bcreateRequire\b|\b(?:import\.meta|require)\.resolve\b/;
+const READS_DATA = /catalog\/data|shipped\.json|approved\.json/;
+/** Inside `catalog/`, a relative path to its `data/` directory (`'./data/batch-03.ts'`) is a read too. */
+const READS_DATA_RELATIVE = /['"`](?:\.\/|(?:\.\.\/)+)data(?:[/'"`])/;
 /** Either project's tsconfig remapping specifiers (`paths`, `baseUrl`) is resolution the walk lacks. */
 const TSCONFIGS = ['packages/db/tsconfig.json', 'packages/shared/tsconfig.json'];
 
@@ -104,7 +113,8 @@ const TSCONFIGS = ['packages/db/tsconfig.json', 'packages/shared/tsconfig.json']
  * caller's to read as true.
  */
 export function catalogReachable(io) {
-  if (TSCONFIGS.some((f) => /"(?:paths|baseUrl)"/.test(io.read(f)))) return true;
+  // `extends` too: a base config's `paths` would remap resolution where the walk does not look.
+  if (TSCONFIGS.some((f) => /"(?:paths|baseUrl|extends)"/.test(io.read(f)))) return true;
   const exportsMap = JSON.parse(io.read('packages/shared/package.json')).exports;
   const fromExports = (target) => posix.join('packages/shared', target);
   // undefined: a third-party package, not followed. null: first-party, and it does not resolve.
@@ -138,8 +148,13 @@ export function catalogReachable(io) {
     seen.add(file);
     if (inCatalogData(file)) return true;
     const text = io.read(file);
-    if (CODE_FILE.test(file) && (UNFOLLOWABLE.test(code(text)) || READS_DATA.test(code(text))))
-      return true;
+    if (CODE_FILE.test(file)) {
+      if (UNFOLLOWABLE.test(code(text))) return true;
+      const rest = withoutSpecifiers(text);
+      if (READS_DATA.test(rest)) return true;
+      if (file.startsWith('packages/shared/src/catalog/') && READS_DATA_RELATIVE.test(rest))
+        return true;
+    }
     for (const spec of specifiersOf(text)) {
       const next = resolve(file, spec);
       if (next === null) return true; // unresolved: it could be the data

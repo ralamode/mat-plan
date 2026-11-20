@@ -151,6 +151,11 @@ c_pre_c14() { db src/hash.ts "import { data } from '#data';\nexport { data };\n"
 c_pre_c15() { db src/dynamic.ts "const name = './y';\nexport const load = () => import(name);\n"; }
 c_pre_c16() { db src/cjs.ts "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nexport const y = load('./y');\n"; }
 c_pre_c17() { printf '{ "compilerOptions": { "baseUrl": ".", "paths": { "x": ["y"] } } }\n' >"$R/packages/db/tsconfig.json"; }
+c_pre_c19() { db src/comment.ts "// the cases under verify/*.ts\nimport { d } from '@mat-plan/shared/catalog/data';\n/** doc */\nexport { d };\n"; }
+c_pre_c20() { db src/resolve.ts "import { readFileSync } from 'node:fs';\nexport const t = readFileSync(new URL(import.meta.resolve('@mat-plan/shared/catalog/data')), 'utf8');\n"; }
+c_pre_c21() { printf "import { readFileSync } from 'node:fs';\nexport const fixture = readFileSync(new URL('./data/batch-03.ts', import.meta.url), 'utf8');\n" >"$R/$CAT/fixture.ts"; }
+c_pre_c22() { printf '{ "extends": "../../tsconfig.base.json" }\n' >"$R/packages/db/tsconfig.json"; }
+c_pre_c23() { db src/reads-name.ts "import { readFileSync } from 'node:fs';\nexport const s = readFileSync(new URL('./shipped.json', import.meta.url), 'utf8');\n"; }
 c_pr_c18() { printf '{ "name": "planted" }\n' >"$R/$CAT/data/package.json"; }
 # A git that fails on the walk's `ls-files`, and only there: the diff still works.
 SHIM="$T/shim"
@@ -178,6 +183,11 @@ C_SPEC=(
   "C-16|c_pre_c16|-||true"
   "C-17|c_pre_c17|-||true"
   "C-18|-|c_pr_c18||true"
+  "C-19|c_pre_c19|-||true"
+  "C-20|c_pre_c20|-||true"
+  "C-21|c_pre_c21|-||true"
+  "C-22|c_pre_c22|-||true"
+  "C-23|c_pre_c23|-||true"
 )
 C_DESC=(
   "C-1 a batch file plus docs: no mutations; build and e2e still run"
@@ -198,6 +208,11 @@ C_DESC=(
   "C-16 createRequire: mutations run"
   "C-17 a tsconfig with paths or baseUrl: mutations run"
   "C-18 a package.json placed in catalog/data still triggers"
+  "C-19 a // comment holding /* does not hide the next import: mutations run"
+  "C-20 import.meta.resolve of the data: mutations run"
+  "C-21 a catalog/ file reads ./data/batch-03.ts by path: mutations run"
+  "C-22 a tsconfig that extends a base: mutations run"
+  "C-23 a db file reads a file named shipped.json, no catalog/data in the path: mutations run"
 )
 C_BASES=()
 C_HEADS=()
@@ -300,21 +315,27 @@ mutant c-unresolved-is-fine "C-5 C-9 C-12 C-14" \
 mutant c-any-throw-is-no-match "C-6" \
   "return true; // an error proves nothing" "return false; // an error proves nothing"
 # The scan keeps only `from` and a bare `import '…'`: the dynamic import (C-10) and require (C-11) go.
-mutant c-scan-drops-call-forms "C-10 C-11" \
-  "/\b(?:from|import|require)\s*\(?\s*['\"]([^'\"]+)['\"]/g" "/\b(?:from|import)\s*['\"]([^'\"]+)['\"]/g"
+# No scan-regex mutant: dropping the call forms leaves `import('…catalog/data')` and `require('./data…')`
+# un-blanked, so the path-read checks (C-13, C-21) catch them anyway. That backstop is the design.
 mutant c-unmapped-export-is-third-party "C-12" \
   "fromExports(target) : null;" "fromExports(target) : undefined;"
 mutant c-scripts-not-entries "C-10" \
   "CODE_FILE.test(f) && !TEST_FILE.test(f)" "CODE_FILE.test(f) && !TEST_FILE.test(f) && !f.startsWith('packages/db/scripts/')"
-mutant c-path-reads-ignored "C-13" \
-  "READS_DATA.test(code(text))" "false"
+mutant c-path-reads-ignored "C-13 C-23" \
+  "if (READS_DATA.test(rest)) return true;" "if (false) return true;"
 mutant c-hash-is-third-party "C-14" \
   "if (spec.startsWith('#')) return null;" "if (spec.startsWith('#')) return undefined;"
 # One pattern covers both: a non-literal call (C-15) and createRequire (C-16).
 mutant c-unfollowable-ignored "C-15 C-16" \
   "UNFOLLOWABLE.test(code(text))" "false"
-mutant c-tsconfig-paths-ignored "C-17" \
-  "/\"(?:paths|baseUrl)\"/.test(io.read(f))" "false"
+mutant c-tsconfig-paths-ignored "C-17 C-22" \
+  "/\"(?:paths|baseUrl|extends)\"/.test(io.read(f))" "false"
+mutant c-relative-data-ignored "C-21" \
+  "READS_DATA_RELATIVE.test(rest)" "false"
+# No mutant for UNFOLLOWABLE's `.resolve` arm: C-20's resolved string still names catalog/data, so
+# READS_DATA catches it too. The arm is the backstop for a resolve whose string does not.
+mutant c-blocks-before-lines "C-19" \
+  "text.replace(/(^|[\\s;{}(),])\\/\\/.*\$/gm, '\$1').replace(/\\/\\*[\\s\\S]*?\\*\\//g, '')" "text.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/(^|[\\s;{}(),])\\/\\/.*\$/gm, '\$1')"
 mutant c-data-dir-config-excluded "C-18" \
   " && !/\/(?:package|tsconfig[^/]*)\.json\$/.test(f)" ""
 
