@@ -255,6 +255,9 @@ export async function settled(button: Locator, pressed: boolean) {
   await expect(button).not.toHaveAttribute('aria-busy', 'true');
 }
 
+/** Text for a `RegExp`, with its special characters escaped (a name can hold `(`, `+`, `.`). */
+export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * Adds an athlete through `/p/new`, as a parent does (PROF-1 a-1u); they land on their day page.
  * `track` collects the name BEFORE the add, so `archiveAdded` cleans up even if the add's answer
@@ -348,7 +351,9 @@ export async function copyOntoEveryWeekday(
   { from, workout, to }: { from: string; workout: string; to: string },
 ): Promise<void> {
   await page.goto(PROGRAMS_PATH);
-  await page.getByRole('link', { name: from, exact: true }).click();
+  // The list row's name starts with the program's and goes on (its workouts and athletes), so it is
+  // anchored at the start rather than exact.
+  await page.getByRole('link', { name: new RegExp(`^${escapeRegExp(from)}\\b`) }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(from);
   await page.getByRole('button', { name: copyToLabel(workout) }).click();
   const copy = page.getByRole('dialog', { name: copyTitle(workout) });

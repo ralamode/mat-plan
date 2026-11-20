@@ -14,6 +14,7 @@ import {
   bodyweightSection,
   copyOntoEveryWeekday,
   createProgram,
+  escapeRegExp,
   isoDaysAgo,
   openPrograms,
   programRowTick,
@@ -200,7 +201,6 @@ test('more than the look-ahead ahead renders today', async ({ page }) => {
 // fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
 // Saturday, so today or yesterday always has one.
 
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** The superset itself: its own list, named "Superset A" (`workout-card.tsx`), holding its two items. */
 const supersetWorkout = (page: Page) =>
   page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
@@ -228,7 +228,7 @@ const setOne = (item: string) => DAY_COPY.setLabel(item, 1);
 const setTick = (page: Page, item: string) =>
   page.getByRole('button', { name: DAY_COPY.logLabel(setOne(item)), exact: true });
 const loadField = (page: Page, item: string) =>
-  page.getByRole('textbox', { name: new RegExp(`^${escape(setOne(item))}, in (?!reps$)`) });
+  page.getByRole('textbox', { name: new RegExp(`^${escapeRegExp(setOne(item))}, in (?!reps$)`) });
 const repsField = (page: Page, item: string) =>
   page.getByRole('textbox', { name: `${setOne(item)}, in reps`, exact: true });
 
@@ -332,7 +332,7 @@ const workoutHeadings = (page: Page) =>
     .getByRole('heading', { level: 3 });
 /** The programs line ("Programs: A, B"), whose names are links to their program pages (D49). */
 const programsLine = (page: Page) =>
-  page.locator('p', { hasText: new RegExp(`^${escape(PROGRAM_COPY.lineLabel(2))}`) });
+  page.locator('p', { hasText: new RegExp(`^${escapeRegExp(PROGRAM_COPY.lineLabel(2))}`) });
 
 test.describe('Program order on real data', () => {
   test.use({ viewport: NARROW_VIEWPORT });
@@ -403,7 +403,7 @@ test.describe('Program order on real data', () => {
     ).toHaveCount(1);
     await expect(down).toBeFocused();
     await expect(dialog.getByRole('listitem')).toHaveText(
-      moved.map((p) => new RegExp(escape(p.name))),
+      moved.map((p) => new RegExp(escapeRegExp(p.name))),
     );
     await dialog.getByRole('button', { name: PROGRAM_COPY.done, exact: true }).click();
     await expect(dialog).toBeHidden();
