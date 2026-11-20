@@ -52,9 +52,9 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-24 PR 1a: one heading in every state. Athlete One's TODAY is this spec's alone (the e2e rule — see
   // `global.setup.ts`), so this takes the CREATE path, including the focus-on-receipt assertion.
-  await expect(
-    page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
-  ).toBeVisible();
+  // The region, by its bare name: folded (a retry that finds the weight logged), the heading holds the
+  // line and is named "Bodyweight, 72.5 lb" (FAM-1 12c-iii).
+  await expect(bodyweightSection(page)).toBeVisible();
   // V1-24 3b-life-b B3: the bodyweight ✓ fills while a typed weight waits to be sent.
   const weightField = bodyweightSection(page).getByLabel('Weight', { exact: true });
   if ((await weightField.count()) > 0) {
@@ -202,9 +202,7 @@ test('an unknown profile id renders not-found', async ({ page }) => {
     page.getByRole('heading', { level: 1, name: NOT_FOUND_COPY.heading, exact: true }),
   ).toBeVisible();
   // never leaks a scoped Today for a bogus id
-  await expect(
-    page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
-  ).toHaveCount(0);
+  await expect(bodyweightSection(page)).toHaveCount(0);
   expect(cspErrors, 'the not-found page renders without a CSP violation').toEqual([]);
   // The page's one way out, measured here because the a11y scan excludes links.
   const cta = await page.getByRole('link', { name: ALL_ATHLETES_LINK, exact: true }).boundingBox();

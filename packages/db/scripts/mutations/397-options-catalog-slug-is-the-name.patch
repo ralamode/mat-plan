@@ -1,13 +1,13 @@
 diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
-index 350e596f..00405e48 100644
+index 1d361c8d..f66975d3 100644
 --- a/packages/db/src/queries/program/movement-options.ts
 +++ b/packages/db/src/queries/program/movement-options.ts
-@@ -131,7 +131,7 @@ export async function movementOptions(
-         owner: 'catalog' as const,
-         group: entry.group,
-         aliases: entry.aliases ?? [],
--        slug: row.slug,
-+        slug: row.name,
-       };
-     }),
-     ...[...own].sort(byName).map((row) => ({ ...declared(row), owner: 'household' as const })),
+@@ -128,7 +128,7 @@ export async function movementOptions(
+       .sort(byName)
+       .map((row) =>
+         catalogArmOption(
+-          { ...declared(row), slug: row.slug },
++          { ...declared(row), slug: row.name },
+           pickerEntryOf(row.slug),
+           bySlug.get(row.slug),
+         ),

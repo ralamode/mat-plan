@@ -1,0 +1,22 @@
+diff --git a/packages/db/src/queries/program/movement-options.ts b/packages/db/src/queries/program/movement-options.ts
+index 835f94c7..c58de98c 100644
+--- a/packages/db/src/queries/program/movement-options.ts
++++ b/packages/db/src/queries/program/movement-options.ts
+@@ -11,6 +11,7 @@ import {
+   type TrackingType,
+   type Unit,
+ } from '@mat-plan/shared';
++import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+ 
+ import { schema } from '../../client';
+ import type { HouseholdScope } from '../../scope';
+@@ -119,7 +120,8 @@ export async function movementOptions(
+     if (fa !== fb) return fa < fb ? -1 : 1;
+     return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+   };
+-  const bySlug = new Map(library.map((entry) => [entry.slug, entry]));
++  void library;
++  const bySlug = new Map(CATALOG_MOVEMENTS.map((entry) => [entry.slug, entry]));
+   return [
+     ...[...catalog]
+       .sort(byName)

@@ -137,9 +137,9 @@ export default async function TodayPage({
   const lastWeight =
     bodyweight.length === 0 && writable ? await lastBodyweight(profile.id, day) : null;
 
-  // V1-24 3b-page: the day page is Bodyweight and Life. The routine still chooses the life
-  // activities (`profile.routine`, resolved by the DAL); its strength and check-in keys render
-  // nothing here until FAM-1 brings the program's workouts.
+  // V1-24 3b-page: the routine still chooses the Life activities (`profile.routine`, resolved by the
+  // DAL). Since FAM-1 12f PR 5 its catalog is `strength` and Wrestling practice; `strength` renders
+  // nothing here, because the day's workouts come from the program.
   const lifeKeys = buildRoutineBlocks(profile.routine.order).flatMap((block) =>
     block.kind === 'life' ? block.keys : [],
   );

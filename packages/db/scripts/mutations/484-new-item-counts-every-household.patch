@@ -1,13 +1,21 @@
 diff --git a/packages/db/src/writers/program/new-item.ts b/packages/db/src/writers/program/new-item.ts
-index ecb19e5a..b3491758 100644
+index f1bd7685..9c10f9e1 100644
 --- a/packages/db/src/writers/program/new-item.ts
 +++ b/packages/db/src/writers/program/new-item.ts
-@@ -129,7 +129,7 @@ async function addOrSelect(
+@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
+ import {
+   existingItem,
+   householdItemsFull,
++  MAX_HOUSEHOLD_ITEMS,
+   movementSlug,
+   newItemSchema,
+   PROGRAM_REFUSAL,
+@@ -139,7 +140,7 @@ async function addOrSelect(
  
    // The household's own items, as the picker lists them (live, not shadowed by a catalog item):
    // the fake's count, from the list already read under the lock.
--  const own = options.filter((option) => option.owner !== 'catalog').length;
-+  const own = options.length;
-   if (own >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
+-  if (householdItemsFull(options)) return refuse(PROGRAM_REFUSAL.limit_reached);
++  if (options.length >= MAX_HOUSEHOLD_ITEMS) return refuse(PROGRAM_REFUSAL.limit_reached);
  
    const made = await findOrCreateTypedMovement(exec, scope, name, trackingType);
+   const [row] = await exec

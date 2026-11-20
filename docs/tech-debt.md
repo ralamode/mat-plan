@@ -215,7 +215,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
   (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
   `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
-  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user is `lib/checkins`.
+  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user was `lib/checkins`.
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
 - **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
