@@ -280,7 +280,8 @@ to `owed.test.ts` for the reader, which PR 1 deletes.
 **Walked and needing no edit**, because the helpers above open first: `e2e/global.setup.ts:48` (it
 logs a warm-up weight on Athlete Two's today, so later visits there arrive with Bodyweight
 collapsed), `export-full-day.spec.ts:126`, `:132`, `log-bodyweight.spec.ts:69-117` (one visit; its
-reload at `:183` reads only the date) and `a11y.spec.ts:369-372` (the helper leaves the receipt open,
+reload at `:183` reads only the date; _as built_, its heading checks at `:55-57` and `:205-207` did
+need an edit: a folded heading is named "Bodyweight, 72.5 lb", so both find the region instead) and `a11y.spec.ts:369-372` (the helper leaves the receipt open,
 so the scan at `:374` still sees it).
 
 Neither PR edits `page.tsx`, `packages/shared/src/program/` or `apps/web/app/design/program/`. Each

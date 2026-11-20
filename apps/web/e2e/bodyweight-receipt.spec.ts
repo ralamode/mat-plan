@@ -14,6 +14,7 @@ import {
   isoDaysAgo,
   logBodyweight,
   loggedWeight,
+  openCollapsed,
   shownWeight,
 } from './steps';
 
@@ -109,12 +110,16 @@ test('log with ✓, change, clear with a blank ✓, then re-enter, with focus at
   const AGAIN = '72';
   await logBodyweight(page, AGAIN);
   await expect(status).toHaveText(BODYWEIGHT_COPY.announcedLogged);
-  // A fresh server render agrees: the writes reached the rows, not only the client.
+  // A fresh server render agrees: the writes reached the rows, not only the client. Coming back to
+  // a logged day, the weight is one line that shows it (FAM-1 12c-iii).
   await page.reload({ waitUntil: 'networkidle' });
-  await expect(loggedWeight(page, AGAIN)).toBeVisible();
+  await expect(
+    section.getByRole('heading').getByRole('button', { expanded: false }),
+  ).toHaveAccessibleName(`${BODYWEIGHT_COPY.heading}, ${shownWeight(AGAIN)}`);
 
   // ── Yesterday: clear it, and its re-entry shows no hint (nothing before it) ────────────────
   await page.goto(`${route}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
+  await openCollapsed(section, BODYWEIGHT_COPY.heading);
   await clearFrom(page, YESTERDAY);
   await expect(field).toBeFocused();
   await expect(section.getByText(new RegExp(`^${LAST_TIME_PREFIX}`))).toHaveCount(0);

@@ -88,7 +88,10 @@ export async function selectProfile(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
-/** The weigh-in section, by its heading — `Bodyweight` in every state (V1-24 PR 1a). */
+/**
+ * The weigh-in section, by the region's own name, `Bodyweight` in every state (V1-24 PR 1a). Not by
+ * its heading: folded (12c-iii PR 2), the heading holds the line and is named with the weight.
+ */
 export const bodyweightSection = (page: Page) =>
   page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true });
 
@@ -143,6 +146,8 @@ export async function logBodyweight(
   opts?: { timeout?: number },
 ): Promise<void> {
   const section = bodyweightSection(page);
+  // A retry, or a day an earlier spec logged, arrives with the weight folded to one line (12c-iii).
+  await openIfCollapsed(section, BODYWEIGHT_COPY.heading);
   const saved = loggedWeight(page, value);
   const input = section.getByLabel('Weight', { exact: true });
 
@@ -186,6 +191,7 @@ export function practiceLogField(page: Page) {
  */
 export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
+  await openIfCollapsed(life, LIFE_COPY.heading);
   const button = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
   const change = practiceChange(page);
   // A retry after a failed change left another value on the row: clear it, so the log below runs.
@@ -230,6 +236,8 @@ export async function clearPractice(page: Page, from: string): Promise<void> {
  */
 export async function clearAnyPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
+  // Folded, its Change is hidden, and this would return as if nothing were logged.
+  await openIfCollapsed(life, LIFE_COPY.heading);
   const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
   const anyChange = life.getByRole('button', { name: changePrefix(PRACTICE_COPY.changeSubject) });
   if ((await anyChange.count()) === 0) return;
@@ -264,9 +272,9 @@ export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g
  * is lost. Lifted from `athletes.spec.ts` at FAM-1 15, when the builder's spec became the second.
  *
  * ⚠️ **The athlete budget is shared.** Archiving does not free a slot, and a fresh e2e run spends
- * about 20 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
- * 4 seeded, about 10 in `athletes.spec.ts`, one each in seven more, the day page's fold journey
- * included since FAM-1 12c-iii), leaving about 4 for retries. A new
+ * about 22 of `MAX_HOUSEHOLD_ATHLETES` (25) across every spec that adds one (counted 2026-11-20:
+ * 4 seeded, about 10 in `athletes.spec.ts`, one each in eight more, the day page's Bodyweight and
+ * Life journey included since FAM-1 12c-iii PR 2), leaving about 3 for retries. A new
  * spec that adds athletes counts itself here first.
  */
 export async function addAthlete(
@@ -387,7 +395,23 @@ export async function putOnFromToday(page: Page, program: string, athlete: strin
  */
 export async function openCollapsed(region: Locator, name: string): Promise<void> {
   const line = region.getByRole('heading').getByRole('button', { expanded: false });
+  const collapse = region.getByRole('button', { name: DAY_COPY.collapseLabel(name) });
   await expect(line, `${name} arrives as one line`).toBeVisible();
-  await line.click();
-  await expect(region.getByRole('button', { name: DAY_COPY.collapseLabel(name) })).toBeFocused();
+  // A tap before the page has hydrated does nothing: tap again while the line is still there.
+  await expect(async () => {
+    if (await line.isVisible()) await line.click();
+    await expect(collapse).toBeFocused({ timeout: 1_000 });
+  }).toPass();
+}
+
+/**
+ * FAM-1 12c-iii PR 2: open `region` if it arrived as one line, else nothing. Only where the state
+ * depends on earlier steps or a retry (the logging helpers, an order-dependent spec); a test that
+ * expects the line uses the strict `openCollapsed`. ⚠️ `count()` does not wait, so the region,
+ * there in both states, is awaited first.
+ */
+export async function openIfCollapsed(region: Locator, name: string): Promise<void> {
+  await expect(region).toBeVisible();
+  const line = region.getByRole('heading').getByRole('button', { expanded: false });
+  if ((await line.count()) > 0) await openCollapsed(region, name);
 }
