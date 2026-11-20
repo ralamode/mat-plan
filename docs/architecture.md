@@ -385,8 +385,11 @@ leaves with the tombstone, and a CHECK refuses a live row that kept one. **B1-2:
 (`clearEventOn`, `queries/clear-events.ts`) serves `clearDay`'s replay, `restoreClear` and the
 banner's read `clearEventsForDay` (every clear of a day, newest first, as a token and a count), so the
 banner offers exactly what Restore all restores. Restore all's action answers counts, counted in the
-DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. The diagram's last block
-is Restore all's server half; B2 adds the banner that calls it.
+DAL so no `heldBy.value` leaves it; 0 and 0 means nothing left to restore. **B2:** `clearDayAction`
+takes the athlete, the day and a typed confirm word, on today only (maintainer, 2026-11-19), and
+answers the day's newest clear's count: a call that finds nothing live replays that clear, however
+old, and answers 0 only when the day holds none. The diagram's last two blocks are the clear and
+Restore all; B2-ii's banner and dialog will call them.
 
 ```mermaid
 sequenceDiagram
@@ -417,6 +420,15 @@ sequenceDiagram
       W->>DB: restore the item (guarded by the token)
       W-->>P: ok — or ROLLBACK TO SAVEPOINT
     end
+  end
+
+  P->>W: Clear this day (profile, day, confirm word) — today only, not archived
+  W->>DB: clearDay — the day's live ids, locked ORDER BY id, scoped
+  alt nothing live
+    W-->>P: ok · count 0 (or a replay's count)
+  else
+    W->>DB: deleted_at = now() · hide_reason = clear_day · ONE token
+    W-->>P: ok · count (no token leaves the action)
   end
 
   P->>W: Restore all (profile, day, token) — today or yesterday, not archived
@@ -860,7 +872,7 @@ flowchart TB
   PREV --> REV["review + squash-merge to main"]
   REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>migrate.yml (prod) + migrate-preview.yml"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
-  REV --> MAIN["push to main: every mutation shard runs<br/>red → one issue, 'mutation gate red on main'"]
+  REV --> MAIN["push to main: every mutation shard runs; a burst of pushes coalesces to at most two runs<br/>red → one issue, 'mutation gate red on main'"]
   MIG --> NEON[("Neon: production")]
   MIG --> NEONP[("Neon: mat-plan-preview<br/>seed-only, separate project")]
   PROD --> NEON
