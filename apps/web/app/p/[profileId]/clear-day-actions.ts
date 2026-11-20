@@ -36,7 +36,7 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
 /**
  * **The two windows** (plan § B2 as amended; maintainer, 2026-11-19), both from `packages/shared`:
  * Restore all takes `dayOpenFor` (today or yesterday, not archived: the rule the day page's ✓ takes),
- * and the clear takes `clearDayOpenFor` (today only, not archived), which B2-ii's trigger will read too.
+ * and the clear takes `clearDayOpenFor` (today only, not archived), which the page's trigger reads too.
  * "Today" is the request's active-timezone day from the client's `tz` cookie: an accepted residual
  * (`.github/SECURITY.md` → Authorization).
  */

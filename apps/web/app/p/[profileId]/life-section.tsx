@@ -1,7 +1,7 @@
 import { ACTIVITY_TYPE_KEYS, PRACTICE_UNIT } from '@mat-plan/shared';
 
 import { LIFE_COPY } from '@/lib/constants';
-import type { LoggedLifeActivity } from '@/lib/entries/activity-totals';
+import { isPracticeEntry, type LoggedLifeActivity } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
 
@@ -64,10 +64,7 @@ export function LifeSection({
           before the log it announces, and paging to a logged day is not a log. */}
       <SingleValueLive key={`live-${day}`}>
         {rows.map((r) => {
-          const practice =
-            r.activityKey === ACTIVITY_TYPE_KEYS.wrestling_practice &&
-            r.value !== null &&
-            r.unit === PRACTICE_UNIT;
+          const practice = isPracticeEntry(r) && r.value !== null && r.unit === PRACTICE_UNIT;
           return (
             <LoggedValueRow
               key={r.entryId}
