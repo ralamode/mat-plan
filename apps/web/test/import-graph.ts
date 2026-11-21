@@ -176,6 +176,20 @@ export function unwrapExpression(e: ts.Expression): ts.Expression {
   return e;
 }
 
+/** The value an expression hands on: through `( )`, `as`, `!`, `satisfies` and `.bind(…)`. */
+export function bound(e: ts.Expression): ts.Expression {
+  for (;;) {
+    e = unwrapExpression(e);
+    if (
+      ts.isCallExpression(e) &&
+      ts.isPropertyAccessExpression(e.expression) &&
+      e.expression.name.text === 'bind'
+    )
+      e = e.expression.expression;
+    else return e;
+  }
+}
+
 const LOADERS = new Set(['require', '__webpack_require__', '__non_webpack_require__']);
 /** Node's module system: `createRequire`, `Module._load`. Importing it at all is refused. */
 const NODE_MODULE = new Set(['module', 'node:module']);
@@ -412,30 +426,119 @@ export function originsOf(
     if (name === '*') return { file: target, name };
     return originsOf(target, texts, inside, memo).get(name) ?? null;
   };
-  /** Local bindings that come from an import: local name → (resolved target, imported name). */
+  /**
+   * Local bindings that come from an import: local name → (resolved target, imported name). `*` is a
+   * namespace. `import x = require('…')` is a namespace; `import x = P.y` is `y` of `P`'s target.
+   */
   const imported = new Map<string, { target: string | null; name: string }>();
   for (const st of sf.statements) {
-    if (!ts.isImportDeclaration(st) || !st.importClause) continue;
-    const target = refOf(st)?.resolved ?? null;
-    const clause = st.importClause;
-    if (clause.name) imported.set(clause.name.text, { target, name: 'default' });
-    const b = clause.namedBindings;
-    if (b && ts.isNamespaceImport(b)) imported.set(b.name.text, { target, name: '*' });
-    else
-      b?.elements.forEach((e) =>
-        imported.set(e.name.text, { target, name: (e.propertyName ?? e.name).text }),
-      );
+    if (ts.isImportDeclaration(st) && st.importClause) {
+      const target = refOf(st)?.resolved ?? null;
+      const clause = st.importClause;
+      if (clause.name) imported.set(clause.name.text, { target, name: 'default' });
+      const b = clause.namedBindings;
+      if (b && ts.isNamespaceImport(b)) imported.set(b.name.text, { target, name: '*' });
+      else
+        b?.elements.forEach((e) =>
+          imported.set(e.name.text, { target, name: (e.propertyName ?? e.name).text }),
+        );
+    } else if (ts.isImportEqualsDeclaration(st)) {
+      const ref = st.moduleReference;
+      if (ts.isExternalModuleReference(ref))
+        imported.set(st.name.text, { target: refOf(st)?.resolved ?? null, name: '*' });
+      else {
+        const ns =
+          ts.isQualifiedName(ref) && ts.isIdentifier(ref.left)
+            ? imported.get(ref.left.text)
+            : undefined;
+        imported.set(st.name.text, {
+          target: ns?.name === '*' ? ns.target : null,
+          name: ts.isQualifiedName(ref) ? ref.right.text : ref.text,
+        });
+      }
+    }
   }
+  /** Top-level `const`/`let`/`var` initializers, and names destructured from an identifier. */
+  const values = new Map<string, ts.Expression>();
+  const picked = new Map<string, { from: string; name: string } | null>();
+  for (const st of sf.statements)
+    if (ts.isVariableStatement(st))
+      for (const d of st.declarationList.declarations) {
+        if (ts.isIdentifier(d.name)) {
+          if (d.initializer) values.set(d.name.text, d.initializer);
+          continue;
+        }
+        const from = d.initializer && unwrapExpression(d.initializer);
+        const names = (n: ts.BindingName): string[] =>
+          ts.isIdentifier(n)
+            ? [n.text]
+            : n.elements.flatMap((e) => (ts.isOmittedExpression(e) ? [] : names(e.name)));
+        if (ts.isObjectBindingPattern(d.name) && from && ts.isIdentifier(from))
+          for (const e of d.name.elements) {
+            const key = e.propertyName ?? e.name;
+            const flat =
+              ts.isIdentifier(e.name) &&
+              !e.dotDotDotToken &&
+              (ts.isIdentifier(key) || ts.isStringLiteral(key));
+            for (const n of names(e.name))
+              picked.set(n, flat ? { from: from.text, name: (key as ts.Identifier).text } : null);
+          }
+        else for (const n of names(d.name)) picked.set(n, null);
+      }
   const set = (name: string, origin: Origin | null) => {
     const had = out.get(name);
     const same = (a: Origin | null | undefined, b: Origin | null) =>
       !!a && !!b && a.file === b.file && a.name === b.name;
     out.set(name, had === undefined || same(had, origin) ? origin : null);
   };
-  const local = (name: string): Origin | null => {
-    const from = imported.get(name);
-    return from ? through(from.target, from.name) : { file, name };
+  /** Does `e` hand on an in-package import as a value (not as a direct callee, not in a type)? */
+  const handsOnImport = (e: ts.Node): boolean => {
+    let hit = false;
+    const walk = (n: ts.Node): void => {
+      if (hit) return;
+      if (ts.isIdentifier(n) && isReference(n) && imported.has(n.text)) {
+        const from = imported.get(n.text)!;
+        const callee = ts.isCallExpression(n.parent) && n.parent.expression === n;
+        if (from.target?.startsWith(inside) && !callee && !ts.isTypeNode(n.parent)) hit = true;
+      }
+      ts.forEachChild(n, walk);
+    };
+    walk(e);
+    return hit;
   };
+  /**
+   * The origin of the value `e`, published as `name`: through `( )`, `as`, `!`, `satisfies` and
+   * `.bind`, an identifier is traced as a local binding and `ns.x` through a namespace import. Any
+   * other value that hands on an in-package import (`{ saveWorkout }`, `wrap(saveWorkout)`) cannot be
+   * traced; anything else is defined here.
+   */
+  const valueOrigin = (e: ts.Expression, name: string, seen: Set<string>): Origin | null => {
+    const x = bound(e);
+    if (ts.isIdentifier(x)) return local(x.text, seen);
+    if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression)) {
+      const ns = imported.get(x.expression.text);
+      if (ns) return ns.name === '*' ? through(ns.target, x.name.text) : null;
+    }
+    return handsOnImport(x) ? null : { file, name };
+  };
+  const local = (name: string, seen = new Set<string>()): Origin | null => {
+    if (seen.has(name)) return null;
+    seen.add(name);
+    const from = imported.get(name);
+    if (from) return through(from.target, from.name);
+    const pick = picked.get(name);
+    if (pick === null) return null;
+    if (pick) {
+      const ns = imported.get(pick.from);
+      return ns?.name === '*' ? through(ns.target, pick.name) : ns ? null : { file, name };
+    }
+    const value = values.get(name);
+    return value ? valueOrigin(value, name, seen) : { file, name };
+  };
+  const modifiers = (st: ts.Statement) =>
+    ts.canHaveModifiers(st) ? ts.getModifiers(st) : undefined;
+  const exportedHere = (st: ts.Statement) =>
+    !!modifiers(st)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
   for (const st of sf.statements) {
     if (ts.isExportDeclaration(st)) {
       const clause = st.exportClause;
@@ -453,17 +556,19 @@ export function originsOf(
         for (const [name, origin] of originsOf(target, texts, inside, memo))
           if (name !== 'default') set(name, origin);
     } else if (ts.isExportAssignment(st)) {
-      const x = unwrapExpression(st.expression);
-      set('default', ts.isIdentifier(x) ? local(x.text) : { file, name: 'default' });
-    } else if (
-      ts.canHaveModifiers(st) &&
-      ts.getModifiers(st)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-    ) {
-      const isDefault = ts.getModifiers(st)?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword);
+      set('default', valueOrigin(st.expression, 'default', new Set()));
+    } else if (ts.isImportEqualsDeclaration(st) && exportedHere(st)) {
+      set(st.name.text, local(st.name.text));
+    } else if (exportedHere(st)) {
+      const isDefault = modifiers(st)?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword);
       if (ts.isVariableStatement(st))
-        st.declarationList.declarations.forEach(
-          (d) => ts.isIdentifier(d.name) && set(d.name.text, { file, name: d.name.text }),
-        );
+        st.declarationList.declarations.forEach((d) => {
+          const names = (n: ts.BindingName): string[] =>
+            ts.isIdentifier(n)
+              ? [n.text]
+              : n.elements.flatMap((e) => (ts.isOmittedExpression(e) ? [] : names(e.name)));
+          for (const n of names(d.name)) set(n, local(n));
+        });
       else if (
         (ts.isFunctionDeclaration(st) ||
           ts.isClassDeclaration(st) ||

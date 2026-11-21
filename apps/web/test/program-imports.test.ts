@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ASSET_EXT,
   barrelNames,
+  bound,
   blindSpots,
   CODE_EXT,
   compilerOptionsOf,
@@ -16,7 +17,6 @@ import {
   lineOf,
   originsOf,
   REPO_DIR,
-  unwrapExpression,
   type FileImports,
   type GraphRefusal,
   type Origin,
@@ -123,9 +123,20 @@ const OVERRIDES: Record<string, readonly string[]> = {
 const LANE_P_DIRS = ['packages/db/src/writers/program/', 'packages/db/src/queries/program/'];
 const originKey = (o: Origin) => `${o.file}#${o.name}`;
 type Published = Map<string, Origin | null>;
+/** What a map was built from, so a namespace origin's contents are read from the same texts. */
+const builtFrom = new WeakMap<
+  Published,
+  { texts: Record<string, string>; memo: Map<string, Published> }
+>();
+/** Each name `index.ts` publishes, and its origin (`null`: untraceable); `texts` from a fixture. */
+function publish(texts: Record<string, string> = {}): Published {
+  const memo = new Map<string, Published>();
+  const names = originsOf(DB_INDEX, texts, DB_SRC, memo);
+  builtFrom.set(names, { texts, memo });
+  return names;
+}
 let publishedCache: Published | undefined;
-/** Each name `index.ts` publishes, and its origin (`null`: untraceable). */
-const published = () => (publishedCache ??= originsOf(DB_INDEX));
+const published = () => (publishedCache ??= publish());
 
 /**
  * Where in `apps/web` each ORIGIN may be imported from `@mat-plan/db`, as a directory (ending `/`) or
@@ -148,14 +159,27 @@ const ALLOWED_IN = (names: Published) => {
   if (!rows) allowedCache.set(names, (rows = allowedIn(names)));
   return rows;
 };
-/** Where `name`, as `index.ts` publishes it, may be imported: `'untraceable'` fails closed. */
+/**
+ * Where `name`, as `index.ts` publishes it, may be imported. `'untraceable'` fails closed: a name the
+ * walk did not publish, a name it could not trace, and a namespace of a `packages/db` module holding
+ * any restricted or untraceable name (`export * as ns`), which is refused everywhere rather than
+ * given the intersection of its members' rows.
+ */
 function restriction(
   name: string,
   names: Published,
 ): readonly string[] | 'untraceable' | undefined {
   const origin = names.get(name);
-  if (origin === null) return 'untraceable';
-  return origin ? ALLOWED_IN(names).get(originKey(origin)) : undefined;
+  if (!origin) return 'untraceable'; // `null`: not traced; `undefined`: not published
+  if (origin.name === '*' && origin.file.startsWith(DB_SRC)) {
+    const from = builtFrom.get(names);
+    const inner = originsOf(origin.file, from?.texts, DB_SRC, from?.memo);
+    const rows = ALLOWED_IN(names);
+    const restricted = (o: Origin | null) =>
+      !o || o.name === '*' || rows.has(originKey(o)) || under(o.file, LANE_P_DIRS);
+    return [...inner.values()].some(restricted) ? 'untraceable' : undefined;
+  }
+  return ALLOWED_IN(names).get(originKey(origin));
 }
 /** Every file or directory some row permits: where the direct-callee rule applies. */
 const permitted = (names: Published) => [...new Set([...ALLOWED_IN(names).values()].flat())];
@@ -220,8 +244,17 @@ const webLanding = () =>
 
 /** Inside a type (`typeof s`): no value is passed. */
 const inType = (n: ts.Node): boolean => {
-  for (let p = n.parent; p && !ts.isStatement(p) && !ts.isSourceFile(p); p = p.parent)
+  for (let p = n.parent; p && !ts.isStatement(p) && !ts.isSourceFile(p); p = p.parent) {
+    // A class's `extends (…)` is evaluated: a value, though its node is a type node.
+    if (
+      ts.isExpressionWithTypeArguments(p) &&
+      ts.isHeritageClause(p.parent) &&
+      p.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+      ts.isClassLike(p.parent.parent)
+    )
+      return false;
     if (ts.isTypeNode(p)) return true;
+  }
   return false;
 };
 /** `s(…)`, through parentheses and `!`: the one use of a restricted binding that passes nothing on. */
@@ -230,27 +263,20 @@ const isDirectCallee = (n: ts.Node): boolean => {
   while (ts.isParenthesizedExpression(e.parent) || ts.isNonNullExpression(e.parent)) e = e.parent;
   return ts.isCallExpression(e.parent) && e.parent.expression === e;
 };
-/** The value an export hands on: through `( )`, `as`, `!`, `satisfies` and `.bind(…)`. */
-const bound = (e: ts.Expression): ts.Expression => {
-  for (;;) {
-    e = unwrapExpression(e);
-    if (
-      ts.isCallExpression(e) &&
-      ts.isPropertyAccessExpression(e.expression) &&
-      e.expression.name.text === 'bind'
-    )
-      e = e.expression.expression;
-    else return e;
-  }
-};
 
 /**
  * In a file a row permits, every use of a restricted name other than as a direct callee, so a
  * writer is never handed on by a local binding (closed tech-debt, 2026-11-20). An
  * export of one (`export { s }`, `export const x = s`, `export default s`, `export { s } from
  * '@mat-plan/db'`) is a `re-export`; any other value use (an object literal, an argument such as
- * `cache(s)`, an assignment, `.call`, a spread, a return) is `not a direct call`. Type positions are
- * free.
+ * `cache(s)`, an assignment, `.call`, a spread, a return, a class's `extends (…)`) is `not a direct
+ * call`. Type positions are free.
+ *
+ * ⚠️ **A forwarding wrapper passes, by design**: `export const persist = (...a) => saveWorkout(...a)`
+ * calls the writer directly, the same shape as the allowed `cache(async (id) => saveWorkout(id))`,
+ * so this rule cannot tell them apart without call-graph analysis (docs/tech-debt.md, "A DAL can
+ * forward a writer through a wrapper function"). Every writer still takes a `HouseholdScope` that
+ * only the DAL resolves.
  */
 function valueUses(graph: FileImports, names: Published): GraphRefusal[] {
   const { sf } = graph;
@@ -817,7 +843,9 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           "import type { MovementOption } from '@mat-plan/db';",
           `name: MovementOption → ${ONLY_PROGRAM}`,
         ),
-        fixture(C, "import { db, profiles } from '@mat-plan/db';"),
+        fixture(C, "import { schema, createDb } from '@mat-plan/db';"),
+        // A name the package does not publish fails closed.
+        fixture(C, "import { db } from '@mat-plan/db';", 'untraceable name: db'),
       ],
       'neither DAL re-exports a lane P name': [
         ...[
@@ -865,6 +893,8 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           'const xs = [saveWorkout];',
           'function f() {\n  return saveWorkout;\n}',
           'const n = new saveWorkout();',
+          // A class's `extends (…)` runs (security review of #790, P2-1).
+          'export class X extends ((leak = saveWorkout), Object) {}',
         ].map((text) =>
           fixture(
             PROGRAM_X,
@@ -891,7 +921,10 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           'const o = { saveWorkout: 1 };',
         ].map((text) => fixture(PROGRAM_X, `import { saveWorkout } from '@mat-plan/db';\n${text}`)),
         // An unrestricted name is free to pass on.
-        fixture(PROGRAM_X, "import { db } from '@mat-plan/db';\nexport const api = { db };"),
+        fixture(
+          PROGRAM_X,
+          "import { schema } from '@mat-plan/db';\nexport const api = { schema };",
+        ),
       ],
       'MODULES: only the listed importers': [
         ...(
@@ -945,7 +978,7 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
             'client: apps/web/lib/dal/program/reads.ts',
           ),
         ),
-        fixture(C, "'use client';\nimport { db } from '@mat-plan/db';", `client: ${DB_INDEX}`),
+        fixture(C, "'use client';\nimport { schema } from '@mat-plan/db';", `client: ${DB_INDEX}`),
         fixture(C, "import { g } from '@/lib/dal/program/reads';\n'use client';"),
         fixture(C, "const s = 'use client';\nimport { g } from '@/lib/dal/program/reads';"),
         fixture(C, "'use client';\nimport { g } from '@/lib/dal/day/day';"),
@@ -974,8 +1007,7 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
       const DAY_BARREL = 'packages/db/src/writers/day/index.ts';
       const dayBarrel = readFileSync(join(REPO_DIR, DAY_BARREL), 'utf8');
       /** The package as if `writers/day/index.ts` also held `line`. */
-      const withDay = (line: string) =>
-        originsOf(DB_INDEX, { [DAY_BARREL]: `${dayBarrel}\n${line}` });
+      const withDay = (line: string) => publish({ [DAY_BARREL]: `${dayBarrel}\n${line}` });
       it.each([
         [
           "export { saveWorkout as persistWorkout } from '../program';",
@@ -1024,8 +1056,86 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         ]);
       });
 
+      const P_IMPORT = "import { saveWorkout } from '../program';\n";
+      const P_NS = "import * as P from '../program';\n";
+      const INDEX_TEXT = readFileSync(join(REPO_DIR, DB_INDEX), 'utf8');
+      const UNTRACEABLE = (name: string) => [`untraceable name: ${name}`];
+      it.each([
+        // A value alias is the value it aliases (security review of #790, P1-1).
+        [
+          'day',
+          `${P_IMPORT}export const persist = saveWorkout;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_IMPORT}export const persist = saveWorkout.bind(null);`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_IMPORT}const p2 = saveWorkout;\nexport { p2 as persist };`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'index',
+          "import { saveWorkout as s9 } from './writers/program';\nexport const persist = s9;",
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_NS}export const persist = P.saveWorkout;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        // Forms a name-only walk never published (P1-2): traced, or absent and so untraceable.
+        [
+          'day',
+          `${P_NS}export const { saveWorkout: persist } = P;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_NS}export import persist = P.saveWorkout;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        ['day', `${P_IMPORT}export const tools = { saveWorkout };`, 'tools', UNTRACEABLE('tools')],
+        // A namespace holding a restricted name is refused everywhere (P1-3).
+        ['index', "export * as dayNs from './writers/day';", 'dayNs', UNTRACEABLE('dayNs')],
+        ['index', "export * as ownNs from './writers/ownership';", 'ownNs', UNTRACEABLE('ownNs')],
+      ] as const)('%s: %s, then %s imported by a component', (where, line, name, want) => {
+        const names =
+          where === 'day' ? withDay(line) : publish({ [DB_INDEX]: `${INDEX_TEXT}\n${line}` });
+        const text = `import { ${name} } from '@mat-plan/db';\n${name}.call(x);`;
+        expect(
+          violations(C, text, webLanding(), names).map((x) => `${x.rule}: ${x.detail}`),
+        ).toEqual(want);
+      });
+
+      it('a name the walk did not publish is untraceable', () => {
+        expect(restriction('notPublished', published())).toBe('untraceable');
+      });
+
+      it('the walk publishes exactly the names the TypeScript checker sees', () => {
+        const file = join(REPO_DIR, DB_INDEX);
+        const program = ts.createProgram({
+          rootNames: [file],
+          options: { ...compilerOptionsOf(join(REPO_DIR, 'packages/db')), noEmit: true },
+        });
+        const checker = program.getTypeChecker();
+        const entry = checker.getSymbolAtLocation(program.getSourceFile(file)!)!;
+        const names = checker.getExportsOfModule(entry).map((x) => x.name);
+        expect([...published().keys()].sort()).toEqual(names.sort());
+      });
+
       it('two export * chains publishing one name from different origins: untraceable', () => {
-        const names = originsOf(DB_INDEX, {
+        const names = publish({
           [DAY_BARREL]: `${dayBarrel}\nexport const saveWorkout = 1;`,
         });
         expect(names.get('saveWorkout')).toBeNull();

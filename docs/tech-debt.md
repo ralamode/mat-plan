@@ -15,6 +15,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
+
+- **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by
+  its origin and, in a file a row permits, allows a restricted name only as the direct callee of a
+  call. A function that calls it is therefore allowed, so a DAL can still publish
+  `export const persist = (...a) => saveWorkout(...a)`: the same shape as the allowed
+  `cache(async (id) => readWorkoutDraft(id))`, which the rule cannot tell apart.
+- **Impact:** a file outside the DAL could reach a writer through such a wrapper without the guard
+  refusing it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the
+  damage is limited to a path a reviewer must catch.
+- **The fix:** call-graph analysis: follow each exported DAL function to the restricted calls it
+  makes, and require that it resolves the caller's household first. Not worth it until a second
+  wrapper shape appears.
+- **Severity:** low.
+
 ### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
 
 - **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at
