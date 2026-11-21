@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
 import { newId, SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
-import { expect, test, type Frame, type Page, type Request } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { PUBLIC_PATH_TREES, PUBLIC_PATHS } from '../lib/public-paths';
 import { MIN_PROTECTED_PAGES, protectedPageFiles, routeOf } from './app-routes';
@@ -79,21 +79,24 @@ test.describe('public', () => {
    * 🔴 **Proof 1: every protected page refuses a stranger** (`docs/plans/td-signed-out-e2e.md`). The
    * successor to "the app itself is still gated", deleted at AUTH-1 1d, which checked `/p` alone.
    *
-   * - **The pages** are every `page.tsx` under `app/` whose route is not `isPublicPath()`, read from the
-   *   file system (`e2e/app-routes.ts`, the list `app/pages-need-a-session.test.ts` checks
+   * - **The pages** are every `page.tsx` under `app/` whose route is not `isPublicPath()`, read from
+   *   the file system (`e2e/app-routes.ts`, the list `app/pages-need-a-session.test.ts` checks
    *   statically). The design previews are included.
-   * - **(a) Where it lands.** The main-frame chain is exactly `[route, SIGN_IN_PATH]`. It is built
-   *   from the document's HTTP redirects and the frame's navigations, because a page under a
-   *   `loading.tsx` answers 200 and redirects from the stream instead of with a 307. A final-URL
-   *   check would pass `/programs` with its session check deleted, because it bounces through `/p`.
-   * - **(b) What is on the wire.** The first response's body holds none of `STRANGER_MUST_NOT_SEE`,
+   * - **(a) Where it lands:** the redirect chain is exactly `[route, SIGN_IN_PATH]`. A chain with
+   *   an extra hop fails: `/programs` with its session check deleted bounces through `/p`.
+   * - **(b) What is on the wire:** the first response's body holds none of `STRANGER_MUST_NOT_SEE`,
    *   so a 200 shell is checked too.
    *
-   * Soft, so one failing page names every other one. The redirect proves the page refused; it
-   * cannot show the session check ran before any data read, which stays unit-owned.
+   * ⚠️ **Followed over HTTP, not read from the browser** (a deviation from the plan, after two CI
+   * runs). The browser's navigation events leaked a late hop from the previous page into the next
+   * page's chain, and lost a 307's history. Over HTTP, each hop is a 3xx `Location`, or the
+   * `__next-page-redirect` meta Next streams when a redirect is thrown under a `loading.tsx`. That
+   * meta is what a browser follows, so the chain is the same one a visitor takes.
+   *
+   * Soft, so one failing page names every other one. The redirect proves the page refused. It cannot
+   * show the session check ran before any data read, which stays unit-owned.
    */
   test('every protected page sends a stranger to sign-in, with nothing on the wire', async ({
-    page,
     request,
   }) => {
     const appDir = join(__dirname, '..', 'app');
@@ -103,27 +106,22 @@ test.describe('public', () => {
     );
     for (const file of files) {
       const route = withFreshIds(routeOf(appDir, file));
-      const chain: string[] = [];
-      const onNav = (frame: Frame) => {
-        if (frame === page.mainFrame()) chain.push(new URL(frame.url()).pathname);
-      };
-      page.on('framenavigated', onNav);
-      const response = await page.goto(route);
-      await page.waitForURL(`**${SIGN_IN_PATH}`).catch(() => undefined);
-      page.off('framenavigated', onNav);
-      const hops: string[] = [];
-      for (let r = response?.request() ?? null; r; r = r.redirectedFrom())
-        hops.unshift(new URL(r.url()).pathname);
-      // Two views of one chain, never concatenated (that counted it twice; first CI run). A 307 shows
-      // only in the document's redirects, and the frame sees the landing alone. A redirect from the
-      // stream shows only as the frame's navigations. So: the frame's chain when it moved, else the
-      // HTTP one, with repeats (a meta refresh after a soft navigation) collapsed.
-      const seen = (chain.length > 1 ? chain : hops).filter(
-        (p, i, all) => i === 0 || p !== all[i - 1],
-      );
-      expect.soft(seen, `${route}: lands on sign-in in one hop`).toEqual([route, SIGN_IN_PATH]);
-
-      const body = await (await request.get(route, { maxRedirects: 0 })).text();
+      const chain = [route];
+      let body = '';
+      for (let url = route, hop = 0; hop < 5; hop++) {
+        const res = await request.get(url, { maxRedirects: 0 });
+        const text = await res.text();
+        if (hop === 0) body = text;
+        const meta = text.match(/<meta[^>]*__next-page-redirect[^>]*>/)?.[0];
+        const next =
+          res.status() >= 300 && res.status() < 400
+            ? res.headers()['location']
+            : meta?.match(/content="\d+;\s*url=([^"]+)"/)?.[1];
+        if (!next) break;
+        url = new URL(next, SIGNED_OUT_ORIGIN).pathname;
+        chain.push(url);
+      }
+      expect.soft(chain, `${route}: lands on sign-in in one hop`).toEqual([route, SIGN_IN_PATH]);
       for (const secret of STRANGER_MUST_NOT_SEE)
         expect.soft(body, `${route} sends a stranger "${secret}"`).not.toContain(secret);
     }

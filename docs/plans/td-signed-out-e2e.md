@@ -95,6 +95,10 @@ The pin grows deliberately rather than being dodged.
 
 ## Design
 
+- **Proof 1's chain, as built:** followed over HTTP (each hop is a 3xx `Location`, or the streamed
+  `__next-page-redirect` meta), not recorded from the browser's navigation events, which crossed pages
+  on two CI runs (`docs/lessons.md` → E2E). The assertion, `[route, SIGN_IN_PATH]`, and its red
+  mutation are unchanged.
 - **The two origins, defined once** (reuse 8, architecture 5): `APP_ORIGIN` (`E2E_PORT ?? 3100`)
   and `SIGNED_OUT_ORIGIN` (`E2E_SIGNED_OUT_PORT ?? 3101`). **As built, they are exported from
   `playwright.config.ts` itself**, and specs import them from there. That deviates from the plan's

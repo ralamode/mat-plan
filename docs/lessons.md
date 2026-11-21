@@ -267,6 +267,15 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A redirect chain read from the browser was wrong on two CI runs (td-signed-out-e2e, #791).**
+  (1) Concatenating `response.request().redirectedFrom()` hops with `framenavigated` URLs counted each
+  hop twice. (2) Reading either one alone still failed: a late navigation from the previous page
+  landed in the next page's chain (`[/sign-in, /p, /sign-in]`), and a 307's history was lost
+  (`[/sign-in]`). → Follow a redirect chain over HTTP with `request.get(url, { maxRedirects: 0 })`:
+  a 3xx `Location`, or, for a redirect thrown under a `loading.tsx`, the streamed
+  `<meta id="__next-page-redirect" … content="1;url=…">`. That meta is what the browser follows, so
+  the chain is the visitor's, and it is deterministic. Diagnose from the "Received" array: a repeated
+  or leading `/sign-in` means the events crossed pages.
 - **A journey that builds its own athlete and program failed twice before it reached what it tested
   (FAM-1 12c-iii, #761).** (1) Put on timed out finding the new athlete's checkbox: `addAthlete` had
   not landed when the spec read `page.url()` and moved on. (2) Then "no rows to tick": `locator.count()`
