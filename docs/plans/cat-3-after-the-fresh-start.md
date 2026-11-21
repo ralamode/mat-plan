@@ -101,16 +101,18 @@ seed and `verify/catalog.ts`; whichever lands second rebases.
     the seven above. The runner fails a patch whose first failure is not its `.expect`, so a re-cut
     keeps each surviving assertion's message word for word. The PR derives the list from the
     `.expect` files and marks each patch kept, re-aimed or retired; each kept or re-aimed patch is
-    run alone with `--only`. A pass over the cited spans on `main` (`ca7ab590`) adds these
-    candidates: 42, 43 and 44 (`verify/schema.ts`, the typing); 305, 306 and 398
-    (`verify/program.ts`, FAM-1 6a-iii-a); 498 (the caps); 502 (`verify/catalog.ts`); and 05 and
-    06, in the TEN-1 1d and TEN-2c stretch of `verify.ts`. That pass is a hint and not the list.
+    run alone with `--only`. A pass over the cited spans, moved to where they sit on `main`
+    (`ca7ab590`), adds these candidates: 42, 43 and 44 (`verify/schema.ts`, the typing); 304, 305,
+    306 and 398 (`verify/program.ts`, FAM-1 6a-iii-a, beside 397 and 592); 498 (the caps); 323, 502
+    and 510 (`verify/catalog.ts`); and 06, in the TEN-1 1d catalog verdict of `verify.ts`. Mutation
+    05 is not one: its assertion is in TEN-1 1d's `db:correct` registry, which this PR does not
+    touch. That pass is a hint and not the list.
   - **The line numbers above are hints** at `b6ef8287`; `verify/program.ts` has since moved by 40
     lines on `main`. The assertion's message is the key.
 - **Beside `LEGACY-1`** (the plan in #802, the Tech Debt lane's, not yet approved). Both plans edit
   the same two files. In `verify.ts` this PR re-cuts TEN-1 1d, TEN-2a, TEN-2b and TEN-2c;
-  `LEGACY-1` keeps TEN-1 1d and the TEN-2b write proof and deletes the resolver's sections between
-  them. In `verify/schema.ts` this PR renames the fixture that FAM-1 5b's legacy block comes from;
+  `LEGACY-1` keeps TEN-1 1d's `db:correct` registry and the TEN-2b write proof, and deletes the
+  resolver's sections after it (TEN-2b-1 ordering, PICK-1 PR 2). In `verify/schema.ts` this PR renames the fixture that FAM-1 5b's legacy block comes from;
   `LEGACY-1` drops half of 5b. Neither plan waits for the other. Whichever PR lands second re-reads
   its sections by assertion message and derives its patch list again. `LEGACY-1`'s legacy-row
   builder, and the sections it moves onto that builder, should name no old built-in; any that does
