@@ -153,6 +153,10 @@ fresh; rm "$c/shared.js"
 for i in "${!ROUTES[@]}"; do head -c 600 /dev/zero >"$c/s$i.js"; done
 json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.forEach((r, i) => { r.firstLoadChunkPaths = r.firstLoadChunkPaths.map((q) => q.endsWith("/shared.js") ? `.next/static/chunks/s${i}.js` : q); })'
 expect "a regrouping that duplicates shared code across routes passes" 0 '| (lazy client chunks) | 100 | 100 | 0 |'
+# A symlink in first-load to a lazy chunk: compared by real path, so the chunk leaves the lazy row.
+fresh; ln -s app/lazy.js "$c/alias.js"
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x[0].firstLoadChunkPaths.push(".next/static/chunks/alias.js")'
+expect "a first-load symlink to a lazy chunk takes it out of the lazy row" 0 '| (lazy client chunks) | 100 | 0 | -100 B |'
 
 # ── Cannot measure: stats, shape, paths, count, inputs ────────────────────────────────────────────
 fresh; rm "$p/apps/web/.next/diagnostics/route-bundle-stats.json"

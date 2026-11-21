@@ -10,7 +10,8 @@
  *     build table; that file replaced it, and it is undocumented);
  *   - one `(lazy client chunks)` row: every `.next/static/chunks/**\/*.js` that is in NO route's
  *     first-load list, except the polyfills (`build-manifest.json` → `polyfillFiles`). It catches
- *     code only `dynamic()` loads. It was `(all client chunks)` until 2026-11-20, which also summed
+ *     code only `dynamic()` loads (inferred: `dynamic()` code a route renders on the server can sit
+ *     in that route's first-load list, where its route row catches it instead). It was `(all client chunks)` until 2026-11-20, which also summed
  *     first-load chunks, so a Turbopack regrouping that duplicates shared code across routes (no
  *     route loading more) tripped it: #798, +121.9 KiB with the lazy chunks byte-identical. The
  *     route rows already hold first-load code.
@@ -22,7 +23,10 @@
  *
  * WHAT IS NOT MEASURED. Core Web Vitals timings (LCP, INP, CLS: PERF-1 (a) and PERF-2), CSS, server
  * code and route handlers, and Clerk's scripts, which load from Clerk's CDN rather than
- * `.next/static`. Gzip is not measured either: uncompressed bytes track parse and compile cost, and an
+ * `.next/static`. Since the lazy row replaced the all-chunks row (2026-11-20), nothing measures the
+ * TOTAL distinct client JS: shared code the bundler copies into several route groups (each page
+ * loads the same, but moving between them re-downloads it) and a PR that grows many routes by just
+ * under the budget each are both unmeasured. Gzip is not measured either: uncompressed bytes track parse and compile cost, and an
  * exact comparison should not depend on a zlib version.
  *
  * THE BUDGET. Each row is compared with `.github/bundle-baseline.json`. A move of more than
