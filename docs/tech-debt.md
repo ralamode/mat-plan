@@ -15,6 +15,38 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The builder's copy is split into its own chunk in four route groups, so moving between them downloads it again (added 2026-11-20, from #805's diagnosis)
+
+- **What & why it's debt:** Turbopack now puts the program builder's copy into its own chunk of
+  about 35 KiB in four route groups: `/p/[profileId]`, `/programs/[programId]`, the two workout
+  pages and `/design/program`. That copy is `components/program-builder/builder-text.ts`'s
+  `BUILDER_COPY`, plus what it pulls from `lib/constants` (`AMEND_COPY`, `HOME_LINK`,
+  `itemCountText`). It used to share one chunk. Tiny edits in lane C's #798 set off the regrouping
+  (Native Scaling's #805 diagnosis).
+
+  Two import paths keep that copy reachable from both sides:
+  - **Code outside the builder imports pieces of it:**
+    - `components/day/day-copy.ts`: `BUILDER_COPY.programs` and `weekdayName`;
+    - `components/day/program-order-dialog.tsx`: `lastDayText`;
+    - `components/layout/nav-rail.tsx`: `BUILDER_COPY.programs`;
+    - `app/p/new/add-athlete-form.tsx`: `BUILDER_COPY.programs`;
+    - `app/p/page.tsx`: `programsNavLink`.
+  - **`builder-text.ts` imports from `lib/constants`**, the app's widest-shared module.
+
+- **Impact:** each page's own first load is unchanged (+1 KiB at most). The cost is a repeated
+  download of about 35 KiB when moving between those pages on a phone. It is not measured by any
+  gate: #805 moved the bundle check's synthetic row to lazy chunks, and the PERF-1 entry names it.
+- **The fix, to weigh (not yet chosen):**
+  - **(a)** Move the few pieces used outside the builder into a small shared module (for example
+    `lib/program-copy.ts`: the `programs` label, `programsNavLink`, `weekdayName`, `lastDayText`),
+    so `BUILDER_COPY` is reached only from the builder's routes.
+  - **(b)** Cut `builder-text.ts`'s import of `lib/constants` (or the reverse dependency), so the
+    bundler keeps one shared chunk.
+  - Either may be enough, and they combine. **Measure before and after:** a local `pnpm build`, then
+    compare `.next/static/chunks` across the four routes for a chunk holding `BUILDER_COPY`.
+- **Severity:** low. Lane B owns `builder-text.ts`; the day files are lane C's, so edits there would
+  be guest edits.
+
 ### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
 
 - **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by
