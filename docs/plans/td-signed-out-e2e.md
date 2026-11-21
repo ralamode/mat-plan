@@ -192,13 +192,17 @@ The pin grows deliberately rather than being dodged.
 - `ai-1-nl-logging.md`'s spend argument: the "do not cite" sentence still stands after this PR, and
   that plan is its owner's.
 
-## For the maintainer
+## Decided
 
-- **Q1. Is "runtime proof from `null` onward, through the dark proxy, plus the existing unit proofs
-  of a configured Clerk with no session" enough? Or do you want the configured branch at runtime
-  too,** which needs development-instance Clerk keys as a CI secret on the e2e job? Recommended:
-  **enough for now**, for the reasons in Alternatives. The narrowed tech-debt row keeps the residual
-  visible.
+- **Approved** by the maintainer _(orchestrator's chat, 2026-11-20, relayed by the board)_: "Approve; no
+  Clerk keys in CI (Recommended)".
+- **Q1, decided: runtime proof through the no-Clerk path is enough for now.** The narrowed tech-debt
+  row keeps the Clerk-composed branch visible.
+- **Re-checked at Playwright 1.65.1** (#794 bumped it from 1.64.1; the maintainer asked for this). The
+  three internals this plan relies on are unchanged:
+  - `options.env` is spread over `process.env` (`playwright/lib/runner/index.js:943-947`);
+  - entries start in order, each awaiting its URL (`:913-915`, task loop `:6425`);
+  - with `reuseExistingServer: false`, a port already answering throws "is already used" (`:933-936`).
 
 ## Review-response log
 
