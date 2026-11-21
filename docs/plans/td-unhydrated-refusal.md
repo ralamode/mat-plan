@@ -4,6 +4,9 @@
 > hydration, re-renders a blank form" (narrowed 2026-11-19 by #691). Branch:
 > `fix/td-unhydrated-refusal`. No `plan.md` row: a tech-debt payoff.
 
+> **Status: v1, PARKED (2026-11-20).** Not approved for implementation. The review log below sets
+> out what v2 must change; the debt entry's trigger says when to pick it up.
+
 _Roadmap alignment (2026-11-20): checked against the private roadmap; nothing to add here. Gates
 nothing._
 
