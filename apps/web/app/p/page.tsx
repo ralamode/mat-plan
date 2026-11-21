@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { AppShell } from '@/components/layout/app-shell';
@@ -47,6 +48,9 @@ export const runtime = 'nodejs';
  * of a short page it takes no attention from "who's logging today?". The provider still lives in the
  * root layout, so the choice applies everywhere and the gate and the landing still follow the device.
  */
+/** A plain title (the picker's heading); Next's route announcer reads it on arrival. */
+export const metadata: Metadata = { title: PICKER_COPY.heading };
+
 export default async function ProfilePickerPage() {
   // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**
   // 🔴 **The session IS the boundary (AUTH-1 1d).** `getHouseholdScope()` resolves the signed-in

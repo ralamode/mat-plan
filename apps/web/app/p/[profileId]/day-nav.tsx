@@ -55,13 +55,25 @@ export function dayNavBounds(args: {
   };
 }
 
-/** The date line: v12's `dayLabel`, short off-today so it fits between the arrows at 360px. */
-export function dayLine(day: string, today: string): string {
+function relativeDay(day: string, today: string, todayDate: (day: string) => string): string {
   const offset = isoDayDiff(day, today);
-  if (offset === 0) return `Today · ${formatDayLong(day)}`;
+  if (offset === 0) return `Today · ${todayDate(day)}`;
   if (offset === -1) return `Yesterday · ${formatDayShort(day)}`;
   if (offset === 1) return `Tomorrow · ${formatDayShort(day)}`;
   return formatDayShort(day);
+}
+
+/** The date line: v12's `dayLabel`, short off-today so it fits between the arrows at 360px. */
+export function dayLine(day: string, today: string): string {
+  return relativeDay(day, today, formatDayLong);
+}
+
+/**
+ * The page's title: the date line, short on every day ("Today · Fri, Nov 20"), so a phone's tab
+ * and the route announcer's arrival alert are not the long form with its year.
+ */
+export function dayTitle(day: string, today: string): string {
+  return relativeDay(day, today, formatDayShort);
 }
 
 export function DayNav({

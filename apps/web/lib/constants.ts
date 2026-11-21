@@ -517,6 +517,10 @@ export const NO_HOUSEHOLD_COPY = {
 
 /** The routine editor's copy — the e2e replays its Save, so the label has one home. */
 export const ROUTINE_COPY = {
+  /** The routine page's `<h1>` and its title. */
+  heading: 'Edit routine',
+  /** Said, and shown, after a save (`routine-editor.tsx`'s `Announcer`). */
+  saved: 'Routine saved.',
   orderHeading: 'Routine order',
   save: 'Save routine',
 } as const;

@@ -198,6 +198,8 @@ test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }
   await nav.getByRole('link', { name: /^Next day/ }).click();
   await page.waitForURL((u) => u.searchParams.get('d') === tomorrow);
   await expect(page.getByText(/^Tomorrow ·/)).toBeVisible();
+  // The tab's title is the day, which Next's route announcer reads; never the athlete's name (D8).
+  await expect(page).toHaveTitle(/^Tomorrow · \w{3}, \w{3} \d{1,2}$/);
   await expect(page.getByText(COMING_UP)).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
   await expect(ticks(page)).toHaveCount(0);
