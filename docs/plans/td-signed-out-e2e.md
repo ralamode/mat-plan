@@ -114,12 +114,14 @@ The pin grows deliberately rather than being dodged.
 - **`apps/web/scripts/e2e-local.ts`:** passes `E2E_SIGNED_OUT_PORT` from a second `freePort()`
   (`scripts/embedded-pg.ts:74`), asserted to differ from the app port.
 - **Shared helpers**, moved rather than copied:
-  - `routeOf`, `pages` and the floor go from `app/pages-need-a-session.test.ts` to
-    `test/source-scan.ts`, where `exportedActionSlices` already went (`:97-98`). Both the vitest file
-    and proof 1 import them (reuse 2). ⚠️ That module reads `import.meta.url` at module scope. The
-    probe, run before implementation: a throwaway `e2e/zz-probe.spec.ts` importing `WEB_DIR` under
-    `playwright test --list`. If Playwright's transform rejects it, the helper derives its root from
-    `__dirname`'s equivalent, and the plan records which.
+  - `routeOf`, `pages` and the floor move out of `app/pages-need-a-session.test.ts` into a new
+    `test/app-routes.ts`, and both the vitest file and proof 1 import it (reuse 2). Its functions take
+    the app directory **as an argument**, and the module reads no `import.meta` of its own. **Probed
+    2026-11-20:** Playwright 1.64.1's transform cannot load a module that reads `import.meta` at module
+    scope (`test/source-scan.ts`; `SyntaxError: Cannot use 'import.meta' outside a module` under
+    `playwright test --list`). So `source-scan.ts` is not the home. The vitest file passes its own
+    `import.meta`-derived path, and the spec passes one built from `__dirname`, which Playwright's
+    CommonJS transform provides.
   - `routineOrder`, the Save capture and the leak list stay inside the one replay test that uses them.
     Proof 2 extends that test rather than copying it (scope 1), so nothing is hoisted.
 - **`app/p/[profileId]/routine` capture:** the capture page runs on the **bypassed** origin
