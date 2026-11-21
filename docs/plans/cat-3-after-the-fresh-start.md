@@ -264,11 +264,7 @@ What E6 asks, with lane P's and the panel's points as the design.
    `UPDATE movements … WHERE id = … AND household_id IS NULL AND modality IS NOT NULL`. A push with
    no entry change updates no row and takes no row lock. (The insert still advances the identity
    sequence, as `migrate.yml`'s header says.) **This is not E6's `onConflictDoUpdate`, and this PR
-   amends E6's wording** (lane A's finding): the only arbiter for a global slug is the index
-   `WHERE household_id IS NULL`, Postgres infers a partial index only from a predicate that implies
-   it, and it does not use a CHECK constraint for that, so `targetWhere: modality IS NOT NULL` fails
-   with "no unique or exclusion constraint matching", and the seed would throw on every push. An
-   upsert would also lock all 587 rows each push, and could not report why a row was skipped.
+   amends E6's wording** (lane A's finding): E6's `targetWhere: modality IS NOT NULL` alone cannot name the arbiter, because the global slug index is partial on `household_id IS NULL` and Postgres does not use a CHECK constraint to infer it, so as worded it fails with "no unique or exclusion constraint matching". Naming the index with `movementIsGlobal()` and filtering in a `setWhere` would run, but an upsert locks every conflicting row even where it writes nothing, all 587 on each push, and cannot report why a row was skipped. An update by id locks and reports only what it changes.
 2. **Only live catalog rows.** `id` and `public_id` never change. Kept equal to the entry: name,
    kind of training, pattern, `unitDefault`, `isBodyweight`; the update sets `updated_at` itself,
    since no trigger does. It never writes `deleted_at`, `household_id` or `tracking_type`, and never
@@ -289,8 +285,7 @@ What E6 asks, with lane P's and the panel's points as the design.
    `movements_global_row_has_pattern` or the pattern and kind-of-training checks, is skipped and
    counted. That replaces A2's "a bad entry is fixed forward" throw on the insert path, since a new
    entry with a mistyped code would block deploys exactly as an edit would. The library transaction
-   is the only unit. A mutation proves a would-fail row turns `db:verify` red if it is thrown and
-   not skipped.
+   is the only unit. A mutation proves a would-fail row turns `db:verify` red if it is thrown and not skipped. **A skip must never hide a bad entry:** `db:verify` asserts that seeding the whole real library on a fresh database skips nothing, for every reason, and a mutation that plants an entry with a code the reference tables lack turns that assertion red. The entry schema's enums catch a bad code before merge, but they are the shared lists; this catches a reference table that lags them, and an entry that passes the schema and breaks a database-only check. In production the count stays in the seed's log, where a non-zero means a lagging reference seed or a hand edit.
 5. **The tracking type is never updated.** If a stored type differs from the lockfile's, the row is
    skipped and counted, as E6 says; a real type change is a new movement.
 6. **No slug is retired here.** The append-only check and the lockfile test (`lockfileIssues`) keep
@@ -304,8 +299,7 @@ What E6 asks, with lane P's and the panel's points as the design.
 8. **Proofs.** Its own mutation range, a block lane A asks the board for (about six: 505 re-cut; thrown, not skipped; a join-row delete reaching a household's row; a second run that writes; a write to the tracking type; an old row adopted). It re-cuts A2-ii's "a second run inserts nothing" into
    "updates nothing when no entry changed, and exactly the changed rows when one did", and
    `assertOnlyLibraryRowsAdded` into "an existing global row changes only where its entry changed".
-   It re-cuts mutation 505 to drop `targetWhere`, so that it would adopt an old or a household's
-   row, and keeps the pins at `verify/catalog.ts:500-512`.
+   It re-cuts mutation 505 so that the update would adopt an old or a household's row, keeps the pins at `verify/catalog.ts:500-512`, and re-cuts the pins on the join rows' authored order (`verify/catalog.ts:350`, `:392-404`, `:469`, and mutation 510's expected text) to set equality.
 9. **The lines that stop being true:** `AGENTS.md:150`; `migrate.yml`'s header; the docstrings in
    `seed.ts:433-452`, `scripts/seed.ts:10`, `catalog-movements.ts:34-38` and `schema.ts:127`;
    `movement-catalog.md` invariants 4 and 6; `catalog-data.md:78-80`; `lessons.md:76`;
@@ -413,8 +407,6 @@ correctness lens found one non-blocking gap. Both of their last points are appli
 the shadow count's filter (mutation 518 and A2-i's E5 pin), and why a prefix count is sound as an
 alarm where the code forbids it as a selector.
 
-**Lane A's feasibility check of PR 4, 2026-11-20** (lane A had restarted; it is A3's builder). One
-blocking point: E6's `onConflictDoUpdate` cannot name its arbiter, so the design updates by id and E6's
-wording is amended in this PR. Also applied: the primary change as two statements; join rows equal as
+**Lane A's feasibility check of PR 4, 2026-11-20** (lane A had restarted; it is A3's builder). One blocking point: E6's `onConflictDoUpdate`, as worded, cannot name its arbiter, and an upsert that could would lock every row on each push; so the design updates by id and E6's wording is amended in this PR. The correctness lens checked the claim and narrowed its wording, and added the order pins and the zero-skip proof, which lane A asked for too. Also applied: the primary change as two statements; join rows equal as
 a set, not in order; the pre-check and the soft-deleted count extended to the insert path; A3's
 mutation block.
