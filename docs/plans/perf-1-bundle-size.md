@@ -367,7 +367,8 @@ growth fails), and a probe that counts every chunk again goes RED on the regroup
 **What this replaces, and its status.** It supersedes the maintainer-approved (2026-11-19) wording in
 Acceptance 1 (the `(all client chunks)` row), step 4's row definition, the test table's `dynamic()`
 row and the size section's "the row stays, because Acceptance 1 requires it". Those passages are
-kept as merged. **The swap needs the maintainer's sign-off** (asked through the board with #805).
+kept as merged. **The maintainer's revision of Acceptance 1 (2026-11-20, relayed by the board):** _"Swap
+to 'lazy chunks'"_. Acceptance 1 now reads `(lazy client chunks)` where it named `(all client chunks)`.
 That probe 2b's `dynamic()` literal lands in the lazy row is **inferred**, not re-measured: a
 `dynamic()` component rendered on the server can sit in its route's first-load list, where the route
 row catches it instead. Either way 2b stays RED. **Given up:** the total distinct client JS, so a
