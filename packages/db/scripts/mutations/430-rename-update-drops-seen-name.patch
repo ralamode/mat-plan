@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index fe17d35d..9a1b8cae 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -156,7 +156,7 @@ export async function renameProfile(
+   const rows = await exec
+     .update(schema.profiles)
+     .set({ name, updatedAt: sql`now()` })
+-    .where(and(isLiveProfile(publicId, scope), eq(schema.profiles.name, seenName)))
++    .where(isLiveProfile(publicId, scope))
+     .returning({ publicId: schema.profiles.publicId });
+ 
+   const row = rows[0];

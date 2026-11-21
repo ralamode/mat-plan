@@ -331,7 +331,9 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 ## Transport / headers
 
 - HSTS, nonce-based CSP (middleware), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: same-origin` (`REFERRER_POLICY`), `Permissions-Policy`. **`same-origin`, not
+  `Referrer-Policy: same-origin` (`REFERRER_POLICY`), `Permissions-Policy` (camera, microphone,
+  geolocation off; no `browsing-topics`, because Chrome removed the Topics API, a current Chromium
+  flags the name as unrecognised, and no other engine shipped it). **`same-origin`, not
   `no-referrer`, because** under `no-referrer` every browser (Fetch, "append a request `Origin`
   header") sends a native form POST with `Origin: null`, even to this site, and Next's Server Action
   check refuses it, so a server-action form tapped before hydration did nothing (four routes; the day page's closure-wrapped forms always waited for hydration). `same-origin` still sends no

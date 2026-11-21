@@ -371,6 +371,10 @@ const STATES = {
   // FAM-1 7b-ii — a program's workout pages, reached the same way (see INTERACTIONS).
   'workout-new': null,
   'workout-edit': null,
+  // Muted text on the accent ground: a list row hovered, which only a pointer paints (Tailwind's
+  // `hover:` is `@media (hover: hover)`), so it shows at the desktop width alone (see INTERACTIONS).
+  'programs-row-hover': null,
+  'workouts-row-hover': null,
   // FAM-1 15 — the Put on dialog with one athlete ticked (see INTERACTIONS).
   'put-on': null,
   // V1-9b B2-ii — Clear this day's dialog, armed, and the banner after a clear. Both exist only
@@ -525,6 +529,16 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('link', { name: BUILDER_COPY.newWorkout }).click();
     await page.waitForURL(/\/workouts\/new$/);
     await page.getByRole('textbox', { name: EDITOR_COPY.workoutName, exact: true }).waitFor();
+  },
+  /** `/programs` with the seeded program's row hovered: its athletes line sits on `hover:bg-accent`. */
+  'programs-row-hover': async (page) => {
+    await page.getByRole('link', { name: /^Family program/ }).hover();
+  },
+  /** The seeded program's workouts list with "Heavy A"'s row hovered: muted lines on the accent. */
+  'workouts-row-hover': async (page) => {
+    await page.getByRole('link', { name: /^Family program/ }).click();
+    await page.getByRole('heading', { level: 1, name: 'Family program' }).waitFor();
+    await page.getByRole('link', { name: /^Heavy A/ }).hover();
   },
   /** FAM-1 7b-ii — the seeded program's "Heavy A", opened from its row. */
   'workout-edit': async (page) => {

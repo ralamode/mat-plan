@@ -464,7 +464,10 @@ CI gates: `drizzle-kit check` (snapshot parent collisions) + `generate` leaves a
   Squawk on new migrations + the e2e job's migrate+seed against an empty Postgres service. Where each
   gate runs, and which is NOT wired: "Local hooks vs CI merge-gates" above.
 Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside
-  app code — use expand→backfill→contract across separate deploys. Indexes CONCURRENTLY. New NOT NULL
+  app code — use expand→backfill→contract across separate deploys. Indexes: CONCURRENTLY cannot run
+  inside drizzle's one migrate transaction, so a plain CREATE INDEX on an EXISTING table carries
+  `-- squawk-ignore require-concurrent-index-creation` with its reason (row count, lock); that
+  written reason is the gate (since 2026-11-20). A large hot table: stop and plan. New NOT NULL
   via CHECK ... NOT VALID → backfill → VALIDATE. New FK/UNIQUE as NOT VALID → VALIDATE; every new ref
   column gets a covering index. Every migration SETs lock_timeout + statement_timeout. Backfills in
   bounded batches; avoid volatile defaults. IF [NOT] EXISTS guards for re-run safety.

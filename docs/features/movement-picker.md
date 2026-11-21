@@ -223,8 +223,8 @@ path and **creating** the deliberate one.
     - `notice` takes the status region until the caller clears it (`onQueryChange` fires on every
       search change); `takeover` replaces the search, the list AND the footer (the caller's form; its exits are the header's ✕ and the caller's own Cancel), and opening it clears the search, so the list is whole when the form closes and the row the caller focuses stays put;
     - the search's label and placeholder are the caller's (`searchLabel`, `searchPlaceholder`);
-    - a ticked row is outlined (`aria-checked:border-foreground`), never filled: muted text on the
-      accent fill is under AA. Rows carry `data-option-id`, and the create button has
+    - a ticked row is outlined (`aria-checked:border-foreground`), never filled, a choice since muted
+      text on the accent fill passes AA (4.64:1, `--muted-foreground` at L 0.54). Rows carry `data-option-id`, and the create button has
       `PICKER_CREATE_ID`, so the caller can put focus back on them.
 
 13. **The list reads the library's search, and "already listed" is the server's rule** (CAT-3 B1,

@@ -100,8 +100,36 @@ export function RenameForm({
   const router = useRouter();
   const [state, formAction, pending] = useActionState(renameAthleteAction, INITIAL_ACTION_STATE);
   const [name, setName] = useState(initialName);
+  /**
+   * 🔴 **The name this form compares against (`seenName`, the stale-rename fix).** Captured ONCE, at
+   * mount, from the stored name. It advances ONLY on a `stale` answer, and a later `duplicate` answer
+   * does not reset it. ⚠️ Never bound to the `name` prop: any server refresh (the time-zone sync, a
+   * revalidate) would then advance it silently while the field keeps stale typing, and the next Save
+   * would overwrite with no refusal. `write-path.md` records the invariant.
+   */
+  const [seenName, setSeenName] = useState(initialName);
+  /**
+   * 🔴 **The stale refusal, LATCHED.** Set on a `stale` answer, kept across a field error or a
+   * page-level refusal, and cleared only by `ok` or `duplicate`, which only Save anyway can produce
+   * while it shows. Read off `state` alone it would unmount on, say, a blank-name field error, bring
+   * the plain Save back with `seenName` already advanced, and let that Save overwrite without the
+   * deliberate tap (the PR's correctness lens).
+   */
+  const [stale, setStale] = useState<{ current: string } | null>(null);
+  const [answered, setAnswered] = useState(state);
+  if (state !== answered) {
+    // Adjusting state on a new answer, during render (React's documented pattern), not in an effect.
+    setAnswered(state);
+    if (state.stale) {
+      setSeenName(state.stale.current);
+      setStale(state.stale);
+    } else if (state.ok || state.duplicate) {
+      setStale(null);
+    }
+  }
   const nameRef = useRef<HTMLInputElement>(null);
   const calloutRef = useRef<HTMLDivElement>(null);
+  const staleRef = useRef<HTMLDivElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -114,6 +142,7 @@ export function RenameForm({
     state.duplicate && foldName(name) === state.duplicate.folded ? state.duplicate : null;
 
   const duplicateMessageId = `${NAME_INPUT_ID}-duplicate`;
+  const staleMessageId = `${NAME_INPUT_ID}-stale`;
   /**
    * "Both will show as X" is true only when the two tiles really would be identical — same spelling
    * AND same kind. `collapseWhitespace` is not needed here: `initialName` and the field both pass
@@ -140,7 +169,11 @@ export function RenameForm({
    * comment among JSX attributes is non-standard enough that `tsc` and `esbuild` disagree about it.
    */
   const describedBy =
-    [invalid ? NAME_ERROR_ID : null, duplicate ? duplicateMessageId : null]
+    [
+      invalid ? NAME_ERROR_ID : null,
+      duplicate ? duplicateMessageId : null,
+      stale ? staleMessageId : null,
+    ]
       .filter(Boolean)
       .join(' ') || undefined;
   // Derived, never a transition — see the docblock. True on a no-JS re-render too.
@@ -167,9 +200,11 @@ export function RenameForm({
     // yanked out of the field mid-edit — on a phone that also drops the keyboard under their thumb.
     // The add form documents the same rule for the same reason.
     //
-    // Order matters: a duplicate answer carries no `fieldErrors`, and the error block below only
-    // exists on `state.error`, so the three arms are mutually exclusive by construction.
-    if (state.duplicate) calloutRef.current?.focus();
+    // Order matters: a duplicate answer carries no `fieldErrors`, a stale one carries neither (the
+    // action sets `stale` alone), and the error block below only exists on `state.error`, so the four
+    // arms are mutually exclusive by construction.
+    if (state.stale) staleRef.current?.focus();
+    else if (state.duplicate) calloutRef.current?.focus();
     else if (invalid) nameRef.current?.focus();
     // ⚠️ **The page-level refusal needs its own target, and the add form's fix does not transfer.**
     // There, focus returns to the callout; here the callout has UNMOUNTED by the time this answer
@@ -196,9 +231,29 @@ export function RenameForm({
         <button type="submit" hidden aria-hidden="true" tabIndex={-1} disabled={pending}>
           {ATHLETE_FORM_COPY.save}
         </button>
+      ) : stale ? (
+        // The same sentinel for the stale refusal: Enter or Go posts an EMPTY `seenName`. No stored
+        // name is ever blank, so the writer can only answer `stale` again (or `ok` with no write, on a
+        // replay), on the first Enter and every one after it. Only "Save anyway" below carries the
+        // stored name. ⚠️ An earlier version re-posted "the name before the refusal" and advanced it
+        // on every answer, so a SECOND Enter carried the stored name and overwrote (the PR's UX lens).
+        <button
+          type="submit"
+          hidden
+          aria-hidden="true"
+          tabIndex={-1}
+          disabled={pending}
+          name="seenName"
+          value=""
+        >
+          {ATHLETE_FORM_COPY.save}
+        </button>
       ) : null}
 
       <input type="hidden" name="profileId" value={profileId} readOnly />
+      {/* While the stale refusal shows, `seenName` rides on the SUBMITTER (the sentinel, or Save
+          anyway), as the acknowledgement does, so there is never a second value to collide with. */}
+      {stale ? null : <input type="hidden" name="seenName" value={seenName} readOnly />}
 
       <div className="flex flex-col gap-2">
         <label htmlFor={NAME_INPUT_ID} className="text-sm font-medium">
@@ -295,13 +350,37 @@ export function RenameForm({
         </Callout>
       ) : null}
 
+      {stale ? (
+        <Callout
+          ref={staleRef}
+          messageId={staleMessageId}
+          message={
+            <span className={NAME_WRAP_CLASS}>{ATHLETE_FORM_COPY.renameStale(stale.current)}</span>
+          }
+        >
+          {/* The overwrite, deliberately: outline and differently labelled from Save name, and it
+              carries the stored name as `seenName`, so it applies only if that is still stored. */}
+          <Button
+            type="submit"
+            size="lg"
+            variant="outline"
+            disabled={pending}
+            name="seenName"
+            value={stale.current}
+            className={CHOICE_BUTTON_CLASS}
+          >
+            {ATHLETE_FORM_COPY.saveAnyway}
+          </Button>
+        </Callout>
+      ) : null}
+
       <div className="flex flex-col gap-3">
         {/* `w-fit`, following the prototype (`index.html:2164`, `style="width:fit-content"`): a
             full-width primary button on a one-field form reads as the end of a long flow.
             🔴 **Hidden while the callout shows**, so "Save name" and "Save anyway" are never visible
             together — two near-identical submits is the state a parent misreads, and leaving this
             one mounted would also put it in the Enter-key path beside the sentinel. */}
-        {duplicate ? null : (
+        {duplicate || stale ? null : (
           <Button type="submit" size="lg" disabled={pending} className="w-fit text-base">
             {pending ? SAVING_LABEL : ATHLETE_FORM_COPY.save}
           </Button>
