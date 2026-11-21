@@ -413,7 +413,8 @@ const isRuntimeEdge = (i: ImportRef) => !i.typeOnly && i.kind !== 'type';
  * the lane P directories (all its names), and any other file whose `originsOf` maps a name to a
  * restricted origin (that name). An **importer** of it is any tracked `packages/db/src` file with a
  * ref (any kind) resolving to it that names one of those names, or names nothing (`export *`, a
- * namespace or side-effect import). The map is `publisher → importer → kinds`; a test compares it
+ * namespace or side-effect import), unless both sit under lane P's directories. The map is
+ * `publisher → importer → kinds`; a test compares it
  * with {@link DB_IMPORTERS}, so a new importer, or a new kind of import, fails the guard whatever
  * form follows it. `texts` reads a file's text (or a new file) from a fixture.
  */
@@ -441,6 +442,9 @@ function dbImporters(texts: Record<string, string> = {}): Record<string, Record<
     for (const i of importsOf(join(REPO_DIR, f), texts[f]).imports) {
       const names = i.resolved === null ? undefined : publishers.get(i.resolved);
       if (!names) continue;
+      // Lane P inside lane P is exempt: what is defined there is lane P's by origin wherever it is
+      // re-published, so such an edge cannot launder a name, and pinning it would churn per writer.
+      if (under(f, LANE_P_DIRS) && under(i.resolved!, LANE_P_DIRS)) continue;
       if (names !== ALL && i.names.length > 0 && !i.names.some((n) => names.has(n))) continue;
       const row = (map[i.resolved!] ??= {});
       row[f] = [...new Set([...(row[f]?.split('|') ?? []), i.kind])].sort().join('|');
@@ -492,77 +496,11 @@ const DB_IMPORTERS: Record<string, Record<string, string>> = {
     [`${LP_W}save-workout.ts`]: 'static',
     [`${LP_W}seed-fixtures.ts`]: 'static',
   },
-  // Lane P's reads: their barrel, and each other (the list and the view share athletes and week).
+  // Lane P's code, from outside lane P: the entry, the test beside a lane P file, and the fixtures
+  // seed. Edges inside lane P are exempt (dbImporters).
   [`${LP_Q}index.ts`]: { [DB_INDEX]: 'star' },
-  [`${LP_Q}athletes.ts`]: {
-    [`${LP_Q}program-list.ts`]: 'static',
-    [`${LP_Q}program-view.ts`]: 'static',
-  },
-  [`${LP_Q}catalog-arm-option.ts`]: {
-    [`${LP_Q}catalog-arm-option.test.ts`]: 'static',
-    [`${LP_Q}movement-options.ts`]: 'static',
-    [`${LP_W}new-item.ts`]: 'static', // a new item's movement match
-  },
-  [`${LP_Q}exists.ts`]: { [`${LP_Q}index.ts`]: 're-export', [`${LP_Q}week.ts`]: 'static' },
-  [`${LP_Q}movement-options.ts`]: {
-    [`${LP_Q}index.ts`]: 're-export',
-    [`${LP_W}new-item.ts`]: 'static',
-  },
-  [`${LP_Q}program-list.ts`]: { [`${LP_Q}index.ts`]: 're-export', [`${LP_W}assign.ts`]: 'static' },
-  [`${LP_Q}program-view.ts`]: { [`${LP_Q}index.ts`]: 're-export' },
-  [`${LP_Q}week.ts`]: { [`${LP_Q}index.ts`]: 're-export', [`${LP_Q}program-view.ts`]: 'static' },
-  [`${LP_Q}workout.ts`]: { [`${LP_Q}index.ts`]: 're-export' },
-  // Lane P's writers: their barrel, each other, and the fixtures seed (seedProgramFixtures).
   [`${LP_W}index.ts`]: { [DB_INDEX]: 'star' },
-  [`${LP_W}assign.ts`]: {
-    [`${LP_W}index.ts`]: 're-export',
-    [`${LP_W}reorder-programs.ts`]: 'static',
-    [`${LP_W}seed-fixtures.ts`]: 'static',
-    [`${LP_W}take-off.ts`]: 'static',
-  },
-  [`${LP_W}copy-workout.ts`]: { [`${LP_W}index.ts`]: 're-export' },
-  [`${LP_W}create-program.ts`]: {
-    [`${LP_W}index.ts`]: 're-export',
-    [`${LP_W}seed-fixtures.ts`]: 'static',
-  },
-  [`${LP_W}new-item.ts`]: {
-    [`${LP_W}index.ts`]: 're-export',
-    [`${LP_W}seed-fixtures.ts`]: 'static',
-  },
-  [`${LP_W}program-name.ts`]: {
-    [`${LP_W}create-program.ts`]: 'static',
-    [`${LP_W}program-name.test.ts`]: 'static',
-    [`${LP_W}rename-program.ts`]: 'static',
-  },
-  [`${LP_W}refuse.ts`]: Object.fromEntries(
-    [
-      'assign',
-      'copy-workout',
-      'new-item',
-      'reorder-programs',
-      'save-week',
-      'save-workout',
-      'take-off',
-    ].map((f) => [`${LP_W}${f}.ts`, 'static']),
-  ),
-  [`${LP_W}rename-program.ts`]: { [`${LP_W}index.ts`]: 're-export' },
-  [`${LP_W}reorder-programs.ts`]: { [`${LP_W}index.ts`]: 're-export' },
-  [`${LP_W}save-week.ts`]: {
-    [`${LP_W}index.ts`]: 're-export',
-    [`${LP_W}seed-fixtures.ts`]: 'static',
-  },
-  [`${LP_W}save-workout.ts`]: {
-    [`${LP_W}index.ts`]: 're-export',
-    [`${LP_W}seed-fixtures.ts`]: 'static',
-  },
-  [`${LP_W}seed-e2e.ts`]: { [`${LP_W}seed-fixtures.ts`]: 'static' },
   [`${LP_W}seed-fixtures.ts`]: { 'packages/db/src/seed.ts': 'static' }, // seedProgramFixtures
-  [`${LP_W}shift-band.ts`]: {
-    [`${LP_W}assign.ts`]: 'static',
-    [`${LP_W}save-week.ts`]: 'static',
-    [`${LP_W}save-workout.ts`]: 'static',
-  },
-  [`${LP_W}take-off.ts`]: { [`${LP_W}index.ts`]: 're-export' },
 };
 
 /**
@@ -789,6 +727,15 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         expect(dbImporters()).toEqual(DB_IMPORTERS);
       });
 
+      it('a new importer inside lane P, of lane P code, does not change the map', () => {
+        expect(
+          dbImporters({
+            [`${LP_W}helper.ts`]:
+              "import { refuse } from './refuse';\nimport { readWeek } from '../../queries/program/week';\nexport const h = [refuse, readWeek];",
+          }),
+        ).toEqual(DB_IMPORTERS);
+      });
+
       it('the entry imports nothing: it only re-exports, by export * and export { … } from', () => {
         const kinds = importsOf(join(REPO_DIR, DB_INDEX)).imports.map((i) => i.kind);
         expect(kinds.filter((k) => k !== 'star' && k !== 're-export')).toEqual([]);
@@ -836,6 +783,16 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           `${LP_W}index.ts`,
           DAY_BARREL,
           'star',
+        ],
+        [
+          'a lane P writer imported from outside lane P, next door',
+          {
+            'packages/db/src/writers/day/x.ts':
+              "import { saveWorkout } from '../program/save-workout';\nexport const n = saveWorkout.length;",
+          },
+          `${LP_W}save-workout.ts`,
+          'packages/db/src/writers/day/x.ts',
+          'static',
         ],
         [
           'a new kind of import by an existing importer',
