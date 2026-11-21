@@ -4,6 +4,7 @@ import { PROFILE_KIND, PROFILE_KIND_LABELS, PROFILE_KINDS } from './enums';
 import {
   addAthleteSchema,
   athleteNameSchema,
+  PROFILE_ECHO_MAX,
   PROFILE_NAME_MAX,
   renameAthleteSchema,
 } from './profiles';
@@ -90,10 +91,27 @@ describe('athleteNameSchema — what is refused', () => {
 
 describe('renameAthleteSchema', () => {
   it('accepts a profile id and a name', () => {
-    expect(renameAthleteSchema.parse({ profileId: PROFILE_ID, name: '  Ada  ' })).toEqual({
+    expect(
+      renameAthleteSchema.parse({ profileId: PROFILE_ID, name: '  Ada  ', seenName: 'Ada  Mae' }),
+    ).toEqual({
       profileId: PROFILE_ID,
       name: 'Ada',
+      // The seen name is the stored value echoed back: compared byte for byte, never normalised.
+      seenName: 'Ada  Mae',
     });
+  });
+
+  it('requires the seen name, bounded by PROFILE_ECHO_MAX (the stale-rename fix)', () => {
+    expect(renameAthleteSchema.safeParse({ profileId: PROFILE_ID, name: 'Ada' }).success).toBe(
+      false,
+    );
+    expect(
+      renameAthleteSchema.safeParse({
+        profileId: PROFILE_ID,
+        name: 'Ada',
+        seenName: 'x'.repeat(PROFILE_ECHO_MAX + 1),
+      }).success,
+    ).toBe(false);
   });
 
   it('refuses a non-uuid profile id', () => {
@@ -110,6 +128,7 @@ describe('renameAthleteSchema', () => {
     const parsed = renameAthleteSchema.parse({
       profileId: PROFILE_ID,
       name: 'Ada',
+      seenName: 'Ada',
       kind: 'adult',
     });
     expect(parsed).not.toHaveProperty('kind');

@@ -8054,6 +8054,8 @@ console.log(
       .where(eq(schema.profiles.publicId, publicId));
     return row?.name;
   };
+  /** The name a form showing this row would carry as `seenName`: the stored one (any for a missing row). */
+  const seenNameOf = async (publicId: string) => (await nameOf(publicId)) ?? 'Nobody Stored';
 
   await db.insert(schema.profiles).values([
     {
@@ -8087,7 +8089,13 @@ console.log(
     r.ok ? r.publicId : `REFUSED:${r.reason}`;
 
   // 1 · The ordinary case: A renames A's own athlete, one row back, and the name really changed.
-  const renamed = await renameProfile(asPg, A_SCOPE, AR_A_P, 'A-r Renamed');
+  const renamed = await renameProfile(
+    asPg,
+    A_SCOPE,
+    AR_A_P,
+    'A-r Renamed',
+    await seenNameOf(AR_A_P),
+  );
   assert.equal(
     renamedId(renamed),
     AR_A_P,
@@ -8098,7 +8106,15 @@ console.log(
   // 2 · 🔴 CRITERION 4. B tries to rename A's athlete: zero rows, `null`, and — the half a return
   // value alone would not catch — A's name is UNTOUCHED.
   assert.equal(
-    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'Renamed By The Wrong Household')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        B_SCOPE,
+        AR_A_P,
+        'Renamed By The Wrong Household',
+        await seenNameOf(AR_A_P),
+      ),
+    ),
     'REFUSED:refused',
     "PROF-1 a-r: household B renaming A's profile updates 0 rows",
   );
@@ -8111,7 +8127,15 @@ console.log(
   // 2b · …and the same in the OTHER direction, which is this file's standing rule for a seam: a
   // predicate that happened to hard-code one household would pass case 2 and fail here.
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_B_P, 'Renamed By The Wrong Household')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        AR_B_P,
+        'Renamed By The Wrong Household',
+        await seenNameOf(AR_B_P),
+      ),
+    ),
     'REFUSED:refused',
     "PROF-1 a-r: household A renaming B's profile updates 0 rows",
   );
@@ -8124,7 +8148,15 @@ console.log(
   // 3 · A soft-deleted profile is not renameable, in its OWN household: `deleted_at IS NULL` is the
   // second conjunct, and it is the one a "scope the writes by household" refactor would drop.
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_DELETED, 'Renamed A Dead Row')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        AR_A_DELETED,
+        'Renamed A Dead Row',
+        await seenNameOf(AR_A_DELETED),
+      ),
+    ),
     'REFUSED:refused',
     'PROF-1 a-r: a soft-deleted profile updates 0 rows even for its own household',
   );
@@ -8132,7 +8164,15 @@ console.log(
 
   // 4 · An unknown id is refused the same way, so the three refusals are one answer (ADR 0006).
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-00000004d0ff', 'Nobody')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        '019826b4-0000-7000-8000-00000004d0ff',
+        'Nobody',
+        await seenNameOf('019826b4-0000-7000-8000-00000004d0ff'),
+      ),
+    ),
     'REFUSED:refused',
     'PROF-1 a-r: an unknown public id updates 0 rows',
   );
@@ -8143,7 +8183,15 @@ console.log(
   // fixable without restoring them first. If this ever fails, a UX filter has been folded into the
   // ownership seam. Mutation patch `13-rename-locks-archived` is what proves this assertion can fail.
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_ARCHIVED, 'A-r Archived Renamed')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        AR_A_ARCHIVED,
+        'A-r Archived Renamed',
+        await seenNameOf(AR_A_ARCHIVED),
+      ),
+    ),
     AR_A_ARCHIVED,
     'PROF-1 a-r: an ARCHIVED athlete is still renameable',
   );
@@ -8160,7 +8208,7 @@ console.log(
   // that closes this; it was a claim before this assertion existed.
   const AT_CAP = 'W'.repeat(PROFILE_NAME_MAX);
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP)),
+    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP, await seenNameOf(AR_A_P))),
     AR_A_P,
     'PROF-1 a-r: a name at PROFILE_NAME_MAX is accepted by the column',
   );
@@ -8206,7 +8254,13 @@ console.log(
   // 🔴 THE CASE THE WHOLE GUARD EXISTS FOR. Fixing the casing of one of two same-named athletes must
   // not warn about the other. ⚠️ Fold-EQUAL but string-DIFFERENT on purpose: `'Ren Twin'` unchanged
   // would pass on string equality and prove nothing about the fold.
-  const casingFix = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'REN TWIN');
+  const casingFix = await renameProfile(
+    asPg,
+    A_SCOPE,
+    twinTwo.publicId,
+    'REN TWIN',
+    await seenNameOf(twinTwo.publicId),
+  );
   assert.equal(
     renamedId(casingFix),
     twinTwo.publicId,
@@ -8220,7 +8274,13 @@ console.log(
   );
 
   // The real collision: renaming to a DIFFERENT live athlete's name warns, and writes nothing.
-  const collide = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Other');
+  const collide = await renameProfile(
+    asPg,
+    A_SCOPE,
+    twinTwo.publicId,
+    'Ren Other',
+    await seenNameOf(twinTwo.publicId),
+  );
   assert.equal(
     collide.ok === false && collide.reason,
     'duplicate',
@@ -8240,9 +8300,16 @@ console.log(
   // Acknowledged, the same name goes through: the warning is advisory, never a constraint.
   assert.equal(
     renamedId(
-      await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Other', {
-        acknowledgedDuplicate: foldName('Ren Other'),
-      }),
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        twinTwo.publicId,
+        'Ren Other',
+        await seenNameOf(twinTwo.publicId),
+        {
+          acknowledgedDuplicate: foldName('Ren Other'),
+        },
+      ),
     ),
     twinTwo.publicId,
     'PROF-1 a-1d-ren: an acknowledgement waves the collision through — advisory, not a constraint',
@@ -8252,9 +8319,16 @@ console.log(
   // ⚠️ Discriminated on `reason`, not on `.ok === false` alone: a writer that answered `refused` for
   // any reason would otherwise pass a test named for the acknowledgement, which is the shape
   // `db:mutations` exists to catch. The read-back is the other half — a warning must write nothing.
-  const staleAck = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Twin', {
-    acknowledgedDuplicate: foldName('Somebody Else'),
-  });
+  const staleAck = await renameProfile(
+    asPg,
+    A_SCOPE,
+    twinTwo.publicId,
+    'Ren Twin',
+    await seenNameOf(twinTwo.publicId),
+    {
+      acknowledgedDuplicate: foldName('Somebody Else'),
+    },
+  );
   assert.equal(
     staleAck.ok === false && staleAck.reason,
     'duplicate',
@@ -8279,11 +8353,158 @@ console.log(
     kind: PROFILE_KIND.kid,
   });
   assert.equal(
-    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'B Oracle')),
+    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'B Oracle', await seenNameOf(AR_A_P))),
     'REFUSED:refused',
     'PROF-1 a-1d-ren: household B renaming A’s athlete to a name B HOLDS answers refused, never ' +
       'duplicate — the fold guard’s pre-read is scoped, and a leak here would be an oracle on A’s ' +
       'stored name',
+  );
+
+  // ── The stale-rename fix: a rename applies only if the stored name is still the one the form
+  //    showed (`seenName`, the `seenValue` idiom), a replay is `ok`, and a stale one beats the
+  //    duplicate warning (plan: docs/plans/td-stale-rename-refused.md). Its own two athletes, so the
+  //    a-r ids above keep their histories.
+  const ST_P = '019826b4-0000-7000-8000-00000004d005';
+  const ST_RIVAL_NAME = 'Stale Rival Athlete';
+  await db.insert(schema.profiles).values([
+    { publicId: ST_P, name: 'Stale Start', kind: PROFILE_KIND.kid, householdId: households[0].id },
+    {
+      publicId: '019826b4-0000-7000-8000-00000004d006',
+      name: ST_RIVAL_NAME,
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
+    },
+  ]);
+
+  // (a) Stale: the form showed another name. Refused with the stored one, and nothing written.
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, 'Stale Try', 'Shown Elsewhere'),
+    { ok: false, reason: 'stale', current: 'Stale Start' },
+    'stale rename: a form showing an out-of-date name is refused with the stored name',
+  );
+  assert.equal(await nameOf(ST_P), 'Stale Start', 'stale rename: and nothing is written');
+
+  // (b) Stale beats duplicate: the new name collides too, unacknowledged. Mutation 428 (the
+  //     pre-read's classification skipped) answers `duplicate` here.
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, ST_RIVAL_NAME, 'Shown Elsewhere'),
+    { ok: false, reason: 'stale', current: 'Stale Start' },
+    'stale rename: a stale form whose new name also collides is answered stale, before the duplicate warning',
+  );
+
+  // (c) The replay: the Save already landed (stored = the new name), the form still says the old
+  //     one. `ok`, no write. Mutation 429 (the replay arm dropped) answers `stale`.
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, 'Stale Landed', 'Stale Start'),
+    { ok: true, publicId: ST_P },
+    'stale rename: a fresh rename applies',
+  );
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, 'Stale Landed', 'Stale Start'),
+    { ok: true, publicId: ST_P },
+    'stale rename: a replay of a Save that landed answers ok, not stale',
+  );
+
+  // (d) The race, on one connection: a rival rename runs just before the writer's own UPDATE (after
+  //     its pre-read and duplicate guard). The UPDATE's `name = seenName` conjunct matches 0 rows and
+  //     the re-read answers stale. Mutation 430 (the conjunct dropped) overwrites and answers `ok`.
+  const rivalBeforeUpdate = (rival: () => Promise<unknown>) => {
+    let fired = false;
+    const builder = (b: object): object =>
+      new Proxy(b, {
+        get(target, prop, receiver) {
+          const v = Reflect.get(target, prop, receiver) as unknown;
+          if (prop === 'then') {
+            const then = (v as (ok: unknown, err: unknown) => unknown).bind(target);
+            return (ok: unknown, err: unknown) => {
+              const go = fired ? Promise.resolve() : ((fired = true), rival());
+              return go.then(() => then(ok, err), err as never);
+            };
+          }
+          return typeof v === 'function'
+            ? (...args: unknown[]) => {
+                const out = (v as (...a: unknown[]) => unknown).apply(target, args);
+                return out && typeof out === 'object' ? builder(out) : out;
+              }
+            : v;
+        },
+      });
+    return new Proxy(asPg, {
+      get(target, prop, receiver) {
+        const v = Reflect.get(target, prop, receiver) as unknown;
+        if (prop === 'update') {
+          return (...args: unknown[]) =>
+            builder((v as (...a: unknown[]) => object).apply(target, args));
+        }
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+      },
+    }) as typeof asPg;
+  };
+  const setStoredName = (name: string) => () =>
+    db.update(schema.profiles).set({ name }).where(eq(schema.profiles.publicId, ST_P));
+  assert.deepEqual(
+    await renameProfile(
+      rivalBeforeUpdate(setStoredName('Stale Rival')),
+      A_SCOPE,
+      ST_P,
+      'Stale Mine',
+      'Stale Landed',
+    ),
+    { ok: false, reason: 'stale', current: 'Stale Rival' },
+    'stale rename: a rename committed between the pre-read and the UPDATE is not overwritten',
+  );
+  assert.equal(await nameOf(ST_P), 'Stale Rival', 'stale rename: the rival name stands');
+  // …and a rival that wrote the SAME name answers ok through the 0-row re-read.
+  assert.deepEqual(
+    await renameProfile(
+      rivalBeforeUpdate(setStoredName('Stale Same')),
+      A_SCOPE,
+      ST_P,
+      'Stale Same',
+      'Stale Rival',
+    ),
+    { ok: true, publicId: ST_P },
+    'stale rename: a rival that chose the same name answers ok after the 0-row re-read',
+  );
+
+  // …and a row soft-deleted between the read and the write answers refused through the re-read
+  // (its own throwaway row, so ST_P's tenancy checks below keep theirs).
+  const ST_GONE = '019826b4-0000-7000-8000-00000004d007';
+  await db.insert(schema.profiles).values({
+    publicId: ST_GONE,
+    name: 'Stale Gone',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  });
+  const goneUnderUs = rivalBeforeUpdate(() =>
+    db
+      .update(schema.profiles)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.profiles.publicId, ST_GONE)),
+  );
+  assert.deepEqual(
+    await renameProfile(goneUnderUs, A_SCOPE, ST_GONE, 'Stale Gone Renamed', 'Stale Gone'),
+    { ok: false, reason: 'refused' },
+    'stale rename: a row deleted between the pre-read and the UPDATE answers refused',
+  );
+
+  // (e) Tenancy, both ways: another household never learns the name, whatever it sends.
+  assert.deepEqual(
+    await renameProfile(asPg, B_SCOPE, ST_P, 'B Probe', 'Wrong Seen'),
+    { ok: false, reason: 'refused' },
+    'stale rename: another household with a wrong seen name is refused, never told the stored name',
+  );
+  assert.deepEqual(
+    await renameProfile(asPg, B_SCOPE, ST_P, 'Stale Same', 'Stale Same'),
+    { ok: false, reason: 'refused' },
+    'stale rename: another household sending the stored name is refused, never ok',
+  );
+  assert.equal(await nameOf(ST_P), 'Stale Same', 'stale rename: and B wrote nothing');
+
+  console.log(
+    '✓ stale rename: a rename applies only if the stored name is still the one the form showed; a ' +
+      'replay is ok; a stale form beats the duplicate warning; a rename between the read and the ' +
+      'write is not overwritten; another household learns nothing',
   );
 
   console.log(
@@ -8518,8 +8739,11 @@ console.log(
   // deliberately absent from `isLiveProfile`, so the row still resolves, still renames and still
   // exports. If this goes red, someone folded archive into the ownership predicate and an archived
   // athlete's history just became unreachable.
-  assert.ok(
-    await renameProfile(asPg, A_SCOPE, B_P, 'B Athlete Renamed'),
+  // It answers `ok`, not merely a truthy result object (every arm of `RenameProfileResult` is
+  // truthy, which made this assertion unable to fail once the result became discriminated).
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, B_P, 'B Athlete Renamed', 'B Athlete'),
+    { ok: true, publicId: B_P },
     'PROF-1 b: an ARCHIVED athlete is still renameable — archive is not a lock',
   );
   assert.deepEqual(

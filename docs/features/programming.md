@@ -209,8 +209,8 @@ and complete; this is the one thing it cannot reach.
    [tech-debt.md](../tech-debt.md). Do not add a second without that conversation.
 
 8. 🔴 **Only a CHILD reads the household's program, and `kind` is read at QUERY time (`PROF-1` a-g,
-   Q15 stopgap).** `readsHouseholdProgram(kind)` and `PROGRAM_READ_KIND` live once in
-   `packages/shared/src/programming.ts`; the enforcement is a `profiles.kind` conjunct inside
+   Q15 stopgap).** `PROGRAM_READ_KIND` lives once in `packages/shared/src/programming.ts`, with no
+   predicate function around it; the enforcement is a `profiles.kind` conjunct inside
    `programDayRows`' block subquery, which `isLiveProfile` has already pinned to this profile's row.
    An adult resolves no `blockId` and the query returns `[]` — the same "nothing programmed" shape
    its callers already handle.

@@ -993,7 +993,28 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   match. ⚠️ **Under concurrency the match CAN be self** — two renames of the same row to the same new
   name, where the second's lookup finds the row after the first commits. The stored name is correct
   either way (the rename is idempotent on the fold), so that is advisory copy being wrong rather than
-  corruption, and an exclusion parameter would not have helped: the write had already landed. ⚠️ The rename
+  corruption, and an exclusion parameter would not have helped: the write had already landed.
+  ⚠️ **Narrowed, not retired, by the stale-rename fix:** a rival that commits before the pre-read is
+  now answered `ok` (stored = name); one landing between the pre-read and the lookup still
+  self-matches.
+
+  🔴 **(4b) A stale rename is REFUSED, not last-write-wins** (the stale-rename fix,
+  [plan](../plans/td-stale-rename-refused.md)). `renameProfile` takes a **required** `seenName`, the
+  name the form showed, and applies only if it is still stored: the `seenValue` idiom, compared by
+  value. **Unlike the amends, the branch lives in the WRITER** (`classifyRename`, run on the pre-read
+  and on the 0-row re-read), so `db:verify` proves every arm:
+  - stored = name → `ok` with no write (a replay, or two devices choosing the same name);
+  - stored ≠ seenName → `stale` with the stored name, **before** the duplicate guard;
+  - the UPDATE carries `name = seenName`, so a rename landing between the read and the write matches
+    0 rows and is classified again.
+
+  The scoped pre-read is now leak-bearing (`stale.current` is a minor's name), proved both ways.
+  🔴 **The form's `seenName` is captured once at mount and advances only on a `stale` answer**
+  (`rename-form.tsx`). Never bind it to the `name` prop: a server refresh would advance it silently
+  while the field keeps stale typing, and the next Save would overwrite with no refusal. While the
+  refusal shows (it is LATCHED: kept across a field error or a page-level refusal, cleared only by `ok`
+  or `duplicate`), `seenName` rides on the submitter: Save anyway carries the stored name, and the
+  sentinel carries an EMPTY one, which no stored name equals, so every Enter re-refuses. ⚠️ The rename
   envelope carries **no `atCap`** — a rename creates nothing, so the quota is never consulted and the
   field would always be `false`; it is optional in `ActionState` for exactly that reason.
 
