@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { LOOK_AHEAD_DAYS } from '@/lib/constants';
+// `resolveDeclaredDay` reads the request's active day; the test fixes it.
+const ACTIVE_TODAY = '2026-11-21';
+vi.mock('@/lib/active-timezone', () => ({ getActiveLocalDay: async () => ACTIVE_TODAY }));
 
-import { dayPageFlags, isWritableDay, resolveViewedDay, WRITABLE_DAY_RADIUS } from './declared-day';
+import { LOOK_AHEAD_DAYS, NOT_SAVED_RELOAD } from '@/lib/constants';
+
+import {
+  DECLARED_DAY_CLOSED_ERROR,
+  dayPageFlags,
+  isWritableDay,
+  resolveDeclaredDay,
+  resolveViewedDay,
+  WRITABLE_DAY_RADIUS,
+} from './declared-day';
 
 // ── V1-15: which day the PAGE renders ──────────────────────────────────────────────────────────
 describe('resolveViewedDay', () => {
@@ -135,6 +146,26 @@ describe('dayPageFlags', () => {
         amendable: false,
         showClosedNotice: false,
       });
+    }
+  });
+});
+
+describe('resolveDeclaredDay: says "locked" only for a day that is', () => {
+  it('today and yesterday are open', async () => {
+    expect(await resolveDeclaredDay(ACTIVE_TODAY)).toEqual({ ok: true, day: ACTIVE_TODAY });
+    expect(await resolveDeclaredDay('2026-11-20')).toEqual({ ok: true, day: '2026-11-20' });
+  });
+
+  it('a day before yesterday is locked', async () => {
+    expect(await resolveDeclaredDay('2026-11-19')).toEqual({
+      ok: false,
+      error: DECLARED_DAY_CLOSED_ERROR,
+    });
+  });
+
+  it('a day not open yet, or a malformed one, is not called locked', async () => {
+    for (const raw of ['2026-11-22', 'not-a-day', null]) {
+      expect(await resolveDeclaredDay(raw)).toEqual({ ok: false, error: NOT_SAVED_RELOAD });
     }
   });
 });
