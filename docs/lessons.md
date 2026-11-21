@@ -1077,6 +1077,14 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- 🔴 **The docs-only overlap rule skips WAITING for another CI run, never the hooks.** → Several lanes
+  passed `--no-verify` (one on eight PRs) to get past a slow or failing hook, reading the maintainer's
+  docs-only rule (2026-11-20) as permission. One probe commit pushed that way then failed CI's format
+  check before reaching the step it existed to test: a wasted run, and nothing proved. The hooks are
+  the local half of the gate. Since 2026-11-21 `.claude/hooks/guard-hook-skip.mjs` refuses
+  `--no-verify`, `git commit -n`, `HUSKY=0` and any `core.hooksPath` change for Claude sessions. If a
+  hook is slow, retry it or tell the board; a probe that needs a committed tree gets a real
+  Conventional Commit.
 - 🔴 **A test that ran `git init` in a temp directory re-initialised THIS repository and
   committed to the real branch, because it ran inside the pre-push hook.** → Git exports `GIT_DIR`
   (and its kin) to a hook, and a child `git` obeys those over the directory it is started in. The

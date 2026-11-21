@@ -110,6 +110,10 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ### Two shell-wrapper walks (added 2026-11-17, DX-18 1b)
 
+> **Narrowed (2026-11-21):** the kill guard's walk is now `.claude/hooks/shell-commands.mjs`, shared
+> with `guard-hook-skip.mjs`, so the guards that apply everywhere walk wrappers once. Two walks remain:
+> that module and the main-checkout guard's `analyzeSegment`.
+
 - **What & why it's debt:** `.claude/hooks/guard-process-kill.mjs` imports `lex()` from
   `.claude/hooks/guard-main-checkout.mjs` but walks the wrappers (`sudo`, `env`, `timeout`, `xargs`,
   `bash -c`, `find -exec`, …) with its own copy of the loop in the sibling's `analyzeSegment`. The

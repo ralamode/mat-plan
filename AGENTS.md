@@ -213,6 +213,9 @@ Deletion: [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone
   - **Guarded for Claude sessions** by a `PreToolUse` hook (`.claude/hooks/guard-main-checkout.mjs`):
     best-effort, not a security boundary; the allowlist is the hook's header. A `SessionStart` hook
     prints status, open PRs and stale or off-main worktrees. Both are inert under CI.
+  - **Hooks always run:** `.claude/hooks/guard-hook-skip.mjs` refuses `--no-verify`, `git commit -n`,
+    `HUSKY=0` and any `core.hooksPath` change, in every directory (maintainer, 2026-11-21). The
+    docs-only rule skips waiting for CI, never the hooks.
 - **Before running two tracks at once, run the rubric** in
   [docs/parallel-work.md](./docs/parallel-work.md). Gate 1 — disjoint file globs, **feature guides
   included** — is the one that actually fails. When a gate fails, pick an order and write the reason
