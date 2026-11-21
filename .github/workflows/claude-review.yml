@@ -63,7 +63,7 @@ jobs:
       # The panel read v1.0.237 (fd1c128). Any other SHA here must be re-read per docs/runbooks.md →
       # CLAUDE_CODE_OAUTH_TOKEN, step 6: before merge while the workflow is active, and at activation
       # while it is dormant (the runbook's carve-out). v1.0.275 merged dormant, unread (#638).
-      - uses: anthropics/claude-code-action@4d75e5f390ee76b2e09c1980ecc99ff3a2e088c8 # v1.0.275
+      - uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         with:
           # zizmor: ignore[secrets-outside-env] — issue_comment always runs main's workflow and only writers
           # can push branches, so an Environment adds deployment noise to every PR for no new boundary.
