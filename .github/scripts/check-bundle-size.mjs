@@ -8,9 +8,12 @@
  *   - one row per app route: the JS a first visit loads, summed over the route's chunk list in
  *     `.next/diagnostics/route-bundle-stats.json` (Next 16 dropped "First Load JS" from the printed
  *     build table; that file replaced it, and it is undocumented);
- *   - one `(all client chunks)` row: every `.next/static/chunks/**\/*.js` except the polyfills
- *     (`build-manifest.json` → `polyfillFiles`). It catches code only `dynamic()` loads, which is in no
- *     route's first load.
+ *   - one `(lazy client chunks)` row: every `.next/static/chunks/**\/*.js` that is in NO route's
+ *     first-load list, except the polyfills (`build-manifest.json` → `polyfillFiles`). It catches
+ *     code only `dynamic()` loads. It was `(all client chunks)` until 2026-11-20, which also summed
+ *     first-load chunks, so a Turbopack regrouping that duplicates shared code across routes (no
+ *     route loading more) tripped it: #798, +121.9 KiB with the lazy chunks byte-identical. The
+ *     route rows already hold first-load code.
  * The guard sums the bytes ITSELF with `stat` and ignores Next's `firstLoadUncompressedJsBytes`, whose
  * writer silently skips missing files. From the stats file it takes only the routes and their chunk
  * lists, and it refuses the writer's two quiet omissions with a count check against
@@ -65,7 +68,7 @@ import { fileURLToPath } from 'node:url';
 export const TOLERANCE_BYTES = 8 * 1024;
 /** How far a changed baseline may sit from this run's measurement: CI's build-to-build noise, with room. */
 export const NOISE_BYTES = 256;
-const ALL_CHUNKS_ROW = '(all client chunks)';
+const LAZY_CHUNKS_ROW = '(lazy client chunks)';
 const BASELINE_FILE = '.github/bundle-baseline.json';
 const STATS_KEYS = ['firstLoadChunkPaths', 'firstLoadUncompressedJsBytes', 'route'];
 const BASELINE_KEYS = ['next', 'routes'];
@@ -126,7 +129,7 @@ function readRoutes(nextDir) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) fail(`${at} is not an object`);
     exactKeys(row, STATS_KEYS, at);
     // A route starts with `/`: that keeps inherited names (`constructor`) out, and keeps a row from
-    // overwriting the synthetic `(all client chunks)` one.
+    // overwriting the synthetic `(lazy client chunks)` one.
     if (typeof row.route !== 'string' || !row.route.startsWith('/')) {
       fail(`${at}.route must be a string that starts with /`);
     }
@@ -184,25 +187,31 @@ function measure(nextDir) {
   }
 
   const measured = {};
+  const firstLoad = new Set(); // real paths, so a symlinked or `..` spelling cannot dodge it
   for (const { route, firstLoadChunkPaths } of routes) {
+    for (const p of firstLoadChunkPaths) {
+      sizeOf(resolve(projectDir, p), staticRoot, p); // proves it exists and stays under .next/static
+      firstLoad.add(realpathSync(resolve(projectDir, p)));
+    }
     measured[route] = [...new Set(firstLoadChunkPaths)].reduce(
       (sum, p) => sum + sizeOf(resolve(projectDir, p), staticRoot, p),
       0,
     );
   }
   const skip = new Set(polyfills.map((p) => resolve(nextDir, p)));
-  let all = 0;
+  let lazy = 0;
   const walk = (dir) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, e.name);
       if (e.isDirectory()) walk(p);
       else if (e.name.endsWith('.js') && !skip.has(p)) {
-        all += sizeOf(p, staticRoot, relative(projectDir, p));
+        const size = sizeOf(p, staticRoot, relative(projectDir, p));
+        if (!firstLoad.has(realpathSync(p))) lazy += size;
       }
     }
   };
   walk(join(staticDir, 'chunks'));
-  measured[ALL_CHUNKS_ROW] = all;
+  measured[LAZY_CHUNKS_ROW] = lazy;
   return { next: framework.version, routes: measured };
 }
 

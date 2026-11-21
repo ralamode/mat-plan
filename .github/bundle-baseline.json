@@ -1,7 +1,7 @@
 {
   "next": "16.4.5",
   "routes": {
-    "(all client chunks)": 1322984,
+    "(lazy client chunks)": 24586,
     "/": 695701,
     "/_not-found": 695701,
     "/design/program": 1132848,

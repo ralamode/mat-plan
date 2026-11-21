@@ -71,7 +71,7 @@ cat >"$t/.github/bundle-baseline.json" <<'EOF'
 {
   "next": "16.4.5",
   "routes": {
-    "(all client chunks)": 16700,
+    "(lazy client chunks)": 100,
     "/": 1000,
     "/_not-found": 1000,
     "/design/program": 1000,
@@ -145,8 +145,14 @@ fresh; grow "$PROFILE_CHUNK" 8193
 expect "+8193 on /p/[profileId] fails" 1 '::error::bundle: /p/[profileId] +8.0 KiB (+8,193 B; 10,600 → 18,793); budget ±8.0 KiB'
 fresh; head -c 1807 /dev/zero >"$c/$PROFILE_CHUNK"; expect "-8193 fails: re-baseline" 1 're-baseline'
 fresh; grow app/lazy.js 8193
-expect "dynamic()-only chunk grows 8193, no route moves" 1 '::error::bundle: (all client chunks) +8.0 KiB (+8,193 B; 16,700 → 24,893)'
+expect "dynamic()-only chunk grows 8193, no route moves" 1 '::error::bundle: (lazy client chunks) +8.0 KiB (+8,193 B; 100 → 8,293)'
 fresh; grow app/lazy.js 8193; expect "dynamic()-only growth moves no route" 1 '!::error::bundle: /p/'
+# A regrouping (#798): the shared chunk becomes one copy per route. The files on disk grow 9,000 B,
+# past the budget, but no route loads more and no lazy chunk moves, so it passes.
+fresh; rm "$c/shared.js"
+for i in "${!ROUTES[@]}"; do head -c 600 /dev/zero >"$c/s$i.js"; done
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.forEach((r, i) => { r.firstLoadChunkPaths = r.firstLoadChunkPaths.map((q) => q.endsWith("/shared.js") ? `.next/static/chunks/s${i}.js` : q); })'
+expect "a regrouping that duplicates shared code across routes passes" 0 '| (lazy client chunks) | 100 | 100 | 0 |'
 
 # ── Cannot measure: stats, shape, paths, count, inputs ────────────────────────────────────────────
 fresh; rm "$p/apps/web/.next/diagnostics/route-bundle-stats.json"
@@ -185,7 +191,7 @@ expect "a row gone from the build" 1 'remove it'
 fresh; printf '{"name":"Next.js","version":"16.5.0"}' >"$p/apps/web/.next/diagnostics/framework.json"
 expect "Next stamp != framework version, within tolerance: noted" 0 'Next 16.4.5 → 16.5.0'
 expect "Next stamp != framework version: the table is still drawn" 0 '| / | 1000 | 1000 | 0 |'
-fresh; grow "$PROFILE_CHUNK" 9000; setb "/p/[profileId]" 19600; setb "(all client chunks)" 25700
+fresh; grow "$PROFILE_CHUNK" 9000; setb "/p/[profileId]" 19600
 expect "PR raised a baseline to the measurement: warned" 0 '::warning::bundle: baseline for /p/[profileId] raised by +8.8 KiB in this PR'
 expect "PR raised a baseline: its own section" 0 '### Baseline changed in this PR'
 expect "PR raised a baseline: vs main's column shows the growth" 0 "| /p/[profileId] | 19600 | 19600 | 0 | +8.8 KiB |"
@@ -234,8 +240,8 @@ fresh; json "$p/apps/web/.next/server/app-paths-manifest.json" 'x["/k/page"] = "
 json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "constructor", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
 expect "a route named constructor is refused" 2 'must be a string that starts with /'
 fresh; json "$p/apps/web/.next/server/app-paths-manifest.json" 'x["/k/page"] = "x"'
-json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "(all client chunks)", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
-expect "a route cannot overwrite the (all client chunks) row" 2 'must be a string that starts with /'
+json "$p/apps/web/.next/diagnostics/route-bundle-stats.json" 'x.push({route: "(lazy client chunks)", firstLoadUncompressedJsBytes: 1, firstLoadChunkPaths: [".next/static/chunks/shared.js"]})'
+expect "a route cannot overwrite the (lazy client chunks) row" 2 'must be a string that starts with /'
 fresh; BS=; setb constructor 5; expect "a baseline entry named constructor is not taken as measured" 1 'constructor is in .github/bundle-baseline.json but was not measured; remove it'
 fresh; setb constructor 5; expect "a changed baseline's constructor entry is not compared with an inherited value" 1 '!measured function'
 fresh; XARGS=(--next-dir); expect "--next-dir with no value" 2 '--next-dir needs a value'

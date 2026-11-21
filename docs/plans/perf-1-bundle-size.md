@@ -346,6 +346,24 @@ requires it, and splitting it out would save only about 40 lines.
 
 _Approved (maintainer, 2026-11-19, relayed by the board)._
 
+## As built: the lazy row replaces the all-chunks row (2026-11-20)
+
+`(all client chunks)` summed every client chunk, so it caught `dynamic()` code (correctness 3, RED
+probe 2b) but ALSO first-load code that Turbopack regroups. Lane C's #798 tripped it at +121.9 KiB
+while adding almost no client code. Measured on local builds of #798 and its base `ca7ab590`:
+
+| build | first-load chunks (union) | lazy chunks | largest route move |
+| ----- | ------------------------- | ----------- | ------------------ |
+| main  | 1,300,381 B               | 24,586 B    |                    |
+| #798  | 1,423,225 B               | 24,586 B    | about +1 KiB       |
+
+The program builder's copy left one shared chunk for its own ~35 KiB copy in four route groups: no
+page loads more, and the cost is only re-downloading it across those pages. So the row became
+**`(lazy client chunks)`**, the chunks in no route's first-load list minus the polyfills. It still
+catches what it was for (probe 2b's literal lands there), and a regrouping cannot trip it: the route
+rows hold first-load code. The self-test pins both cases (a regroup past the budget passes; lazy
+growth fails), and a probe that counts every chunk again goes RED on the regroup case.
+
 ## Review-response log (adversarial panel)
 
 > Panel cost: not recorded in the relay. Models: high-stakes no (a CI step; no auth/schema) ·
