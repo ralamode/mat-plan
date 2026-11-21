@@ -52,6 +52,7 @@ import {
   openIfCollapsed,
   PRACTICE_MINUTES,
   SEED_PROFILE_ROUTE,
+  dayLineText,
 } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
@@ -656,7 +657,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       .getByRole('navigation', { name: 'Change day' })
       .getByRole('link', { name: /^Next day/ })
       .click();
-    await page.getByText(/^Tomorrow ·/).waitFor();
+    await dayLineText(page, /^Tomorrow ·/).waitFor();
   },
   'bodyweight-rejected': async (page) => {
     const section = page.getByRole('region', { name: 'Bodyweight' });

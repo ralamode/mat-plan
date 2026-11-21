@@ -40,6 +40,8 @@ import {
   SEED_PROFILE_ROUTE,
   settled,
   shownWeight,
+  dayLineText,
+  dayNav,
 } from './steps';
 
 /**
@@ -167,12 +169,12 @@ test.describe('the daily stretch row', () => {
     // The server's day is still today; the device's has moved on (`pinDayBeforeWrite`).
     await page.clock.setFixedTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
     await page.goto(SEED_PROFILE_ROUTE);
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/)).toBeVisible();
     const row = anyTick(page);
     const pressed = (await row.getAttribute('aria-pressed')) === 'true';
     await row.click();
     await expect(page).toHaveURL((u) => u.searchParams.get('d') === today());
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/)).toBeVisible();
     await settled(anyTick(page), !pressed);
   });
 
@@ -182,7 +184,7 @@ test.describe('the daily stretch row', () => {
     // Not a midnight run. Replace the URL by hand with another day, as the pin would, then write:
     // the render the action brings back must be the replaced URL's day, not the one loaded.
     await page.goto(SEED_PROFILE_ROUTE);
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/)).toBeVisible();
     const yesterday = isoDaysAgo(1);
     // `null`, exactly as `pinDayBeforeWrite` passes: Next's patched `replaceState` syncs its router
     // only for a call that does not carry its own `__NA` state (next/dist/client/components/app-router.js).
@@ -190,7 +192,7 @@ test.describe('the daily stretch row', () => {
     await anyTick(page).click();
     await expect(page).toHaveURL((u) => u.searchParams.get('d') === yesterday);
     await expect(
-      page.getByText(/^Yesterday ·/),
+      dayLineText(page, /^Yesterday ·/),
       'the revalidated render is the replaced ?d=; if it shows Today, the midnight pin cannot work',
     ).toBeVisible();
   });
@@ -199,10 +201,10 @@ test.describe('the daily stretch row', () => {
 test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }) => {
   const tomorrow = addDays(today(), 1);
   await page.goto(SEED_PROFILE_ROUTE);
-  const nav = page.getByRole('navigation', { name: 'Change day' });
+  const nav = dayNav(page);
   await nav.getByRole('link', { name: /^Next day/ }).click();
   await page.waitForURL((u) => u.searchParams.get('d') === tomorrow);
-  await expect(page.getByText(/^Tomorrow ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Tomorrow ·/)).toBeVisible();
   // The tab's title is the day, never the athlete's name (D8), and Next's route announcer SAYS it: its
   // node holds the new day, not the last one (a title that streams in after the tree commits would
   // leave it silent, or one navigation behind; #798 review).
@@ -222,7 +224,7 @@ test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }
 
 test('more than the look-ahead ahead renders today', async ({ page }) => {
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${addDays(today(), LOOK_AHEAD_DAYS + 1)}`);
-  await expect(page.getByText(/^Today ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Today ·/)).toBeVisible();
   // The title names the day shown, after the fallback, not the one asked for.
   await expect(page).toHaveTitle(/^Today ·/);
   // The last day it does show is still Coming up.
@@ -244,10 +246,10 @@ const supersetWorkout = (page: Page) =>
 /** Today, or yesterday when today has no superset workout. */
 async function openSupersetDay(page: Page): Promise<void> {
   await page.goto(SEED_PROFILE_2_ROUTE);
-  await expect(page.getByText(/^Today ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Today ·/)).toBeVisible();
   if ((await supersetWorkout(page).count()) === 0) {
     await page.goto(`${SEED_PROFILE_2_ROUTE}?d=${isoDaysAgo(1)}`);
-    await expect(page.getByText(/^Yesterday ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Yesterday ·/)).toBeVisible();
   }
   await expect(supersetWorkout(page)).toBeVisible();
 }
@@ -612,7 +614,7 @@ test.describe('Bodyweight and Life on real data', () => {
     // 3. Coming back: a day away and back with DayNav (a client-side change of day, where the page
     // itself does not remount), then a reload. Two lines each time, each region still named by its
     // heading alone. A new athlete can view yesterday (`day-navigation.spec.ts`).
-    const nav = page.getByRole('navigation', { name: 'Change day' });
+    const nav = dayNav(page);
     await nav.getByRole('link', { name: /^Previous day/ }).click();
     await page.waitForURL((u) => u.searchParams.has('d'));
     await nav.getByRole('link', { name: /^Next day/ }).click();

@@ -1,5 +1,5 @@
 import { addDays, isoDayDiff } from '@mat-plan/shared';
-import { athletePath, LOOK_AHEAD_DAYS, TICK_FOCUS_CLASS } from '@/lib/constants';
+import { athletePath, DAY_NAV_LABEL, LOOK_AHEAD_DAYS, TICK_FOCUS_CLASS } from '@/lib/constants';
 import Link from 'next/link';
 
 import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
@@ -107,7 +107,7 @@ export function DayNav({
   const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (
-    <nav aria-label="Change day" className="flex flex-col gap-2">
+    <nav aria-label={DAY_NAV_LABEL} className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <DayArrow
           to={bounds.canGoBack ? href(prev) : null}

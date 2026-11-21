@@ -1007,6 +1007,9 @@ export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other:
  */
 export const LOOK_AHEAD_DAYS = 6;
 
+/** The day page's day arrows and date line: `day-nav.tsx`'s `<nav>`, and how a test finds it. */
+export const DAY_NAV_LABEL = 'Change day';
+
 /**
  * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
  * on it can be logged or changed, so the sentence says that and names the two days that can.
