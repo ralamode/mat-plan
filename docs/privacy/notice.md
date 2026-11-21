@@ -36,7 +36,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Earlier check-ins and wake-up times** — whether a habit was done or a count, and the day, and
   the clock time a wake-up was tapped. These are still stored from before November 2026; the day page
   no longer records new ones.
-- **How a session felt** — a free-text box.
+- **How a session felt** — a note typed in a free-text box. Notes typed before November 2026 are
+  still stored; the app no longer asks for one.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
@@ -63,8 +64,7 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
 
-**The text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
-an **athlete's name**; and, in the program builder, a program's name, a workout's name and
+**The text boxes have no filter.** An **athlete's name**; and, in the program builder, a program's name, a workout's name and
 description, each exercise's instructions and rest note, the name of a group of exercises, the label
 of a workout on a day (in the week and when copying), and the name of a movement you add with
 "+ New item". Whatever goes in is stored exactly as typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
@@ -368,6 +368,13 @@ Because this cannot be undone, both of the steps below stay in place:
   current code does not remove it from the history**. That is being worked on, and it is a permanent
   limitation of having built this in the open.
 
+## What changed on 20 November 2026
+
+**"How it felt" and the box for typing a movement's name are no longer listed as text boxes.** No
+page shows either any more. A note or a movement name typed there before is still kept with its
+workout, as "How long we keep it" says. A movement you add in the program builder is still named by
+what you type, and is still in that list.
+
 ## What changed on 19 November 2026
 
 **Clear this day is in the app.** On today's page, it hides every entry logged for an athlete that
@@ -461,7 +468,8 @@ one.**
 2026-10-26. Re-reviewed 2026-11-05** against the retirement of the shared access code, which changed
 who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
 2026-11-19** against the export becoming the household owners' and its rate limit, and against
-Clear this day _(both pending the maintainer's re-read)_.
+Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
+the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out
