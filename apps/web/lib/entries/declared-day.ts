@@ -68,7 +68,7 @@ export function isWritableDay(day: string, today: string): boolean {
  * - `amendable`: a logged value offers Change. Follows the DAY only: an archived athlete's weight on
  *   today or yesterday stays correctable, as before.
  * - `showClosedNotice`: the read-only sentence, on a PAST closed day. Not for an archived athlete,
- *   where its "today and yesterday can be logged" is false and the archived notice gives the real
+ *   where its "today and yesterday stay open" is false and the archived notice gives the real
  *   reason, and not for a future day, which has not happened yet (maintainer, 2026-11-17).
  */
 export function dayPageFlags(day: string, today: string, archived: boolean) {

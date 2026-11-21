@@ -1011,11 +1011,14 @@ export const LOOK_AHEAD_DAYS = 6;
 export const DAY_NAV_LABEL = 'Change day';
 
 /**
- * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
- * on it can be logged or changed, so the sentence says that and names the two days that can.
+ * The notice on a day before yesterday (V1-15). Since V1-24 3b-page nothing on such a day can be
+ * logged or changed, so the sentence says that and names the two days that can. Shown only on a PAST
+ * closed day (`dayPageFlags`' `showClosedNotice`: never a future day, never an archived athlete), so
+ * "Past days" is always true where it appears. Wording chosen by the maintainer (2026-11-21) over
+ * "This day is read-only. Only today and yesterday can be logged or changed.", which read as too
+ * technical; keep it plain.
  */
-export const CLOSED_DAY_NOTICE =
-  'This day is read-only. Only today and yesterday can be logged or changed.';
+export const CLOSED_DAY_NOTICE = 'Past days are locked. Today and yesterday stay open.';
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';
