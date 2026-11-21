@@ -24,7 +24,7 @@ import {
   SETTINGS_PATH,
 } from '../lib/constants';
 import { expectLinkTargets, expectTapTargets } from './a11y-checks';
-import { addAthlete, archiveAdded, SEED_PROFILE_2_ROUTE } from './steps';
+import { addAthlete, archiveAdded, escapeRegExp, SEED_PROFILE_2_ROUTE } from './steps';
 import { expectNoHorizontalOverflow, MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
 
 /**
@@ -861,28 +861,75 @@ test('editing the name past the match dismisses the warning', async ({ page }, t
 });
 
 /**
- * 🔴 **NOT COVERED END TO END: the archived match → Restore path.** A test for it was written and is
- * NOT shipped, because it could not be made to pass for a reason that is not the feature's.
- *
- * What was observed, so the next attempt starts here rather than at the beginning: after
- * `archiveAthleteNamed`, loading `/p/new` leaves the kind radios **resolvable but never actionable**
- * — `page.url()` and `locator.count()` answer, while every call that EVALUATES page JS
- * (`check`, `innerHTML`, `evaluateAll`) hangs until the test times out, at 30s and again at 90s.
- * Routing via `/p` in between did not clear it.
- *
- * **The cause is unexplained; what is ruled out is the rendering.** The same state under jsdom — an
- * archived duplicate with `archived: true` — produces the Restore button in ~1s with no loop
- * (`add-athlete-form.test.tsx`), so the form is not looping. Which layer does hang is not diagnosed,
- * and this docblock does not guess.
- *
- * **What IS covered, so the gap is bounded:** `db:verify` proves an archived twin matches, reports
- * `archived: true`, yields the stored spelling, and loses to a live match; mutation patch `27` proves
- * the archived arm is load-bearing; and the unit suite proves the Restore button renders, that the
- * kinds-differ copy appears, and that neither branch offers "Add another" at the cap. What nothing
- * proves is the *click* — that Restore posts and navigates.
- *
- * Tracked in `docs/tech-debt.md`.
+ * Put the archive athlete back if a previous attempt left them archived. Retry-safe on purpose: CI
+ * retries once against the SAME database, and a test that times out is abandoned, so its `finally`
+ * may never run. That is why this runs at the start of the test as well as at the end. The page is
+ * server-rendered, so after `networkidle` the row is there to count. ⚠️ The count is 0 or 1 by
+ * construction — one seeded athlete under this name — which is what makes `count()` safe here
+ * (the `archiveAdded` loop exists for the case where it is not).
  */
+async function restoreIfArchived(page: Page, name: string): Promise<void> {
+  await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+  const restore = page.getByRole('button', { name: SETTINGS_COPY.restoreFor(name) });
+  if ((await restore.count()) > 0) await restoreAthleteNamed(page, name);
+}
+
+/**
+ * PROF-1 a-1d — the archived match → Restore path, end to end: the one part of the duplicate warning
+ * that only a browser can prove, that **Restore posts `restoreAthleteAction` and lands the parent on
+ * the athlete**. Below the browser, `db:verify` proves an archived twin matches, reports
+ * `archived: true`, yields the stored spelling and loses to a live match; mutation patch `27` proves
+ * the archived arm is load-bearing; the unit suite proves the Restore button renders, that the
+ * kinds-differ copy appears, and that neither branch offers "Add another" at the cap.
+ *
+ * **It adds no athlete.** It archives and restores Athlete Three, the archive specs' own seeded
+ * fixture, which this file's serial mode keeps from racing the other archive tests — so it spends
+ * nothing of `MAX_HOUSEHOLD_ATHLETES` (the budget note on `addAthlete` in `steps.ts`), and a refused
+ * duplicate creates no row either.
+ *
+ * ⚠️ **This test was once filed as un-writable** (2026-11-10): Playwright appeared to hang on
+ * `/p/new` after an archive. It does not reproduce — not on `main` (2026-11-20), and not at the
+ * commit that filed it, with listeners and a trace on. The attempt that hung was never committed, so
+ * what hung is unknown; `docs/lessons.md` → e2e has the measurement.
+ */
+test('an archived name offers Restore, and Restore brings them back to the picker and their page', async ({
+  page,
+}) => {
+  await restoreIfArchived(page, SEED_PROFILE_3_NAME);
+  await archiveAthleteNamed(page, SEED_PROFILE_3_NAME);
+  try {
+    await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+    await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
+    // Lower-cased, so the match is the FOLD and the callout must carry the STORED spelling back.
+    await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(SEED_PROFILE_3_NAME.toLowerCase());
+    await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+
+    await expect(
+      page
+        .locator('main')
+        .getByText(
+          ATHLETE_FORM_COPY.duplicateArchived(SEED_PROFILE_3_NAME, PROFILE_KIND_LABELS.kid),
+        ),
+    ).toBeVisible();
+    const restore = page.getByRole('button', {
+      name: ATHLETE_FORM_COPY.restoreMatch(SEED_PROFILE_3_NAME),
+    });
+    await expect(restore).toBeVisible();
+    await restore.click();
+
+    // The navigation is the client's (`router.replace`), so the URL is the action having answered ok.
+    await expect(page).toHaveURL(new RegExp(`${escapeRegExp(athletePath(SEED_THREE))}$`));
+    await expect(page.getByRole('heading', { name: SEED_PROFILE_3_NAME, level: 1 })).toBeVisible();
+
+    // Back on the picker, ONCE: Restore brought the archived row back rather than adding a twin.
+    await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('link', { name: SEED_PROFILE_3_NAME })).toHaveCount(1);
+  } finally {
+    // Leave the seed as we found it, whatever failed above.
+    await restoreIfArchived(page, SEED_PROFILE_3_NAME);
+  }
+});
+
 test('the callout fits 360px with a 40-character name, and its choices clear the tap bar', async ({
   page,
 }, testInfo) => {

@@ -35,7 +35,7 @@ import { useRow } from './use-row';
 /**
  * An item's card, and how a logged one looks (`docs/design.md` → the `done` tokens): a `border-done`
  * edge, which is the boundary, and a `done-surface` tint, which is decoration. Secondary text on the
- * tint is `done-muted-foreground`, since `muted-foreground` is under AA there.
+ * tint is `done-muted-foreground`, for its green hue and margin (`muted-foreground` is 4.57:1 there).
  *
  * ⚠️ **No tint while the row shows a message.** `destructive` text is 4.30:1 on the light tint,
  * under AA, and a failed un-tick puts "Still logged…" on a logged row. The edge and the filled ✓
