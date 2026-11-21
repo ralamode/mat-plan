@@ -327,6 +327,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   when the title is empty. The title is streamed metadata (it arrives after the shell), so on a
   slow render the announcer reads the `<h1>` and says the athlete's name instead of the day. Seen on
   CI: run 44908009063 (#809, no app code), attempt and retry, the node held "Athlete One".
+  ⚠️ **Two ways it goes wrong**, by what `document.title` holds at that moment: **empty** → it
+  reads the `<h1>` (observed); **still the old title** → it says nothing, or the old day again
+  (inferred from the code, not observed). It announces only a title that differs from the last.
 - **Impact:** low. The name is already on screen (no D8 leak), and the tab's title is right; a
   screen-reader user paging days sometimes hears the athlete instead of the day.
 - **Proposed fix:** an in-page polite `Announcer` that says `dayTitle(day, today)` when the viewed

@@ -265,7 +265,8 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     `generateMetadata`; D8). Next's route announcer reads a title that CHANGES, so paging days and
     arriving are USUALLY announced ("Tomorrow · Sat, Nov 21"). ⚠️ **Best-effort, not guaranteed:**
     the title streams in after the tree commits, and when it is late the announcer reads the
-    `<h1>`, the athlete's name (tech-debt "The route announcer sometimes says the athlete"). Two
+    `<h1>`, the athlete's name, or (title still stale) says nothing (tech-debt "The route announcer
+    sometimes says the athlete"). Two
     athletes on one day share a title, so switching between them is silent (accepted, 2026-11-20).
     The page and `generateMetadata` share one `cache()`d `resolveDayView`, so the title names the
     day shown after the look-ahead fallback. `e2e/day-page.spec.ts` asserts the TITLE, never the
