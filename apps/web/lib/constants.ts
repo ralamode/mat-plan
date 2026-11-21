@@ -1278,6 +1278,14 @@ export const ATHLETE_FORM_COPY = {
     alreadyAdvised
       ? `Or go back — ${stored} keeps their name.`
       : `Change the name, or go back — ${stored} keeps their name.`,
+  /**
+   * The stale-rename fix (maintainer, 2026-11-20, option c): the form showed an out-of-date name, so
+   * nothing was saved. It names the stored name, both routes out, and the button that overwrites
+   * ("Save anyway", `saveAnyway`, the duplicate warning's own label), so the overwrite is a deliberate,
+   * differently labelled tap. "Go back" is the page's Back link, which keeps the stored name.
+   */
+  renameStale: (stored: string) =>
+    `Not saved. This name was changed to “${stored}” on another device. Save anyway to replace it, or go back to keep it.`,
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,

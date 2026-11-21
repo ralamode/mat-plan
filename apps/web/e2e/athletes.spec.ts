@@ -219,6 +219,48 @@ test('Enter on a duplicate warning re-warns instead of saving the collision', as
   await expect(nameField(page)).toHaveValue(SEED_PROFILE_2_NAME);
 });
 
+/**
+ * The stale-rename fix (plan: docs/plans/td-stale-rename-refused.md). One screen shows the name;
+ * another tab renames the athlete to a 40-character name meanwhile. The first screen's Save is
+ * refused, keeps the typing, shows the stored name, and only "Save anyway" overwrites. Only a real
+ * browser proves the round trip, the revalidated heading, Enter's re-refusal and the 360px layout.
+ */
+test('a rename from a stale screen is refused, keeps the typing, and Save anyway applies it', async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(athleteEditPath(SEED_TWO), { waitUntil: 'networkidle' });
+
+  const otherTab = await context.newPage();
+  await renameTo(otherTab, LONG_NAME);
+  await otherTab.close();
+
+  // Appends to the seeded name, as this file's renames must (siblings match Athlete Two by substring).
+  const TYPED = `${SEED_PROFILE_2_NAME} Stale`;
+  await nameField(page).fill(TYPED);
+  await saveButton(page).click();
+  const refusal = page.getByRole('group');
+  await expect(refusal).toContainText(ATHLETE_FORM_COPY.renameStale(LONG_NAME));
+  await expect(refusal).toBeFocused();
+  await expect(nameField(page)).toHaveValue(TYPED);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(LONG_NAME);
+  await expectNoHorizontalOverflow(page, 'the stale-rename refusal at 360px');
+
+  // Enter in the field must not overwrite, the first time or the second. `press` focuses the field
+  // and focus only returns to the refusal on a NEW answer, so each wait proves a round trip.
+  for (const press of [1, 2]) {
+    await nameField(page).press('Enter');
+    await expect(refusal, `Enter #${press} is answered with the refusal again`).toBeFocused();
+  }
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(LONG_NAME);
+
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.saveAnyway, exact: true }).click();
+  await page.waitForURL((url) => !url.pathname.endsWith('/edit'));
+  await page.goto(athleteEditPath(SEED_TWO), { waitUntil: 'networkidle' });
+  await expect(nameField(page)).toHaveValue(TYPED);
+});
+
 test('the rename callout fits 360px with a 40-character name', async ({ page }) => {
   // Give Athlete Three a 40-character name to collide WITH, so the callout renders the longest
   // name the schema allows rather than the 13-character seed value.

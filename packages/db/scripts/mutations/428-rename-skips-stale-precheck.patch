@@ -1,0 +1,16 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index fe17d35d..a53b35bb 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -117,8 +117,9 @@ export async function renameProfile(
+   // refused before the duplicate warning, so the parent is not asked to consent to a collision on
+   // a rename that would not apply. Mutation 428 skips this call (`db:verify`'s stale-and-duplicate
+   // case goes RED).
+-  const before = classifyRename(current, name, seenName);
+-  if (before) return before;
++  const before = null as RenameProfileResult | null;
++  void classifyRename;
++  if (!current) return { ok: false, reason: 'refused' };
+ 
+   // 🔴 **A rename that does not change the FOLD creates no new collision, so there is nothing to
+   // warn about.** `ada` → `Ada`, `Jose` → `José`, a stray double space, or Save with nothing edited

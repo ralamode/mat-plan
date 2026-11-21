@@ -293,7 +293,10 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   for hydration and are unchanged.
 - **What is left:** a REFUSAL on add or rename, submitted unhydrated, re-renders the island fresh.
   The typed name is gone (the add's `name` starts `''`; the rename's seeds from the stored name), so
-  the duplicate callout cannot match its folded name, and the form shows no message. Nothing is
+  the duplicate callout cannot match its folded name, and the form shows no message. The rename's
+  `stale` refusal (2026-11-20) is lost the same way: unhydrated, the field re-seeds from the stored
+  name, so a second Save is a replay that answers "Name saved." for the stored name, and the parent's
+  typing is gone (nothing is overwritten). Nothing is
   written. This is the state the reverted a-1d fix handled (`typed`/`chosenKind` on the envelope),
   reverted only because the POST never arrived; that reason is gone.
 - **Smaller, harmless, recorded:**
@@ -618,22 +621,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   ✅ **Closed (FAM-1 15c PR 1, 2026-11-20)**: `Sheet` takes `statusKey`, passed to its region as
   `messageKey`, and the dialog's status is `{ text, n }`. No U+00A0 idiom is left.
 - **Severity:** low.
-
-### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
-
-- **What & why:** `renameProfile` (`packages/db/src/writers/profile.ts`) has no `expected`/version
-  conjunct, so two devices — or one edit tab left open while someone renames from another — resolve
-  last-write-wins by server clock. ⚠️ **It compounds with the deliberate no-history decision**
-  (`PROF-1` a-r, 2026-11-07): the overwritten name is not recoverable from the app.
-- **Impact:** low today — two to five people in a household, and renaming is rare. It rises with
-  `COACH-1` (a second household's adult) and with any flow that leaves the screen open.
-- **Proposed fix:** carry the seeded name as a hidden `previousName`, add `eq(profiles.name,
-previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name changed on another
-  device"_ refusal — the `updateBodyweightEntryById` `seenValue` idiom, which already exists. One
-  more `db:verify` case and one more mutation patch. ⚠️ **It has a real cost to decide, not to
-  assume:** a replayed submit after a success would then refuse rather than no-op.
-- **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
-  rule is scoped to `/api/sync`, so there is no standing convention this violates.
 
 ### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
 
