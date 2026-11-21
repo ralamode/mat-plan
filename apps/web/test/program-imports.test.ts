@@ -8,15 +8,18 @@ import { describe, expect, it } from 'vitest';
 import {
   ASSET_EXT,
   barrelNames,
+  bound,
   blindSpots,
   CODE_EXT,
   compilerOptionsOf,
-  exportedNames,
   importsOf,
+  isReference,
   lineOf,
+  originsOf,
   REPO_DIR,
-  unwrapExpression,
+  type FileImports,
   type GraphRefusal,
+  type Origin,
   type ImportKind,
   type ImportRef,
 } from './import-graph';
@@ -38,17 +41,21 @@ import {
  *   third-party `node_modules/`. From `packages/db/src/index.ts`'s closure: `packages/db/src/`,
  *   shared and engine `src/`, third-party. Anything else (`packages/evals`, `packages/db/scripts`,
  *   `.github/scripts`, a test file) is refused, so the graph never stops at a package boundary.
- * - **The pins:** the entry publishes nothing from `erasure/`; each name in `ALLOWED_IN` is imported
- *   only where it lists; no whole-package form (`import * as`, `export *`, `import()`, `require`,
- *   `typeof import`); neither DAL re-exports a lane P name; each module in `MODULES` has only its
- *   listed importers; no `'use client'` file reaches the package or the program DAL.
+ * - **The pins:** the entry publishes nothing from `erasure/`; each name `ALLOWED_IN` restricts is
+ *   imported only where it lists; no whole-package form (`import * as`, `export *`, `import()`,
+ *   `require`, `typeof import`); in a file `ALLOWED_IN` permits, such a name is used only as the
+ *   direct callee of a call, never passed on (exported, put in an object, handed to a wrapper);
+ *   each module in `MODULES` has only its listed importers; no `'use client'` file reaches the
+ *   package or the program DAL.
+ * - **Names are keyed by ORIGIN** (`originsOf`): each name `index.ts` publishes is traced through
+ *   its re-export graph to the file and name that define it, so a lane P writer re-published under a
+ *   new name by another barrel is still lane P's. A name whose origin cannot be traced fails closed.
+ *   The walk is per form, so it is backed by a structural pin: inside `packages/db/src`, restricted
+ *   code has exactly the importers it has today (`DB_IMPORTERS`), so a form the walk misses still
+ *   needs a new import, and fails.
  * - **The premises** the resolver's answer rests on (the alias, the resolution options, the
  *   manifests' `exports`/`imports`, `next.config`'s bundler keys) are assertions: if one breaks, the
  *   resolver may disagree with the bundler, and this file says so.
- * - ⚠️ **Not covered** (docs/tech-debt.md, "The import pins hold names by barrel and by direct
- *   import, not by origin"): a lane P writer re-published by another `packages/db` module under a new
- *   name, and a DAL passing one on through a local binding (`export { s }` of an aliased import, an
- *   object literal, `cache(x)`).
  *
  * **Scoped** (D7): CI and pre-push skip it only when `.github/scripts/changed-scopes.mjs`'s
  * `runImportPins` says no changed file can change its answer. Anything else runs it, and every run
@@ -106,6 +113,7 @@ const OVERRIDES: Record<string, readonly string[]> = {
   logRow: [DAY_DAL],
   untickRow: [DAY_DAL],
   retickRow: [DAY_DAL],
+  amendRow: [DAY_DAL],
   prescriptionLiveIn: [DAY_DAL],
   readLiveSets: [ENTRIES_DAL],
   insertProgramBlockOwnedBy: [],
@@ -114,15 +122,70 @@ const OVERRIDES: Record<string, readonly string[]> = {
   liveTemplateBlockIn: [],
 };
 
+/** Where lane P's writers and reads are defined: a name that ORIGINATES here is lane P's. */
+const LANE_P_DIRS = ['packages/db/src/writers/program/', 'packages/db/src/queries/program/'];
+const originKey = (o: Origin) => `${o.file}#${o.name}`;
+type Published = Map<string, Origin | null>;
+/** What a map was built from, so a namespace origin's contents are read from the same texts. */
+const builtFrom = new WeakMap<
+  Published,
+  { texts: Record<string, string>; memo: Map<string, Published> }
+>();
+/** Each name `index.ts` publishes, and its origin (`null`: untraceable); `texts` from a fixture. */
+function publish(texts: Record<string, string> = {}): Published {
+  const memo = new Map<string, Published>();
+  const names = originsOf(DB_INDEX, texts, DB_SRC, memo);
+  builtFrom.set(names, { texts, memo });
+  return names;
+}
+let publishedCache: Published | undefined;
+const published = () => (publishedCache ??= publish());
+
 /**
- * Each name, and where in `apps/web` it may be imported from `@mat-plan/db`: a directory (ending
- * `/`) or one file. The one home of every allowance. A `Map`, so a name such as `constructor` cannot
- * hit the prototype.
+ * Where in `apps/web` each ORIGIN may be imported from `@mat-plan/db`, as a directory (ending `/`) or
+ * one file: an `OVERRIDES` row by its name's origin, else the program DAL for a lane P origin. The one
+ * home of every allowance; keyed `file#name`, so a re-publication under another name is the same row.
  */
-const ALLOWED_IN = new Map<string, readonly string[]>([
-  ...LANE_P.map((n) => [n, [PROGRAM_DAL]] as const),
-  ...Object.entries(OVERRIDES),
-]);
+function allowedIn(names: Published): Map<string, readonly string[]> {
+  const rows = new Map<string, readonly string[]>();
+  for (const origin of names.values())
+    if (origin && under(origin.file, LANE_P_DIRS)) rows.set(originKey(origin), [PROGRAM_DAL]);
+  for (const [name, where] of Object.entries(OVERRIDES)) {
+    const origin = names.get(name);
+    if (origin) rows.set(originKey(origin), where);
+  }
+  return rows;
+}
+const allowedCache = new WeakMap<Published, Map<string, readonly string[]>>();
+const ALLOWED_IN = (names: Published) => {
+  let rows = allowedCache.get(names);
+  if (!rows) allowedCache.set(names, (rows = allowedIn(names)));
+  return rows;
+};
+/**
+ * Where `name`, as `index.ts` publishes it, may be imported. `'untraceable'` fails closed: a name the
+ * walk did not publish, a name it could not trace, and a namespace of a `packages/db` module holding
+ * any restricted or untraceable name (`export * as ns`), which is refused everywhere rather than
+ * given the intersection of its members' rows.
+ */
+function restriction(
+  name: string,
+  names: Published,
+): readonly string[] | 'untraceable' | undefined {
+  const origin = names.get(name);
+  if (!origin) return 'untraceable'; // `null`: not traced; `undefined`: not published
+  if (origin.name === '*' && origin.file.startsWith(DB_SRC)) {
+    const from = builtFrom.get(names);
+    const inner = originsOf(origin.file, from?.texts, DB_SRC, from?.memo);
+    const rows = ALLOWED_IN(names);
+    const restricted = (o: Origin | null) =>
+      !o || o.name === '*' || rows.has(originKey(o)) || under(o.file, LANE_P_DIRS);
+    return [...inner.values()].some(restricted) ? 'untraceable' : undefined;
+  }
+  return ALLOWED_IN(names).get(originKey(origin));
+}
+/** Every file or directory some row permits: where the direct-callee rule applies. */
+const permitted = (names: Published) => [...new Set([...ALLOWED_IN(names).values()].flat())];
 
 /** A program builder page: the one kind of file outside the module that may import its actions. */
 const PROGRAM_PAGE = /^apps\/web\/app\/programs\/(?:.+\/)?page\.tsx$/;
@@ -182,39 +245,91 @@ const webLanding = () =>
     ...trackedAll('apps/web').filter((f) => ASSET_EXT.test(f) && !NOT_SOURCE.test(f)),
   ]));
 
-/** `export { x }`, `export const v = x` (unwrapped, `.bind` too) and `export default x` of a name. */
-function reexportsOf(sf: ts.SourceFile, names: readonly string[]) {
-  const hits: { line: number; name: string }[] = [];
-  const bound = (e: ts.Expression): ts.Expression => {
-    for (;;) {
-      e = unwrapExpression(e);
-      if (
-        ts.isCallExpression(e) &&
-        ts.isPropertyAccessExpression(e.expression) &&
-        e.expression.name.text === 'bind'
-      )
-        e = e.expression.expression;
-      else return e;
-    }
-  };
-  const hit = (n: ts.Node, name: string) =>
-    names.includes(name) && hits.push({ line: lineOf(sf, n), name });
+/** Inside a type (`typeof s`): no value is passed. */
+const inType = (n: ts.Node): boolean => {
+  for (let p = n.parent; p && !ts.isStatement(p) && !ts.isSourceFile(p); p = p.parent) {
+    // A class's `extends (…)` is evaluated: a value, though its node is a type node.
+    if (
+      ts.isExpressionWithTypeArguments(p) &&
+      ts.isHeritageClause(p.parent) &&
+      p.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+      ts.isClassLike(p.parent.parent)
+    )
+      return false;
+    if (ts.isTypeNode(p)) return true;
+  }
+  return false;
+};
+/** `s(…)`, through parentheses and `!`: the one use of a restricted binding that passes nothing on. */
+const isDirectCallee = (n: ts.Node): boolean => {
+  let e = n;
+  while (ts.isParenthesizedExpression(e.parent) || ts.isNonNullExpression(e.parent)) e = e.parent;
+  return ts.isCallExpression(e.parent) && e.parent.expression === e;
+};
+
+/**
+ * In a file a row permits, every use of a restricted name other than as a direct callee, so a
+ * writer is never handed on by a local binding (closed tech-debt, 2026-11-20). An
+ * export of one (`export { s }`, `export const x = s`, `export default s`, `export { s } from
+ * '@mat-plan/db'`) is a `re-export`; any other value use (an object literal, an argument such as
+ * `cache(s)`, an assignment, `.call`, a spread, a return, a class's `extends (…)`) is `not a direct
+ * call`. Type positions are free.
+ *
+ * ⚠️ **A forwarding wrapper passes, by design**: `export const persist = (...a) => saveWorkout(...a)`
+ * calls the writer directly, the same shape as the allowed `cache(async (id) => saveWorkout(id))`,
+ * so this rule cannot tell them apart without call-graph analysis (docs/tech-debt.md, "A DAL can
+ * forward a writer through a wrapper function"). Every writer still takes a `HouseholdScope` that
+ * only the DAL resolves.
+ */
+function valueUses(graph: FileImports, names: Published): GraphRefusal[] {
+  const { sf } = graph;
+  const hits: GraphRefusal[] = [];
+  const toDb = (st: ts.Node) =>
+    graph.imports.find((i) => i.text === st.getText(sf))?.resolved === DB_INDEX;
+  const restricted = (name: string) => restriction(name, names) !== undefined;
+  /** Local binding → the name `index.ts` publishes. */
+  const locals = new Map<string, string>();
+  const exported = new Set<ts.Node>();
   for (const st of sf.statements) {
-    if (ts.isExportDeclaration(st) && st.exportClause && ts.isNamedExports(st.exportClause))
-      for (const e of st.exportClause.elements) hit(e, (e.propertyName ?? e.name).text);
-    else if (
+    if (ts.isImportDeclaration(st) && !st.importClause?.isTypeOnly && toDb(st)) {
+      const b = st.importClause?.namedBindings;
+      if (b && ts.isNamedImports(b))
+        for (const e of b.elements) {
+          const name = (e.propertyName ?? e.name).text;
+          if (!e.isTypeOnly && restricted(name)) locals.set(e.name.text, name);
+        }
+    } else if (
+      ts.isExportDeclaration(st) &&
+      st.exportClause &&
+      ts.isNamedExports(st.exportClause)
+    ) {
+      if (st.moduleSpecifier) {
+        if (toDb(st))
+          for (const e of st.exportClause.elements) {
+            const name = (e.propertyName ?? e.name).text;
+            if (restricted(name))
+              hits.push({ line: lineOf(sf, e), rule: 're-export', detail: name });
+          }
+      } else st.exportClause.elements.forEach((e) => exported.add(e.propertyName ?? e.name));
+    } else if (
       ts.isVariableStatement(st) &&
       st.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
     )
-      for (const d of st.declarationList.declarations) {
-        const x = d.initializer && bound(d.initializer);
-        if (x && ts.isIdentifier(x)) hit(d, x.text);
-      }
-    else if (ts.isExportAssignment(st)) {
-      const x = bound(st.expression);
-      if (ts.isIdentifier(x)) hit(st, x.text);
-    }
+      st.declarationList.declarations.forEach(
+        (d) => d.initializer && exported.add(bound(d.initializer)),
+      );
+    else if (ts.isExportAssignment(st)) exported.add(bound(st.expression));
   }
+  const walk = (n: ts.Node): void => {
+    if (ts.isIdentifier(n) && locals.has(n.text) && !ts.isImportSpecifier(n.parent)) {
+      const name = locals.get(n.text)!;
+      if (exported.has(n)) hits.push({ line: lineOf(sf, n), rule: 're-export', detail: name });
+      else if (isReference(n) && !inType(n) && !isDirectCallee(n))
+        hits.push({ line: lineOf(sf, n), rule: 'not a direct call', detail: name });
+    }
+    ts.forEachChild(n, walk);
+  };
+  walk(sf);
   return hits;
 }
 
@@ -222,7 +337,12 @@ function reexportsOf(sf: ts.SourceFile, names: readonly string[]) {
  * Every pin, for one `apps/web` file (repo-relative), read from disk or from `text`. `landing` is
  * where an import may land inside `apps/web`; a fixture passes its own.
  */
-function violations(file: string, text?: string, landing = webLanding()): Violation[] {
+function violations(
+  file: string,
+  text?: string,
+  landing = webLanding(),
+  names: Published = published(),
+): Violation[] {
   const graph = importsOf(join(REPO_DIR, file), text);
   const out: Violation[] = blindSpots(graph).map((b) => ({ file, ...b }));
   const v = (line: number, rule: string, detail: string) => out.push({ file, line, rule, detail });
@@ -234,8 +354,9 @@ function violations(file: string, text?: string, landing = webLanding()): Violat
       if (WHOLE_PACKAGE.has(i.kind)) v(i.line, 'whole-package', i.kind);
       else
         for (const n of i.names) {
-          const where = ALLOWED_IN.get(n);
-          if (where && !where.some((w) => within(file, w)))
+          const where = restriction(n, names);
+          if (where === 'untraceable') v(i.line, 'untraceable name', n);
+          else if (where && !where.some((w) => within(file, w)))
             v(i.line, 'name', `${n} → ${where.length ? `only ${where.join(', ')}` : 'nowhere'}`);
         }
     } else if (r.startsWith(DB_DIR)) v(i.line, 'deep packages/db', r);
@@ -252,8 +373,8 @@ function violations(file: string, text?: string, landing = webLanding()): Violat
     if (graph.client && (r.startsWith(DB_DIR) || r.startsWith(PROGRAM_DAL))) v(i.line, 'client', r);
     for (const m of MODULES) if (m.files.includes(r) && !m.may(file)) v(i.line, 'module', r);
   }
-  if (within(file, PROGRAM_DAL) || within(file, DAY_DAL))
-    for (const h of reexportsOf(graph.sf, LANE_P)) v(h.line, 're-export', h.name);
+  if (permitted(names).some((w) => within(file, w)))
+    for (const h of valueUses(graph, names)) v(h.line, h.rule, h.detail);
   return out;
 }
 
@@ -280,6 +401,107 @@ function packageViolations(file: string, text?: string): string[] {
 
 /** An edge that exists at run time: not `import type`, `export type … from` or `typeof import`. */
 const isRuntimeEdge = (i: ImportRef) => !i.typeOnly && i.kind !== 'type';
+
+/**
+ * 🔴 **The backstop to the origin walk: who inside `packages/db/src` imports restricted code.** The
+ * walk (`originsOf`) traces the forms it knows; a file can still hand a writer on through one it does
+ * not (a later reassignment of an `export let`, `Object.assign` onto an exported object, a function
+ * or namespace body that returns it, an alias of a namespace import). Every such form needs an
+ * IMPORT of the writer first, so this pins the importers instead of chasing the forms.
+ *
+ * A **publisher** is a `packages/db/src` file that publishes a restricted origin: every file under
+ * the lane P directories (all its names), and any other file whose `originsOf` maps a name to a
+ * restricted origin (that name). An **importer** of it is any tracked `packages/db/src` file with a
+ * ref (any kind) resolving to it that names one of those names, or names nothing (`export *`, a
+ * namespace or side-effect import), unless both sit under lane P's directories. The map is
+ * `publisher → importer → kinds`; a test compares it
+ * with {@link DB_IMPORTERS}, so a new importer, or a new kind of import, fails the guard whatever
+ * form follows it. `texts` reads a file's text (or a new file) from a fixture.
+ */
+function dbImporters(texts: Record<string, string> = {}): Record<string, Record<string, string>> {
+  const memo = new Map<string, Published>();
+  const rows = ALLOWED_IN(published());
+  const restrictedOrigin = (o: Origin | null) =>
+    !!o && (under(o.file, LANE_P_DIRS) || rows.has(originKey(o)));
+  const files = [...new Set([...tracked('packages/db/src'), ...Object.keys(texts)])].sort();
+  const ALL = 'all';
+  const publishers = new Map<string, Set<string> | typeof ALL>();
+  for (const f of files) {
+    if (TEST_FILE.test(f)) continue;
+    if (under(f, LANE_P_DIRS)) {
+      publishers.set(f, ALL);
+      continue;
+    }
+    const names = [...originsOf(f, texts, DB_SRC, memo)]
+      .filter(([, o]) => restrictedOrigin(o))
+      .map(([n]) => n);
+    if (names.length > 0) publishers.set(f, new Set(names));
+  }
+  const map: Record<string, Record<string, string>> = {};
+  for (const f of files)
+    for (const i of importsOf(join(REPO_DIR, f), texts[f]).imports) {
+      const names = i.resolved === null ? undefined : publishers.get(i.resolved);
+      if (!names) continue;
+      // Lane P inside lane P is exempt: what is defined there is lane P's by origin wherever it is
+      // re-published, so such an edge cannot launder a name, and pinning it would churn per writer.
+      if (under(f, LANE_P_DIRS) && under(i.resolved!, LANE_P_DIRS)) continue;
+      if (names !== ALL && i.names.length > 0 && !i.names.some((n) => names.has(n))) continue;
+      const row = (map[i.resolved!] ??= {});
+      row[f] = [...new Set([...(row[f]?.split('|') ?? []), i.kind])].sort().join('|');
+    }
+  return map;
+}
+
+const LP_W = 'packages/db/src/writers/program/';
+const LP_Q = 'packages/db/src/queries/program/';
+/**
+ * Every importer of restricted code inside `packages/db/src` today, with how it imports
+ * ({@link dbImporters}). A change here is a reviewed change to who can reach a writer.
+ */
+const DB_IMPORTERS: Record<string, Record<string, string>> = {
+  // resolveDayPlan, through the day queries' barrel.
+  'packages/db/src/queries/day/day-plan.ts': {
+    'packages/db/src/queries/day/index.ts': 're-export',
+  },
+  'packages/db/src/queries/day/index.ts': { [DB_INDEX]: 're-export' },
+  'packages/db/src/queries/day/prescription-live-in.ts': {
+    'packages/db/src/queries/day/index.ts': 'star',
+  },
+  // readLiveSets: the entry for entries.ts, and the day's stored row values (one read, #766).
+  'packages/db/src/queries/live-sets.ts': {
+    [DB_INDEX]: 're-export',
+    'packages/db/src/queries/day/stored-row-values.ts': 'static',
+  },
+  // logRow, untickRow, retickRow, amendRow: the day writers' barrel, then the entry.
+  'packages/db/src/writers/day/amend-row.ts': {
+    'packages/db/src/writers/day/index.ts': 're-export',
+  },
+  'packages/db/src/writers/day/log-row.ts': { 'packages/db/src/writers/day/index.ts': 're-export' },
+  'packages/db/src/writers/day/index.ts': { [DB_INDEX]: 'star' },
+  // The ownership helpers: the entry, and lane P's writers and reads, which compose them; the day
+  // query that reuses the template-block rule.
+  'packages/db/src/writers/ownership.ts': {
+    [DB_INDEX]: 'star',
+    'packages/db/src/queries/day/prescription-live-in.ts': 'static',
+    [`${LP_Q}exists.ts`]: 'static',
+    [`${LP_Q}program-list.ts`]: 'static',
+    [`${LP_Q}program-view.ts`]: 'static',
+    [`${LP_Q}workout.ts`]: 'static',
+    [`${LP_W}assign.ts`]: 'static',
+    [`${LP_W}copy-workout.ts`]: 'static',
+    [`${LP_W}create-program.ts`]: 'static',
+    [`${LP_W}program-name.ts`]: 'static',
+    [`${LP_W}rename-program.ts`]: 'static',
+    [`${LP_W}save-week.ts`]: 'static',
+    [`${LP_W}save-workout.ts`]: 'static',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+  },
+  // Lane P's code, from outside lane P: the entry, the test beside a lane P file, and the fixtures
+  // seed. Edges inside lane P are exempt (dbImporters).
+  [`${LP_Q}index.ts`]: { [DB_INDEX]: 'star' },
+  [`${LP_W}index.ts`]: { [DB_INDEX]: 'star' },
+  [`${LP_W}seed-fixtures.ts`]: { 'packages/db/src/seed.ts': 'static' }, // seedProgramFixtures
+};
 
 /**
  * `index.ts`'s import closure inside `packages/db/src/`: what it reaches at run time in `erasure/`,
@@ -425,10 +647,23 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
       });
 
       it('every OVERRIDES name is one the package publishes, so no row guards nothing', () => {
-        const published = exportedNames(DB_INDEX);
-        expect(Object.keys(OVERRIDES).filter((n) => !published.has(n))).toEqual([]);
-        expect(published.has('saveWorkout')).toBe(true);
-        expect(published.has('notAPublishedName')).toBe(false);
+        const names = published();
+        expect(Object.keys(OVERRIDES).filter((n) => !names.get(n))).toEqual([]);
+        expect(names.has('saveWorkout')).toBe(true);
+        expect(names.has('notAPublishedName')).toBe(false);
+      });
+
+      it("every name the package publishes has a traced origin, and lane P's are lane P's", () => {
+        const names = published();
+        expect([...names].filter(([, o]) => o === null).map(([n]) => n)).toEqual([]);
+        expect(LANE_P.filter((n) => !under(names.get(n)?.file ?? '', LANE_P_DIRS))).toEqual([]);
+        expect(names.get('saveWorkout')).toEqual({
+          file: 'packages/db/src/writers/program/save-workout.ts',
+          name: 'saveWorkout',
+        });
+        expect(names.get('insertWorkoutOwnedBy')?.file).toBe(
+          'packages/db/src/writers/ownership.ts',
+        );
       });
 
       it('reads an alias, a type, and refuses what it cannot read (fixtures)', () => {
@@ -484,6 +719,94 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         ],
       ])('a shared file: %s', (text, want) => {
         expect(packageViolations(SHARED_X, text)).toEqual([`${SHARED_X}:1 ${want}`]);
+      });
+    });
+
+    describe('inside packages/db/src, restricted code has exactly the importers it has today', () => {
+      it('the importer map is DB_IMPORTERS', () => {
+        expect(dbImporters()).toEqual(DB_IMPORTERS);
+      });
+
+      it('a new importer inside lane P, of lane P code, does not change the map', () => {
+        expect(
+          dbImporters({
+            [`${LP_W}helper.ts`]:
+              "import { refuse } from './refuse';\nimport { readWeek } from '../../queries/program/week';\nexport const h = [refuse, readWeek];",
+          }),
+        ).toEqual(DB_IMPORTERS);
+      });
+
+      it('the entry imports nothing: it only re-exports, by export * and export { … } from', () => {
+        const kinds = importsOf(join(REPO_DIR, DB_INDEX)).imports.map((i) => i.kind);
+        expect(kinds.filter((k) => k !== 'star' && k !== 're-export')).toEqual([]);
+        expect(kinds.length).toBeGreaterThan(10);
+      });
+
+      // One form from each group the origin walk cannot follow (security re-check of #790). Each
+      // needs a new import of restricted code, which the map refuses.
+      const DAY_BARREL = 'packages/db/src/writers/day/index.ts';
+      const dayBarrel = readFileSync(join(REPO_DIR, DAY_BARREL), 'utf8');
+      const PI = "import { saveWorkout } from '../program';\n";
+      it.each([
+        [
+          'a later reassignment of an export let',
+          { [DAY_BARREL]: `${dayBarrel}\n${PI}export let persist: any;\npersist = saveWorkout;` },
+          `${LP_W}index.ts`,
+          DAY_BARREL,
+          'static',
+        ],
+        [
+          'Object.assign onto an exported object',
+          {
+            'packages/db/src/writers/day/tools.ts':
+              "import { logRow } from './log-row';\nexport const tools: any = {};\nObject.assign(tools, { logRow });",
+          },
+          'packages/db/src/writers/day/log-row.ts',
+          'packages/db/src/writers/day/tools.ts',
+          'static',
+        ],
+        [
+          'a function body that returns the writer',
+          {
+            'packages/db/src/queries/leak.ts':
+              "import { readLiveSets } from './live-sets';\nexport function f() {\n  return readLiveSets;\n}",
+          },
+          'packages/db/src/queries/live-sets.ts',
+          'packages/db/src/queries/leak.ts',
+          'static',
+        ],
+        [
+          'an alias of a namespace import',
+          {
+            [DAY_BARREL]: `${dayBarrel}\nimport * as P from '../program';\nconst a = P;\nexport const persist = a.saveWorkout;`,
+          },
+          `${LP_W}index.ts`,
+          DAY_BARREL,
+          'star',
+        ],
+        [
+          'a lane P writer imported from outside lane P, next door',
+          {
+            'packages/db/src/writers/day/x.ts':
+              "import { saveWorkout } from '../program/save-workout';\nexport const n = saveWorkout.length;",
+          },
+          `${LP_W}save-workout.ts`,
+          'packages/db/src/writers/day/x.ts',
+          'static',
+        ],
+        [
+          'a new kind of import by an existing importer',
+          {
+            [DAY_BARREL]: `${dayBarrel}\nimport { logRow as l } from './log-row';\nexport let x: any;\nx = l;`,
+          },
+          'packages/db/src/writers/day/log-row.ts',
+          DAY_BARREL,
+          're-export|static',
+        ],
+      ] as const)('%s', (_label, texts, publisher, importer, kinds) => {
+        const map = dbImporters({ ...texts });
+        expect(map[publisher]?.[importer]).toBe(kinds);
+        expect(map).not.toEqual(DB_IMPORTERS);
       });
     });
 
@@ -677,6 +1000,9 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
       ],
       'ALLOWED_IN: each name, only where it lists': [
         fixture(DAY_X, "import { workoutInHousehold, logRow } from '@mat-plan/db';"),
+        // Change's row writer (12d) is the day DAL's, like logRow, untickRow and retickRow.
+        fixture(DAY_X, "import { amendRow } from '@mat-plan/db';"),
+        fixture(C, "import { amendRow } from '@mat-plan/db';", `name: amendRow → ${ONLY_DAY}`),
         fixture(
           DAY_X,
           "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';",
@@ -709,7 +1035,9 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           "import type { MovementOption } from '@mat-plan/db';",
           `name: MovementOption → ${ONLY_PROGRAM}`,
         ),
-        fixture(C, "import { db, profiles } from '@mat-plan/db';"),
+        fixture(C, "import { schema, createDb } from '@mat-plan/db';"),
+        // A name the package does not publish fails closed.
+        fixture(C, "import { db } from '@mat-plan/db';", 'untraceable name: db'),
       ],
       'neither DAL re-exports a lane P name': [
         ...[
@@ -731,10 +1059,63 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
           "export { workoutInHousehold } from '@mat-plan/db';",
           're-export: workoutInHousehold',
         ),
-        // A wrapper call is not unwrapped (`reads.ts`'s `cache(async function …)`).
+        // An aliased import exported by its local name, and entries.ts, which a row permits too.
+        fixture(
+          DAY_X,
+          "import { workoutInHousehold as w } from '@mat-plan/db';\nexport { w };",
+          're-export: workoutInHousehold',
+        ),
+        fixture(
+          ENTRIES_DAL,
+          "import { readLiveSets } from '@mat-plan/db';\nexport const r = readLiveSets;",
+          're-export: readLiveSets',
+        ),
+      ],
+      'in a permitted file, a restricted name is only ever called': [
+        ...[
+          'export const api = { saveWorkout };',
+          'export const api = { save: saveWorkout };',
+          'export const getX = cache(saveWorkout);',
+          'wrap(saveWorkout);',
+          'let s;\ns = saveWorkout;',
+          'saveWorkout.call(null, x);',
+          'saveWorkout.apply(null, [x]);',
+          'const f = saveWorkout.bind(null);',
+          'const o = { ...saveWorkout };',
+          'const xs = [saveWorkout];',
+          'function f() {\n  return saveWorkout;\n}',
+          'const n = new saveWorkout();',
+          // A class's `extends (…)` runs (security review of #790, P2-1).
+          'export class X extends ((leak = saveWorkout), Object) {}',
+        ].map((text) =>
+          fixture(
+            PROGRAM_X,
+            `import { saveWorkout } from '@mat-plan/db';\n${text}`,
+            'not a direct call: saveWorkout',
+          ),
+        ),
+        fixture(
+          DAY_X,
+          "import { logRow as log } from '@mat-plan/db';\nexport const actions = { log };",
+          'not a direct call: logRow',
+        ),
+        ...[
+          'await saveWorkout(x);',
+          'saveWorkout(x);',
+          '(saveWorkout)(x);',
+          'saveWorkout!(x);',
+          'saveWorkout?.(x);',
+          'type T = typeof saveWorkout;',
+          'let p: Parameters<typeof saveWorkout>[0];',
+          // `reads.ts`'s shape: a wrapper around a function that calls it.
+          'export const getX = cache(async function g(id) {\n  return saveWorkout(id);\n});',
+          'export const getY = cache(async (id) => saveWorkout(id));',
+          'const o = { saveWorkout: 1 };',
+        ].map((text) => fixture(PROGRAM_X, `import { saveWorkout } from '@mat-plan/db';\n${text}`)),
+        // An unrestricted name is free to pass on.
         fixture(
           PROGRAM_X,
-          "import { readWorkoutDraft } from '@mat-plan/db';\nexport const getX = cache(readWorkoutDraft);",
+          "import { schema } from '@mat-plan/db';\nexport const api = { schema };",
         ),
       ],
       'MODULES: only the listed importers': [
@@ -789,7 +1170,7 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
             'client: apps/web/lib/dal/program/reads.ts',
           ),
         ),
-        fixture(C, "'use client';\nimport { db } from '@mat-plan/db';", `client: ${DB_INDEX}`),
+        fixture(C, "'use client';\nimport { schema } from '@mat-plan/db';", `client: ${DB_INDEX}`),
         fixture(C, "import { g } from '@/lib/dal/program/reads';\n'use client';"),
         fixture(C, "const s = 'use client';\nimport { g } from '@/lib/dal/program/reads';"),
         fixture(C, "'use client';\nimport { g } from '@/lib/dal/day/day';"),
@@ -813,6 +1194,145 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         fixture('apps/web/test/x.ts', "import { code } from './source-scan';"),
       ],
     };
+
+    describe('names are keyed by origin (fixtures)', () => {
+      const DAY_BARREL = 'packages/db/src/writers/day/index.ts';
+      const dayBarrel = readFileSync(join(REPO_DIR, DAY_BARREL), 'utf8');
+      /** The package as if `writers/day/index.ts` also held `line`. */
+      const withDay = (line: string) => publish({ [DAY_BARREL]: `${dayBarrel}\n${line}` });
+      it.each([
+        [
+          "export { saveWorkout as persistWorkout } from '../program';",
+          'persistWorkout',
+          C,
+          [`name: persistWorkout → ${ONLY_PROGRAM}`],
+        ],
+        [
+          "export { saveWorkout as persistWorkout } from '../program';",
+          'persistWorkout',
+          PROGRAM_X,
+          [],
+        ],
+        [
+          "export { insertWorkoutOwnedBy as insertW } from '../ownership';",
+          'insertW',
+          PROGRAM_X,
+          ['name: insertW → nowhere'],
+        ],
+        [
+          "export { readLiveSets as liveSets } from '../../queries/live-sets';",
+          'liveSets',
+          C,
+          [`name: liveSets → only ${ENTRIES_DAL}`],
+        ],
+        ["export { lost } from './nope';", 'lost', C, ['untraceable name: lost']],
+      ])('%s, then %s imported', (line, name, at, want) => {
+        const names = withDay(line);
+        const text = `import { ${name} } from '@mat-plan/db';\n${name}(x);`;
+        expect(
+          violations(at, text, webLanding(), names).map((x) => `${x.rule}: ${x.detail}`),
+        ).toEqual(want);
+      });
+
+      it('a renamed lane P writer is still only ever called in the program DAL', () => {
+        const names = withDay("export { saveWorkout as persistWorkout } from '../program';");
+        // Traced past the barrel it was re-published from, to the file that defines it.
+        expect(names.get('persistWorkout')).toEqual({
+          file: 'packages/db/src/writers/program/save-workout.ts',
+          name: 'saveWorkout',
+        });
+        const text =
+          "import { persistWorkout } from '@mat-plan/db';\nexport const api = { persistWorkout };";
+        expect(violations(PROGRAM_X, text, webLanding(), names).map((x) => x.rule)).toEqual([
+          'not a direct call',
+        ]);
+      });
+
+      const P_IMPORT = "import { saveWorkout } from '../program';\n";
+      const P_NS = "import * as P from '../program';\n";
+      const INDEX_TEXT = readFileSync(join(REPO_DIR, DB_INDEX), 'utf8');
+      const UNTRACEABLE = (name: string) => [`untraceable name: ${name}`];
+      it.each([
+        // A value alias is the value it aliases (security review of #790, P1-1).
+        [
+          'day',
+          `${P_IMPORT}export const persist = saveWorkout;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_IMPORT}export const persist = saveWorkout.bind(null);`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_IMPORT}const p2 = saveWorkout;\nexport { p2 as persist };`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'index',
+          "import { saveWorkout as s9 } from './writers/program';\nexport const persist = s9;",
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_NS}export const persist = P.saveWorkout;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        // Forms a name-only walk never published (P1-2): traced, or absent and so untraceable.
+        [
+          'day',
+          `${P_NS}export const { saveWorkout: persist } = P;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        [
+          'day',
+          `${P_NS}export import persist = P.saveWorkout;`,
+          'persist',
+          [`name: persist → ${ONLY_PROGRAM}`],
+        ],
+        ['day', `${P_IMPORT}export const tools = { saveWorkout };`, 'tools', UNTRACEABLE('tools')],
+        // A namespace holding a restricted name is refused everywhere (P1-3).
+        ['index', "export * as dayNs from './writers/day';", 'dayNs', UNTRACEABLE('dayNs')],
+        ['index', "export * as ownNs from './writers/ownership';", 'ownNs', UNTRACEABLE('ownNs')],
+      ] as const)('%s: %s, then %s imported by a component', (where, line, name, want) => {
+        const names =
+          where === 'day' ? withDay(line) : publish({ [DB_INDEX]: `${INDEX_TEXT}\n${line}` });
+        const text = `import { ${name} } from '@mat-plan/db';\n${name}.call(x);`;
+        expect(
+          violations(C, text, webLanding(), names).map((x) => `${x.rule}: ${x.detail}`),
+        ).toEqual(want);
+      });
+
+      it('a name the walk did not publish is untraceable', () => {
+        expect(restriction('notPublished', published())).toBe('untraceable');
+      });
+
+      it('the walk publishes exactly the names the TypeScript checker sees', () => {
+        const file = join(REPO_DIR, DB_INDEX);
+        const program = ts.createProgram({
+          rootNames: [file],
+          options: { ...compilerOptionsOf(join(REPO_DIR, 'packages/db')), noEmit: true },
+        });
+        const checker = program.getTypeChecker();
+        const entry = checker.getSymbolAtLocation(program.getSourceFile(file)!)!;
+        const names = checker.getExportsOfModule(entry).map((x) => x.name);
+        expect([...published().keys()].sort()).toEqual(names.sort());
+      });
+
+      it('two export * chains publishing one name from different origins: untraceable', () => {
+        const names = publish({
+          [DAY_BARREL]: `${dayBarrel}\nexport const saveWorkout = 1;`,
+        });
+        expect(names.get('saveWorkout')).toBeNull();
+      });
+    });
 
     describe.each(Object.keys(ROWS))('%s (fixtures)', (group) => {
       it.each(ROWS[group]!)('$text @ $at', ({ at, text, want }) => {
