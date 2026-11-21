@@ -264,7 +264,7 @@ What E6 asks, with lane P's and the panel's points as the design.
    `UPDATE movements … WHERE id = … AND household_id IS NULL AND modality IS NOT NULL`. A push with
    no entry change updates no row and takes no row lock. (The insert still advances the identity
    sequence, as `migrate.yml`'s header says.) **This is not E6's `onConflictDoUpdate`, and this PR
-   amends E6's wording** (lane A's finding): E6's `targetWhere: modality IS NOT NULL` alone cannot name the arbiter, because the global slug index is partial on `household_id IS NULL` and Postgres does not use a CHECK constraint to infer it, so as worded it fails with "no unique or exclusion constraint matching". Naming the index with `movementIsGlobal()` and filtering in a `setWhere` would run, but an upsert locks every conflicting row even where it writes nothing, all 587 on each push, and cannot report why a row was skipped. An update by id locks and reports only what it changes.
+   amends E6's wording** (lane A's finding): E6's `targetWhere: modality IS NOT NULL` alone cannot name the arbiter, because the global slug index is partial on `household_id IS NULL` and Postgres does not use a CHECK constraint to infer it, so as worded it fails with "no unique or exclusion constraint matching". Naming the index with `movementIsGlobal()` and filtering in a `setWhere` would run, but a blanket upsert locks every conflicting row even where it writes nothing, all 587 on each push, and cannot report why a row was skipped. An update by id locks and reports only what it changes.
 2. **Only live catalog rows.** `id` and `public_id` never change. Kept equal to the entry: name,
    kind of training, pattern, `unitDefault`, `isBodyweight`; the update sets `updated_at` itself,
    since no trigger does. It never writes `deleted_at`, `household_id` or `tracking_type`, and never
@@ -407,6 +407,6 @@ correctness lens found one non-blocking gap. Both of their last points are appli
 the shadow count's filter (mutation 518 and A2-i's E5 pin), and why a prefix count is sound as an
 alarm where the code forbids it as a selector.
 
-**Lane A's feasibility check of PR 4, 2026-11-20** (lane A had restarted; it is A3's builder). One blocking point: E6's `onConflictDoUpdate`, as worded, cannot name its arbiter, and an upsert that could would lock every row on each push; so the design updates by id and E6's wording is amended in this PR. The correctness lens checked the claim and narrowed its wording, and added the order pins and the zero-skip proof, which lane A asked for too. Also applied: the primary change as two statements; join rows equal as
+**Lane A's feasibility check of PR 4, 2026-11-20** (lane A had restarted; it is A3's builder). One blocking point: E6's `onConflictDoUpdate`, as worded, cannot name its arbiter, and a blanket upsert that could would lock every row on each push; so the design updates by id and E6's wording is amended in this PR. The correctness lens checked the claim and narrowed its wording, and added the order pins and the zero-skip proof, which lane A asked for too. Also applied: the primary change as two statements; join rows equal as
 a set, not in order; the pre-check and the soft-deleted count extended to the insert path; A3's
 mutation block.
