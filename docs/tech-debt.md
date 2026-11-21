@@ -788,20 +788,48 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
-### 20 pre-existing Squawk findings on `main` are never linted (accepted 2026-09-24)
+### Squawk lints new migrations only, and the CONCURRENTLY rule is review-enforced (recorded 2026-11-20)
 
-- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. All-files is not viable — 20
-  findings remain across 6 migrations already on `main`, and Squawk has **no baseline or suppression
-  feature**, so an all-files gate would be red on arrival and get disabled rather than fixed.
-- **Are they bugs? Mostly no.** `0009`'s own comment names the Squawk objection and justifies it: the
-  column is created in the same statement, so every existing row is NULL, `NULL in (...)` is NULL, and a
-  CHECK passes on anything but FALSE — the validating scan reads rows that cannot fail, on a few dozen
-  rows. `0008`'s is on still-empty V1-10 tables. These were reasoned, not missed.
-- **Impact:** low, but the gate **silently implies `main` is clean**, which it is not. Recorded so that
-  implication is not mistaken for a fact.
-- **Also still unenforced:** `require-concurrent-index-creation` is excluded, because `CONCURRENTLY`
-  cannot run inside drizzle's migration transaction (one for all pending files) and the transaction-stripping runner AGENTS.md
-  describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**, and `.squawk.toml` excludes
+  `require-concurrent-index-creation`. Linting every file is not viable as a gate: Squawk has **no
+  baseline or suppression file**, so a gate over the findings below would be red on arrival. The
+  forward-only guard makes those files immutable, so nothing in them can change; the findings are
+  history, not a backlog, and each is accounted for below.
+- **Every finding on `main`, with its reason** (2026-11-20, Squawk 2.66.0, 33 files). Lines are
+  1-based, the statement's first line. Reproduce:
+  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` (the 20); for the 27,
+  the same with a copy of `.squawk.toml` whose `excluded_rules` keeps only `prefer-bigint-over-int`.
+
+  **The 20 under the repo's config** (all in 0001–0009, written before Squawk was wired):
+
+  | Where                                                                  | Rule(s)                                                         | Why it was safe                                                                                                                                                                                                                                                   |
+  | ---------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | 0001:131 (`profiles.household_id` FK)                                  | `constraint-missing-not-valid`, `adding-foreign-key-constraint` | The column was added in the same file and every row was NULL, which an FK does not check; a handful of profiles.                                                                                                                                                  |
+  | 0002:21–24 (four FKs on `entries`' new columns)                        | both rules, ×4                                                  | Same: new, all-NULL columns, and `entries` held only v0 seed and dev rows (0002's header records this).                                                                                                                                                           |
+  | 0005:37 (`entries.superset_id` FK)                                     | both rules                                                      | Same: a new, all-NULL column.                                                                                                                                                                                                                                     |
+  | 0001:159, 0002:80, 0003:22, 0005:46, 0005:48 (NOT VALID then VALIDATE) | `constraint-missing-not-valid` (same-transaction form)          | Each file's comment says why every row already conformed (a backfill just ran, or the column was all NULL), on tables holding a handful of v0 rows. One transaction means NOT VALID bought nothing; that finding is why AGENTS.md now splits the pair across PRs. |
+  | 0008:13 (`prescriptions_day_role_check`)                               | `constraint-missing-not-valid`                                  | The table was still empty (0008's header).                                                                                                                                                                                                                        |
+  | 0009:27 (`sessions_day_role_check`)                                    | `constraint-missing-not-valid`                                  | The column was created in the statement above, so every row was NULL and passes; 0009's own comment.                                                                                                                                                              |
+  | 0003:16 (`entries.kind` DROP NOT NULL)                                 | `ban-drop-not-null`                                             | A deliberate expand step: no column or data is removed, so it was safe to race the concurrent deploy (0003's header).                                                                                                                                             |
+
+  **The 27 under `require-concurrent-index-creation`**, which `.squawk.toml` excludes because
+  `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
+  that already existed; Squawk does not flag an index on a table the same file creates. A plain
+  `CREATE INDEX` holds a `SHARE` lock, blocking writes but not reads, for the build, which on this
+  app's row counts is milliseconds:
+  0001:132 · 0002:25–28 · 0005:38–39 · 0010:47 (`units`, a reference table) · 0012:50 · 0015:96, 102
+  · 0020:58 · 0021:86–90 · 0023:81 · 0024:60–65 · 0025:85–86 · 0026:49. From 0012 on, each file
+  says why in a comment above the index; 0001, 0002 (header), 0005 and 0010 predate that habit.
+  0027–0032 have none.
+
+- **Impact:** low. The record is now a fact rather than an implication. What stays open is the gate
+  itself: a NEW migration's non-concurrent index on a populated table passes CI, and only review
+  catches it, while a table is small enough that this is harmless.
+- **Proposed fix:** remove `require-concurrent-index-creation` from `excluded_rules`, so each new
+  index on an existing table needs a `-- squawk-ignore require-concurrent-index-creation` with its
+  reason (the 0024 idiom). That turns the review rule into a gate that asks for a written reason. The
+  real fix, a runner that applies a `CONCURRENTLY` file outside the transaction, is only worth
+  building when a table is large enough for the lock to matter.
 - **Severity:** low.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)

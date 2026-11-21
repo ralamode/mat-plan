@@ -252,11 +252,10 @@ jobs:
       # suppression feature. Scoping to added files composes with the forward-only
       # guard above — that makes migrations add-only, so "added" IS "new".
       #
-      # The 20 pre-existing findings are therefore never linted. They are known and
-      # reasoned, not a backlog: 0009's own comment names the Squawk objection and
-      # justifies it (the column is created in the same statement, so every row is
-      # NULL and the validating scan reads rows that cannot fail). Recorded in
-      # docs/tech-debt.md so the gate does not silently imply main is clean.
+      # The 20 pre-existing findings are therefore never linted. Each one is listed
+      # with its reason in docs/tech-debt.md ("Squawk lints new migrations only"),
+      # with the command that reproduces them, so the gate does not imply main is
+      # clean.
       #
       # In `quality`, not its own job — a new job is not a REQUIRED check until
       # branch protection is edited, so it would look wired while blocking nothing.
