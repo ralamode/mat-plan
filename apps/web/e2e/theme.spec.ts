@@ -221,15 +221,24 @@ test('the inline-script check catches a script with its nonce stripped (it can f
   await page.route(`**${APP_HOME_PATH}`, async (route) => {
     const response = await route.fetch();
     const html = await response.text();
-    // The first nonced inline <script>: drop its nonce, as a regression in the theme script would.
-    const body = html.replace(/(<script)([^>]*?)\snonce="[^"]*"([^>]*>)(?!<\/script>)/, '$1$2$3');
+    // The THEME script, found as the test above finds it (its body names THEME_STORAGE_KEY): drop
+    // its nonce, as a regression in the theme script would. Every other script keeps its own.
+    const body = html.replace(
+      /<script\b([^>]*)>([\s\S]*?)<\/script>/g,
+      (tag, attrs: string, js: string) =>
+        js.includes(THEME_STORAGE_KEY)
+          ? `<script${attrs.replace(/\snonce="[^"]*"/, '')}>${js}</script>`
+          : tag,
+    );
     stripped = body !== html;
     await route.fulfill({ response, body });
   });
-  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  // The same wait as the first test, so this proves the check sees a violation at ITS timing.
+  const response = await page.goto(APP_HOME_PATH, { waitUntil: 'domcontentloaded' });
+  await response?.text();
   expect(
     stripped,
-    'no nonced inline script on the page to strip; this proof has nothing to test',
+    'no nonced theme script on the page to strip; this proof has nothing to test',
   ).toBe(true);
   const violations = await cspViolations(page);
   expect(

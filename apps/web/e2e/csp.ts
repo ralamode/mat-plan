@@ -27,11 +27,12 @@ export async function recordCspViolations(page: Page): Promise<void> {
  * The recorded violations that are a blocked INLINE script. 🔴 Chromium reports one as
  * `script-src-elem`, not `script-src` (probed 2026-11-20: a nonce stripped from the theme script
  * reported `script-src-elem inline`). A filter on `'script-src inline'` alone matched nothing, so the
- * two `theme.spec.ts` assertions that used it could not fail. Both names are accepted, and
- * `theme.spec.ts` proves this catches a stripped nonce.
+ * two `theme.spec.ts` assertions that used it could not fail. All three names are accepted: `-elem`
+ * for a `<script>` element, `-attr` for an inline event handler (`onerror="…"`), and the bare name
+ * an older browser may report. `theme.spec.ts` proves this catches a stripped nonce.
  */
 export function blockedInlineScripts(violations: readonly string[]): string[] {
-  return violations.filter((v) => /^script-src(-elem)? inline /.test(v));
+  return violations.filter((v) => /^script-src(-elem|-attr)? inline /.test(v));
 }
 
 /** The violations recorded so far, as `"<directive> <blockedURI|inline> @<file>:<line> <sample>"`. */
