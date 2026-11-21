@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { uuidSchema } from '@mat-plan/shared';
 
@@ -40,6 +40,37 @@ export async function liveProgramBlockId(
     .where(and(eq(schema.programBlocks.publicId, programPublicId), liveTemplateBlockIn(scope)))
     .limit(1);
   return row?.id ?? null;
+}
+
+/**
+ * **Which of `programPublicIds` are this household's live programs**, in one query: the set of those
+ * ids that `programIn` would answer `true` for. For a caller holding several ids at once (the Program
+ * order's scope-miss report, FAM-1 15c), so a refusal costs one read, not the Programs list. Ids that
+ * are not uuids are left out without being sent; an empty or all-invalid list reads nothing. The set
+ * holds each id in the lower case `uuidSchema` gives it.
+ */
+export async function programIdsIn(
+  exec: Executor,
+  scope: HouseholdScope,
+  programPublicIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  // Each id as `uuidSchema` reads it (lower case), so two spellings of one id are sent once. The
+  // set comes back lower case (Postgres's form of a uuid): a caller looks ids up in their parsed,
+  // lower-cased form, as the order's schema (`lowerCaseUuidSchema`) already gives them.
+  const ids = [
+    ...new Set(
+      programPublicIds.flatMap((id) => {
+        const parsed = uuidSchema.safeParse(id);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  ];
+  if (ids.length === 0) return new Set();
+  const rows = await exec
+    .select({ publicId: schema.programBlocks.publicId })
+    .from(schema.programBlocks)
+    .where(and(inArray(schema.programBlocks.publicId, ids), liveTemplateBlockIn(scope)));
+  return new Set(rows.map((row) => row.publicId));
 }
 
 /** Whether `workoutPublicId` is a live workout of this household's live program `programPublicId`. */

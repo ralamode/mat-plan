@@ -796,6 +796,12 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **A CSP assertion filtered on `'script-src inline'` never matched: Chromium reports a blocked
+  inline script under `script-src-elem`.** Two `theme.spec.ts` checks had stayed green on every run.
+  A probe that stripped one script's nonce printed `script-src-elem inline` (2026-11-20). Filter
+  through `blockedInlineScripts` in `e2e/csp.ts`, and keep its proof (a stripped nonce must be
+  caught). **The general rule: an assertion that a list is empty needs a sibling that makes the list
+  non-empty**, or a wrong filter reads as a pass.
 - 🔴 **An import guard written as a regex meets a new spelling with each fix.** The program-tables
   pins (#552) matched specifier text, and each hardening met another form that reached the same
   module: a comment inside the braces, a backtick, `require (`, a `../node_modules` path, an `@/`

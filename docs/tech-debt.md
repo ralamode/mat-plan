@@ -15,20 +15,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
-### The import pins hold names by barrel and by direct import, not by origin (added 2026-11-20, #779)
+### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
 
-- **What & why it's debt:** `apps/web/test/program-imports.test.ts` checks each `@mat-plan/db` name
-  by the name imported from `packages/db/src/index.ts`, and the DAL re-export rule by an `export`
-  that names it directly ([plan](./plans/td-program-tables-import-graph.md), § Goal). Two holes the
-  regex guard also had stay open: a lane P writer re-published by another `packages/db` module under
-  a new name, and a DAL passing one on through a local binding (`export { s }` of an aliased import,
-  an object literal, `cache(x)`).
-- **Impact:** code written that way could reach a writer outside the DAL without the guard refusing
-  it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the damage is
-  limited to a path a reviewer must catch.
-- **The fix:** key names by origin, walking `index.ts`'s re-export graph so a writer keeps its
-  identity under any name; and, in the DALs, allow a lane P name only as a direct callee. The second
-  is a new restriction, with a false-positive risk (a writer handed to a transaction wrapper).
+- **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by
+  its origin and, in a file a row permits, allows a restricted name only as the direct callee of a
+  call. A function that calls it is therefore allowed, so a DAL can still publish
+  `export const persist = (...a) => saveWorkout(...a)`: the same shape as the allowed
+  `cache(async (id) => readWorkoutDraft(id))`, which the rule cannot tell apart. Inside
+  `packages/db/src` a wrapper is caught, since it needs a new importer of the writer and the
+  importer map (`DB_IMPORTERS`) pins those; this row is the `apps/web` DAL case.
+- **Impact:** a file outside the DAL could reach a writer through such a wrapper without the guard
+  refusing it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the
+  damage is limited to a path a reviewer must catch.
+- **The fix:** call-graph analysis: follow each exported DAL function to the restricted calls it
+  makes, and require that it resolves the caller's household first. Not worth it until a second
+  wrapper shape appears.
 - **Severity:** low.
 
 ### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
@@ -49,20 +50,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     per test.
 - **Trigger:** the next spec that adds an athlete must pick one of the two.
 - **Severity:** low (test-only; the suite fits today).
-
-### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
-
-- **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
-  reuses `readProgramList` to tell a foreign program id from the household's own. That read is 2 +
-  one query per live athlete (`athletesOnPrograms`), up to 27, and loads names and assignments only to
-  keep the ids. A one-query id lookup beside `programIn` in `packages/db/src/queries/program/exists.ts`
-  is lane P's file, so 15c PR 2 did not add one.
-- **Impact:** it runs on the writer's `invalid`, which is also its routine stale-list answer (a put on
-  or take off elsewhere, midnight), and is awaited before the refusal returns. Small at household scale.
-- **The fix:** lane P adds `programIdsIn(exec, scope, ids)` (one `select public_id … where
-liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `reportOrderProgramMiss`
-  changes.
-- **Severity:** low.
 
 ### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
 
@@ -332,6 +319,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **The fix, when taken:** restore the a-1d envelope seed (`typed`, `chosenKind`) for the add and
   the rename, each with an unhydrated e2e of its refusal. `profile-actions.ts` is owned by
   `write-path.md`.
+- **Planned and parked (2026-11-20).** A v1 plan went through a correctness and a UX lens:
+  [plan](./plans/td-unhydrated-refusal.md), with its review log. Seeding the form from an echoed
+  `typed` works on the native re-render, but the full fix also needs native `autofocus` so the
+  refusal is seen before hydration, no focus theft at hydration, Restore's unhydrated answer, and the
+  byte-identical refusal matrix kept. The log lists v2's shape.
+- **Trigger:** a report of a blank form after a refusal on a slow phone, or the next PR that
+  changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
@@ -347,7 +341,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
   edit and belongs to whichever chunk next touches that file deliberately.
 
-### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
+### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08) — ✅ CLOSED 2026-11-20
+
+> **Closed by decision** (maintainer, 2026-11-20: "Accept as is, close the row"). PROF-1 b's N3
+> already shipped the control half: `ExportControl` shows "Nothing logged yet, so there is nothing to
+> export." and no link when an athlete has no history, in Household settings and on the day page. A
+> direct hit on the export route (a stale tab, a bookmark after Clear this day) still downloads an
+> empty zip, and that is accepted. The text below is the original record.
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
   athlete with none yields `buildZip([])`, which is a valid but **EOCD-only** archive — iOS Files

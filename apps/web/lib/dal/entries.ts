@@ -125,9 +125,6 @@ export type EntryDTO = {
   // read path deliberately — a persisted role that nothing displays is a value nobody can discover is
   // wrong until an export months later, which is exactly what makes storing it risky.
   sessionDayRole: DayRole | null;
-  // V1-8-3b: the optional session "how did it feel?" note, shown in the session-block header. NULL when
-  // no feel was logged (the schema normalizes a blank input to NULL) or for non-session entries.
-  sessionFeel: string | null;
   // V1-8-3d: the superset this movement belongs to. `supersetId` is the superset's PUBLIC id (anti-IDOR),
   // NULL for a standalone movement or a soft-deleted superset (the join misses → renders standalone);
   // `supersetOrder` is its 1-based position within the superset (for the alternating read order). No
@@ -171,7 +168,6 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       sessionId: schema.sessions.publicId,
       sessionType: schema.sessions.sessionType,
       sessionDayRole: schema.sessions.dayRole,
-      sessionFeel: schema.sessions.feel,
       // V1-8-3d: the superset's PUBLIC id (anti-IDOR) + the member's order within it. Same PK-join idiom.
       supersetId: schema.supersets.publicId,
       supersetOrder: schema.entries.supersetOrder,
@@ -256,7 +252,6 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     // The sessions_session_type_check column only holds SessionType values (or NULL).
     sessionType: r.sessionType as SessionType | null,
     sessionDayRole: r.sessionDayRole as DayRole | null,
-    sessionFeel: r.sessionFeel,
     supersetId: r.supersetId,
     supersetOrder: r.supersetOrder,
     sets: setsByEntry.get(r.id) ?? [],

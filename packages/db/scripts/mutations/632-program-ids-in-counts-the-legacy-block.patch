@@ -1,0 +1,28 @@
+diff --git a/packages/db/src/queries/program/exists.ts b/packages/db/src/queries/program/exists.ts
+index b673f6b2..416d80db 100644
+--- a/packages/db/src/queries/program/exists.ts
++++ b/packages/db/src/queries/program/exists.ts
+@@ -5,7 +5,7 @@ import { uuidSchema } from '@mat-plan/shared';
+ import { schema } from '../../client';
+ import type { HouseholdScope } from '../../scope';
+ import type { Executor } from '../../writers/executor';
+-import { liveTemplateBlockIn } from '../../writers/ownership';
++import { liveTemplateBlockIn, programBlockInHousehold } from '../../writers/ownership';
+ 
+ /**
+  * Scoped existence reads for the program builder's DAL (FAM-1 lane B's 7a-i asked for them): whether
+@@ -68,7 +68,13 @@ export async function programIdsIn(
+   const rows = await exec
+     .select({ publicId: schema.programBlocks.publicId })
+     .from(schema.programBlocks)
+-    .where(and(inArray(schema.programBlocks.publicId, ids), liveTemplateBlockIn(scope)));
++    .where(
++      and(
++        inArray(schema.programBlocks.publicId, ids),
++        programBlockInHousehold(scope),
++        isNull(schema.programBlocks.deletedAt),
++      ),
++    );
+   return new Set(rows.map((row) => row.publicId));
+ }
+ 
