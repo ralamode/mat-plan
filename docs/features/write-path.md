@@ -159,7 +159,7 @@ The shapes those lanes agree on, the fakes and the preview route are
    boolean cannot supply the `userId` that `checkMutationLimit()` keys on, and two shapes asking one
    question at one call site is how the source guard ends up matching the weaker call.
 
-   🔴 **It is ONE function, `enterMutation`, not seven copies** (`app/p/[profileId]/mutation-entry.ts`
+   🔴 **It is ONE function, `enterMutation`, not seven copies** (`app/p/mutation-entry.ts`
    — collapsed on review of #323). Seven pasted copies of a security predicate is seven places to land
    one conjunct short, and six of those are only caught by a reviewer noticing an absence.
 
@@ -415,7 +415,8 @@ The shapes those lanes agree on, the fakes and the preview route are
      silently no-ops when it is off — which for an auth bypass means default-OPEN on a real
      deployment. It **refuses at module import**, so a mis-wired deployment fails its build rather
      than promoting and serving. `apps/web/test/bypass-is-contained.test.ts` pins one armer, one
-     reader and two injectors; `lib/env-session-bypass.test.ts` pins the refusals — including the one
+     reader, two injectors and one disarmer (`playwright.config.ts`, the signed-out e2e server's `''`,
+     `docs/plans/td-signed-out-e2e.md`); `lib/env-session-bypass.test.ts` pins the refusals — including the one
      OPS-1 deliberately allows and this does not (`ALLOW_LIVE_DB` + a remote database, i.e.
      `pnpm dev:prod`).
    - 🔴 **A page NEVER calls `getHouseholdScope()`** (`AUTH-1` 1c-2). The picker needs to tell "no
