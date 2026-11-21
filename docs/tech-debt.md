@@ -213,24 +213,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
   the new page to the household, or before a second household.
 
-### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
-
-- **What & why it's debt:** `--muted-foreground` is oklch L 0.556 and `--accent` is L 0.97, which
-  measures **4.34:1** — under WCAG AA's 4.5 for small text. (Dark clears it at 5.83; `--muted` is the
-  same value as `--accent`, so it is the same pair.) `UI-5`'s axe run at 1280 found it the first time
-  it ran, on the nav rail's current row. **It is not confined to the rail:** `NAV_ROW_CLASS` fills on
-  `hover:bg-accent`, so the archived-count line on `/p`'s settings row (`app/p/page.tsx`) has the
-  same pair in its hover state today.
-- **Why nothing in CI says so:** axe measures the rendered state only. A hover or focus ground it
-  never enters is invisible to it, though WCAG 1.4.3 covers every state.
-- **What `UI-5` did instead:** removed the pair from the two places it would have shipped it — the
-  rail's open row is outlined rather than filled, and its kind line un-mutes on hover
-  (`group-hover:text-foreground`). Both are local; the token is untouched.
-- **The fix, when someone takes it:** nudge `--muted-foreground` to **oklch(0.545)**, which measures
-  **4.54** on accent and 4.96 on background. An L shift of 0.011 is not perceptible, and it clears
-  the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
-  [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
-
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)
 
 - **What & why it's debt:** `packages/db/scripts/verify/day-plan.ts`'s seeder writes the week
@@ -266,32 +248,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **Where it belongs:** no PR is scheduled for it now. `PICK-1` PR 4 was to mount into the strength
   form, which FAM-1 12f deleted (#725), so settle it in the next PR that touches the day page's
   `loading.tsx` or `AppShell`'s grid.
-
-### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
-
-- **What & why it's debt:** `PROF-1 a-1d` added a duplicate warning that offers **Restore** when the
-  match is archived. Every tier below the browser covers it — `db:verify` proves the archived twin
-  matches, reports `archived: true`, carries the stored spelling and loses to a live match; mutation
-  patch `27` proves that arm is load-bearing; the unit suite proves the Restore button renders. ⚠️ **Those unit tests did not exist when this
-  entry was first written** — the claim was false for a day, and a review lens caught it; they were
-  written rather than the claim weakened. **What nothing proves is the click**: that Restore posts `restoreAthleteAction` and navigates to the athlete.
-- **The observation, recorded so the next attempt does not repeat it:** after `archiveAthleteNamed`,
-  loading `/p/new` leaves the kind radios **resolvable but never actionable**. `page.url()` and
-  `locator.count()` answer normally; every call that evaluates page JS (`check`, `innerHTML`,
-  `evaluateAll`) hangs until the test times out — reproduced at a 30s budget and again at 90s.
-  Navigating via `/p` between the archive and the add screen did not clear it.
-- **What is ruled out is the rendering; the cause itself is unexplained.** The same state under jsdom
-  (an archived duplicate, `archived: true`) renders the Restore button in ~1s with no render loop, so
-  the form is not looping. ⚠️ An earlier version of this line asserted the defect was "the
-  interaction between the archive action's revalidation and a subsequent navigation under
-  Playwright". That was a **guess stated as a finding** — nothing here measured it. The suspicion is
-  worth keeping as a starting point (see the fix below), not as a conclusion.
-- **Why it is filed rather than skipped:** a `test.skip` would sit in the suite looking like coverage.
-  The e2e file carries a docblock naming exactly what is and is not proven instead.
-- **The fix, when taken:** instrument what the page is doing in that window (a `pageerror`/`console`
-  listener attached BEFORE the `goto`, or a trace) rather than guessing; suspect a pending RSC
-  revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
-  fresh context instead of continuing the archived session.
 
 ### A refusal on the add or rename form, submitted before hydration, re-renders a blank form (narrowed 2026-11-19; added 2026-11-10)
 
@@ -822,20 +778,48 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
-### 20 pre-existing Squawk findings on `main` are never linted (accepted 2026-09-24)
+### Squawk lints new migrations only, and the CONCURRENTLY rule is review-enforced (recorded 2026-11-20)
 
-- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. All-files is not viable — 20
-  findings remain across 6 migrations already on `main`, and Squawk has **no baseline or suppression
-  feature**, so an all-files gate would be red on arrival and get disabled rather than fixed.
-- **Are they bugs? Mostly no.** `0009`'s own comment names the Squawk objection and justifies it: the
-  column is created in the same statement, so every existing row is NULL, `NULL in (...)` is NULL, and a
-  CHECK passes on anything but FALSE — the validating scan reads rows that cannot fail, on a few dozen
-  rows. `0008`'s is on still-empty V1-10 tables. These were reasoned, not missed.
-- **Impact:** low, but the gate **silently implies `main` is clean**, which it is not. Recorded so that
-  implication is not mistaken for a fact.
-- **Also still unenforced:** `require-concurrent-index-creation` is excluded, because `CONCURRENTLY`
-  cannot run inside drizzle's migration transaction (one for all pending files) and the transaction-stripping runner AGENTS.md
-  describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**, and `.squawk.toml` excludes
+  `require-concurrent-index-creation`. Linting every file is not viable as a gate: Squawk has **no
+  baseline or suppression file**, so a gate over the findings below would be red on arrival. The
+  forward-only guard makes those files immutable, so nothing in them can change; the findings are
+  history, not a backlog, and each is accounted for below.
+- **Every finding on `main`, with its reason** (2026-11-20, Squawk 2.66.0, 33 files). Lines are
+  1-based, the statement's first line. Reproduce:
+  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` (the 20); for the 27,
+  the same with a copy of `.squawk.toml` whose `excluded_rules` keeps only `prefer-bigint-over-int`.
+
+  **The 20 under the repo's config** (all in 0001–0009, written before Squawk was wired):
+
+  | Where                                                                  | Rule(s)                                                         | Why it was safe                                                                                                                                                                                                                                                   |
+  | ---------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | 0001:131 (`profiles.household_id` FK)                                  | `constraint-missing-not-valid`, `adding-foreign-key-constraint` | The column was added in the same file and every row was NULL, which an FK does not check; a handful of profiles.                                                                                                                                                  |
+  | 0002:21–24 (four FKs on `entries`' new columns)                        | both rules, ×4                                                  | Same: new, all-NULL columns, and `entries` held only v0 seed and dev rows (0002's header records this).                                                                                                                                                           |
+  | 0005:37 (`entries.superset_id` FK)                                     | both rules                                                      | Same: a new, all-NULL column.                                                                                                                                                                                                                                     |
+  | 0001:159, 0002:80, 0003:22, 0005:46, 0005:48 (NOT VALID then VALIDATE) | `constraint-missing-not-valid` (same-transaction form)          | Each file's comment says why every row already conformed (a backfill just ran, or the column was all NULL), on tables holding a handful of v0 rows. One transaction means NOT VALID bought nothing; that finding is why AGENTS.md now splits the pair across PRs. |
+  | 0008:13 (`prescriptions_day_role_check`)                               | `constraint-missing-not-valid`                                  | The table was still empty (0008's header).                                                                                                                                                                                                                        |
+  | 0009:27 (`sessions_day_role_check`)                                    | `constraint-missing-not-valid`                                  | The column was created in the statement above, so every row was NULL and passes; 0009's own comment.                                                                                                                                                              |
+  | 0003:16 (`entries.kind` DROP NOT NULL)                                 | `ban-drop-not-null`                                             | A deliberate expand step: no column or data is removed, so it was safe to race the concurrent deploy (0003's header).                                                                                                                                             |
+
+  **The 27 under `require-concurrent-index-creation`**, which `.squawk.toml` excludes because
+  `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
+  that already existed; Squawk does not flag an index on a table the same file creates. A plain
+  `CREATE INDEX` holds a `SHARE` lock, blocking writes but not reads, for the build, which on this
+  app's row counts is milliseconds:
+  0001:132 · 0002:25–28 · 0005:38–39 · 0010:47 (`units`, a reference table) · 0012:50 · 0015:96, 102
+  · 0020:58 · 0021:86–90 · 0023:81 · 0024:60–65 · 0025:85–86 · 0026:49. From 0012 on, each file
+  says why in a comment above the index; 0001, 0002 (header), 0005 and 0010 predate that habit.
+  0027–0032 have none.
+
+- **Impact:** low. The record is now a fact rather than an implication. What stays open is the gate
+  itself: a NEW migration's non-concurrent index on a populated table passes CI, and only review
+  catches it, while a table is small enough that this is harmless.
+- **Proposed fix:** remove `require-concurrent-index-creation` from `excluded_rules`, so each new
+  index on an existing table needs a `-- squawk-ignore require-concurrent-index-creation` with its
+  reason (the 0024 idiom). That turns the review rule into a gate that asks for a written reason. The
+  real fix, a runner that applies a `CONCURRENTLY` file outside the transaction, is only worth
+  building when a table is large enough for the lock to matter.
 - **Severity:** low.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)

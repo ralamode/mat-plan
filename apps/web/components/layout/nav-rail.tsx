@@ -17,13 +17,11 @@ import { cn } from '@/lib/utils';
 /**
  * The open row's treatment. One row wears it at a time: an athlete, Programs or Settings.
  *
- * 🔴 **Outlined, not filled, and that is a contrast finding rather than a taste one.** The first
- * version was `bg-accent font-medium`, which put the row's muted kind line on `--accent`: measured,
- * `muted-foreground` (oklch L 0.556) on `accent` (L 0.97) is **4.34:1**, under AA's 4.5 for small
- * text — in the light palette only; dark clears it at 5.83. The 1280px axe run caught it the first
- * time it ran. Darkening the text would have flattened the name/kind hierarchy on exactly one row,
- * so the fill comes off instead: the ground stays `background`, where the same pair measures 4.73.
- * `border-foreground` + `font-medium` reads as "this one" against the row's existing hairline.
+ * **Outlined, not filled.** The first version was `bg-accent font-medium`, which put the row's muted
+ * kind line on `--accent`, then 4.34:1, under AA (UI-5's 1280px axe run). Since `--muted-foreground`
+ * moved to L 0.54 (tech debt, 2026-11-20) that pair measures 4.64:1 and passes; the outline stays as
+ * a choice: `border-foreground` + `font-medium` reads as "this one" against the row's hairline
+ * without filling one row of a list.
  */
 const CURRENT_ROW_CLASS = 'border-foreground font-medium';
 
@@ -130,13 +128,11 @@ export function NavRail({
                     `/edit` records that a tile "shows name AND kind, so a Child and an Adult sharing
                     a name are already distinct" — a second switcher without it would be two
                     identical rows. One display map, beside `PROFILE_KINDS`. */}
-                {/* 🔴 **`group-hover:text-foreground` is the contrast fix, not a flourish.**
-                    `NAV_ROW_CLASS` fills the row with `--accent` on hover, and muted text on accent
-                    is the **4.34:1** pair that failed axe on the current row — WCAG 1.4.3 covers
-                    every state, but axe only ever sees the rendered one, so CI cannot catch a hover.
-                    Un-muting on hover keeps the fill affordance and clears AA. (The global
-                    alternative — nudging `--muted-foreground` to L 0.545, which measures 4.54 on
-                    accent — is a design-token change and belongs to `UI-3`, not a layout PR.) */}
+                {/* `group-hover:text-foreground`: `NAV_ROW_CLASS` fills the row with `--accent` on
+                    hover. Muted text on accent was 4.34:1 when this was written; since
+                    `--muted-foreground` moved to L 0.54 it is 4.64:1 and passes, and
+                    `token-sets.test.ts` pins muted text on every ground. Un-muting on hover stays as
+                    a choice: the hovered row reads a step stronger. */}
                 <span className="text-muted-foreground group-hover:text-foreground text-xs">
                   {PROFILE_KIND_LABELS[athlete.kind]}
                 </span>

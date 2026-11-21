@@ -357,6 +357,29 @@ same-origin` (`REFERRER_POLICY`); never `serverActions.allowedOrigins: ['null']`
   is fixed** (2026-11-19, `Referrer-Policy`; the entry below), so that render CAN happen now, and the
   narrowed [tech-debt.md](./tech-debt.md) entry owes the fix back. **The general shape: a cheap probe that could falsify your
   own fix is worth running BEFORE you defend the fix in a docblock, not after.**
+- **"Playwright hangs on `/p/new` after an archive" was not a property of the app, and the test it
+  blocked for ten days passed on its first instrumented run.** → Filed 2026-11-10 (`PROF-1 a-1d`):
+  after `archiveAthleteNamed`, `/p/new`'s radios resolved but every call that evaluated page JS hung
+  until timeout, so the archived-match → Restore e2e was not shipped. **How it was settled
+  (2026-11-20):** the same flow written as a probe, with `pageerror`, `console`, `requestfailed`,
+  POST-`response` and `framenavigated` listeners attached before the first `goto` and `--trace on`,
+  run as `pnpm --filter web e2e:local e2e/athletes.spec.ts -g "<title>" --project=chromium`. On
+  `main` it passed in 5.3s: archive POST 200 at +0.8s, `/p/new` loaded at +1.8s, the radio checked
+  50ms later, the duplicate POST and the Restore POST both 200, and the client landed on the athlete
+  at +2.1s; no `pageerror`, and the only console line was Chromium's `Permissions-Policy`
+  `browsing-topics` warning. **Then at the commit that filed the row** (`c65b9535`, a detached
+  throwaway worktree, the run wrapped in `heavy-slot.mjs` because that commit's `e2e:local`
+  predates the slot): it passed there too. So nothing between then and now fixed it (not AUTH-1, not
+  the `Referrer-Policy` fix, not a Next upgrade), and the cause is **not recoverable**: the attempt
+  that hung was never committed. `#361`'s branch history holds the docblock about it but not the
+  test. **The rules it leaves:** (1) before writing "X hangs" as a finding, keep the failing attempt
+  somewhere a later session can run it again (a commit on the branch, or the test text in the
+  tech-debt row), because a symptom without its reproducer cannot be checked by anyone else; (2) a
+  "cannot be tested" claim gets re-run at the commit that made it before anyone looks for a fix.
+  Running it there is one `git worktree add --detach <sha>` and one `e2e:local` run, and it turns
+  "what fixed it?" into "it was never the app" in about two minutes. ⚠️ `next build` at an old
+  commit can stop once with `SecurityFatalError` (its Next version has a published advisory); the
+  same command run again builds. That is the historical version, not the branch under test.
 - **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
   OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
   `.next/BUILD_ID` is **absent**; `--build` forces it. The symptom is the worst kind: the script

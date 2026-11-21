@@ -35,10 +35,10 @@ import type { TokenSet } from './token-sets';
  *
  * ## What is deliberately NOT rendered, and why that is a report rather than a dodge
  *
- * `text-muted-foreground` on `bg-muted` measures under AA in light, in the palette shipping TODAY,
- * and is invisible to CI because no route renders it. Rendering it here would redden the a11y gate
- * over a pre-existing defect this PR cannot fix without changing the live app's appearance, which
- * UI-4 promised not to do. So it is pinned in `token-sets.test.ts` and handed to UI-3 as an input.
+ * `text-muted-foreground` on `bg-muted` measured 4.34:1, under AA, when this inventory was written,
+ * so it was left out rather than redden the a11y gate. Since `--muted-foreground` moved to L 0.54
+ * (2026-11-20) it is 4.64:1, and `token-sets.test.ts` pins muted text at AA on every ground; the pair
+ * could be rendered here now.
  * The destructive *state* is shown the way the app ships it: `text-destructive` error copy and an
  * `aria-invalid` field.
  *

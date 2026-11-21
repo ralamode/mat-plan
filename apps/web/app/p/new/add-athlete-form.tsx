@@ -333,7 +333,7 @@ export function AddAthleteForm({
           <legend className="text-sm font-medium">{ATHLETE_FORM_COPY.legend}</legend>
 
           {/* The permanence, before the choice. `text-foreground`, not muted: it is the one sentence on
-            this screen a parent must read, and the muted token sits on the AA floor at 4.74:1.
+            this screen a parent must read, and the muted token sits near the AA floor at 5.06:1.
             ⚠️ The RECOVERY is not here — it is role-branched on the page, because only an owner can
             archive and a member read a contradiction two inches below. */}
           <p id={kindHintId} className="max-w-prose text-sm">
