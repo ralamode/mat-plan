@@ -54,8 +54,9 @@ export async function programIdsIn(
   scope: HouseholdScope,
   programPublicIds: readonly string[],
 ): Promise<ReadonlySet<string>> {
-  // Each id as `uuidSchema` reads it (lower case, as Postgres returns a uuid), so an id sent in
-  // upper case is answered as `programIn` would answer it, and `.has` on the result matches.
+  // Each id as `uuidSchema` reads it (lower case), so two spellings of one id are sent once. The
+  // set comes back lower case (Postgres's form of a uuid): a caller looks ids up in their parsed,
+  // lower-cased form, as the order's schema (`lowerCaseUuidSchema`) already gives them.
   const ids = [
     ...new Set(
       programPublicIds.flatMap((id) => {

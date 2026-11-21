@@ -1134,14 +1134,19 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       'not-a-uuid',
       newId(),
     ];
+    assert.ok(
+      !(await programIdsIn(exec, A_SCOPE, [legacyBlock.publicId])).has(legacyBlock.publicId),
+      'FAM-1 15c: programIdsIn: the household’s legacy block is not one of its programs',
+    );
+    assert.deepEqual(
+      [...(await programIdsIn(exec, A_SCOPE, ['not-a-uuid']))],
+      [],
+      'FAM-1 15c: programIdsIn: a list with no uuid in it reads nothing and answers nothing',
+    );
     assert.deepEqual(
       [...(await programIdsIn(exec, A_SCOPE, asked))].sort(),
       [programPublicId, aOther].sort(),
       'FAM-1 15c: programIdsIn answers exactly the ids that are this household’s live programs',
-    );
-    assert.ok(
-      !(await programIdsIn(exec, A_SCOPE, [legacyBlock.publicId])).has(legacyBlock.publicId),
-      'FAM-1 15c: programIdsIn: the household’s legacy block is not one of its programs',
     );
     assert.deepEqual(
       [...(await programIdsIn(exec, B_SCOPE, asked))],
