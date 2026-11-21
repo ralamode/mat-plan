@@ -155,15 +155,15 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
 
   2. **One decision, frozen at module scope**, so the boot check and every later answer are the
      same evaluation.
-  3. **Containment, pinned by a test** (`apps/web/test/bypass-is-contained.test.ts`): the raw
-     variable is named only where it is declared, validated and injected, and only
-     `lib/dal/session.ts` calls `sessionBypassUserId()`.
+  3. **Containment, pinned by a test** (`apps/web/test/bypass-is-contained.test.ts`):
+     - in `apps/web` the raw variable is named only in `lib/env.ts` and the two harness injectors
+       (`scripts/e2e-local.ts`, `scripts/screenshot-ephemeral.ts`), and only `lib/dal/session.ts`
+       calls `sessionBypassUserId()`;
+     - across `.github/workflows/`, only `ci.yml` names it, exactly once, as a step-scoped
+       `key: value` entry whose value equals the committed constant.
 
-  ⚠️ **What the pin does not see:** it scans `apps/web` source minus tests. The injectors outside it
-  are reviewed as what they are: `scripts/e2e-local.ts` and `scripts/screenshot-ephemeral.ts` pass
-  the shared constant, and `.github/workflows/ci.yml`'s e2e job sets the same value at step level,
-  as a literal (YAML cannot import it). A workflow change that touches that line is a security
-  review.
+  ⚠️ **What the pin does not see:** what the Playwright step around that one line does. A workflow
+  change to that step is reviewed as a security change.
 
 ## Sensitive data
 
