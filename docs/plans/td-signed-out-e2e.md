@@ -95,13 +95,12 @@ The pin grows deliberately rather than being dodged.
 
 ## Design
 
-- **`apps/web/e2e/contexts.ts`:** the two origins, defined once and imported by the config and every
-  spec that needs them (reuse 8, architecture 5):
-  - `APP_ORIGIN`: `E2E_PORT ?? 3100`, today's;
-  - `SIGNED_OUT_ORIGIN`: `E2E_SIGNED_OUT_PORT ?? 3101`.
-
-  The module already sits on the config's import path and is dependency-light.
-
+- **The two origins, defined once** (reuse 8, architecture 5): `APP_ORIGIN` (`E2E_PORT ?? 3100`)
+  and `SIGNED_OUT_ORIGIN` (`E2E_SIGNED_OUT_PORT ?? 3101`). **As built, they are exported from
+  `playwright.config.ts` itself**, and specs import them from there. That deviates from the plan's
+  `e2e/contexts.ts`, and from a first-build `e2e/origins.ts`: `app/design/program/fakes.test.ts`
+  forbids anything outside `e2e/` and `scripts/` from importing from them, and the config is outside
+  both. The first CI run caught it.
 - **`apps/web/playwright.config.ts`:**
   - `webServer` becomes an array, and the existing entry is unchanged;
   - the second entry runs `next start` on the **same build**, after the first. Playwright 1.64.1 runs
