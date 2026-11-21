@@ -334,8 +334,9 @@ movement picker.
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
   workflow changes), the one gate whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
-  **Not covered by it:** `next build` (CI-only), the Playwright smoke (next bullet), gitleaks, Squawk,
-  and the forward-only guard (Squawk and the guard are diff-against-base checks on new migrations).
+  **Not covered by it:** `next build` (CI-only), bundle size (CI-only; the guard's header), the
+  Playwright smoke (next bullet), gitleaks, Squawk, and the forward-only guard (Squawk and the guard
+  are diff-against-base checks on new migrations).
 - **`pnpm e2e:local` — the Playwright smoke on a throwaway DB.** Not inside `verify` (minutes; it
   builds the prod app); run it before a PR that touches a flow the smoke covers. It boots an ephemeral
   `embedded-postgres`, migrates + seeds exactly as CI does, runs `playwright test` against it, and
@@ -343,7 +344,7 @@ movement picker.
   through. Bare `pnpm --filter web e2e` provisions no database — use `e2e:local`.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
-  `next build` · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
+  `next build` · bundle size (CI-only; the guard's header) · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
   `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run
@@ -369,6 +370,11 @@ build`; default-to-run). Override with the
   **`ci-skip-e2e` label, then push** — sparingly, a red `e2e` usually means a real bug — or an admin
   merge as last resort. The skip is step-level, never a job-level `if:`, so a required check never
   stalls "pending" ([plan](./docs/plans/ci-e2e-auto-skip.md)).
+- **The import-pins guard** (`apps/web/test/program-imports.test.ts`, who may import what from
+  `@mat-plan/db` and the action modules) is the one test the suite scopes: on a PR (`run_import_pins`)
+  and pre-push it runs only when `runImportPins` ([changed-scopes.mjs](./.github/scripts/changed-scopes.mjs),
+  one predicate for both) finds a changed file it reads or any non-inert `.github/` change, and every
+  run on `main` runs it. A scoping, not a loosening.
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking API/DB
   changes.
 - **No personal names in PRs, plans, ADRs, changelog fragments or commit messages.** Write the role —

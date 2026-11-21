@@ -104,7 +104,7 @@ flowchart LR
 | `apps/web/app/programs/not-found.tsx` · `loading.tsx` · `layout.tsx`    | The builder's 404 ("← Programs", its own `AppShell`, since `notFound()` replaces the page) its busy frame, and its `ClerkRoot` (#626: Clerk loads per segment, never in the root layout).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `apps/web/e2e/program-builder.spec.ts` · `program-builder.a11y.spec.ts` | From `/p`: create, rename, copy a seeded workout, Copy at 360px, a random id's 404; a new workout with two items, Save, then Back (7b-ii); one Back after making an item in the open picker and closing it leaves the editor (the Sheet's history entry survives a Server Action's rewrite); another program's workout is a 404; a new athlete's day page linking to Programs, then put on this run's program, a ✓ logged, Take off and back on (15); the four routes' a11y walk at 360px, the Copy and Put-on dialogs (in-sheet overflow, `expectNoOverflowWithin`), and one desktop axe pass each. Opening Programs, creating a program, copying a workout onto every weekday and Put on from today are `e2e/steps.ts` helpers since 15c PR 3, shared with the day page's Program order journey. |
 | `apps/web/lib/dal/program/reads.ts`                                     | `getProgramList`, `getProgramView` (7b-i, primitive arguments for `cache()`), `getProgramEntry` (7b-ii: one entry of the list, by the id lower-cased), `getProgramsByAthlete` (15 PR 3: Home's tiles, `null` with no household) and `getWorkoutDraft`: the editor's read. A non-uuid id is `null` with no query; a miss is reported; the read goes through `quietDbErrors`, as the writes do.                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15), `reportAthleteMiss` (15c, the athlete alone; the same athlete probe as Put on's), `reportOrderProgramMiss` (15c, an `invalid` order's first foreign program; the Programs list read once, 2 + one query per live athlete): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `apps/web/lib/dal/program/report-miss.ts`                               | `reportProgramMiss`, `reportWeekMiss`, `reportCopyMiss`, `reportAssignMiss` (15), `reportAthleteMiss` (15c, the athlete alone; the same athlete probe as Put on's), `reportOrderProgramMiss` (15c, an `invalid` order's first foreign program; `programIdsIn`, one query for every id): on a miss only, which id missed the household, reported once through `reportScopeMiss`.                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `apps/web/lib/dal/program/revalidate.ts`                                | `refreshPrograms` and `refreshAssignment`: what a program write revalidates (15c PR 2 moved them out of `app/programs/actions.ts`, unchanged). The builder's actions and the day page's Program order both call them, after a success only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## Invariants
@@ -368,7 +368,7 @@ flowchart LR
 
 19. 🔴 **The actions and the program DAL** (step 7a-i; engineering panel, 2026-11-16):
     - Only `lib/dal/program/` imports lane P's writers and reads; everything else reaches them
-      through it (`apps/web/test/program-tables-stay-dark.test.ts`). The one exception is
+      through it (`apps/web/test/program-imports.test.ts`, its `ALLOWED_IN`). The one exception is
       `workoutInHousehold`, which the day DAL (`lib/dal/day/`, 12b) may import as well, for its
       scope-miss report.
     - A miss is reported only after a writer or read has said "not here", never on a success, and
@@ -406,7 +406,7 @@ flowchart LR
       (`lib/dal/program/revalidate.ts`, shared with Put on and Take off). Today comes from the action,
       as for Put on. A `not_found` reports the athlete alone (`reportAthleteMiss`, the same athlete
       probe); an `invalid` reports the first program id that is not the household's
-      (`reportOrderProgramMiss`, `readProgramList` read once: 2 + one query per live athlete, on a refusal only), and a stale list of its own programs
+      (`reportOrderProgramMiss`: one `programIdsIn` query for every id, on a refusal only), and a stale list of its own programs
       reports nothing. The answer is the writer's either way.
     - **A week that names a workout twice on a day is `once_per_day`**, not `invalid`, before the
       DAL (`weekRepeatsAWorkout`), as the preview's fake and lane P's writer answer (C25); the
@@ -452,6 +452,9 @@ flowchart LR
 - **The DAL tests set the movement library explicitly** (`CAT-3` K29). Under vitest `DATABASE_URL` is
   local, so the real `lib/env.ts` would pick the test library: `picker.test.ts` and
   `program-dal.test.ts` mock `catalog-library` and have one case for each library.
+- **Links on the builder's screens are measured by the suite's one link check**,
+  `expectLinkTargets(page.getByRole('main'), context)` in `e2e/a11y-checks.ts`, which
+  `program-builder.a11y.spec.ts` calls; there is no builder-local copy.
 
 - **The sheet pops its history entry on close, and in jsdom that `popstate` lands in the next
   test**, closing its sheet. A test file that opens a sheet stubs `history.back` (as

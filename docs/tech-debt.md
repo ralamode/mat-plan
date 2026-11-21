@@ -31,36 +31,41 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   database passes), or the fresh start itself, which erases the seed-id household.
 - **Severity:** low today; it closes at R2.
 
-### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
+### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
 
-- **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
-  reuses `readProgramList` to tell a foreign program id from the household's own. That read is 2 +
-  one query per live athlete (`athletesOnPrograms`), up to 27, and loads names and assignments only to
-  keep the ids. A one-query id lookup beside `programIn` in `packages/db/src/queries/program/exists.ts`
-  is lane P's file, so 15c PR 2 did not add one.
-- **Impact:** it runs on the writer's `invalid`, which is also its routine stale-list answer (a put on
-  or take off elsewhere, midnight), and is awaited before the refusal returns. Small at household scale.
-- **The fix:** lane P adds `programIdsIn(exec, scope, ids)` (one `select public_id … where
-liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `reportOrderProgramMiss`
-  changes.
+- **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by
+  its origin and, in a file a row permits, allows a restricted name only as the direct callee of a
+  call. A function that calls it is therefore allowed, so a DAL can still publish
+  `export const persist = (...a) => saveWorkout(...a)`: the same shape as the allowed
+  `cache(async (id) => readWorkoutDraft(id))`, which the rule cannot tell apart. Inside
+  `packages/db/src` a wrapper is caught, since it needs a new importer of the writer and the
+  importer map (`DB_IMPORTERS`) pins those; this row is the `apps/web` DAL case.
+- **Impact:** a file outside the DAL could reach a writer through such a wrapper without the guard
+  refusing it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the
+  damage is limited to a path a reviewer must catch.
+- **The fix:** call-graph analysis: follow each exported DAL function to the restricted calls it
+  makes, and require that it resolves the caller's household first. Not worth it until a second
+  wrapper shape appears.
 - **Severity:** low.
 
-### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
+### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
 
-- **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in
-  `<main>`, all undersized ones collected) and `a11y.spec.ts`'s `expectLinkTapTargets(root, context,
-expected?)` (any root, an optional exact count, fail-fast) measure the same 44px rule for links.
-  #720 merged the control checks but left these, because merging them edits
-  `program-preview-a11y.spec.ts`, which lanes do not edit (the contract's). Separately,
-  `athletes.spec.ts` (about :862-865) loops `main button, main a[href^="/p/"]` with no visibility
-  skip, no label measurement and no zero-match guard.
-- **Impact:** a change to the link rule made in one copy leaves the other on the old rule; the
-  `athletes.spec.ts` loop passes vacuously if its selector ever matches nothing.
-- **The fix:** one exported `expectLinkTargets(root: Locator, context, expected?)` that collects every
-  undersized link and names it with `describeControl`; its 7 call sites move to it (3 of them in the
-  contract's spec, so the roadmap thread makes those). `athletes.spec.ts` calls `expectTapTargets`
-  and the link check instead of its loop.
-- **Severity:** low. Tests only; both copies hold the same 44px bar today.
+- **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at
+  `MAX_HOUSEHOLD_ATHLETES` (25). Specs that add an athlete (`athletes.spec.ts`,
+  `form-before-hydration.spec.ts`, `bodyweight-receipt.spec.ts`, `day-navigation.spec.ts`,
+  `clear-day.spec.ts`, the program-builder specs and others) now spend about 22 of those slots on a
+  fresh run, as lane C counted, and archiving frees none. A retried spec re-adds its athletes, so
+  with about 3 slots left a couple of retries in one run reach the cap. Then `createProfile` answers
+  `full`, and the retry fails looking like the feature under test broke.
+- **Impact:** test-only, but it turns flakes into misattributed failures, and every new add-athlete
+  spec shrinks the margin.
+- **The fix, one of:**
+  - raise the e2e household's cap through the fixture or seed: a test-only household limit, never
+    the production `MAX_HOUSEHOLD_ATHLETES`;
+  - or have specs reuse athletes: one shared per-run athlete per need, created once, instead of one
+    per test.
+- **Trigger:** the next spec that adds an athlete must pick one of the two.
+- **Severity:** low (test-only; the suite fits today).
 
 ### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
 
@@ -72,20 +77,6 @@ expected?)` (any root, an optional exact count, fail-fast) measure the same 44px
 - **The fix:** if Home's LCP suffers, batch `dayAssignments` with `profile_id IN (...)` and group in
   memory, keeping `currentPrograms`' order rule unchanged (the Programs list shares the read).
 - **Severity:** low.
-
-### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
-
-- **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
-  HELPERS and erasure pins) finds lane P's imports by matching specifier text. #552 tried to harden
-  it, and its security review found that each fix met another spelling: a comment inside an import, a
-  backtick specifier, `require (` with a space, a `../node_modules` path, or an `@/` alias walking out
-  of `apps/web`.
-- **Impact:** an import written that way into a page or the day DAL would not be refused by the
-  guard. Code written in good faith uses the plain forms, which the guard catches.
-- **The fix:** a parser-based check, ESLint `no-restricted-imports` with path patterns per directory
-  (or the TypeScript import graph), so every specifier form, comment and alias resolves in one place.
-  Then the regex guard's directory rules move into it.
-- **Severity:** low. Maintainer, 2026-11-18: "Close; lint check as tech debt".
 
 ### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
 
@@ -238,24 +229,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
   the new page to the household, or before a second household.
 
-### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
-
-- **What & why it's debt:** `--muted-foreground` is oklch L 0.556 and `--accent` is L 0.97, which
-  measures **4.34:1** — under WCAG AA's 4.5 for small text. (Dark clears it at 5.83; `--muted` is the
-  same value as `--accent`, so it is the same pair.) `UI-5`'s axe run at 1280 found it the first time
-  it ran, on the nav rail's current row. **It is not confined to the rail:** `NAV_ROW_CLASS` fills on
-  `hover:bg-accent`, so the archived-count line on `/p`'s settings row (`app/p/page.tsx`) has the
-  same pair in its hover state today.
-- **Why nothing in CI says so:** axe measures the rendered state only. A hover or focus ground it
-  never enters is invisible to it, though WCAG 1.4.3 covers every state.
-- **What `UI-5` did instead:** removed the pair from the two places it would have shipped it — the
-  rail's open row is outlined rather than filled, and its kind line un-mutes on hover
-  (`group-hover:text-foreground`). Both are local; the token is untouched.
-- **The fix, when someone takes it:** nudge `--muted-foreground` to **oklch(0.545)**, which measures
-  **4.54** on accent and 4.96 on background. An L shift of 0.011 is not perceptible, and it clears
-  the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
-  [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
-
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)
 
 - **What & why it's debt:** `packages/db/scripts/verify/day-plan.ts`'s seeder writes the week
@@ -288,34 +261,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   recorded reasons (a layout cannot read the pathname, cannot pass data to children, and uncached
   data in one blocks navigation). The other option — a route group giving `/p` its own boundary and
   dropping the day-subtree fallback — trades the skeleton away on a slow connection.
-- **Where it belongs:** `PICK-1` PR 4 adds the third grid track and is the next PR to touch this
-  seam; the plan's § For PR 4 is the place to settle it.
-
-### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
-
-- **What & why it's debt:** `PROF-1 a-1d` added a duplicate warning that offers **Restore** when the
-  match is archived. Every tier below the browser covers it — `db:verify` proves the archived twin
-  matches, reports `archived: true`, carries the stored spelling and loses to a live match; mutation
-  patch `27` proves that arm is load-bearing; the unit suite proves the Restore button renders. ⚠️ **Those unit tests did not exist when this
-  entry was first written** — the claim was false for a day, and a review lens caught it; they were
-  written rather than the claim weakened. **What nothing proves is the click**: that Restore posts `restoreAthleteAction` and navigates to the athlete.
-- **The observation, recorded so the next attempt does not repeat it:** after `archiveAthleteNamed`,
-  loading `/p/new` leaves the kind radios **resolvable but never actionable**. `page.url()` and
-  `locator.count()` answer normally; every call that evaluates page JS (`check`, `innerHTML`,
-  `evaluateAll`) hangs until the test times out — reproduced at a 30s budget and again at 90s.
-  Navigating via `/p` between the archive and the add screen did not clear it.
-- **What is ruled out is the rendering; the cause itself is unexplained.** The same state under jsdom
-  (an archived duplicate, `archived: true`) renders the Restore button in ~1s with no render loop, so
-  the form is not looping. ⚠️ An earlier version of this line asserted the defect was "the
-  interaction between the archive action's revalidation and a subsequent navigation under
-  Playwright". That was a **guess stated as a finding** — nothing here measured it. The suspicion is
-  worth keeping as a starting point (see the fix below), not as a conclusion.
-- **Why it is filed rather than skipped:** a `test.skip` would sit in the suite looking like coverage.
-  The e2e file carries a docblock naming exactly what is and is not proven instead.
-- **The fix, when taken:** instrument what the page is doing in that window (a `pageerror`/`console`
-  listener attached BEFORE the `goto`, or a trace) rather than guessing; suspect a pending RSC
-  revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
-  fresh context instead of continuing the archived session.
+- **Where it belongs:** no PR is scheduled for it now. `PICK-1` PR 4 was to mount into the strength
+  form, which FAM-1 12f deleted (#725), so settle it in the next PR that touches the day page's
+  `loading.tsx` or `AppShell`'s grid.
 
 ### A refusal on the add or rename form, submitted before hydration, re-renders a blank form (narrowed 2026-11-19; added 2026-11-10)
 
@@ -343,26 +291,14 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **The fix, when taken:** restore the a-1d envelope seed (`typed`, `chosenKind`) for the add and
   the rename, each with an unhydrated e2e of its refusal. `profile-actions.ts` is owned by
   `write-path.md`.
+- **Planned and parked (2026-11-20).** A v1 plan went through a correctness and a UX lens:
+  [plan](./plans/td-unhydrated-refusal.md), with its review log. Seeding the form from an echoed
+  `typed` works on the native re-render, but the full fix also needs native `autofocus` so the
+  refusal is seen before hydration, no focus theft at hydration, Restore's unhydrated answer, and the
+  byte-identical refusal matrix kept. The log lists v2's shape.
+- **Trigger:** a report of a blank form after a refusal on a slow phone, or the next PR that
+  changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
-
-### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
-
-- **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in
-  linear light** — its own docblock says so, and `luminance()` takes linear sRGB. Browsers composite a
-  translucent border in **gamma-encoded** sRGB (and `color-mix(in oklch, …)` in OKLCH). For an opaque
-  token the two agree; for a translucent one they do not, and the error is not in a safe direction:
-  for a 28% foreground mix the helper reports ≈1.36 light / ≈6.03 dark where a browser draws ≈1.93 /
-  ≈2.35 — i.e. it would **pass** a dark border that fails SC 1.4.11.
-- **Why it surfaced:** `PROF-1 a-1`'s plan proposed a dashed add-tile border "at a measured ≥3:1
-  foreground mix". The measurement would have been taken with this helper. a-1 side-steps it by using
-  an **opaque** token, which makes the model moot — so this is recorded, not fixed, and nothing today
-  depends on the translucent answer except the pinned hairline figure below.
-- **Also affected:** `token-sets.test.ts`'s "hairlines miss SC 1.4.11 — 1.26:1 light, **2.69:1 dark**"
-  pins a dark figure computed this way. The assertion (`< 3`) is still correct; the number in its name
-  is not. ⚠️ Verify the arithmetic before editing it — the claim here is structural (read the two
-  docblocks), the specific ratios are a reviewer's calculation.
-- **The fix, when taken:** composite in gamma-encoded sRGB (or match whatever `color-mix` space the
-  token uses), and re-derive the pinned figures.
 
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
 
@@ -377,7 +313,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
   edit and belongs to whichever chunk next touches that file deliberately.
 
-### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
+### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08) — ✅ CLOSED 2026-11-20
+
+> **Closed by decision** (maintainer, 2026-11-20: "Accept as is, close the row"). PROF-1 b's N3
+> already shipped the control half: `ExportControl` shows "Nothing logged yet, so there is nothing to
+> export." and no link when an athlete has no history, in Household settings and on the day page. A
+> direct hit on the export route (a stale tab, a bookmark after Clear this day) still downloads an
+> empty zip, and that is accepted. The text below is the original record.
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
   athlete with none yields `buildZip([])`, which is a valid but **EOCD-only** archive — iOS Files
@@ -396,56 +338,17 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   The cheapest honest version is to render the control **disabled with a reason** when the athlete has
   no months, which the settings page already knows.
 
-### 🔴 PRIORITY — nothing measures how much JavaScript ships, and the CWV budget cannot be measured at all (added 2026-11-06)
+### Nothing measured how much JavaScript ships (added 2026-11-06) — ✅ CLOSED 2026-11-19 for bytes
 
-_(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.)_
-
-- **What & why it's debt:** AGENTS.md commits to a Core Web Vitals budget — **LCP < 2.5s · INP < 200ms
-  · CLS < 0.1, p75 mobile** — and `review-pr`'s rubric dimension 11 already admits "nothing measures
-  the budget". Two separate reasons it is unmeasured, and only one is fixable now:
-  - **The budget is a RUM budget.** p75-over-real-users cannot be produced in CI, and **INP cannot be
-    produced in a lab at all** — it needs real interaction. RUM is blocked behind
-    `OBS-1`'s `connect-src` decision ([plan.md](./plan.md)), and at three households p75 of anything is
-    noise anyway.
-  - **Lab timings in CI measure CI.** LCP on a shared runner swings substantially between identical
-    commits. A gate on it produces alerts you learn to ignore, which is worse than no gate.
-- **What IS deterministic: bytes.** `next build` already prints **First Load JS per route**, and CI
-  runs `pnpm build` (`ci.yml:362`) and **discards the output**. Nothing in the repo tracks bundle size
-  — verified 2026-11-06: no `@next/bundle-analyzer`, no `size-limit`, no Lighthouse, no size
-  assertion anywhere in `.github/workflows` or either `package.json`.
-- **Impact — the three regressions this codebase actually produces, none of which anything catches:**
-  1. **`'use client'` creep** — the mechanism by which an RSC-first app gets slow. ⚠️ **Live example,
-     same day this was filed:** `components/layout/site-footer.tsx` became a client component
-     (`usePathname()`) in `AUTH-1` 1d PR 0. Correct, necessary, reviewed — and the bundle cost was
-     invisible to every gate.
-  2. **A barrel file defeating tree shaking** — `export * from './x'`. A real risk as
-     `packages/shared` grows; nothing flags it.
-  3. **A heavy dependency on a hot route** — Recharts is planned for charts (AGENTS.md → Design), and
-     the `/p/[profileId]` day page is the hottest route in the app.
-     ⚠️ **Tree shaking and per-route code splitting are already ON** (App Router default + ESM; the
-     minimal `next.config.ts` adds nothing that defeats them), so this is not a bundler setting anyone
-     forgot. It is the absence of a _measurement_, and all three regressions above are habits rather than
-     config.
-- **Proposed fix** (sketch; it owes its own plan + panel, and the panel should push on the tolerance):
-  1. Capture `next build`'s per-route **First Load JS** in CI — parse the build output, or
-     `.next/app-build-manifest.json` plus chunk sizes if the printed table proves unstable to parse.
-  2. Commit a baseline (`perf/bundle-baseline.json`), one entry per route.
-  3. A guard fails the PR when a route grows beyond a tolerance, printing **route, before, after,
-     delta**. The number is the deliverable — "this PR adds 48KB to the day page" is actionable in a
-     way "LCP regressed" never is.
-  4. Baseline updates are a **deliberate committed diff**, so growth is approved rather than drifted
-     into — the `ALLOWLIST`-pinned-empty idiom (`pages-need-a-session.test.ts:321`).
-  5. ⚠️ **It needs a self-test and a RED probe before it is trusted** — see
-     [lessons.md](./lessons.md) → "Guards that pass while guarding nothing", where a CI gate silently
-     enforced 3 of 13 paths for two releases because it had no self-test. A size guard that parses
-     build output is exactly the shape that goes quietly vacuous when the output format changes.
-- **Severity:** **medium now, high later.** Nothing is slow today and there is no evidence of a
-  regression — the cost is that the budget AGENTS.md commits to is unfalsifiable, so the first real
-  regression will be found by a person on a gym floor rather than by a gate. It gets worse with every
-  client component and every chart. **Not a Beta 0 blocker** (not in `beta-1.md`'s exit criteria).
-- **Deliberately NOT in scope:** Lighthouse CI, a canary deploy (meaningless at three households), and
-  post-deploy CWV assertions — that last is `OBS-2`'s synthetic-monitoring job ([plan.md](./plan.md)),
-  which answers "is the deploy broken", not "did the baseline move".
+> ✅ **Closed by `PERF-1` (b)** ([plan](./plans/perf-1-bundle-size.md)): the `quality` job's "Bundle
+> size" step measures each route's first-load client JS and the total client chunks, compares them
+> with `.github/bundle-baseline.json`, and fails a move past the tolerance either way. What it
+> measures and does not, and the tolerance, are in `check-bundle-size.mjs`'s header.
+> ⚠️ **The entry's premise changed under it.** It said `next build` prints First Load JS per route;
+> Next 16 removed that column. The guard reads `.next/diagnostics/route-bundle-stats.json`, which is
+> undocumented, so a Next bump that drops or reshapes it makes the step exit 2 and name the file.
+> **Still unmeasured:** the CWV timings themselves (real-user p75 is `PERF-1` (a), lab scores are
+> `PERF-2`).
 
 ### Two runtime auth proofs went with the gate, and the harness cannot replace them (found 2026-11-05, AUTH-1 1d)
 
@@ -901,20 +804,48 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
-### 20 pre-existing Squawk findings on `main` are never linted (accepted 2026-09-24)
+### Squawk lints new migrations only, and the CONCURRENTLY rule is review-enforced (recorded 2026-11-20)
 
-- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. All-files is not viable — 20
-  findings remain across 6 migrations already on `main`, and Squawk has **no baseline or suppression
-  feature**, so an all-files gate would be red on arrival and get disabled rather than fixed.
-- **Are they bugs? Mostly no.** `0009`'s own comment names the Squawk objection and justifies it: the
-  column is created in the same statement, so every existing row is NULL, `NULL in (...)` is NULL, and a
-  CHECK passes on anything but FALSE — the validating scan reads rows that cannot fail, on a few dozen
-  rows. `0008`'s is on still-empty V1-10 tables. These were reasoned, not missed.
-- **Impact:** low, but the gate **silently implies `main` is clean**, which it is not. Recorded so that
-  implication is not mistaken for a fact.
-- **Also still unenforced:** `require-concurrent-index-creation` is excluded, because `CONCURRENTLY`
-  cannot run inside drizzle's migration transaction (one for all pending files) and the transaction-stripping runner AGENTS.md
-  describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**, and `.squawk.toml` excludes
+  `require-concurrent-index-creation`. Linting every file is not viable as a gate: Squawk has **no
+  baseline or suppression file**, so a gate over the findings below would be red on arrival. The
+  forward-only guard makes those files immutable, so nothing in them can change; the findings are
+  history, not a backlog, and each is accounted for below.
+- **Every finding on `main`, with its reason** (2026-11-20, Squawk 2.66.0, 33 files). Lines are
+  1-based, the statement's first line. Reproduce:
+  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` (the 20); for the 27,
+  the same with a copy of `.squawk.toml` whose `excluded_rules` keeps only `prefer-bigint-over-int`.
+
+  **The 20 under the repo's config** (all in 0001–0009, written before Squawk was wired):
+
+  | Where                                                                  | Rule(s)                                                         | Why it was safe                                                                                                                                                                                                                                                   |
+  | ---------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | 0001:131 (`profiles.household_id` FK)                                  | `constraint-missing-not-valid`, `adding-foreign-key-constraint` | The column was added in the same file and every row was NULL, which an FK does not check; a handful of profiles.                                                                                                                                                  |
+  | 0002:21–24 (four FKs on `entries`' new columns)                        | both rules, ×4                                                  | Same: new, all-NULL columns, and `entries` held only v0 seed and dev rows (0002's header records this).                                                                                                                                                           |
+  | 0005:37 (`entries.superset_id` FK)                                     | both rules                                                      | Same: a new, all-NULL column.                                                                                                                                                                                                                                     |
+  | 0001:159, 0002:80, 0003:22, 0005:46, 0005:48 (NOT VALID then VALIDATE) | `constraint-missing-not-valid` (same-transaction form)          | Each file's comment says why every row already conformed (a backfill just ran, or the column was all NULL), on tables holding a handful of v0 rows. One transaction means NOT VALID bought nothing; that finding is why AGENTS.md now splits the pair across PRs. |
+  | 0008:13 (`prescriptions_day_role_check`)                               | `constraint-missing-not-valid`                                  | The table was still empty (0008's header).                                                                                                                                                                                                                        |
+  | 0009:27 (`sessions_day_role_check`)                                    | `constraint-missing-not-valid`                                  | The column was created in the statement above, so every row was NULL and passes; 0009's own comment.                                                                                                                                                              |
+  | 0003:16 (`entries.kind` DROP NOT NULL)                                 | `ban-drop-not-null`                                             | A deliberate expand step: no column or data is removed, so it was safe to race the concurrent deploy (0003's header).                                                                                                                                             |
+
+  **The 27 under `require-concurrent-index-creation`**, which `.squawk.toml` excludes because
+  `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
+  that already existed; Squawk does not flag an index on a table the same file creates. A plain
+  `CREATE INDEX` holds a `SHARE` lock, blocking writes but not reads, for the build, which on this
+  app's row counts is milliseconds:
+  0001:132 · 0002:25–28 · 0005:38–39 · 0010:47 (`units`, a reference table) · 0012:50 · 0015:96, 102
+  · 0020:58 · 0021:86–90 · 0023:81 · 0024:60–65 · 0025:85–86 · 0026:49. From 0012 on, each file
+  says why in a comment above the index; 0001, 0002 (header), 0005 and 0010 predate that habit.
+  0027–0032 have none.
+
+- **Impact:** low. The record is now a fact rather than an implication. What stays open is the gate
+  itself: a NEW migration's non-concurrent index on a populated table passes CI, and only review
+  catches it, while a table is small enough that this is harmless.
+- **Proposed fix:** remove `require-concurrent-index-creation` from `excluded_rules`, so each new
+  index on an existing table needs a `-- squawk-ignore require-concurrent-index-creation` with its
+  reason (the 0024 idiom). That turns the review rule into a gate that asks for a written reason. The
+  real fix, a runner that applies a `CONCURRENTLY` file outside the transaction, is only worth
+  building when a table is large enough for the lock to matter.
 - **Severity:** low.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)

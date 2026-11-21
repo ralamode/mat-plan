@@ -252,11 +252,10 @@ jobs:
       # suppression feature. Scoping to added files composes with the forward-only
       # guard above — that makes migrations add-only, so "added" IS "new".
       #
-      # The 20 pre-existing findings are therefore never linted. They are known and
-      # reasoned, not a backlog: 0009's own comment names the Squawk objection and
-      # justifies it (the column is created in the same statement, so every row is
-      # NULL and the validating scan reads rows that cannot fail). Recorded in
-      # docs/tech-debt.md so the gate does not silently imply main is clean.
+      # The 20 pre-existing findings are therefore never linted. Each one is listed
+      # with its reason in docs/tech-debt.md ("Squawk lints new migrations only"),
+      # with the command that reproduces them, so the gate does not imply main is
+      # clean.
       #
       # In `quality`, not its own job — a new job is not a REQUIRED check until
       # branch protection is edited, so it would look wired while blocking nothing.
@@ -414,7 +413,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The import-pins guard (apps/web/test/program-imports.test.ts) skips only on a literal
+      # 'false': the scopes step above found no changed file it reads. A missing output runs it.
       - name: Test
+        env:
+          RUN_IMPORT_PINS: ${{ steps.scopes.outputs.run_import_pins }}
         run: pnpm test
 
       # EVAL-0's required check. Two gates, scored separately, failing differently on purpose:
@@ -440,11 +443,21 @@ jobs:
           pnpm --filter @mat-plan/db db:verify
 
       - name: Build
+        id: build
         if: steps.scopes.outputs.run_build != 'false'
         run: pnpm build
         env:
           # lib/env.ts validates at build; values are non-secret CI placeholders.
           DATABASE_URL: postgres://user:pass@localhost:5432/db
+
+      # ── Bundle size (PERF-1 (b); what it measures: the script's header) ──────
+      # No `if:` on purpose: the script decides what a skipped Build means, so a skipped build can
+      # never look like a passing guard. Re-baseline by pasting the summary's <details> block.
+      - name: Bundle size (PERF-1; .github/scripts/check-bundle-size.mjs)
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: node .github/scripts/check-bundle-size.mjs
 
   e2e:
     name: e2e

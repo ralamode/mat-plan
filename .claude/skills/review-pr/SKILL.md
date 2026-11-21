@@ -166,7 +166,13 @@ with no rule citation is taste. Mark it P2, or drop it.
     Also enforce the naming convention: no personal names in PRs, plans, ADRs or commit messages —
     use the role (_the maintainer_, _the household operator_, _the athlete_).
 
-11. **Performance / CWV.** Nothing measures the budget (LCP < 2.5s, INP < 200ms, CLS < 0.1), so look
+11. **Performance / CWV.** The budget is AGENTS.md's (UI PR rules → web performance). CI measures only
+    client JS bytes (the `quality` job's "Bundle size" step; what it measures is
+    `check-bundle-size.mjs`'s header): cite its delta and "vs main's baseline" columns, and any
+    `baseline … raised` warning. **A PR that changes `.github/bundle-baseline.json` must say why in its
+    body** (what grew, and why that cost is worth it); a raise with no stated reason is a P2, and a
+    raise the diff does not explain (no new dependency, client component or route) is a question to
+    the author before shipit. The timings are not measured, so look
     for the causes: client JS where RSC works, unbounded queries on a hot path (`profile_id, date`),
     layout shift from late content, images without `next/image`. **A performance claim nobody
     measured reads _not measured_**, in the PR and in the review, never "faster" or "no impact".
@@ -320,6 +326,8 @@ behind, and:
     contract shape or a writer can break a disjoint caller without sharing a file with it;
   - `main`'s new commits change **the bar itself**: `package.json`, `pnpm-lock.yaml`, any
     `tsconfig*.json`, lint or test config, or a workflow. Any of those can turn a disjoint PR red.
+  - `main`'s new commits **moved bundle size** (its "Bundle size" step shows a non-zero delta), and
+    the PR moves it too: two PRs each under the budget can sum past it on `main` (PERF-1, R6).
 
 Then check `main`'s CI on the merge commit. A red one is fixed before the next merge.
 

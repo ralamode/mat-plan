@@ -410,7 +410,7 @@ describe('the program DAL (FAM-1 15c): Program order', () => {
       reason: PROGRAM_REFUSAL.invalid,
     });
     expect(vi.mocked(reportOrderProgramMiss).mock.calls).toEqual([
-      [SCOPE, order().programPublicIds, TODAY],
+      [SCOPE, order().programPublicIds],
     ]);
     expect(reportAthleteMiss).not.toHaveBeenCalled();
   });

@@ -915,11 +915,11 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     environment that is unfalsifiable from a desk; (2) **this row's PR deletes `app/design/tokens/`**
     and its entry in `e2e/a11y.spec.ts`'s `ROUTES`. A harness kept past its decision is a CI cost
     paid forever for a choice made once.
-    ⚠️ **Three inputs UI-4 measured and could not fix** (fixing them means changing `:root`, i.e.
-    changing the live app's look, which UI-4 ruled out): `muted-foreground` on `muted` is **4.34:1**
-    in light; the `destructive` button variant is **4.39:1** light and **3.04:1** dark on a card (it
-    has zero call sites, which is the only reason CI is green); and hairlines miss SC 1.4.11's 3:1 in
-    both themes (**1.26:1** light, **2.69:1** dark). All four candidate sets clear AA on every text
+    ⚠️ **Inputs UI-4 measured and could not fix** (fixing them means changing `:root`, i.e.
+    changing the live app's look, which UI-4 ruled out): `muted-foreground` on `muted` was **4.34:1**
+    in light (fixed as tech debt on 2026-11-20: L 0.54, 4.64:1); the `destructive` button variant is **3.99:1** light (it has zero call sites, which is
+    the only reason CI is green; dark on a card clears AA at 4.63:1, measured as a browser composites
+    it, #774); and hairlines miss SC 1.4.11's 3:1 in both themes (**1.26:1** light, **1.32:1** dark). All four candidate sets clear AA on every text
     pair in both themes, and Clinch clears 3:1 on hairlines too. Pinned in
     `app/design/tokens/token-sets.test.ts`, so fixing one tells you to delete its row.
     **Constraints that do not move:** contrast ratios stay AA, `MIN_TAP_TARGET_PX` stays, the 360px
@@ -1912,7 +1912,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   ADR 0001's deferred real-user monitoring exactly as its 2026-08-11 amendment requires: production
   only, gated through `lib/env.ts`, CSP updated. **(b)** A client-bundle size budget per route that
   fails CI when exceeded, so a dependency's cost is seen in the PR that adds it. **Before Beta 1.**
-  Needs a plan (touches CI).
+  Needs a plan (touches CI). **(b) is built** ([plan](./plans/perf-1-bundle-size.md)): the `quality`
+  job's "Bundle size" step, `.github/scripts/check-bundle-size.mjs`. (a) is still open.
 
 - **PERF-2 — Lighthouse CI on the main app pages.** _(maintainer, 2026-11-13.)_ Lab scores for the
   pages V1-12 already scans with axe (`/`, Today, the routine editor), as a trend and a regression

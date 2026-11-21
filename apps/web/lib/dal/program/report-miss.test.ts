@@ -14,11 +14,12 @@ vi.mock('@mat-plan/db', () => ({
   workoutIn: vi.fn(async () => false),
   workoutInHousehold: vi.fn(async () => true),
   programWorkoutIds: vi.fn(async () => new Set<string>()),
-  // The household's live programs: the one read a Program order's probes share (15c).
-  readProgramList: vi.fn(async () => [
-    { programPublicId: PROGRAM_ID, name: 'Strength', athletes: [] },
-    { programPublicId: OTHER_PROGRAM_ID, name: 'Stretching', athletes: [] },
-  ]),
+  // Which of the given ids are the household's live programs: the one read a Program order's probes
+  // share (15c), one query for every id.
+  programIdsIn: vi.fn(
+    async (_db: unknown, _scope: unknown, ids: readonly string[]) =>
+      new Set(ids.filter((id) => id === PROGRAM_ID || id === OTHER_PROGRAM_ID)),
+  ),
 }));
 // The household's athletes, archived ones included: the one read the athlete probes share.
 vi.mock('../profiles', () => ({
@@ -28,7 +29,7 @@ vi.mock('../profiles', () => ({
   ]),
 }));
 
-import { programIn, programWorkoutIds, readProgramList, workoutInHousehold } from '@mat-plan/db';
+import { programIdsIn, programIn, programWorkoutIds, workoutInHousehold } from '@mat-plan/db';
 
 import { db } from '../db';
 import { reportScopeMiss, SCOPE_MISS_ACTION, SCOPE_MISS_KIND } from '../household';
@@ -45,6 +46,7 @@ import {
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const OTHER_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a2';
 const FOREIGN_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000af';
+const SECOND_FOREIGN_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000ae';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
 const SCOPE = { householdId: 7 } as never;
 const ATHLETE_ID = '019826b4-0000-7000-8000-000000000001';
@@ -293,34 +295,35 @@ describe('a Program order (FAM-1 15c): the athlete alone', () => {
 });
 
 describe('a Program order refused as invalid (FAM-1 15c): the first program id the household lacks', () => {
-  const TODAY = '2026-11-21';
   const programMissOf = (publicId: string) => ({
     action: SCOPE_MISS_ACTION.resolveProgram,
     resource: { kind: SCOPE_MISS_KIND.program, publicId },
   });
 
-  it('🔴 another household’s program in the order is reported once, with ONE read of the household’s programs', async () => {
-    await reportOrderProgramMiss(
-      SCOPE,
-      [PROGRAM_ID, FOREIGN_PROGRAM_ID, OTHER_PROGRAM_ID, FOREIGN_PROGRAM_ID],
-      TODAY,
-    );
+  it('🔴 another household’s program in the order is reported once, with ONE query for every id', async () => {
+    // Two foreign ids, so only the FIRST in the order's order may be the one reported.
+    const order = [
+      PROGRAM_ID,
+      FOREIGN_PROGRAM_ID,
+      OTHER_PROGRAM_ID,
+      SECOND_FOREIGN_PROGRAM_ID,
+      FOREIGN_PROGRAM_ID,
+    ];
+    await reportOrderProgramMiss(SCOPE, order);
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMissOf(FOREIGN_PROGRAM_ID)]]);
-    expect(vi.mocked(readProgramList).mock.calls).toEqual([[db, SCOPE, TODAY]]);
+    expect(vi.mocked(programIdsIn).mock.calls).toEqual([[db, SCOPE, order]]);
     expect(programIn).not.toHaveBeenCalled();
   });
 
   it('a stale order of the household’s own programs (one left out) reports nothing', async () => {
-    await reportOrderProgramMiss(SCOPE, [OTHER_PROGRAM_ID], TODAY);
+    await reportOrderProgramMiss(SCOPE, [OTHER_PROGRAM_ID]);
     expect(reportScopeMiss).not.toHaveBeenCalled();
-    expect(readProgramList).toHaveBeenCalledTimes(1);
+    expect(programIdsIn).toHaveBeenCalledTimes(1);
   });
 
   it('a failed read reports nothing, and does not throw', async () => {
-    vi.mocked(readProgramList).mockRejectedValueOnce(new Error('connection reset'));
-    await expect(
-      reportOrderProgramMiss(SCOPE, [FOREIGN_PROGRAM_ID], TODAY),
-    ).resolves.toBeUndefined();
+    vi.mocked(programIdsIn).mockRejectedValueOnce(new Error('connection reset'));
+    await expect(reportOrderProgramMiss(SCOPE, [FOREIGN_PROGRAM_ID])).resolves.toBeUndefined();
     expect(reportScopeMiss).not.toHaveBeenCalled();
   });
 });

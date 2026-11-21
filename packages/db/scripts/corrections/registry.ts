@@ -147,8 +147,8 @@ async function requireLiveHouseholdScope(db: Database, publicId: string): Promis
  *
  * Two app bugs produced it, both V1-24: the strength form offered a BW toggle on a movement the
  * catalog declares as loaded (`kb_swings` is seeded `isBodyweight: false, unitDefault: 'lb'`), and
- * `isEditableSet` refuses to edit a bodyweight set — which, with no delete action anywhere in the
- * app, made it **unrecoverable through the UI**. Hence a correction.
+ * `isEditableSet` (the form's, retired at FAM-1 12f) refused to edit a bodyweight set — which, with
+ * no delete action anywhere in the app, made it **unrecoverable through the UI**. Hence a correction.
  *
  * The fix, per set: `reps 20 → 10`, clear `is_bodyweight`, and add the `primary` mass quantity of
  * 20 lb that should have been there. Note the quantity is an INSERT, not an update — a bodyweight set

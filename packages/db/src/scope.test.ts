@@ -89,22 +89,6 @@ const NAMES_ROLE: Readonly<Record<string, string>> = {
     'unwrap `scope.householdId`, so the authority and the tenancy seam stay in one place.',
 };
 
-/**
- * The ONE fixture script allowed to derive one, recorded here with its reason (TEN-1 1c).
- *
- * `screenshot-ephemeral.ts` writes fixtures into a throwaway embedded Postgres it created seconds
- * earlier, through `packages/db`'s write cores — which since 1c require a scope. It is the
- * *db:verify / db:correct* case (a database, no request), but `householdScopeForScript` lives in a
- * module `packages/db`'s `exports` map makes unreachable from `apps/web` **by module resolution**,
- * deliberately, so a script in `apps/web` has to derive instead.
- *
- * **Deriving is the stronger half of the rule**: it never names a household id, it asks the database
- * which household is live through the resolver's own single-sourced probe. The exception is lexical
- * (one file, under `scripts/`), and the request-serving tree is asserted absolutely clean below —
- * which is a check this file did not have before.
- */
-const FIXTURE_DERIVES_SCOPE = 'apps/web/scripts/screenshot-ephemeral.ts';
-
 /** The request-serving tree: routes, DAL, components. No fixture script lives here. */
 const WEB_REQUEST_TREE = /^apps\/web\/(app|lib|components)\//;
 
@@ -309,20 +293,23 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([]);
   });
 
-  it('exactly one module derives a scope from a request (plus the one named fixture script)', () => {
+  // ⚠️ There was a second, named allowance until 2026-11-20: `screenshot-ephemeral.ts`'s
+  // `fixtureScope`, for fixture writers that FAM-1 12f retired. It was removed with its last caller,
+  // so the rule is absolute again: a fixture that needs a scope now has to argue for one here.
+  it('exactly one module derives a scope from a request', () => {
     const derivers = WEB_SOURCES.filter((f) =>
       /\bhouseholdScopeForRequest\b/.test(code(join(REPO, f))),
     );
     expect(
       derivers.map((f) => relative('', f)).sort(),
-      'getHouseholdScope() is the ONE place that decides which household a request belongs to; the only other namer is the screenshot fixture script, which has a database and no request',
-    ).toEqual([DERIVES_SCOPE, FIXTURE_DERIVES_SCOPE].sort());
+      'getHouseholdScope() is the ONE place that decides which household a request belongs to',
+    ).toEqual([DERIVES_SCOPE]);
   });
 
   it('nothing in the REQUEST-SERVING tree mints a scope except getHouseholdScope()', () => {
-    // The assertion above allows a second file by name; this one says where a second file may NOT
-    // live. A fixture script under `scripts/` runs against a throwaway database; a constructor named
-    // in `app/`, `lib/` or `components/` is on a request path, which is the thing being contained.
+    // Also the scope constructors that are not `householdScopeForRequest` (above): a constructor
+    // named in `app/`, `lib/` or `components/` is on a request path, which is the thing being
+    // contained. If a fixture script ever needs one again, the case above is where it argues for it.
     const offenders = WEB_SOURCES.filter(
       (f) =>
         WEB_REQUEST_TREE.test(f) &&
@@ -345,13 +332,11 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     //
     // Swept by EXCLUSION rather than by naming `app|components`: invariant 2 is "nothing ABOVE
     // `lib/dal` holds a scope", and a `'use server'` module under `lib/` (not `lib/dal/`) is above it
-    // too — 1b-bis exists precisely because such modules are easy to forget. Two homes may name the
-    // resolver: the DAL that owns it, and the screenshot fixture script, which has a database and no
-    // request (already a named constant here).
+    // too — 1b-bis exists precisely because such modules are easy to forget. Only the DAL that owns
+    // the resolver may name it.
     const offenders = WEB_SOURCES.filter(
       (f) =>
         !relative('', f).startsWith('apps/web/lib/dal/') &&
-        relative('', f) !== FIXTURE_DERIVES_SCOPE &&
         /\bgetHouseholdScope\b/.test(code(join(REPO, f))),
     );
     expect(

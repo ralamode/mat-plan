@@ -82,7 +82,7 @@ test.describe('public', () => {
     await expect(here).toHaveAttribute('aria-current', 'page');
     await expect(home).not.toHaveAttribute('aria-current', 'page');
 
-    // `expectTapTargets`/`expectLinkTapTargets` are deliberately NOT used on this route (the first
+    // `expectTapTargets`/`expectLinkTargets` are deliberately NOT used on this route (the first
     // matches nothing here, the second measures prose links covered by SC 2.5.8's inline
     // exception), so the footer's two links are measured directly.
     for (const link of [here, home]) {

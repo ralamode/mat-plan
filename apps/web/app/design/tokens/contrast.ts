@@ -14,8 +14,8 @@
  *
  * Method (and the sanity check that proves it): Oklab → linear sRGB with the inverse LMS matrices
  * from Björn Ottosson's reference implementation, then WCAG 2.x relative luminance and
- * `(L1 + 0.05) / (L2 + 0.05)`. Fractional alpha is composited over an opaque backdrop in LINEAR
- * light. Running this on `--brand: oklch(0.654 0.212 34.36)` over white returns 3.5:1, which is
+ * `(L1 + 0.05) / (L2 + 0.05)`. Fractional alpha is composited over an opaque backdrop in gamma-encoded
+ * sRGB, as a browser composites it (`over`). Running this on `--brand: oklch(0.654 0.212 34.36)` over white returns 3.5:1, which is
  * exactly what `globals.css`'s own comment records for the mark — that agreement is the check that
  * the matrices are right, not a coincidence.
  */
@@ -31,10 +31,16 @@ export type ParsedColor = { rgb: Rgb; alpha: number };
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
-/** sRGB transfer function, linear → encoded (not needed for contrast, kept for hex output). */
+/** sRGB transfer function, linear → encoded (for compositing, as a browser does, and for hex output). */
 function encode(c: number): number {
   const v = clamp01(c);
   return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+}
+
+/** Its inverse, encoded → linear. */
+function decode(c: number): number {
+  const v = clamp01(c);
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
 }
 
 /**
@@ -79,15 +85,18 @@ export function parseOklch(value: string): ParsedColor | null {
   };
 }
 
-/** Composite a possibly-translucent colour over an opaque backdrop, in linear light. */
+/**
+ * Composite a possibly-translucent colour over an opaque backdrop **as a browser draws it**: in
+ * gamma-ENCODED sRGB, then back to linear for the luminance below. CSS alpha compositing (Compositing
+ * and Blending Level 1) works on the encoded values; blending in linear light instead gave a ratio a
+ * browser never draws, and not in a safe direction (a 28% foreground mix read ≈6.03:1 dark where a
+ * browser draws ≈2.35:1). Takes and returns LINEAR sRGB, like the rest of this module.
+ */
 export function over(fg: ParsedColor, bg: Rgb): Rgb {
   const a = fg.alpha;
   if (a >= 1) return fg.rgb;
-  return {
-    r: fg.rgb.r * a + bg.r * (1 - a),
-    g: fg.rgb.g * a + bg.g * (1 - a),
-    b: fg.rgb.b * a + bg.b * (1 - a),
-  };
+  const mix = (f: number, b: number) => decode(encode(f) * a + encode(b) * (1 - a));
+  return { r: mix(fg.rgb.r, bg.r), g: mix(fg.rgb.g, bg.g), b: mix(fg.rgb.b, bg.b) };
 }
 
 /** WCAG 2.x relative luminance from LINEAR sRGB. */

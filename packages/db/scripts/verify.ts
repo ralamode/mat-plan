@@ -28,6 +28,7 @@ import {
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
+  PROFILE_NOT_FOUND,
   PROFILE_NAME_MAX,
   PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
@@ -2448,7 +2449,8 @@ assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW
 assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
 
 // V1-30: a non-mass set is UNEDITABLE by design. The edit guard keys on a live primary MASS quantity
-// (writers/strength-session.ts), and the form's `isEditableSet` agrees (strength-logging invariant 3).
+// (writers/strength-session.ts). The old strength form, whose `isEditableSet` mirrored it, was retired
+// at FAM-1 12f, so this guard is the whole rule now.
 // This set has no mode flag and one quantity, so the dimension is the ONLY thing refusing it. Since
 // V1-30 the form can save time and distance sets, so this is the population the refusal now covers;
 // recovering a typo in one means writing a correction (docs/features/strength-logging.md).
@@ -5127,8 +5129,8 @@ const [verifyProfileRow] = await db
 // resolver onto `membershipHousehold` — it counts a principal's memberships now, and two live
 // households is the intended Beta 0 end state. A gate asserting a control that no longer exists is
 // worse than no gate, so what this proves is re-stated as what it is: `liveHouseholdIds` keeps its
-// `LIMIT 2` ambiguity probe, and its two surviving callers (this file, and
-// `screenshot-ephemeral.ts`'s fixture scope) both refuse rather than pick when it returns 2.
+// `LIMIT 2` ambiguity probe, and its one surviving caller (this file) refuses rather than picks when
+// it returns 2.
 assert.equal(
   (await liveHouseholdIds(asPg)).length,
   2,
@@ -5824,7 +5826,7 @@ for (const [label, profilePublicId, ownScope, otherScope, day] of [
       activityTypeId: scLiftActivityId,
       movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
     }),
-    /Profile not found/,
+    { message: PROFILE_NOT_FOUND },
     `TEN-1: …and the other household cannot write it (${label})`,
   );
   assert.equal(
@@ -6240,7 +6242,7 @@ await assert.rejects(
       },
     ],
   }),
-  /Profile not found/,
+  { message: PROFILE_NOT_FOUND },
   'TEN-1 1d: the household seam refuses the cross-household session write (as 1c proves)',
 );
 assert.equal(
