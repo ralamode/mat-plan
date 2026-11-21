@@ -95,6 +95,13 @@ test.describe('public', () => {
    *
    * Soft, so one failing page names every other one. The redirect proves the page refused. It cannot
    * show the session check ran before any data read, which stays unit-owned.
+   *
+   * ✅ **Probed RED three ways** (`e2e:local`, 2026-11-21):
+   * - **(a)** with `await requireSession()` deleted from `app/programs/page.tsx`, `/programs` gave
+   *   `[/programs, /p, /sign-in]`;
+   * - **(b)** with `app/p/layout.tsx` rendering "Athlete One", every page under it sent a stranger that
+   *   name, in its streamed shell;
+   * - with the second server armed (its `''` dropped), every page rendered and leaked.
    */
   test('every protected page sends a stranger to sign-in, with nothing on the wire', async ({
     request,
@@ -133,6 +140,9 @@ test.describe('public', () => {
    * pass the bypassed suite too. Each leaf of `PUBLIC_PATHS` and each root of `PUBLIC_PATH_TREES`
    * answers 200 with no redirect in the stream (a followed redirect to `/sign-in` would also render
    * an `<h1>`), then stays put in a browser.
+   *
+   * ✅ **Probed RED** (`e2e:local`, 2026-11-21): with `await requireSession()` added to
+   * `app/privacy/page.tsx`, `/privacy` failed on its status and its navigation.
    */
   test('every public path answers a stranger itself, with no redirect', async ({
     page,
@@ -202,9 +212,10 @@ async function routineOrder(page: Page): Promise<string[]> {
  * lookup" stays unit-owned (`app/p/[profileId]/actions.test.ts`). Do not cite "no unauthenticated
  * request does DB work" as a runtime property of this suite.
  *
- * ✅ **To be probed red** (recorded when run): drop the second server's `''` override, so it is
- * armed. The Save really runs, and both the soft copy check and the tail ("a replay ran: the routine
- * was saved") go red. Run that probe under `e2e:local` only, because it writes to the seed.
+ * ✅ **Probed RED** (`e2e:local`, 2026-11-21; only there, because it writes to the seed): with the
+ * second server's `''` override dropped, so it is armed, the Save really ran. The soft checks failed
+ * ("not refused with the no-session copy", and the athletes' names on the wire), and the tail failed
+ * too ("a replay ran: the routine was saved"), so the tail sees a write.
  */
 test('a real Server Action replayed by a stranger, or spoofed onto a public path, runs nothing', async ({
   page,

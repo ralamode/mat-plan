@@ -53,6 +53,9 @@ test('the export refuses an unknown profile, and says nothing about it', async (
  *   well; that line is unit-proved (`app/p/[profileId]/export/route.test.ts`).
  *
  * Athlete Two, as above: the warm-up's weigh-in is the history that makes the export non-empty.
+ *
+ * ✅ **Probed RED** (`e2e:local`, 2026-11-21): with the second server armed (its `''` dropped), the
+ * stranger got the export.
  */
 test('the export answers a member, and refuses a stranger the same URL', async ({ request }) => {
   const path = athleteExportPath(SEED_PROFILE_2_PUBLIC_ID);
