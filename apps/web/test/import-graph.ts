@@ -404,7 +404,9 @@ export type Origin = { file: string; name: string };
  * target stays under `inside`. A target outside it (third-party, a sibling package) is the origin
  * itself, not walked. `null` is a name whose origin cannot be traced: a specifier that does not
  * resolve, or two `export *` chains publishing one name from different origins. A guard keyed on the
- * origin fails closed on `null`, so a renamed re-export keeps its identity. `texts` reads a file's
+ * origin fails closed on `null`, so a renamed re-export keeps its identity. ⚠️ It reads exports and
+ * initializers, not what a body or a later statement does with a binding, so it is not the last
+ * line: `program-imports.test.ts`'s importer map (`DB_IMPORTERS`) is the backstop. `texts` reads a file's
  * text from a fixture.
  */
 export function originsOf(

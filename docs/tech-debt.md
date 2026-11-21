@@ -21,7 +21,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   its origin and, in a file a row permits, allows a restricted name only as the direct callee of a
   call. A function that calls it is therefore allowed, so a DAL can still publish
   `export const persist = (...a) => saveWorkout(...a)`: the same shape as the allowed
-  `cache(async (id) => readWorkoutDraft(id))`, which the rule cannot tell apart.
+  `cache(async (id) => readWorkoutDraft(id))`, which the rule cannot tell apart. Inside
+  `packages/db/src` a wrapper is caught, since it needs a new importer of the writer and the
+  importer map (`DB_IMPORTERS`) pins those; this row is the `apps/web` DAL case.
 - **Impact:** a file outside the DAL could reach a writer through such a wrapper without the guard
   refusing it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the
   damage is limited to a path a reviewer must catch.

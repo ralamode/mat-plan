@@ -50,6 +50,9 @@ import {
  * - **Names are keyed by ORIGIN** (`originsOf`): each name `index.ts` publishes is traced through
  *   its re-export graph to the file and name that define it, so a lane P writer re-published under a
  *   new name by another barrel is still lane P's. A name whose origin cannot be traced fails closed.
+ *   The walk is per form, so it is backed by a structural pin: inside `packages/db/src`, restricted
+ *   code has exactly the importers it has today (`DB_IMPORTERS`), so a form the walk misses still
+ *   needs a new import, and fails.
  * - **The premises** the resolver's answer rests on (the alias, the resolution options, the
  *   manifests' `exports`/`imports`, `next.config`'s bundler keys) are assertions: if one breaks, the
  *   resolver may disagree with the bundler, and this file says so.
@@ -400,6 +403,169 @@ function packageViolations(file: string, text?: string): string[] {
 const isRuntimeEdge = (i: ImportRef) => !i.typeOnly && i.kind !== 'type';
 
 /**
+ * 🔴 **The backstop to the origin walk: who inside `packages/db/src` imports restricted code.** The
+ * walk (`originsOf`) traces the forms it knows; a file can still hand a writer on through one it does
+ * not (a later reassignment of an `export let`, `Object.assign` onto an exported object, a function
+ * or namespace body that returns it, an alias of a namespace import). Every such form needs an
+ * IMPORT of the writer first, so this pins the importers instead of chasing the forms.
+ *
+ * A **publisher** is a `packages/db/src` file that publishes a restricted origin: every file under
+ * the lane P directories (all its names), and any other file whose `originsOf` maps a name to a
+ * restricted origin (that name). An **importer** of it is any tracked `packages/db/src` file with a
+ * ref (any kind) resolving to it that names one of those names, or names nothing (`export *`, a
+ * namespace or side-effect import). The map is `publisher → importer → kinds`; a test compares it
+ * with {@link DB_IMPORTERS}, so a new importer, or a new kind of import, fails the guard whatever
+ * form follows it. `texts` reads a file's text (or a new file) from a fixture.
+ */
+function dbImporters(texts: Record<string, string> = {}): Record<string, Record<string, string>> {
+  const memo = new Map<string, Published>();
+  const rows = ALLOWED_IN(published());
+  const restrictedOrigin = (o: Origin | null) =>
+    !!o && (under(o.file, LANE_P_DIRS) || rows.has(originKey(o)));
+  const files = [...new Set([...tracked('packages/db/src'), ...Object.keys(texts)])].sort();
+  const ALL = 'all';
+  const publishers = new Map<string, Set<string> | typeof ALL>();
+  for (const f of files) {
+    if (TEST_FILE.test(f)) continue;
+    if (under(f, LANE_P_DIRS)) {
+      publishers.set(f, ALL);
+      continue;
+    }
+    const names = [...originsOf(f, texts, DB_SRC, memo)]
+      .filter(([, o]) => restrictedOrigin(o))
+      .map(([n]) => n);
+    if (names.length > 0) publishers.set(f, new Set(names));
+  }
+  const map: Record<string, Record<string, string>> = {};
+  for (const f of files)
+    for (const i of importsOf(join(REPO_DIR, f), texts[f]).imports) {
+      const names = i.resolved === null ? undefined : publishers.get(i.resolved);
+      if (!names) continue;
+      if (names !== ALL && i.names.length > 0 && !i.names.some((n) => names.has(n))) continue;
+      const row = (map[i.resolved!] ??= {});
+      row[f] = [...new Set([...(row[f]?.split('|') ?? []), i.kind])].sort().join('|');
+    }
+  return map;
+}
+
+const LP_W = 'packages/db/src/writers/program/';
+const LP_Q = 'packages/db/src/queries/program/';
+/**
+ * Every importer of restricted code inside `packages/db/src` today, with how it imports
+ * ({@link dbImporters}). A change here is a reviewed change to who can reach a writer.
+ */
+const DB_IMPORTERS: Record<string, Record<string, string>> = {
+  // resolveDayPlan, through the day queries' barrel.
+  'packages/db/src/queries/day/day-plan.ts': {
+    'packages/db/src/queries/day/index.ts': 're-export',
+  },
+  'packages/db/src/queries/day/index.ts': { [DB_INDEX]: 're-export' },
+  'packages/db/src/queries/day/prescription-live-in.ts': {
+    'packages/db/src/queries/day/index.ts': 'star',
+  },
+  // readLiveSets: the entry for entries.ts, and the day's stored row values (one read, #766).
+  'packages/db/src/queries/live-sets.ts': {
+    [DB_INDEX]: 're-export',
+    'packages/db/src/queries/day/stored-row-values.ts': 'static',
+  },
+  // logRow, untickRow, retickRow, amendRow: the day writers' barrel, then the entry.
+  'packages/db/src/writers/day/amend-row.ts': {
+    'packages/db/src/writers/day/index.ts': 're-export',
+  },
+  'packages/db/src/writers/day/log-row.ts': { 'packages/db/src/writers/day/index.ts': 're-export' },
+  'packages/db/src/writers/day/index.ts': { [DB_INDEX]: 'star' },
+  // The ownership helpers: the entry, and lane P's writers and reads, which compose them; the day
+  // query that reuses the template-block rule.
+  'packages/db/src/writers/ownership.ts': {
+    [DB_INDEX]: 'star',
+    'packages/db/src/queries/day/prescription-live-in.ts': 'static',
+    [`${LP_Q}exists.ts`]: 'static',
+    [`${LP_Q}program-list.ts`]: 'static',
+    [`${LP_Q}program-view.ts`]: 'static',
+    [`${LP_Q}workout.ts`]: 'static',
+    [`${LP_W}assign.ts`]: 'static',
+    [`${LP_W}copy-workout.ts`]: 'static',
+    [`${LP_W}create-program.ts`]: 'static',
+    [`${LP_W}program-name.ts`]: 'static',
+    [`${LP_W}rename-program.ts`]: 'static',
+    [`${LP_W}save-week.ts`]: 'static',
+    [`${LP_W}save-workout.ts`]: 'static',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+  },
+  // Lane P's reads: their barrel, and each other (the list and the view share athletes and week).
+  [`${LP_Q}index.ts`]: { [DB_INDEX]: 'star' },
+  [`${LP_Q}athletes.ts`]: {
+    [`${LP_Q}program-list.ts`]: 'static',
+    [`${LP_Q}program-view.ts`]: 'static',
+  },
+  [`${LP_Q}catalog-arm-option.ts`]: {
+    [`${LP_Q}catalog-arm-option.test.ts`]: 'static',
+    [`${LP_Q}movement-options.ts`]: 'static',
+    [`${LP_W}new-item.ts`]: 'static', // a new item's movement match
+  },
+  [`${LP_Q}exists.ts`]: { [`${LP_Q}index.ts`]: 're-export', [`${LP_Q}week.ts`]: 'static' },
+  [`${LP_Q}movement-options.ts`]: {
+    [`${LP_Q}index.ts`]: 're-export',
+    [`${LP_W}new-item.ts`]: 'static',
+  },
+  [`${LP_Q}program-list.ts`]: { [`${LP_Q}index.ts`]: 're-export', [`${LP_W}assign.ts`]: 'static' },
+  [`${LP_Q}program-view.ts`]: { [`${LP_Q}index.ts`]: 're-export' },
+  [`${LP_Q}week.ts`]: { [`${LP_Q}index.ts`]: 're-export', [`${LP_Q}program-view.ts`]: 'static' },
+  [`${LP_Q}workout.ts`]: { [`${LP_Q}index.ts`]: 're-export' },
+  // Lane P's writers: their barrel, each other, and the fixtures seed (seedProgramFixtures).
+  [`${LP_W}index.ts`]: { [DB_INDEX]: 'star' },
+  [`${LP_W}assign.ts`]: {
+    [`${LP_W}index.ts`]: 're-export',
+    [`${LP_W}reorder-programs.ts`]: 'static',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+    [`${LP_W}take-off.ts`]: 'static',
+  },
+  [`${LP_W}copy-workout.ts`]: { [`${LP_W}index.ts`]: 're-export' },
+  [`${LP_W}create-program.ts`]: {
+    [`${LP_W}index.ts`]: 're-export',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+  },
+  [`${LP_W}new-item.ts`]: {
+    [`${LP_W}index.ts`]: 're-export',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+  },
+  [`${LP_W}program-name.ts`]: {
+    [`${LP_W}create-program.ts`]: 'static',
+    [`${LP_W}program-name.test.ts`]: 'static',
+    [`${LP_W}rename-program.ts`]: 'static',
+  },
+  [`${LP_W}refuse.ts`]: Object.fromEntries(
+    [
+      'assign',
+      'copy-workout',
+      'new-item',
+      'reorder-programs',
+      'save-week',
+      'save-workout',
+      'take-off',
+    ].map((f) => [`${LP_W}${f}.ts`, 'static']),
+  ),
+  [`${LP_W}rename-program.ts`]: { [`${LP_W}index.ts`]: 're-export' },
+  [`${LP_W}reorder-programs.ts`]: { [`${LP_W}index.ts`]: 're-export' },
+  [`${LP_W}save-week.ts`]: {
+    [`${LP_W}index.ts`]: 're-export',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+  },
+  [`${LP_W}save-workout.ts`]: {
+    [`${LP_W}index.ts`]: 're-export',
+    [`${LP_W}seed-fixtures.ts`]: 'static',
+  },
+  [`${LP_W}seed-e2e.ts`]: { [`${LP_W}seed-fixtures.ts`]: 'static' },
+  [`${LP_W}seed-fixtures.ts`]: { 'packages/db/src/seed.ts': 'static' }, // seedProgramFixtures
+  [`${LP_W}shift-band.ts`]: {
+    [`${LP_W}assign.ts`]: 'static',
+    [`${LP_W}save-week.ts`]: 'static',
+    [`${LP_W}save-workout.ts`]: 'static',
+  },
+  [`${LP_W}take-off.ts`]: { [`${LP_W}index.ts`]: 're-export' },
+};
+
+/**
  * `index.ts`'s import closure inside `packages/db/src/`: what it reaches at run time in `erasure/`,
  * and what it could not follow, which includes any edge out of `packages/db/src/` other than into
  * shared or engine `src/` or third-party code. `overrides` reads a file's text from a fixture.
@@ -615,6 +781,75 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
         ],
       ])('a shared file: %s', (text, want) => {
         expect(packageViolations(SHARED_X, text)).toEqual([`${SHARED_X}:1 ${want}`]);
+      });
+    });
+
+    describe('inside packages/db/src, restricted code has exactly the importers it has today', () => {
+      it('the importer map is DB_IMPORTERS', () => {
+        expect(dbImporters()).toEqual(DB_IMPORTERS);
+      });
+
+      it('the entry imports nothing: it only re-exports, by export * and export { … } from', () => {
+        const kinds = importsOf(join(REPO_DIR, DB_INDEX)).imports.map((i) => i.kind);
+        expect(kinds.filter((k) => k !== 'star' && k !== 're-export')).toEqual([]);
+        expect(kinds.length).toBeGreaterThan(10);
+      });
+
+      // One form from each group the origin walk cannot follow (security re-check of #790). Each
+      // needs a new import of restricted code, which the map refuses.
+      const DAY_BARREL = 'packages/db/src/writers/day/index.ts';
+      const dayBarrel = readFileSync(join(REPO_DIR, DAY_BARREL), 'utf8');
+      const PI = "import { saveWorkout } from '../program';\n";
+      it.each([
+        [
+          'a later reassignment of an export let',
+          { [DAY_BARREL]: `${dayBarrel}\n${PI}export let persist: any;\npersist = saveWorkout;` },
+          `${LP_W}index.ts`,
+          DAY_BARREL,
+          'static',
+        ],
+        [
+          'Object.assign onto an exported object',
+          {
+            'packages/db/src/writers/day/tools.ts':
+              "import { logRow } from './log-row';\nexport const tools: any = {};\nObject.assign(tools, { logRow });",
+          },
+          'packages/db/src/writers/day/log-row.ts',
+          'packages/db/src/writers/day/tools.ts',
+          'static',
+        ],
+        [
+          'a function body that returns the writer',
+          {
+            'packages/db/src/queries/leak.ts':
+              "import { readLiveSets } from './live-sets';\nexport function f() {\n  return readLiveSets;\n}",
+          },
+          'packages/db/src/queries/live-sets.ts',
+          'packages/db/src/queries/leak.ts',
+          'static',
+        ],
+        [
+          'an alias of a namespace import',
+          {
+            [DAY_BARREL]: `${dayBarrel}\nimport * as P from '../program';\nconst a = P;\nexport const persist = a.saveWorkout;`,
+          },
+          `${LP_W}index.ts`,
+          DAY_BARREL,
+          'star',
+        ],
+        [
+          'a new kind of import by an existing importer',
+          {
+            [DAY_BARREL]: `${dayBarrel}\nimport { logRow as l } from './log-row';\nexport let x: any;\nx = l;`,
+          },
+          'packages/db/src/writers/day/log-row.ts',
+          DAY_BARREL,
+          're-export|static',
+        ],
+      ] as const)('%s', (_label, texts, publisher, importer, kinds) => {
+        const map = dbImporters({ ...texts });
+        expect(map[publisher]?.[importer]).toBe(kinds);
+        expect(map).not.toEqual(DB_IMPORTERS);
       });
     });
 
