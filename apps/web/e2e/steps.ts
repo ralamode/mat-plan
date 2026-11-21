@@ -29,6 +29,7 @@ import {
   ATHLETE_FORM_COPY,
   BODYWEIGHT_COPY,
   changeLabel,
+  DAY_NAV_LABEL,
   DEFAULT_TIME_ZONE,
   LIFE_COPY,
   PRACTICE_COPY,
@@ -415,3 +416,12 @@ export async function openIfCollapsed(region: Locator, name: string): Promise<vo
   const line = region.getByRole('heading').getByRole('button', { expanded: false });
   if ((await line.count()) > 0) await openCollapsed(region, name);
 }
+
+/** The day page's day arrows and date line. */
+export const dayNav = (page: Page) => page.getByRole('navigation', { name: DAY_NAV_LABEL });
+
+/**
+ * The date line ("Today · …"), inside the day nav. Not `page.getByText`: Next's route announcer says
+ * the page's title, which is the same day, and Playwright reads its shadow root too.
+ */
+export const dayLineText = (page: Page, text: RegExp) => dayNav(page).getByText(text);

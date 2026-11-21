@@ -20,6 +20,7 @@ import {
   logPractice,
   PRACTICE_MINUTES,
   SEED_PROFILE_ROUTE,
+  dayLineText,
 } from './steps';
 
 /**
@@ -118,7 +119,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   expect(day, 'the page should have rendered the ?d= day').toBe(isoDaysAgo(1));
   // …and on the URL fallback that check compares the test with itself, so also ask the PAGE: a
   // clamped render would say "Today ·" in the day nav.
-  await expect(page.getByText(/^Today ·/), 'the page clamped ?d= to today').toHaveCount(0);
+  await expect(dayLineText(page, /^Today ·/), 'the page clamped ?d= to today').toHaveCount(0);
   const month = day.slice(0, 7);
 
   // ── 1. Bodyweight ─────────────────────────────────────────────────────────────

@@ -276,6 +276,13 @@ access token`, which reads like a permissions problem with the repo. The cause w
   `<meta id="__next-page-redirect" … content="1;url=…">`. That meta is what the browser follows, so
   the chain is the visitor's, and it is deterministic. Diagnose from the "Received" array: a repeated
   or leading `/sign-in` means the events crossed pages.
+- **A page that gets a title makes `page.getByText(<that text>)` match twice (#798).** Next's route
+  announcer says the new title in a `#__next-route-announcer__` node, in an OPEN shadow root, and
+  Playwright's text and CSS locators read through open shadow roots. So once the day page was
+  titled "Today · Fri, Nov 20", every `getByText(/^Today ·/)` hit a strict-mode violation (2
+  elements). → Scope the locator to where the text is drawn (`dayLineText(page, re)`, inside the
+  day nav), never widen it with `.first()`. The same node is how to assert what a navigation
+  ANNOUNCED: `page.locator('#__next-route-announcer__')`, which `toHaveTitle` cannot show.
 - **A journey that builds its own athlete and program failed twice before it reached what it tested
   (FAM-1 12c-iii, #761).** (1) Put on timed out finding the new athlete's checkbox: `addAthlete` had
   not landed when the spec read `page.url()` and moved on. (2) Then "no rows to tick": `locator.count()`

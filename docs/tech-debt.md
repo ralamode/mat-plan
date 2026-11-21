@@ -319,7 +319,16 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
-### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
+### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09) — ✅ CLOSED 2026-11-20
+
+> **Closed (FAM-1 day-page a11y, 2026-11-20).** The day page's title is its day line, short
+> (`dayTitle`: "Today · Fri, Nov 20"), from `generateMetadata` over the page's own `cache()`d
+> resolver, so the look-ahead fallback agrees. Never the name (D8). The routine page and the
+> picker, the two other untitled pages, got plain titles in the same PR. ⚠️ **Known limit:** two
+> athletes on the same day share a title, so switching between them is not announced (the route
+> announcer reads only a title that changes); focus stays on the athlete link just tapped, which
+> reads the name. The rename confirmation is the day, not the new name, for the same reason. The
+> text below is the original record.
 
 - **What & why it's debt:** `app/p/[profileId]/page.tsx` exports no `metadata`, so `document.title`
   stays the root layout's `APP_NAME`. Next's App Router announcer speaks the title **when it changes**
@@ -582,7 +591,14 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   keeps explaining it.
 - **Severity:** low. It holds nothing today; the cost is the explaining.
 
-### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
+### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii) — ✅ CLOSED 2026-11-20
+
+> **Closed as overtaken (FAM-1 day-page a11y, 2026-11-20; board).** The last two copies,
+> `editable-set.tsx` and the `StrengthForm` island, were deleted with the old strength form (#725,
+> 12f), so no copy is left to share and a `useAnnounceAndFocus` hook would have no consumer. The
+> sweep found one silent region instead: `routine-editor.tsx`'s "Routine saved." mounted with its
+> text. It is now an `Announcer`, mounted empty, with a `messageKey` per save. The text below is the
+> original record.
 
 - **What & why:** `saved-announcer.tsx` (deleted at V1-24 3b-life-a), `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in

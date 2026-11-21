@@ -1,8 +1,9 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { AppShell } from '@/components/layout/app-shell';
-import { NAME_WRAP_CLASS, NAV_LINK_CLASS, athletePath } from '@/lib/constants';
+import { NAME_WRAP_CLASS, NAV_LINK_CLASS, ROUTINE_COPY, athletePath } from '@/lib/constants';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId, listProfiles } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
@@ -12,6 +13,9 @@ import { RoutineEditor } from './routine-editor';
 // Route-segment config must be a static inline literal (Next can't follow an imported const), so
 // 'nodejs' stays here. pg → Node runtime, not Edge. Mirrors the sibling Today route.
 export const runtime = 'nodejs';
+
+/** A plain title, never the athlete's name (D8); Next's route announcer reads it on arrival. */
+export const metadata: Metadata = { title: ROUTINE_COPY.heading };
 
 /**
  * V1-18 PR 2: the coach routine editor. A parent authors which activities are in a kid's routine and their
@@ -58,7 +62,7 @@ export default async function RoutineEditorPage({
         <Link href={athletePath(profile.id)} className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}>
           ← Back to {profile.name}
         </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">Edit routine</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">{ROUTINE_COPY.heading}</h1>
         <p className={`text-muted-foreground ${NAME_WRAP_CLASS}`}>
           Choose {profile.name}&rsquo;s activities and the order they log them in.
         </p>

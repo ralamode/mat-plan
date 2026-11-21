@@ -517,6 +517,10 @@ export const NO_HOUSEHOLD_COPY = {
 
 /** The routine editor's copy — the e2e replays its Save, so the label has one home. */
 export const ROUTINE_COPY = {
+  /** The routine page's `<h1>` and its title. */
+  heading: 'Edit routine',
+  /** Said, and shown, after a save (`routine-editor.tsx`'s `Announcer`). */
+  saved: 'Routine saved.',
   orderHeading: 'Routine order',
   save: 'Save routine',
 } as const;
@@ -1002,6 +1006,9 @@ export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other:
  * later `?d=` renders today. Look-ahead is read-only, so this bounds a view, never a write.
  */
 export const LOOK_AHEAD_DAYS = 6;
+
+/** The day page's day arrows and date line: `day-nav.tsx`'s `<nav>`, and how a test finds it. */
+export const DAY_NAV_LABEL = 'Change day';
 
 /**
  * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing

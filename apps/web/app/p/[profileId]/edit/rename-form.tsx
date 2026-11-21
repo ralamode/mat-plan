@@ -69,9 +69,10 @@ const NAME_INPUT_ID = 'athlete-name';
  * ## What the parent actually sees on success
  *
  * **With JavaScript:** they land back on the athlete's day page, whose `<h1>` is the new name. That
- * is the confirmation (UX round 2, U9: _"a pure rename's confirmation is the new `<h1>`"_), not the
- * status line — Next's route announcer is `aria-live="assertive"`, so it pre-empts this polite region
- * on the way out. **Without JavaScript:** no navigation, and the visible "Name saved." line plus the
+ * is the SIGHTED confirmation (UX round 2, U9: _"a pure rename's confirmation is the new `<h1>`"_).
+ * ⚠️ A screen reader hears the page's TITLE on arrival, the day ("Today · Fri, Nov 20"), not the
+ * `<h1>`: Next's route announcer reads `document.title`, and the title never holds the name (D8). It
+ * is `aria-live="assertive"`, so it also pre-empts this polite region on the way out. **Without JavaScript:** no navigation, and the visible "Name saved." line plus the
  * re-rendered `<h1>` above it are the whole confirmation. The region is mounted in both states so a
  * screen reader hears the change rather than a region that appeared with its text already in it.
  */
