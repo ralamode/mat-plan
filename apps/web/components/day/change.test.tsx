@@ -7,7 +7,7 @@ import {
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
@@ -1516,6 +1516,9 @@ describe('another phone’s change, said to a screen reader (only for a row this
 
 describe('another phone’s change beside this phone’s own sentence (one node each)', () => {
   it('both are read, the earlier node untouched; this phone’s next sentence replaces its own', async () => {
+    // A fixed clock: the whole test is one moment, inside ANNOUNCE_TOGETHER_MS on any runner.
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1_000_000);
+    onTestFinished(() => clock.mockRestore());
     const control = mount(yesterdayHalfDone, {
       change: true,
       wrap: () => ({ amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }) }),
@@ -1535,8 +1538,12 @@ describe('another phone’s change beside this phone’s own sentence (one node 
       DAY_COPY.announce.changedElsewhere(setLabel(1), `35 ${SPOKEN.lb}, 8 reps`),
     );
     // This phone's own sentences never stack: Escape here is said beside the other phone's only.
+    const otherNode = region.lastElementChild;
     fireEvent.keyDown(load(), { key: 'Escape' });
     expect(region.children).toHaveLength(2);
+    // The other phone's sentence stays, the same node; this phone's failed one is gone.
+    expect(region.firstElementChild).toBe(otherNode);
+    expect(failedNode!.isConnected).toBe(false);
     expect(region.lastElementChild!.textContent).toContain(
       DAY_COPY.announce.cancelled(setLabel(1)),
     );

@@ -18,7 +18,7 @@
  * the tech-debt entry names this file as where they land. Converting four tested components in a PR
  * that also adds a route, an action module and a writer would bury the behavioural change.
  *
- * ## The two rules a caller must respect
+ * ## The rules a caller must respect
  *
  * 1. **Render it in BOTH states, mounted before the message exists.** A screen reader announces
  *    *changes* to a region that already existed; a region that mounts with its text is silent. This is
@@ -85,7 +85,9 @@ type AnnouncerProps = {
 export function Announcer(props: AnnouncerProps) {
   const { id, className = 'sr-only' } = props;
   return (
-    // `aria-atomic="false"`: read what changed, not the whole region (a hint WebKit needs).
+    // `aria-atomic="false"` overrides `role="status"`'s implicit `true`: read the node that was
+    // added, not the whole region. A one-node region (every `message` caller) reads the same either
+    // way; the `messages` form depends on it.
     <p role="status" aria-atomic="false" id={id} className={className}>
       {props.messages ? (
         props.messages.map((m, i) => (
