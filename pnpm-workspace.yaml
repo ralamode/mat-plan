@@ -9,7 +9,7 @@ packages:
 # there is one range to bump. ⚠️ Not enforced: pnpm's default `catalogMode` is manual, so a
 # `pnpm add pg@x --filter <one workspace>` writes a literal range there; keep both on `catalog:`.
 catalog:
-  '@electric-sql/pglite': ^0.5.15
+  '@electric-sql/pglite': ^0.5.16
   '@types/pg': ^8.23.1
   pg: ^8.23.1
 

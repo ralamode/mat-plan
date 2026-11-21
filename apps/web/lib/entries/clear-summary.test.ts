@@ -32,7 +32,6 @@ function entry(n: number, overrides: Partial<EntryDTO> = {}): EntryDTO {
     sessionId: null,
     sessionType: null,
     sessionDayRole: null,
-    sessionFeel: null,
     supersetId: null,
     supersetOrder: null,
     sets: [],

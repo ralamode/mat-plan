@@ -49,20 +49,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Trigger:** the next spec that adds an athlete must pick one of the two.
 - **Severity:** low (test-only; the suite fits today).
 
-### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
-
-- **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
-  reuses `readProgramList` to tell a foreign program id from the household's own. That read is 2 +
-  one query per live athlete (`athletesOnPrograms`), up to 27, and loads names and assignments only to
-  keep the ids. A one-query id lookup beside `programIn` in `packages/db/src/queries/program/exists.ts`
-  is lane P's file, so 15c PR 2 did not add one.
-- **Impact:** it runs on the writer's `invalid`, which is also its routine stale-list answer (a put on
-  or take off elsewhere, midnight), and is awaited before the refusal returns. Small at household scale.
-- **The fix:** lane P adds `programIdsIn(exec, scope, ids)` (one `select public_id … where
-liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `reportOrderProgramMiss`
-  changes.
-- **Severity:** low.
-
 ### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
 
 - **What & why it's debt:** `getProgramsByAthlete` is one DAL call, but lane P's
@@ -331,6 +317,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **The fix, when taken:** restore the a-1d envelope seed (`typed`, `chosenKind`) for the add and
   the rename, each with an unhydrated e2e of its refusal. `profile-actions.ts` is owned by
   `write-path.md`.
+- **Planned and parked (2026-11-20).** A v1 plan went through a correctness and a UX lens:
+  [plan](./plans/td-unhydrated-refusal.md), with its review log. Seeding the form from an echoed
+  `typed` works on the native re-render, but the full fix also needs native `autofocus` so the
+  refusal is seen before hydration, no focus theft at hydration, Restore's unhydrated answer, and the
+  byte-identical refusal matrix kept. The log lists v2's shape.
+- **Trigger:** a report of a blank form after a refusal on a slow phone, or the next PR that
+  changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
@@ -346,7 +339,13 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
   edit and belongs to whichever chunk next touches that file deliberately.
 
-### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
+### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08) — ✅ CLOSED 2026-11-20
+
+> **Closed by decision** (maintainer, 2026-11-20: "Accept as is, close the row"). PROF-1 b's N3
+> already shipped the control half: `ExportControl` shows "Nothing logged yet, so there is nothing to
+> export." and no link when an athlete has no history, in Household settings and on the day page. A
+> direct hit on the export route (a stale tab, a bookmark after Clear this day) still downloads an
+> empty zip, and that is accepted. The text below is the original record.
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
   athlete with none yields `buildZip([])`, which is a valid but **EOCD-only** archive — iOS Files
