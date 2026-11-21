@@ -231,7 +231,7 @@ export function useChange(
 
   // Keyed on the sentence alone: `day` is not a dependency, so a re-render that hands down a new
   // context value (the announcement's own, say) never says it twice.
-  const announceElsewhere = useEffectEvent((text: string) => day.announce(text));
+  const announceElsewhere = useEffectEvent((text: string) => day.announce(text, 'elsewhere'));
   useEffect(() => {
     if (elsewhere) announceElsewhere(elsewhere.text);
   }, [elsewhere]);
