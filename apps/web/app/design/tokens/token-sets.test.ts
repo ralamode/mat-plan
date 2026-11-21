@@ -233,12 +233,13 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
  * The tint figure is composited as a browser draws it (`over()`, gamma-encoded sRGB; `status-line.tsx`
  * records a measured 3.97:1 for the same red). The dark-mode 20% tint pinned here until 2026-11-20 was
  * an artefact of blending in linear light: drawn as a browser draws it, it clears AA at 4.63:1, so its
- * row is gone. The preview page deliberately does NOT render either pair — rendering them would
- * redden the gate over a pre-existing defect this PR is not allowed to fix (changing `--destructive`
- * or `--muted` would change the live app's appearance, which UI-4 promised not to do).
+ * row is gone. The preview page deliberately does NOT render the red-tint pair — rendering it would
+ * redden the gate over a pre-existing defect UI-4 was not allowed to fix (changing `--destructive`
+ * would change the live app's appearance, which UI-4 promised not to do).
  *
- * These are UI-3's inputs. When UI-3 fixes them, this test fails and tells whoever did it to delete
- * the row — which is the point: a finding recorded as a test cannot be quietly lost.
+ * The red tint and the hairlines are UI-3's inputs. When one is fixed, this test fails and tells
+ * whoever did it to delete its row — which is the point: a finding recorded as a test cannot be
+ * quietly lost.
  */
 describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to fix)', () => {
   const root = blockOf(globals, ':root')!;
@@ -288,6 +289,9 @@ describe.each([
     'secondary',
     'sidebar',
     'sidebar-accent',
+    // A logged row's tint: the thinnest margin (4.57:1 light). Logged rows use
+    // `done-muted-foreground`; this keeps the "every ground" claim, and its figure, checked.
+    'done-surface',
   ] as const;
   it.each(GROUNDS)('muted-foreground clears 4.5:1 on %s', (ground) => {
     expect(ratioOf(t['muted-foreground']!, t[ground]!, t['background']!)!).toBeGreaterThanOrEqual(
