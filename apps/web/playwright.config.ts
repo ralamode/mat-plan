@@ -73,7 +73,9 @@ export default defineConfig({
     },
     {
       // The SAME build, signed out. No second `next build`: Playwright starts this only once the
-      // first entry's URL answers, so the build has finished.
+      // first entry's URL answers, so the build has finished. ⚠️ That holds when this run starts the
+      // first server (CI, `e2e:local`). A bare local `pnpm --filter web e2e` can REUSE a server on the
+      // first port, and this one then runs whatever `.next` is on disk.
       command: `pnpm --filter web exec next start -p ${SIGNED_OUT_PORT}`,
       url: `${SIGNED_OUT_ORIGIN}/`,
       // 🔴 **Always false.** A server this run did not start has an env this run did not set, so it

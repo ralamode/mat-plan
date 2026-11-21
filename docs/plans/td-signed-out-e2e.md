@@ -191,9 +191,8 @@ The pin grows deliberately rather than being dodged.
 ## Out of scope
 
 - The Clerk-composed branch at runtime (Q1).
-- `.github/SECURITY.md` does not mention the test session bypass at all, though it bypasses
-  authentication in production code (security, outside the diff; since #319). Raised with the
-  Tech Debt lane as its own row, not folded in here.
+- `.github/SECURITY.md`'s bypass bullet arrived with #797, after this plan was written. As built, this
+  PR adds its disarm line (the second review's P1).
 - `ai-1-nl-logging.md`'s spend argument: the "do not cite" sentence still stands after this PR, and
   that plan is its owner's.
 

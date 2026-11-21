@@ -5,7 +5,7 @@
   build with the session bypass disarmed (`E2E_SESSION_BYPASS_USER_ID: ''`), so its visitors are
   genuinely signed out. What replaced each proof AUTH-1 1d deleted:
   - **"the app itself is still gated"** (`/p` only) → every protected page, design previews included,
-    sends a stranger to sign-in in one hop, with nothing of the household on the wire
+    sends a stranger to sign-in in one hop, with none of the seeded athletes' names or internals on the wire
     (`landing.spec.ts`);
   - **variant 1 of the action replay** → the captured Save, sent as-is to the routine path and every
     public path on the signed-out server, is refused with the exact no-session copy, and the routine is

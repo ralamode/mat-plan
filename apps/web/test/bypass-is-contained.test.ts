@@ -4,6 +4,8 @@ import { join, resolve } from 'node:path';
 import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
+import config from '../playwright.config';
+
 import { appSources, code, WEB_DIR } from './source-scan';
 
 const REPO = resolve(WEB_DIR, '../..');
@@ -22,7 +24,8 @@ const REPO = resolve(WEB_DIR, '../..');
  * sails past all of it. (`auth-1c-pre-login-seam.md`, panel finding 1.)
  *
  * **The containment has two halves, and they are deliberately different shapes:**
- *  1. the **raw variable** may be named only where it is declared, validated and injected;
+ *  1. the **raw variable** may be named only where it is declared, validated, injected and (by the
+ *     signed-out e2e server, `playwright.config.ts`) disarmed;
  *  2. the **predicate** `sessionBypassUserId()` may be called only by the principal module.
  *
  * Half 2 is what makes `lib/dal/session.ts` absent from half 1's list a *strength* rather than an
@@ -52,7 +55,7 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
 
   const relative = (f: string) => f.replace(/^.*apps\/web\//, '');
 
-  it('names the raw variable in exactly the armer and the injectors', () => {
+  it('names the raw variable in exactly the armer, the injectors and the disarmer', () => {
     const sources = appSources();
     // Non-vacuity: a mis-rooted or empty glob must fail loudly rather than pass by finding nothing.
     expect(sources.length).toBeGreaterThan(50);
@@ -61,7 +64,7 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
 
     expect(
       namers.sort(),
-      'an auth bypass is armed in ONE module and injected only by throwaway harnesses',
+      'an auth bypass is armed in ONE module, injected only by throwaway harnesses, and disarmed only by the e2e config',
     ).toEqual([ARMS, ...INJECTORS, DISARMS].sort());
   });
 
@@ -73,6 +76,21 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
     const mentions = src.split('\n').filter((line) => /E2E_SESSION_BYPASS_USER/.test(line));
     expect(mentions, `${DISARMS} must name the bypass exactly once`).toHaveLength(1);
     expect(mentions[0]).toMatch(/^\s*E2E_SESSION_BYPASS_USER_ID: '',?$/);
+  });
+
+  it('the config disarms the right server: one entry, exactly that env, never reused', () => {
+    // The text pin above cannot see WHERE the key sits: a conditional `env`, the block on the first
+    // entry, or a hoisted unused `const` all pass it with server 2 armed (#791's second review).
+    // So also read the parsed config: exactly one entry carries an `env`, it is exactly the one empty
+    // key, and that entry never reuses a server it did not start.
+    const servers = [config.webServer ?? []].flat() as {
+      env?: Record<string, string>;
+      reuseExistingServer?: boolean;
+    }[];
+    const disarming = servers.filter((server) => server.env !== undefined);
+    expect(disarming, 'exactly one webServer entry carries an env').toHaveLength(1);
+    expect(disarming[0]!.env).toEqual({ E2E_SESSION_BYPASS_USER_ID: '' });
+    expect(disarming[0]!.reuseExistingServer).toBe(false);
   });
 
   it('reads `process.env` for it in the armer alone', () => {
