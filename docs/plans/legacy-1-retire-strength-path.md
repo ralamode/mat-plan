@@ -99,6 +99,9 @@ verbatim, because mutation `.expect` files match on it.
   deleted writer's exact column list, frozen and documented as "rows written before LEGACY-1".
 - **Sets and quantities:** through the live `insertEntrySetRows`, as `verify/day-plan.ts` already
   does.
+- **No old built-in movement.** After #775's PR 1 a fixtures database holds none
+  (`legacyMovements` leaves the seed). So the builder, and every section moved onto it, names no
+  old built-in by slug or seed id: only test-library rows or items the household made.
 - **Required shapes:** a NULL snapshot, a `''` snapshot, a skipped movement with zero sets, a
   multi-set entry, a `day_role` session, and a session with no workout.
 
@@ -185,6 +188,11 @@ new tech-debt entry records it; dropping any of them is a separate expand→cont
 - **#770** (CAT-3 A2-ii) edits `verify.ts`, `verify/schema.ts`, `mutations/README.md` and
   `write-path.md`.
 - **#710** edits `mutations/README.md`; **#791** edits `write-path.md`.
+- **#775's PR 1** ("F1-i", the post-fresh-start plan, not open yet) re-cuts `verify.ts`'s TEN-1 1d,
+  TEN-2a, TEN-2b and TEN-2c, renames `PROGRAM_SEED` to `LEGACY_PROGRAM_FIXTURE`, and is read by
+  `verify/schema.ts`'s FAM-1 5b. Neither plan waits on the other: **whichever lands second re-reads
+  its sections by assertion message and re-derives its patch list from the `.expect` files**
+  (agreed with the Roadmap Thread, 2026-11-21).
 - **PRs B and C wait for #770** to merge (it moves `verify.ts`), and re-read the sections by banner
   afterwards. PR A touches none of those files. `roadmap.md`'s In flight records the order (PR 0).
 
