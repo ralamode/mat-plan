@@ -32,7 +32,6 @@ import {
   ALL_ATHLETES_LINK,
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
-  CLOSED_DAY_NOTICE,
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
   NOTICE_CLASS,
@@ -45,6 +44,7 @@ import {
 import { BodyweightSection } from './bodyweight-section';
 import { ClearDay } from './clear-day';
 import { ClearDayBanner } from './clear-day-banner';
+import { ClosedDayNotice } from './closed-day-notice';
 import { clearedNoticeLine } from './clear-day-notice';
 import { LifeSection } from './life-section';
 import { DayNav, dayTitle } from './day-nav';
@@ -278,10 +278,7 @@ export default async function TodayPage({ params, searchParams }: DayPageProps) 
           {PROGRAM_COPY.comingUp(profile.name, day)}
         </p>
       ) : view.notice === 'closed' ? (
-        <div className={`${NOTICE_CLASS} flex flex-col gap-2`}>
-          <p>{CLOSED_DAY_NOTICE}</p>
-          {clearedLine ? <p>{clearedLine}</p> : null}
-        </div>
+        <ClosedDayNotice clearedLine={clearedLine} />
       ) : null}
 
       {/* V1-9b B2: the day's clears and Restore all, on a day open for it. Mounted on every day and
