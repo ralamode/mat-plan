@@ -1,6 +1,11 @@
 import { join } from 'node:path';
 
-import { newId, SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
+import {
+  newId,
+  SEED_PROFILE_2_NAME,
+  SEED_PROFILE_NAME,
+  SEED_PROFILE_PUBLIC_ID,
+} from '@mat-plan/shared';
 import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { PUBLIC_PATH_TREES, PUBLIC_PATHS } from '../lib/public-paths';
@@ -40,8 +45,16 @@ const STRANGER_MUST_NOT_SEE = [
   '/apps/web/',
 ];
 
-/** Each dynamic segment (`[id]`, `[...rest]`, `[[...rest]]`) filled with a fresh id. */
-const withFreshIds = (route: string) => route.replace(/\[\[?(\.\.\.)?[^\]]+\]\]?/g, () => newId());
+/**
+ * Each dynamic segment filled in. `[profileId]` gets the seeded athlete's REAL id, so a page that
+ * read that athlete by id before its session check would leak a name the body check can see (a fresh
+ * id belongs to nobody and could not fail; #791's second review). No program or workout id is
+ * committed, so those, like any other segment, get a fresh id, and a by-id leak there is not seen.
+ */
+const withRouteIds = (route: string) =>
+  route
+    .replace('[profileId]', SEED_PROFILE_PUBLIC_ID)
+    .replace(/\[\[?(\.\.\.)?[^\]]+\]\]?/g, () => newId());
 
 test.describe('public', () => {
   test.use({ viewport: MOBILE_VIEWPORT, baseURL: SIGNED_OUT_ORIGIN });
@@ -112,7 +125,7 @@ test.describe('public', () => {
       MIN_PROTECTED_PAGES,
     );
     for (const file of files) {
-      const route = withFreshIds(routeOf(appDir, file));
+      const route = withRouteIds(routeOf(appDir, file));
       const chain = [route];
       let body = '';
       for (let url = route, hop = 0; hop < 5; hop++) {
@@ -125,7 +138,10 @@ test.describe('public', () => {
             ? res.headers()['location']
             : meta?.match(/content="\d+;\s*url=([^"]+)"/)?.[1];
         if (!next) break;
-        url = new URL(next, SIGNED_OUT_ORIGIN).pathname;
+        const target = new URL(next, SIGNED_OUT_ORIGIN);
+        // An off-origin redirect must not pass as a path: `https://elsewhere/sign-in` is not ours.
+        expect.soft(target.origin, `${route}: redirects off the origin`).toBe(SIGNED_OUT_ORIGIN);
+        url = target.pathname;
         chain.push(url);
       }
       expect.soft(chain, `${route}: lands on sign-in in one hop`).toEqual([route, SIGN_IN_PATH]);
@@ -167,9 +183,9 @@ test.describe('authenticated', () => {
    * became a loop — `/p` → `requireSession()` → `/sign-in`, whose forward controls lead back here —
    * and it meant a visitor holding only the gate cookie could never see the landing at all.
    *
-   * ⚠️ Asserted as "the landing renders", not "a sessionless visitor sees the landing": the harness
-   * arms a principal process-wide (1c-3a), so no spec here can establish "no session". The proxy
-   * reads no session either way, so this still catches the regression it is named for.
+   * ⚠️ Asserted on the BYPASSED server ("the landing renders for a member"): the `public` block above
+   * covers the stranger. The proxy reads no session either way, so this still catches the
+   * regression it is named for.
    */
   test('/ renders the landing — no forward to the picker', async ({ page }) => {
     await page.goto('/');
@@ -254,7 +270,10 @@ test('a real Server Action replayed by a stranger, or spoofed onto a public path
     accept: 'text/x-component',
   };
 
+  // A context per arm: cookies on `localhost` ignore the port, so one jar would carry anything the
+  // bypassed server set to the stranger's requests (#791's second review).
   const replayCtx = await browser.newContext();
+  const strangerCtx = await browser.newContext();
   // Every public path, not just `/` (PRIV-2): each one is an unauthenticated POST endpoint on the
   // same terms, so a new entry in `PUBLIC_PATHS` inherits this runtime proof.
   for (const publicPath of PUBLIC_PATHS) {
@@ -272,7 +291,7 @@ test('a real Server Action replayed by a stranger, or spoofed onto a public path
   }
   for (const target of [routine, ...PUBLIC_PATHS]) {
     const label = `${target} as-is replay by a stranger`;
-    const res = await replayCtx.request.post(`${SIGNED_OUT_ORIGIN}${target}`, {
+    const res = await strangerCtx.request.post(`${SIGNED_OUT_ORIGIN}${target}`, {
       headers: actionHeaders,
       data: data!,
       maxRedirects: 0,
@@ -287,6 +306,7 @@ test('a real Server Action replayed by a stranger, or spoofed onto a public path
       expect.soft(body, `${label} sends a stranger "${secret}"`).not.toContain(secret);
   }
   await replayCtx.close();
+  await strangerCtx.close();
 
   // Changes nothing: a fresh load still has the original order.
   await page.unroute(routine);
@@ -316,8 +336,8 @@ test('a real Server Action replayed by a stranger, or spoofed onto a public path
  * 🔴 **The witness is the CSP header, not page content.** `withSecurityHeaders` is called from
  * nowhere but `proxy()` (verified: an unconditional early `return` in `proxy()` makes the header
  * `undefined`), so its presence proves the proxy ran on THIS request — a claim that survives the
- * harness bypass, where "no app content on the wire" cannot be asserted at all because every request
- * is authenticated. `proxy.test.ts` pins the matcher's SHAPE; this pins that nothing skips the proxy
+ * harness bypass, where "no app content on the wire" cannot be asserted on the BYPASSED server because
+ * every request to it is authenticated (proof 1 asserts it on the signed-out one). `proxy.test.ts` pins the matcher's SHAPE; this pins that nothing skips the proxy
  * at any other layer, such as an early `return` keyed on the header.
  *
  * ✅ **Probed RED two ways.** (a) **SEC-1's own regression**: re-adding

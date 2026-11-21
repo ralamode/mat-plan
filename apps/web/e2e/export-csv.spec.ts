@@ -57,14 +57,21 @@ test('the export refuses an unknown profile, and says nothing about it', async (
  * ✅ **Probed RED** (`e2e:local`, 2026-11-21): with the second server armed (its `''` dropped), the
  * stranger got the export.
  */
-test('the export answers a member, and refuses a stranger the same URL', async ({ request }) => {
+test('the export answers a member, and refuses a stranger the same URL', async ({
+  request,
+  playwright,
+}) => {
   const path = athleteExportPath(SEED_PROFILE_2_PUBLIC_ID);
   const member = await request.get(`${APP_ORIGIN}${path}`, { maxRedirects: 0 });
   expect(member.status(), 'the control: a member gets the export').toBe(200);
   expect(member.headers()['content-type']).toContain('zip');
 
-  const stranger = await request.get(`${SIGNED_OUT_ORIGIN}${path}`, { maxRedirects: 0 });
+  // Its own context: cookies on `localhost` ignore the port, so the member's jar must not ride along.
+  const strangerCtx = await playwright.request.newContext();
+  const stranger = await strangerCtx.get(`${SIGNED_OUT_ORIGIN}${path}`, { maxRedirects: 0 });
   expect(stranger.status(), 'a stranger gets the export').toBe(404);
+  expect(stranger.headers()['content-type'] ?? '', 'a stranger gets a zip').not.toContain('zip');
+  await strangerCtx.dispose();
 });
 
 // ⚠️ This route lives under `/p/` and not `/api/` because the matcher excluded `/api` when V1-13b
