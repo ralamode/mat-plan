@@ -261,6 +261,13 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     on every unlogged section would cost each a taller heading on every visit. A workout keeps its
     slot from the first ✓ because nothing else in its card moves.
 
+25. 🔴 **The page's title is its day, never its athlete** (`dayTitle` in `day-nav.tsx`, from
+    `generateMetadata`; D8). Next's route announcer reads a title that CHANGES, so paging days and
+    arriving are announced ("Tomorrow · Sat, Nov 21"); two athletes on one day share a title, and
+    switching between them is silent (accepted, 2026-11-20). The page and `generateMetadata` share
+    one `cache()`d `resolveDayView`, so the title names the day shown after the look-ahead
+    fallback. `e2e/day-page.spec.ts` asserts it after a Next-day tap.
+
 ## Recorded differences from the prototype (v12)
 
 **Decided with the maintainer at step 13 (2026-11-15):**
