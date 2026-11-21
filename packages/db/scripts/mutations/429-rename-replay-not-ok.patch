@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index fe17d35d..e21dc4bf 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -186,7 +186,6 @@ function classifyRename(
+   seenName: string,
+ ): RenameProfileResult | null {
+   if (!row) return { ok: false, reason: 'refused' };
+-  if (row.name === name) return { ok: true, publicId: row.publicId };
+   if (row.name !== seenName) return { ok: false, reason: 'stale', current: row.name };
+   return null;
+ }

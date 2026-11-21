@@ -173,6 +173,72 @@ describe('RenameForm — the duplicate warning (PROF-1 a-1d-ren)', () => {
   });
 });
 
+describe('RenameForm — a stale form (the stale-rename fix)', () => {
+  const staleState = (current = 'Bea') =>
+    ({ ok: false, error: null, stale: { current } }) as Awaited<
+      ReturnType<typeof renameAthleteAction>
+    >;
+  const form = () => nameField().closest('form')!;
+  const hiddenSeen = () =>
+    form().querySelector<HTMLInputElement>('input[type="hidden"][name="seenName"]');
+  const submits = () =>
+    Array.from(form().querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
+  const submitAgain = async (state: Awaited<ReturnType<typeof renameAthleteAction>>) => {
+    vi.mocked(renameAthleteAction).mockResolvedValueOnce(state);
+    await act(async () => {
+      fireEvent.submit(form());
+    });
+  };
+
+  it('sends the shown name as seenName, and a server refresh of the prop does not advance it', () => {
+    const { rerender } = renderForm();
+    expect(hiddenSeen()?.value).toBe('Ada');
+    // A refresh (the time-zone sync, a revalidate) hands down a newer stored name: the form keeps
+    // comparing against what it SHOWED, so the next Save is refused rather than overwriting.
+    rerender(
+      <RenameForm
+        profileId={PROFILE_ID}
+        name="Zed"
+        kind={PROFILE_KIND.kid}
+        from={null}
+        fallbackPath="/p/x"
+      />,
+    );
+    expect(hiddenSeen()?.value).toBe('Ada');
+  });
+
+  it('refuses with the approved copy, keeps the typing, and takes focus', async () => {
+    await submitWith(staleState('Bea'), 'Cleo');
+    expect(screen.getByRole('group').textContent).toContain(ATHLETE_FORM_COPY.renameStale('Bea'));
+    expect(document.activeElement?.getAttribute('role')).toBe('group');
+    expect(nameField().value).toBe('Cleo');
+    // The refusal is tied to the field for a screen reader returning to it.
+    expect(nameField().getAttribute('aria-describedby')).toContain('-stale');
+  });
+
+  it('the overwrite is Save anyway, carrying the stored name; Enter re-posts the old one', async () => {
+    await submitWith(staleState('Bea'), 'Cleo');
+    const all = submits();
+    // The sentinel first (hidden), carrying the name compared against before the refusal…
+    expect(all[0]!.hidden).toBe(true);
+    expect([all[0]!.name, all[0]!.value]).toEqual(['seenName', 'Ada']);
+    // …then Save anyway, the only visible submit, carrying the stored name.
+    const visible = all.filter((b) => !b.hidden);
+    expect(visible.map((b) => b.textContent)).toEqual([ATHLETE_FORM_COPY.saveAnyway]);
+    expect([visible[0]!.name, visible[0]!.value]).toEqual(['seenName', 'Bea']);
+    // No second seenName to collide with while it shows.
+    expect(hiddenSeen()).toBeNull();
+  });
+
+  it('stale, then a duplicate answer: the form still compares against the stored name', async () => {
+    await submitWith(staleState('Bea'), 'Cleo');
+    await submitAgain(duplicateState({ stored: 'Cleo' }));
+    // The stale callout is gone and the duplicate one shows; seenName stayed advanced.
+    expect(screen.getByRole('group').textContent).toContain('Another athlete looks like');
+    expect(hiddenSeen()?.value).toBe('Bea');
+  });
+});
+
 describe('RenameForm — refusals (a-r, pinned here for the first time)', () => {
   it('a FIELD error returns focus to the input', async () => {
     renderForm();

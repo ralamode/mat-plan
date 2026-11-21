@@ -1,19 +1,21 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index a001598..4db1498 100644
+index fe17d35d..78c1ddd1 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
 @@ -1,4 +1,4 @@
--import { and, sql, type SQL } from 'drizzle-orm';
-+import { and, isNull, sql, type SQL } from 'drizzle-orm';
+-import { and, eq, sql, type SQL } from 'drizzle-orm';
++import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
  
  import { foldName, MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
  
-@@ -129,7 +129,7 @@ export async function renameProfile(
+@@ -156,7 +156,9 @@ export async function renameProfile(
    const rows = await exec
      .update(schema.profiles)
      .set({ name, updatedAt: sql`now()` })
--    .where(isLiveProfile(publicId, scope))
-+    .where(and(isLiveProfile(publicId, scope), isNull(schema.profiles.archivedAt)))
+-    .where(and(isLiveProfile(publicId, scope), eq(schema.profiles.name, seenName)))
++    .where(
++      and(isLiveProfile(publicId, scope), eq(schema.profiles.name, seenName), isNull(schema.profiles.archivedAt)),
++    )
      .returning({ publicId: schema.profiles.publicId });
  
    const row = rows[0];

@@ -1,8 +1,8 @@
 # A stale rename tab is refused instead of silently overwriting a newer name
 
 _Tech debt: "A stale rename tab silently overwrites a concurrent rename" (`docs/tech-debt.md`).
-Status: **plan, reshaped by a five-lens panel (round 1).** Approved as a P3 item by the maintainer
-(2026-11-20, relayed by the board). The refusal copy is theirs to approve (§ Open questions)._
+Status: **plan approved** with copy (c) and the size accepted *(maintainer, 2026-11-20, relayed by
+the board)*, after a five-lens panel and a correctness re-review._
 
 ## Where this sits
 
@@ -197,13 +197,11 @@ bodies. Splitting would ship a guard that an optional argument lets callers skip
 - The same race on the routine editor.
 - The unhydrated `typed` echo (`td-unhydrated-refusal`).
 
-## Open questions (for the maintainer, through the board)
+## Decision (the maintainer, 2026-11-20, relayed by the board)
 
-1. **The refusal copy.** Option (a), reusing the amend's "the latest is showing now", is **withdrawn**:
-   it is false here, because the field keeps the typing.
-   - **(b)** "This name was changed on another device to “{stored}”. Save again to use yours."
-   - **(c)** (recommended): "Not saved. This name was changed to “{stored}” on another device. Save
-     anyway to replace it, or go back to keep it." While it shows, the button reads "Save anyway".
+"Approve, with (c)": "Not saved. This name was changed to “{stored}” on another device. Save anyway
+to replace it, or go back to keep it." While it shows, the button reads "Save anyway". The 400–450
+line size is accepted.
 
 ## Review-response log (adversarial panel)
 
