@@ -360,9 +360,14 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 ### Nothing measured how much JavaScript ships (added 2026-11-06) — ✅ CLOSED 2026-11-19 for bytes
 
 > ✅ **Closed by `PERF-1` (b)** ([plan](./plans/perf-1-bundle-size.md)): the `quality` job's "Bundle
-> size" step measures each route's first-load client JS and the total client chunks, compares them
+> size" step measures each route's first-load client JS and the client chunks no route loads first
+> (the lazy row; until 2026-11-20 it summed every chunk), compares them
 > with `.github/bundle-baseline.json`, and fails a move past the tolerance either way. What it
 > measures and does not, and the tolerance, are in `check-bundle-size.mjs`'s header.
+> **Still unmeasured:** total distinct client JS. A bundler regrouping that copies shared code into
+> several route groups (#798: the program builder's copy, ~35 KiB in four groups) costs a re-download
+> between those pages, and no row sees it. Moving builder copy out of `lib/constants`' import graph
+> may stop the regroup; that is lane B's to weigh.
 > ⚠️ **The entry's premise changed under it.** It said `next build` prints First Load JS per route;
 > Next 16 removed that column. The guard reads `.next/diagnostics/route-bundle-stats.json`, which is
 > undocumented, so a Next bump that drops or reshapes it makes the step exit 2 and name the file.
