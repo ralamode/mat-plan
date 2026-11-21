@@ -213,24 +213,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
   the new page to the household, or before a second household.
 
-### Muted text on `--accent` is 4.34:1 — sub-AA in the light palette, wherever a muted line sits on an accent ground (added 2026-11-13)
-
-- **What & why it's debt:** `--muted-foreground` is oklch L 0.556 and `--accent` is L 0.97, which
-  measures **4.34:1** — under WCAG AA's 4.5 for small text. (Dark clears it at 5.83; `--muted` is the
-  same value as `--accent`, so it is the same pair.) `UI-5`'s axe run at 1280 found it the first time
-  it ran, on the nav rail's current row. **It is not confined to the rail:** `NAV_ROW_CLASS` fills on
-  `hover:bg-accent`, so the archived-count line on `/p`'s settings row (`app/p/page.tsx`) has the
-  same pair in its hover state today.
-- **Why nothing in CI says so:** axe measures the rendered state only. A hover or focus ground it
-  never enters is invisible to it, though WCAG 1.4.3 covers every state.
-- **What `UI-5` did instead:** removed the pair from the two places it would have shipped it — the
-  rail's open row is outlined rather than filled, and its kind line un-mutes on hover
-  (`group-hover:text-foreground`). Both are local; the token is untouched.
-- **The fix, when someone takes it:** nudge `--muted-foreground` to **oklch(0.545)**, which measures
-  **4.54** on accent and 4.96 on background. An L shift of 0.011 is not perceptible, and it clears
-  the pair everywhere at once. ⚠️ It is a **design-token change**, so it belongs to
-  [`UI-3`](./plan.md) (the reskin), not to a layout PR — which is why `UI-5` did not take it.
-
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)
 
 - **What & why it's debt:** `packages/db/scripts/verify/day-plan.ts`'s seeder writes the week

@@ -18,10 +18,10 @@ import { PICKER_EMPTY_COPY } from '@/lib/constants';
  *    rendered more than once in a document — it is also a cell in `app/design/tokens/inventory.tsx`, which
  *    is the only route that axe-scans it in BOTH themes and measures it for overflow at 360px (the empty
  *    picker is unreachable from Playwright: `fullyParallel: true` + one shared DB).
- *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (4.74:1 — AA by
- *    0.24). Three paragraphs read once, cold, on a gym floor should not sit on the AA floor; only the
- *    short follow-up line is muted. ⚠️ Never put `text-muted-foreground` on `bg-muted`/`bg-accent`/
- *    `bg-secondary` here: that pair measures 4.34:1, and `token-sets.test.ts` asserts no screen does it.
+ *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (5.06:1 — AA by
+ *    0.56). Three paragraphs read once, cold, on a gym floor should not sit on the AA floor; only the
+ *    short follow-up line is muted. Muted text on `bg-muted`/`bg-accent`/`bg-secondary` measures
+ *    4.64:1, and `token-sets.test.ts` pins muted text at AA on every ground in both themes.
  *  - 🔴 **ONE paragraph, as of PROF-1 a-1u — `next` is dropped.** The plan said "`<h2>` → tile →
  *    one paragraph" and the first implementation kept both paragraphs, which a UX lens then measured:
  *    at 360px the header, `<h2>` and two paragraphs (~8 lines) put the add tile at roughly y=420-516
