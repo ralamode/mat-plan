@@ -46,7 +46,8 @@ Every PR must satisfy:
 - [ ] Forward-only (no edits to applied migrations); one migration per PR
 - [ ] Squawk lint passes; migration applies on an empty Postgres in CI (the prod-shaped Neon-branch
       rehearsal is **not** wired — [tech-debt.md](./tech-debt.md)); drift check clean
-- [ ] Expand → contract for breaking changes; `lock_timeout` set; concurrent index isolated
+- [ ] Expand → contract for breaking changes; `lock_timeout` set; each index on an
+      existing table carries its `squawk-ignore` and reason
 - [ ] Backfill plan + rollback plan documented in the PR
 
 ## Test pyramid

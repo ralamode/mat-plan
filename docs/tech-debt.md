@@ -788,17 +788,15 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
-### Squawk lints new migrations only, and the CONCURRENTLY rule is review-enforced (recorded 2026-11-20)
+### Squawk lints new migrations only, so the findings in the old ones are listed here (recorded 2026-11-20)
 
-- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**, and `.squawk.toml` excludes
-  `require-concurrent-index-creation`. Linting every file is not viable as a gate: Squawk has **no
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. Linting every file is not viable as a gate: Squawk has **no
   baseline or suppression file**, so a gate over the findings below would be red on arrival. The
   forward-only guard makes those files immutable, so nothing in them can change; the findings are
   history, not a backlog, and each is accounted for below.
 - **Every finding on `main`, with its reason** (2026-11-20, Squawk 2.66.0, 33 files). Lines are
   1-based, the statement's first line. Reproduce:
-  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` (the 20); for the 27,
-  the same with a copy of `.squawk.toml` whose `excluded_rules` keeps only `prefer-bigint-over-int`.
+  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` reports all 47.
 
   **The 20 under the repo's config** (all in 0001–0009, written before Squawk was wired):
 
@@ -812,8 +810,8 @@ success.` Harmless there — nothing referenced the files yet.
   | 0009:27 (`sessions_day_role_check`)                                    | `constraint-missing-not-valid`                                  | The column was created in the statement above, so every row was NULL and passes; 0009's own comment.                                                                                                                                                              |
   | 0003:16 (`entries.kind` DROP NOT NULL)                                 | `ban-drop-not-null`                                             | A deliberate expand step: no column or data is removed, so it was safe to race the concurrent deploy (0003's header).                                                                                                                                             |
 
-  **The 27 under `require-concurrent-index-creation`**, which `.squawk.toml` excludes because
-  `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
+  **The 27 under `require-concurrent-index-creation`**, excluded in `.squawk.toml` until
+  2026-11-20 because `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
   that already existed; Squawk does not flag an index on a table the same file creates. A plain
   `CREATE INDEX` holds a `SHARE` lock, blocking writes but not reads, for the build, which on this
   app's row counts is milliseconds:
@@ -822,14 +820,13 @@ success.` Harmless there — nothing referenced the files yet.
   says why in a comment above the index; 0001, 0002 (header), 0005 and 0010 predate that habit.
   0027–0032 have none.
 
-- **Impact:** low. The record is now a fact rather than an implication. What stays open is the gate
-  itself: a NEW migration's non-concurrent index on a populated table passes CI, and only review
-  catches it, while a table is small enough that this is harmless.
-- **Proposed fix:** remove `require-concurrent-index-creation` from `excluded_rules`, so each new
-  index on an existing table needs a `-- squawk-ignore require-concurrent-index-creation` with its
-  reason (the 0024 idiom). That turns the review rule into a gate that asks for a written reason. The
-  real fix, a runner that applies a `CONCURRENTLY` file outside the transaction, is only worth
-  building when a table is large enough for the lock to matter.
+- **Impact:** low. Nothing in these files can change, so the list stays true; a Squawk version
+  bump may add findings to it, and the bump's PR re-runs the command above.
+- **Closed part:** a new migration's non-concurrent index on an existing table now fails Squawk
+  unless it carries `-- squawk-ignore require-concurrent-index-creation` with its reason
+  (`.squawk.toml`, maintainer 2026-11-20). The runner that would apply a `CONCURRENTLY` file outside
+  the transaction is still unbuilt; it is worth building only when a table is large enough for the
+  lock to matter.
 - **Severity:** low.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)
