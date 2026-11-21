@@ -5,10 +5,11 @@
 > rules 4, 6 and 7, decisions **K22 to K24**, and the rows **A3**, **Post-R2 cleanup** and **F1** of
 > "Chunks, in order". Branch for this plan: `docs/cat-3-after-the-fresh-start-plan`.
 >
-> **Draft 4, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
+> **Draft 5, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
 > (`b6ef8287`) and #770's branch. Two panel rounds (two lenses each) and the feasibility checks of lane B,
 > lane P and the Native Scaling thread are applied; the log is at the end. The maintainer approves
-> it before any of its PRs is built.
+> it before any of its PRs is built. Draft 5 adds two things to PR 1 and changes no question: how its
+> mutation patches are kept, and how it sits beside `LEGACY-1`'s plan (#802).
 
 ## Where this sits
 
@@ -96,6 +97,24 @@ seed and `verify/catalog.ts`; whichever lands second rebases.
   - Mutations: 45, 326, 327 and 329, which patch the `PROGRAM_SEED` line of `seed()` and prove
     production's seed writes no program or household; 517 and 598, which need the legacy insert (598
     retires with `legacyMovements`); 602.
+  - **Every patch whose expected assertion sits in a re-cut section is accounted for**, not only
+    the seven above. The runner fails a patch whose first failure is not its `.expect`, so a re-cut
+    keeps each surviving assertion's message word for word. The PR derives the list from the
+    `.expect` files and marks each patch kept, re-aimed or retired; each kept or re-aimed patch is
+    run alone with `--only`. A pass over the cited spans on `main` (`ca7ab590`) adds these
+    candidates: 42, 43 and 44 (`verify/schema.ts`, the typing); 305, 306 and 398
+    (`verify/program.ts`, FAM-1 6a-iii-a); 498 (the caps); 502 (`verify/catalog.ts`); and 05 and
+    06, in the TEN-1 1d and TEN-2c stretch of `verify.ts`. That pass is a hint and not the list.
+  - **The line numbers above are hints** at `b6ef8287`; `verify/program.ts` has since moved by 40
+    lines on `main`. The assertion's message is the key.
+- **Beside `LEGACY-1`** (the plan in #802, the Tech Debt lane's, not yet approved). Both plans edit
+  the same two files. In `verify.ts` this PR re-cuts TEN-1 1d, TEN-2a, TEN-2b and TEN-2c;
+  `LEGACY-1` keeps TEN-1 1d and the TEN-2b write proof and deletes the resolver's sections between
+  them. In `verify/schema.ts` this PR renames the fixture that FAM-1 5b's legacy block comes from;
+  `LEGACY-1` drops half of 5b. Neither plan waits for the other. Whichever PR lands second re-reads
+  its sections by assertion message and derives its patch list again. `LEGACY-1`'s legacy-row
+  builder, and the sections it moves onto that builder, should name no old built-in; any that does
+  joins this PR's re-cut list.
 - **Acceptance.**
   1. After `seed({ fixtures: true })` on a fresh database, no global movement fails
      `movementIsCatalog()`.
@@ -332,7 +351,8 @@ a would-fail change are each skipped and counted.
 
 ## Not planned here
 
-- `LEGACY-1`, the legacy strength write path and its tables.
+- `LEGACY-1`, the legacy strength write path. Its plan (#802) changes no table; PR 1 says how the
+  two sit together.
 - Retiring a library slug, and any in-app editing of the library (`CAT-4`).
 
 ## Open questions for the maintainer
@@ -410,3 +430,8 @@ alarm where the code forbids it as a selector.
 **Lane A's feasibility check of PR 4, 2026-11-20** (lane A had restarted; it is A3's builder). One blocking point: E6's `onConflictDoUpdate`, as worded, cannot name its arbiter, and a blanket upsert that could would lock every row on each push; so the design updates by id and E6's wording is amended in this PR. The correctness lens checked the claim and narrowed its wording, and added the order pins and the zero-skip proof, which lane A asked for too. Also applied: the primary change as two statements; join rows equal as
 a set, not in order; the pre-check and the soft-deleted count extended to the insert path; A3's
 mutation block.
+
+**Draft 5, 2026-11-20** (the plan owner, after reading `LEGACY-1`'s plan, #802). Its panel found that
+kept mutation patches had their `.expect` inside sections the plan cut. The same check on PR 1 here
+found patches beyond the seven it named, so PR 1 now derives its list from the `.expect` files. PR 1
+also says how it sits beside `LEGACY-1`. No question for the maintainer changed.
