@@ -61,11 +61,12 @@ history (`PROF-1` a-r keeps none, deliberately). After this change:
      ⚠️ It is **not** bound to the `name` prop: any server refresh (the time-zone sync, a revalidate)
      would then advance the precondition silently while the field keeps stale typing, and the next
      Save would overwrite with no refusal.
-   - **The refusal message** renders between the field and the submit, where the duplicate callout
-     renders. It has an `id`, `role="alert"` and `tabIndex={-1}`, takes focus, and is added to the
-     field's and the submit's `aria-describedby`. The stored name sits in a `NAME_WRAP_CLASS` span.
+   - **The refusal message** is a `Callout` between the field and the submit, where the duplicate one
+     renders: `role="group"`, labelled by its message, taking focus (the duplicate flow's pattern, no
+     double announcement), and in the field's `aria-describedby`. The stored name sits in a `NAME_WRAP_CLASS` span.
    - **While it shows,** the submit reads `ATHLETE_FORM_COPY.saveAnyway`, outline, `size="lg"`. The
-     overwrite is then a differently labelled tap, never a retry of the same button. **Enter or Go in the field does not overwrite**: the duplicate flow's disabled-default-button sentinel (`write-path.md` invariant 4) is reused while the message shows.
+     overwrite is then a differently labelled tap, never a retry of the same button. **Enter or Go in the field does not overwrite**: the duplicate flow's sentinel is reused while the
+     message shows, posting an EMPTY `seenName`, which no stored name equals, on every press.
    - **The field keeps the parent's typing.**
    - **The heading** shows the stored name after the revalidate.
 7. **Proofs:**
@@ -73,7 +74,7 @@ history (`PROF-1` a-r keeps none, deliberately). After this change:
    - Three mutations each go RED on their own assertion.
    - Boundary tests cover unauthenticated, wrong owner, a bad body (`seenName` missing or too long),
      stale and replay.
-   - A form test covers stale → duplicate → Save anyway.
+   - A form test covers stale → duplicate, and a second Enter while stale.
    - One e2e covers two pages in one context.
 
 ## Design
@@ -153,8 +154,8 @@ bodies. Splitting would ship a guard that an optional argument lets callers skip
   - **33's first red moves** to the tenancy assertion, because under 33 the re-read's `stale` would
     carry A's name to household B. Its `.expect` names that, knowingly.
 - **The action:** boundary tests (Acceptance 7) and the verbatim pass-through.
-- **The form:** the three-answer sequence (stale → duplicate → Save anyway), asserting `seenName` on
-  the third submit; the label switch; focus; `aria-describedby`.
+- **The form:** stale → duplicate, asserting the hidden `seenName` beside the duplicate's Save anyway
+  (jsdom's submit has no submitter, so the third submit is the e2e's); the label switch; focus; `aria-describedby`.
 - **The e2e** (`athletes.spec.ts`, at `NARROW_VIEWPORT`):
   - the alert shows;
   - the field keeps its value;

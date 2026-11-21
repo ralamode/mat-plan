@@ -8467,6 +8467,27 @@ console.log(
     'stale rename: a rival that chose the same name answers ok after the 0-row re-read',
   );
 
+  // …and a row soft-deleted between the read and the write answers refused through the re-read
+  // (its own throwaway row, so ST_P's tenancy checks below keep theirs).
+  const ST_GONE = '019826b4-0000-7000-8000-00000004d007';
+  await db.insert(schema.profiles).values({
+    publicId: ST_GONE,
+    name: 'Stale Gone',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  });
+  const goneUnderUs = rivalBeforeUpdate(() =>
+    db
+      .update(schema.profiles)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.profiles.publicId, ST_GONE)),
+  );
+  assert.deepEqual(
+    await renameProfile(goneUnderUs, A_SCOPE, ST_GONE, 'Stale Gone Renamed', 'Stale Gone'),
+    { ok: false, reason: 'refused' },
+    'stale rename: a row deleted between the pre-read and the UPDATE answers refused',
+  );
+
   // (e) Tenancy, both ways: another household never learns the name, whatever it sends.
   assert.deepEqual(
     await renameProfile(asPg, B_SCOPE, ST_P, 'B Probe', 'Wrong Seen'),

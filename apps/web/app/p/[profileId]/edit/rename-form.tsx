@@ -107,19 +107,25 @@ export function RenameForm({
    * would overwrite with no refusal. `write-path.md` records the invariant.
    */
   const [seenName, setSeenName] = useState(initialName);
-  /** The name compared against before the last `stale` answer: what Enter re-posts while it shows. */
-  const [staleFrom, setStaleFrom] = useState(initialName);
+  /**
+   * 🔴 **The stale refusal, LATCHED.** Set on a `stale` answer, kept across a field error or a
+   * page-level refusal, and cleared only by `ok` or `duplicate`, which only Save anyway can produce
+   * while it shows. Read off `state` alone it would unmount on, say, a blank-name field error, bring
+   * the plain Save back with `seenName` already advanced, and let that Save overwrite without the
+   * deliberate tap (the PR's correctness lens).
+   */
+  const [stale, setStale] = useState<{ current: string } | null>(null);
   const [answered, setAnswered] = useState(state);
   if (state !== answered) {
     // Adjusting state on a new answer, during render (React's documented pattern), not in an effect.
     setAnswered(state);
     if (state.stale) {
-      setStaleFrom(seenName);
       setSeenName(state.stale.current);
+      setStale(state.stale);
+    } else if (state.ok || state.duplicate) {
+      setStale(null);
     }
   }
-  /** Shown until the next submit replaces `state`. */
-  const stale = state.stale ?? null;
   const nameRef = useRef<HTMLInputElement>(null);
   const calloutRef = useRef<HTMLDivElement>(null);
   const staleRef = useRef<HTMLDivElement>(null);
@@ -225,9 +231,11 @@ export function RenameForm({
           {ATHLETE_FORM_COPY.save}
         </button>
       ) : stale ? (
-        // The same sentinel for the stale refusal: Enter or Go re-posts the name compared against
-        // BEFORE the refusal, so the server answers `stale` again and nothing is overwritten. Only
-        // "Save anyway" below carries the stored name.
+        // The same sentinel for the stale refusal: Enter or Go posts an EMPTY `seenName`. No stored
+        // name is ever blank, so the writer can only answer `stale` again (or `ok` with no write, on a
+        // replay), on the first Enter and every one after it. Only "Save anyway" below carries the
+        // stored name. ⚠️ An earlier version re-posted "the name before the refusal" and advanced it
+        // on every answer, so a SECOND Enter carried the stored name and overwrote (the PR's UX lens).
         <button
           type="submit"
           hidden
@@ -235,7 +243,7 @@ export function RenameForm({
           tabIndex={-1}
           disabled={pending}
           name="seenName"
-          value={staleFrom}
+          value=""
         >
           {ATHLETE_FORM_COPY.save}
         </button>

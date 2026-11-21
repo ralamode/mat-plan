@@ -236,7 +236,8 @@ test('a rename from a stale screen is refused, keeps the typing, and Save anyway
   await renameTo(otherTab, LONG_NAME);
   await otherTab.close();
 
-  const TYPED = 'Stale Typing';
+  // Appends to the seeded name, as this file's renames must (siblings match Athlete Two by substring).
+  const TYPED = `${SEED_PROFILE_2_NAME} Stale`;
   await nameField(page).fill(TYPED);
   await saveButton(page).click();
   const refusal = page.getByRole('group');
@@ -246,10 +247,13 @@ test('a rename from a stale screen is refused, keeps the typing, and Save anyway
   await expect(page.getByRole('heading', { level: 1 })).toContainText(LONG_NAME);
   await expectNoHorizontalOverflow(page, 'the stale-rename refusal at 360px');
 
-  // Enter in the field must not overwrite: it re-posts the old seen name and is refused again.
-  await nameField(page).press('Enter');
-  await expect(refusal).toContainText(ATHLETE_FORM_COPY.renameStale(LONG_NAME));
-  expect(new URL(page.url()).pathname.endsWith('/edit')).toBe(true);
+  // Enter in the field must not overwrite, the first time or the second. `press` focuses the field
+  // and focus only returns to the refusal on a NEW answer, so each wait proves a round trip.
+  for (const press of [1, 2]) {
+    await nameField(page).press('Enter');
+    await expect(refusal, `Enter #${press} is answered with the refusal again`).toBeFocused();
+  }
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(LONG_NAME);
 
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.saveAnyway, exact: true }).click();
   await page.waitForURL((url) => !url.pathname.endsWith('/edit'));

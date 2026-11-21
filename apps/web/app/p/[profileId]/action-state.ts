@@ -24,6 +24,13 @@ export type ActionState = {
    */
   dayTaken?: true;
   /**
+   * The stale-rename fix: the rename form showed an out-of-date name, so nothing was saved. `current`
+   * is the stored name (in-household; the writer's scoped read). Set only by `renameAthleteAction`,
+   * with `error: null`, and never with `duplicate` or `fieldErrors`: the form composes the copy
+   * (`ATHLETE_FORM_COPY.renameStale`) and advances the name it compares against.
+   */
+  stale?: { current: string };
+  /**
    * PROF-1 a-1d — the add form's duplicate WARNING. Set only by `addAthleteAction`, and only on the
    * `{ ok: false, error: null }` branch: a name that already exists is not an error the parent made,
    * so it carries no `error` string and no `fieldErrors`.
@@ -34,13 +41,6 @@ export type ActionState = {
    * callout disappears the moment the typed name moves on instead of hanging over a field that has
    * changed underneath it.
    */
-  /**
-   * The stale-rename fix: the rename form showed an out-of-date name, so nothing was saved. `current`
-   * is the stored name (in-household; the writer's scoped read). Set only by `renameAthleteAction`,
-   * with `error: null`, and never with `duplicate` or `fieldErrors`: the form composes the copy
-   * (`ATHLETE_FORM_COPY.renameStale`) and advances the name it compares against.
-   */
-  stale?: { current: string };
   duplicate?: {
     // The writer's own type, imported — not a fourth hand-typed copy. A type-only import is erased,
     // so nothing from `@mat-plan/db` reaches the client bundle this module is part of.

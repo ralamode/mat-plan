@@ -1011,8 +1011,9 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   🔴 **The form's `seenName` is captured once at mount and advances only on a `stale` answer**
   (`rename-form.tsx`). Never bind it to the `name` prop: a server refresh would advance it silently
   while the field keeps stale typing, and the next Save would overwrite with no refusal. While the
-  refusal shows, `seenName` rides on the submitter: Save anyway carries the stored name, and the
-  sentinel carries the old one, so Enter re-refuses. ⚠️ The rename
+  refusal shows (it is LATCHED: kept across a field error or a page-level refusal, cleared only by `ok`
+  or `duplicate`), `seenName` rides on the submitter: Save anyway carries the stored name, and the
+  sentinel carries an EMPTY one, which no stored name equals, so every Enter re-refuses. ⚠️ The rename
   envelope carries **no `atCap`** — a rename creates nothing, so the quota is never consulted and the
   field would always be `false`; it is optional in `ActionState` for exactly that reason.
 
