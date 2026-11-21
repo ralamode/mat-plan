@@ -9,8 +9,8 @@
 _Roadmap alignment (2026-11-20): checked against the private roadmap; nothing to add here. Closes
 `TEN-2b-1` (overtaken) and `V1-36`; re-scopes `TEN-2b-2`; gates nothing._
 
-**Status: v2, after the panel (correctness, db-safety, scope; log below). For the maintainer's
-approval. No code before it.** Line numbers are hints at `ca7ab590`; the **banner text** is the key.
+**Status: v2, APPROVED by the maintainer (2026-11-20).** After the panel (correctness, db-safety,
+scope; log below). Line numbers are hints at `ca7ab590`; the **banner text** is the key.
 
 ## Goal
 
@@ -208,18 +208,11 @@ Each PR has its own branch and worktree, a changelog fragment, and full CI (e2e,
 `mutations` shards). Each PR's description links its section here. Each PR gets a heads-up to the
 board; lane A reviews the `verify/schema.ts` hunk in C2.
 
-## Needs a decision (maintainer)
+## Decided (maintainer, 2026-11-20)
 
-1. **`TEN-2b-2`'s boundary.** Options:
-   - (a) only movements created before the FAM-1 12f PR 3 deploy, the last moment the legacy creator
-     could run;
-   - (b) close the row in favour of an in-app item removal;
-   - (c) defer the question to `TEN-2b-2`'s own plan.
-
-   Recommended: **(c)**. This plan only rewords the row, so that it can no longer be built on the
-   old predicate.
-
-2. **Approve v2** as the plan for PRs A–C2.
+1. **`TEN-2b-2`'s boundary is deferred to its own plan** (option (c), recommended). This plan only
+   rewords the row so it can no longer be built on the old predicate.
+2. **v2 is approved.** PR A may start now; PRs B and C wait for #770.
 
 ## Review-response log
 
