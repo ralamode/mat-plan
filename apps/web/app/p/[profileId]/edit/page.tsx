@@ -80,7 +80,7 @@ export default async function RenameAthletePage({
 
   return (
     <AppShell athletes={await listProfiles()} current={{ athlete: profile.id }}>
-      {/* ⚠️ `profile.id`, **not** the `profileId` URL segment. `uuidSchema` is `z.uuid()`, which
+      {/* ⚠️ `profile.id`, **not** the `profileId` URL segment. The segment is checked, never parsed, so it
           accepts upper-case hex, and the `uuid` column matches case-insensitively — so
           `/p/AAAAAAAA-…` renders this page while `athlete.id === currentAthlete` finds nothing and
           the rail marks no row. The DTO carries the canonical id; identity is not re-derived from

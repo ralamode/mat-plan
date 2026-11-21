@@ -1,8 +1,8 @@
 diff --git a/apps/web/lib/dal/entries.ts b/apps/web/lib/dal/entries.ts
-index 375b52eb..bd73c56d 100644
+index b7abe7bc..82de179e 100644
 --- a/apps/web/lib/dal/entries.ts
 +++ b/apps/web/lib/dal/entries.ts
-@@ -423,7 +423,9 @@ export async function logCheckinEntries(args: {
+@@ -425,7 +425,9 @@ export async function logCheckinEntries(args: {
    const [profile] = await db
      .select({ id: schema.profiles.id })
      .from(schema.profiles)
@@ -11,13 +11,13 @@ index 375b52eb..bd73c56d 100644
 +      and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
 +    )
      .limit(1);
-   if (!profile) throw new Error('Profile not found');
+   if (!profile) throw new Error(PROFILE_NOT_FOUND);
  
 diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
-index 2bd7533b..3688f410 100644
+index 7f6f38d7..c1794e88 100644
 --- a/packages/db/src/queries/export-month.ts
 +++ b/packages/db/src/queries/export-month.ts
-@@ -147,7 +147,8 @@ export function strengthMonthRows(
+@@ -146,7 +146,8 @@ export function strengthMonthRows(
        )
        .where(
          and(
@@ -27,7 +27,7 @@ index 2bd7533b..3688f410 100644
            isNull(schema.entries.deletedAt),
            gte(schema.entries.activityDate, from),
            lt(schema.entries.activityDate, to),
-@@ -328,7 +329,8 @@ export function checkinMonthRows(
+@@ -335,7 +336,8 @@ export function checkinMonthRows(
      .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
      .where(
        and(
@@ -37,7 +37,7 @@ index 2bd7533b..3688f410 100644
          isNull(schema.entries.deletedAt),
          isNull(schema.entries.movementId),
          not(bodyweightEntry()),
-@@ -372,7 +374,8 @@ export function bodyweightMonthRows(
+@@ -381,7 +383,8 @@ export function bodyweightMonthRows(
      .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
      .where(
        and(
@@ -47,7 +47,7 @@ index 2bd7533b..3688f410 100644
          isNull(schema.entries.deletedAt),
          bodyweightEntry(),
          gte(schema.entries.activityDate, from),
-@@ -413,7 +416,8 @@ export function loggedMonths(
+@@ -422,7 +425,8 @@ export function loggedMonths(
      .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
      .where(
        and(
@@ -75,10 +75,10 @@ index 17f2c2a4..aaa1e4c3 100644
    // The newest of the profile's own household's live blocks THAT PROGRAMS THIS DAY — see the shape note.
    // A scalar subquery (not a join) so the LIMIT 1 picks a BLOCK, not one of the prescription rows we want
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
-index 86bd3b29..1845fd3f 100644
+index f962f316..1aaf2334 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -566,6 +566,7 @@ export async function seedProgram(
+@@ -579,6 +579,7 @@ export async function seedProgram(
      // cannot use the helper directly — but the household conjunct is the SAME single-sourced
      // `inHousehold`, which is the one function in the repo allowed to unwrap the scope (ADR 0006 fwd-1).
      const blockScope = householdScopeForScript(household.id);
@@ -86,7 +86,7 @@ index 86bd3b29..1845fd3f 100644
      const profileRows = profilePublicIds.length
        ? await db
            .select({ id: schema.profiles.id, publicId: schema.profiles.publicId })
-@@ -574,7 +575,6 @@ export async function seedProgram(
+@@ -587,7 +588,6 @@ export async function seedProgram(
              and(
                inArray(schema.profiles.publicId, profilePublicIds),
                isNull(schema.profiles.deletedAt),
@@ -95,10 +95,10 @@ index 86bd3b29..1845fd3f 100644
            )
        : [];
 diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
-index 04bd2ec9..5472c195 100644
+index cbe6ee5a..b3031002 100644
 --- a/packages/db/src/writers/strength-session.ts
 +++ b/packages/db/src/writers/strength-session.ts
-@@ -388,7 +388,9 @@ export async function writeStrengthSession(
+@@ -390,7 +390,9 @@ export async function writeStrengthSession(
      const [profile] = await tx
        .select({ id: schema.profiles.id })
        .from(schema.profiles)
@@ -107,5 +107,5 @@ index 04bd2ec9..5472c195 100644
 +        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
 +      )
        .limit(1);
-     if (!profile) throw new Error('Profile not found');
+     if (!profile) throw new Error(PROFILE_NOT_FOUND);
  

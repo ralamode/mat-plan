@@ -10,6 +10,7 @@ import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
 import { deviceToday } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
+import { type Announcement, nextAnnouncements } from './announcements';
 import { DayContext, type DayContextValue } from './day-context';
 import { DAY_COPY } from './day-copy';
 import { nothingLoggedNotice, restNotice } from './day-notices';
@@ -82,9 +83,9 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const headingId = useId();
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [closed, setClosed] = useState(false);
-  // `n` counts announcements: each one is a new node in the live region, so the same sentence twice
-  // in a row is read twice (`Announcer`'s `messageKey`).
-  const [message, setMessage] = useState({ text: '', n: 0 });
+  // One keyed node per sentence (`announcements.ts`): a new key each call, so the same sentence
+  // twice in a row is a new node and is read twice.
+  const [said, setSaid] = useState<{ held: Announcement[]; n: number }>({ held: [], n: 0 });
   const closedRef = useRef<HTMLDivElement>(null);
 
   // A row's effect depends on these, so each keeps one identity for the life of the day.
@@ -136,7 +137,13 @@ function DayBody({ plan, actions }: DayScreenProps) {
       day: viewedDay,
       actions: pinned(actions, { day: viewedDay, today }),
       readOnly,
-      announce: (text) => setMessage((was) => ({ text, n: was.n + 1 })),
+      announce: (text, kind = 'local') => {
+        const now = performance.now();
+        setSaid((was) => ({
+          held: nextAnnouncements(was.held, text, kind, was.n + 1, now),
+          n: was.n + 1,
+        }));
+      },
       setRowFailed,
       setRowPending,
       setRowBusy,
@@ -209,7 +216,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
             />
           );
         })}
-        <Announcer message={message.text} messageKey={message.n} />
+        <Announcer messages={said.held} />
       </section>
     </DayContext>
   );

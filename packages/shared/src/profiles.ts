@@ -39,6 +39,13 @@ export const PROFILE_NAME_MAX = 40;
 export const NAME_REQUIRED_MESSAGE = 'Enter a name.';
 
 /**
+ * The error a write throws when the athlete it names is not a live profile in the caller's household.
+ * Not shown to anyone: it reaches `error.tsx` and Sentry. Named because the DAL (`lib/dal/entries.ts`),
+ * the strength writer and their tests all spelled it out, and a test must use the app's const.
+ */
+export const PROFILE_NOT_FOUND = 'Profile not found';
+
+/**
  * An athlete's name, as the app accepts it.
  *
  * The transform order is the contract, because the STORED value is what comes out of it:

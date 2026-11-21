@@ -917,9 +917,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     paid forever for a choice made once.
     ⚠️ **Three inputs UI-4 measured and could not fix** (fixing them means changing `:root`, i.e.
     changing the live app's look, which UI-4 ruled out): `muted-foreground` on `muted` is **4.34:1**
-    in light; the `destructive` button variant is **4.39:1** light and **3.04:1** dark on a card (it
-    has zero call sites, which is the only reason CI is green); and hairlines miss SC 1.4.11's 3:1 in
-    both themes (**1.26:1** light, **2.69:1** dark). All four candidate sets clear AA on every text
+    in light; the `destructive` button variant is **3.99:1** light (it has zero call sites, which is
+    the only reason CI is green; dark on a card clears AA at 4.63:1, measured as a browser composites
+    it, #774); and hairlines miss SC 1.4.11's 3:1 in both themes (**1.26:1** light, **1.32:1** dark). All four candidate sets clear AA on every text
     pair in both themes, and Clinch clears 3:1 on hairlines too. Pinned in
     `app/design/tokens/token-sets.test.ts`, so fixing one tells you to delete its row.
     **Constraints that do not move:** contrast ratios stay AA, `MIN_TAP_TARGET_PX` stays, the 360px

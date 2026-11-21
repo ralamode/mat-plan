@@ -15,6 +15,41 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The import pins hold names by barrel and by direct import, not by origin (added 2026-11-20, #779)
+
+- **What & why it's debt:** `apps/web/test/program-imports.test.ts` checks each `@mat-plan/db` name
+  by the name imported from `packages/db/src/index.ts`, and the DAL re-export rule by an `export`
+  that names it directly ([plan](./plans/td-program-tables-import-graph.md), § Goal). Two holes the
+  regex guard also had stay open: a lane P writer re-published by another `packages/db` module under
+  a new name, and a DAL passing one on through a local binding (`export { s }` of an aliased import,
+  an object literal, `cache(x)`).
+- **Impact:** code written that way could reach a writer outside the DAL without the guard refusing
+  it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the damage is
+  limited to a path a reviewer must catch.
+- **The fix:** key names by origin, walking `index.ts`'s re-export graph so a writer keeps its
+  identity under any name; and, in the DALs, allow a lane P name only as a direct callee. The second
+  is a new restriction, with a false-positive risk (a writer handed to a transaction wrapper).
+- **Severity:** low.
+
+### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
+
+- **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at
+  `MAX_HOUSEHOLD_ATHLETES` (25). Specs that add an athlete (`athletes.spec.ts`,
+  `form-before-hydration.spec.ts`, `bodyweight-receipt.spec.ts`, `day-navigation.spec.ts`,
+  `clear-day.spec.ts`, the program-builder specs and others) now spend about 22 of those slots on a
+  fresh run, as lane C counted, and archiving frees none. A retried spec re-adds its athletes, so
+  with about 3 slots left a couple of retries in one run reach the cap. Then `createProfile` answers
+  `full`, and the retry fails looking like the feature under test broke.
+- **Impact:** test-only, but it turns flakes into misattributed failures, and every new add-athlete
+  spec shrinks the margin.
+- **The fix, one of:**
+  - raise the e2e household's cap through the fixture or seed: a test-only household limit, never
+    the production `MAX_HOUSEHOLD_ATHLETES`;
+  - or have specs reuse athletes: one shared per-run athlete per need, created once, instead of one
+    per test.
+- **Trigger:** the next spec that adds an athlete must pick one of the two.
+- **Severity:** low (test-only; the suite fits today).
+
 ### A refused Program order reads the whole Programs list to report a foreign id (added 2026-11-19, 15c PR 2)
 
 - **What & why it's debt:** `reportOrderProgramMiss` (`apps/web/lib/dal/program/report-miss.ts`)
@@ -29,23 +64,6 @@ liveTemplateBlockIn(scope) and public_id in (…)`); only the read inside `repor
   changes.
 - **Severity:** low.
 
-### The link tap-target check has two copies, and one spec loops its own (added 2026-11-19, #720)
-
-- **What & why it's debt:** `e2e/a11y-checks.ts`'s `expectLinkTargets(page, context)` (every link in
-  `<main>`, all undersized ones collected) and `a11y.spec.ts`'s `expectLinkTapTargets(root, context,
-expected?)` (any root, an optional exact count, fail-fast) measure the same 44px rule for links.
-  #720 merged the control checks but left these, because merging them edits
-  `program-preview-a11y.spec.ts`, which lanes do not edit (the contract's). Separately,
-  `athletes.spec.ts` (about :862-865) loops `main button, main a[href^="/p/"]` with no visibility
-  skip, no label measurement and no zero-match guard.
-- **Impact:** a change to the link rule made in one copy leaves the other on the old rule; the
-  `athletes.spec.ts` loop passes vacuously if its selector ever matches nothing.
-- **The fix:** one exported `expectLinkTargets(root: Locator, context, expected?)` that collects every
-  undersized link and names it with `describeControl`; its 7 call sites move to it (3 of them in the
-  contract's spec, so the roadmap thread makes those). `athletes.spec.ts` calls `expectTapTargets`
-  and the link check instead of its loop.
-- **Severity:** low. Tests only; both copies hold the same 44px bar today.
-
 ### Home's programs lines cost one query per athlete (added 2026-11-19, FAM-1 15 PR 3)
 
 - **What & why it's debt:** `getProgramsByAthlete` is one DAL call, but lane P's
@@ -56,20 +74,6 @@ expected?)` (any root, an optional exact count, fail-fast) measure the same 44px
 - **The fix:** if Home's LCP suffers, batch `dayAssignments` with `profile_id IN (...)` and group in
   memory, keeping `currentPrograms`' order rule unchanged (the Programs list shares the read).
 - **Severity:** low.
-
-### The program-tables guard reads imports with regexes, so an unusual spelling slips past (added 2026-11-18, #552 closed)
-
-- **What & why it's debt:** `apps/web/test/program-tables-stay-dark.test.ts` (and its 7b actions,
-  HELPERS and erasure pins) finds lane P's imports by matching specifier text. #552 tried to harden
-  it, and its security review found that each fix met another spelling: a comment inside an import, a
-  backtick specifier, `require (` with a space, a `../node_modules` path, or an `@/` alias walking out
-  of `apps/web`.
-- **Impact:** an import written that way into a page or the day DAL would not be refused by the
-  guard. Code written in good faith uses the plain forms, which the guard catches.
-- **The fix:** a parser-based check, ESLint `no-restricted-imports` with path patterns per directory
-  (or the TypeScript import graph), so every specifier form, comment and alias resolves in one place.
-  Then the regex guard's directory rules move into it.
-- **Severity:** low. Maintainer, 2026-11-18: "Close; lint check as tech debt".
 
 ### The day page's loading skeleton keeps a switcher row a one-athlete household never shows (added 2026-11-17, FAM-1 12c)
 
@@ -272,8 +276,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   recorded reasons (a layout cannot read the pathname, cannot pass data to children, and uncached
   data in one blocks navigation). The other option — a route group giving `/p` its own boundary and
   dropping the day-subtree fallback — trades the skeleton away on a slow connection.
-- **Where it belongs:** `PICK-1` PR 4 adds the third grid track and is the next PR to touch this
-  seam; the plan's § For PR 4 is the place to settle it.
+- **Where it belongs:** no PR is scheduled for it now. `PICK-1` PR 4 was to mount into the strength
+  form, which FAM-1 12f deleted (#725), so settle it in the next PR that touches the day page's
+  `loading.tsx` or `AppShell`'s grid.
 
 ### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
 
@@ -335,25 +340,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **Trigger:** a report of a blank form after a refusal on a slow phone, or the next PR that
   changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
-
-### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
-
-- **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in
-  linear light** — its own docblock says so, and `luminance()` takes linear sRGB. Browsers composite a
-  translucent border in **gamma-encoded** sRGB (and `color-mix(in oklch, …)` in OKLCH). For an opaque
-  token the two agree; for a translucent one they do not, and the error is not in a safe direction:
-  for a 28% foreground mix the helper reports ≈1.36 light / ≈6.03 dark where a browser draws ≈1.93 /
-  ≈2.35 — i.e. it would **pass** a dark border that fails SC 1.4.11.
-- **Why it surfaced:** `PROF-1 a-1`'s plan proposed a dashed add-tile border "at a measured ≥3:1
-  foreground mix". The measurement would have been taken with this helper. a-1 side-steps it by using
-  an **opaque** token, which makes the model moot — so this is recorded, not fixed, and nothing today
-  depends on the translucent answer except the pinned hairline figure below.
-- **Also affected:** `token-sets.test.ts`'s "hairlines miss SC 1.4.11 — 1.26:1 light, **2.69:1 dark**"
-  pins a dark figure computed this way. The assertion (`< 3`) is still correct; the number in its name
-  is not. ⚠️ Verify the arithmetic before editing it — the claim here is structural (read the two
-  docblocks), the specific ratios are a reviewer's calculation.
-- **The fix, when taken:** composite in gamma-encoded sRGB (or match whatever `color-mix` space the
-  token uses), and re-derive the pinned figures.
 
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
 

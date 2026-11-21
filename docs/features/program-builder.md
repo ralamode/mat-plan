@@ -368,7 +368,7 @@ flowchart LR
 
 19. 🔴 **The actions and the program DAL** (step 7a-i; engineering panel, 2026-11-16):
     - Only `lib/dal/program/` imports lane P's writers and reads; everything else reaches them
-      through it (`apps/web/test/program-tables-stay-dark.test.ts`). The one exception is
+      through it (`apps/web/test/program-imports.test.ts`, its `ALLOWED_IN`). The one exception is
       `workoutInHousehold`, which the day DAL (`lib/dal/day/`, 12b) may import as well, for its
       scope-miss report.
     - A miss is reported only after a writer or read has said "not here", never on a success, and
@@ -448,6 +448,10 @@ flowchart LR
       rows the library has, and drop that arm.
 
 ## Traps
+
+- **Links on the builder's screens are measured by the suite's one link check**,
+  `expectLinkTargets(page.getByRole('main'), context)` in `e2e/a11y-checks.ts`, which
+  `program-builder.a11y.spec.ts` calls; there is no builder-local copy.
 
 - **The sheet pops its history entry on close, and in jsdom that `popstate` lands in the next
   test**, closing its sheet. A test file that opens a sheet stubs `history.back` (as
