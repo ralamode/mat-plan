@@ -127,9 +127,10 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY'); // legacy backstop for frame-ancestors
   response.headers.set('Referrer-Policy', REFERRER_POLICY);
-  // No `browsing-topics=()`: Chrome deprecated the Topics API (M144) and removed it, so a current
-  // Chromium logs "Unrecognized feature" for it on every page, and no other engine ever shipped it.
-  // The opt-out it expressed has nothing left to opt out of.
+  // No `browsing-topics=()`: Chrome deprecated Topics in M144, removed the API in M153 and the policy
+  // name in M159, so a current Chromium logs "Unrecognized feature" for it on every page. No other
+  // engine shipped it, and no script on these pages could call it (the CSP admits no third-party
+  // caller and the app embeds no iframes), so the opt-out guarded nothing.
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   return response;
