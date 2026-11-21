@@ -18,7 +18,7 @@ import {
 } from '../lib/constants';
 
 import { MOBILE_VIEWPORT } from './contexts';
-import { APP_ORIGIN, SIGNED_OUT_ORIGIN } from './origins';
+import { APP_ORIGIN, SIGNED_OUT_ORIGIN } from '../playwright.config';
 import { SEED_PROFILE_ROUTE } from './steps';
 
 /**
@@ -114,7 +114,13 @@ test.describe('public', () => {
       const hops: string[] = [];
       for (let r = response?.request() ?? null; r; r = r.redirectedFrom())
         hops.unshift(new URL(r.url()).pathname);
-      const seen = [...hops, ...chain].filter((p, i, all) => i === 0 || p !== all[i - 1]);
+      // Two views of one chain, never concatenated (that counted it twice; first CI run). A 307 shows
+      // only in the document's redirects, and the frame sees the landing alone. A redirect from the
+      // stream shows only as the frame's navigations. So: the frame's chain when it moved, else the
+      // HTTP one, with repeats (a meta refresh after a soft navigation) collapsed.
+      const seen = (chain.length > 1 ? chain : hops).filter(
+        (p, i, all) => i === 0 || p !== all[i - 1],
+      );
       expect.soft(seen, `${route}: lands on sign-in in one hop`).toEqual([route, SIGN_IN_PATH]);
 
       const body = await (await request.get(route, { maxRedirects: 0 })).text();

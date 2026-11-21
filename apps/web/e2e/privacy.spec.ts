@@ -10,12 +10,12 @@ import {
 import { NOTICE_TITLE } from '../lib/privacy/notice-content';
 
 import { MOBILE_VIEWPORT } from './contexts';
-import { SIGNED_OUT_ORIGIN } from './origins';
+import { SIGNED_OUT_ORIGIN } from '../playwright.config';
 
 /**
  * PRIV-2 — `/privacy`, the URL the Clerk and Google consent screens point at.
  *
- * 🔴 **The `public` cases run on the SIGNED-OUT server** (`SIGNED_OUT_ORIGIN`, `e2e/origins.ts`;
+ * 🔴 **The `public` cases run on the SIGNED-OUT server** (`SIGNED_OUT_ORIGIN`, `playwright.config.ts`;
  * `docs/plans/td-signed-out-e2e.md`), so they assert what a stranger sees. Before that server existed
  * the harness armed a principal process-wide, and these cases could only assert what the page
  * rendered.

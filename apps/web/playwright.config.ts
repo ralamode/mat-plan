@@ -1,6 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
 
-import { APP_ORIGIN, APP_PORT, SIGNED_OUT_ORIGIN, SIGNED_OUT_PORT } from './e2e/origins';
+/**
+ * The two e2e servers' origins, defined once and here in the config and imported by every spec that
+ * needs both (`docs/plans/td-signed-out-e2e.md`).
+ *
+ * - `APP_ORIGIN`: the bypassed server, where every request carries the fixture principal.
+ * - `SIGNED_OUT_ORIGIN`: the same build with the bypass disarmed, so its visitors are genuinely
+ *   signed out. With no Clerk keys in the harness it takes the dark branch (`lib/dal/session.ts:77`,
+ *   `proxy.ts:172`); everything after the session comes back `null` is the code under test.
+ *
+ * ⚠️ **Here, not in `e2e/`:** nothing outside `e2e/` and `scripts/` may import from them
+ * (`app/design/program/fakes.test.ts`), and the config is outside both. `e2e-local.ts` passes both
+ * ports from `freePort()`; the defaults are CI's.
+ */
+export const APP_PORT = Number(process.env.E2E_PORT ?? 3100);
+export const SIGNED_OUT_PORT = Number(process.env.E2E_SIGNED_OUT_PORT ?? 3101);
+export const APP_ORIGIN = `http://localhost:${APP_PORT}`;
+export const SIGNED_OUT_ORIGIN = `http://localhost:${SIGNED_OUT_PORT}`;
 
 /**
  * E2E config (V0-11). The `webServer` builds + starts the PRODUCTION app so the

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 
 import { athleteExportPath } from '../lib/constants';
 
-import { APP_ORIGIN, SIGNED_OUT_ORIGIN } from './origins';
+import { APP_ORIGIN, SIGNED_OUT_ORIGIN } from '../playwright.config';
 import { SEED_PROFILE_2_ROUTE } from './steps';
 
 /**
