@@ -14,7 +14,7 @@ import { logBodyweight, selectProfile, WARMUP_BODYWEIGHT } from './steps';
 // 🔴 **It no longer authenticates, because there is nothing to authenticate THROUGH.** It used to
 // enter the shared access code and save the cookie jar; the harness session is now
 // `E2E_SESSION_BYPASS_USER_ID`, read from the process env before the server boots, so every request
-// arrives authenticated and there is no browser-side login to perform or persist.
+// to the first server arrives authenticated (the second, `SIGNED_OUT_ORIGIN`, is the stranger) and there is no browser-side login to perform or persist.
 //
 // The setup does a cold write on EVERY distinct action path, each of which can take
 // tens of seconds on a cold `next start` — so it needs a test timeout well above Playwright's 30s

@@ -1,32 +1,50 @@
-import { expect, test, type Page, type Request } from '@playwright/test';
+import { join } from 'node:path';
 
-import { PUBLIC_PATHS } from '../lib/public-paths';
+import { newId, SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
+import { expect, test, type Frame, type Page, type Request } from '@playwright/test';
+
+import { PUBLIC_PATH_TREES, PUBLIC_PATHS } from '../lib/public-paths';
+import { MIN_PROTECTED_PAGES, protectedPageFiles, routeOf } from '../test/app-routes';
 import {
   APP_HOME_PATH,
   APP_NAME,
   FOOTER_COPY,
   GITHUB_REPO_URL,
   LANDING_COPY,
+  NO_PROFILE_SAVE,
   PICKER_COPY,
   ROUTINE_COPY,
   SIGN_IN_PATH,
 } from '../lib/constants';
 
 import { MOBILE_VIEWPORT } from './contexts';
+import { APP_ORIGIN, SIGNED_OUT_ORIGIN } from './origins';
 import { SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * OSS-2 §A — the public landing at `/`.
  *
- * ⚠️ **`storageState: NO_GATE_STATE` is gone from every case here (AUTH-1 1d), and nothing replaces
- * it.** It was an empty cookie jar, which kept the project's gate cookie from leaking in and making
- * a gated page look public. The harness session is now an environment variable read before the
- * server boots, so no browser context can be unauthenticated — see `e2e/contexts.ts`. These cases
- * therefore assert what the PAGE renders, never "a stranger sees this".
+ * 🔴 **The `public` cases run on the SIGNED-OUT server** (`SIGNED_OUT_ORIGIN`,
+ * `docs/plans/td-signed-out-e2e.md`): the same build with the bypass disarmed, so "a stranger sees
+ * this" is what they assert. Before that server existed (AUTH-1 1d until 2026-11-20) the harness
+ * armed a principal process-wide, and these cases could only assert what the page rendered.
  */
 
+/** What must never reach a stranger: the seeded athletes, the app home, and internals. */
+const STRANGER_MUST_NOT_SEE = [
+  SEED_PROFILE_NAME,
+  SEED_PROFILE_2_NAME,
+  PICKER_COPY.heading,
+  ' at ',
+  'node_modules',
+  '/apps/web/',
+];
+
+/** Each dynamic segment (`[id]`, `[...rest]`, `[[...rest]]`) filled with a fresh id. */
+const withFreshIds = (route: string) => route.replace(/\[\[?(\.\.\.)?[^\]]+\]\]?/g, () => newId());
+
 test.describe('public', () => {
-  test.use({ viewport: MOBILE_VIEWPORT });
+  test.use({ viewport: MOBILE_VIEWPORT, baseURL: SIGNED_OUT_ORIGIN });
 
   test('/ is the landing, with both CTAs above the fold', async ({ page }) => {
     await page.goto('/');
@@ -57,11 +75,75 @@ test.describe('public', () => {
     await expect(page).toHaveURL('/');
   });
 
-  // ⚠️ **"the app itself is still gated" was DELETED at 1d, not repointed.** It asserted that
-  // `/p` redirected to `/gate?from=…`. After 1d the equivalent claim is "`/p` redirects to
-  // `/sign-in`", which this harness CANNOT establish: the bypass principal is armed process-wide,
-  // so `/p` legitimately renders the picker here. Asserting the redirect would require a second,
-  // un-bypassed server — recorded in `tech-debt.md` rather than faked with an empty cookie jar.
+  /**
+   * 🔴 **Proof 1: every protected page refuses a stranger** (`docs/plans/td-signed-out-e2e.md`). The
+   * successor to "the app itself is still gated", deleted at AUTH-1 1d, which checked `/p` alone.
+   *
+   * - **The pages** are every `page.tsx` under `app/` whose route is not `isPublicPath()`, read from the
+   *   file system (`test/app-routes.ts`, the list `app/pages-need-a-session.test.ts` checks
+   *   statically). The design previews are included.
+   * - **(a) Where it lands.** The main-frame chain is exactly `[route, SIGN_IN_PATH]`. It is built
+   *   from the document's HTTP redirects and the frame's navigations, because a page under a
+   *   `loading.tsx` answers 200 and redirects from the stream instead of with a 307. A final-URL
+   *   check would pass `/programs` with its session check deleted, because it bounces through `/p`.
+   * - **(b) What is on the wire.** The first response's body holds none of `STRANGER_MUST_NOT_SEE`,
+   *   so a 200 shell is checked too.
+   *
+   * Soft, so one failing page names every other one. The redirect proves the page refused; it
+   * cannot show the session check ran before any data read, which stays unit-owned.
+   */
+  test('every protected page sends a stranger to sign-in, with nothing on the wire', async ({
+    page,
+    request,
+  }) => {
+    const appDir = join(__dirname, '..', 'app');
+    const files = protectedPageFiles(appDir);
+    expect(files.length, 'an empty glob would pass every page').toBeGreaterThanOrEqual(
+      MIN_PROTECTED_PAGES,
+    );
+    for (const file of files) {
+      const route = withFreshIds(routeOf(appDir, file));
+      const chain: string[] = [];
+      const onNav = (frame: Frame) => {
+        if (frame === page.mainFrame()) chain.push(new URL(frame.url()).pathname);
+      };
+      page.on('framenavigated', onNav);
+      const response = await page.goto(route);
+      await page.waitForURL(`**${SIGN_IN_PATH}`).catch(() => undefined);
+      page.off('framenavigated', onNav);
+      const hops: string[] = [];
+      for (let r = response?.request() ?? null; r; r = r.redirectedFrom())
+        hops.unshift(new URL(r.url()).pathname);
+      const seen = [...hops, ...chain].filter((p, i, all) => i === 0 || p !== all[i - 1]);
+      expect.soft(seen, `${route}: lands on sign-in in one hop`).toEqual([route, SIGN_IN_PATH]);
+
+      const body = await (await request.get(route, { maxRedirects: 0 })).text();
+      for (const secret of STRANGER_MUST_NOT_SEE)
+        expect.soft(body, `${route} sends a stranger "${secret}"`).not.toContain(secret);
+    }
+  });
+
+  /**
+   * 🔴 **Proof 4: the public paths stay public to a stranger.** `app/pages-need-a-session.test.ts`
+   * accepts `sessioned || isPublic`, so a public page that gained a session check would pass it, and
+   * pass the bypassed suite too. Each leaf of `PUBLIC_PATHS` and each root of `PUBLIC_PATH_TREES`
+   * answers 200 with no redirect in the stream (a followed redirect to `/sign-in` would also render
+   * an `<h1>`), then stays put in a browser.
+   */
+  test('every public path answers a stranger itself, with no redirect', async ({
+    page,
+    request,
+  }) => {
+    for (const path of [...PUBLIC_PATHS, ...PUBLIC_PATH_TREES]) {
+      const res = await request.get(path, { maxRedirects: 0 });
+      expect.soft(res.status(), `${path}: status`).toBe(200);
+      expect
+        .soft(await res.text(), `${path}: redirects from the stream`)
+        .not.toContain('__next-page-redirect');
+      await page.goto(path);
+      await expect.soft(page, `${path}: navigated away`).toHaveURL(path);
+    }
+  });
 });
 
 test.describe('authenticated', () => {
@@ -96,28 +178,31 @@ async function routineOrder(page: Page): Promise<string[]> {
 /**
  * `/` is an unauthenticated POST endpoint too: Server Actions post to the current URL, and Next
  * forwards an action id the page doesn't own to the page that does. Capture a real action request
- * (the routine editor's Save) — aborted, so it never runs — then replay it to every public path with
- * a spoofed `x-action-forwarded: 1`, which makes Next skip forwarding and look in that page's OWN
- * action map. That map must be empty: `pages-need-a-session.test.ts` keeps it so statically, and this
- * proves it at runtime.
+ * (the routine editor's Save, on the bypassed server), aborted so it never runs. Then replay it two
+ * ways:
  *
- * 🔴 **`1d` DELETED variant 1, and this is a real loss of coverage, stated rather than papered over.**
- * The replay used to run twice: as-is, and spoofed. The as-is arm relied on Next forwarding the
- * request onward to `/p/…/routine`, whose internal fetch then "meets the proxy WITHOUT a cookie" —
- * i.e. **the gate bounce was that arm's only protection**. After `1d` that fetch is
- * bypass-authenticated, so the Save action genuinely runs and the tail assertion below would go red.
- * Deleting the arm is correct; pretending nothing was lost would not be.
+ * - **Spoofed, on the bypassed server.** With `x-action-forwarded: 1`, Next skips forwarding and
+ *   looks in that page's OWN action map, which must be empty: `pages-need-a-session.test.ts` keeps it
+ *   so statically, and this proves it at runtime. Nothing may run: no `"ok":` of either value.
+ * - **🔴 As-is, on the SIGNED-OUT server** (proof 2, `docs/plans/td-signed-out-e2e.md`). This is the
+ *   arm AUTH-1 1d deleted, back now that a genuinely signed-out server exists. It goes to the routine
+ *   path and every public path, with only `next-action`, `content-type` and `accept`: a copied
+ *   `origin` would meet Next's CSRF check and 500 before the action. It must be refused with the
+ *   exact `NO_PROFILE_SAVE` copy, with nothing a stranger may not see.
  *
- * ⚠️ **Production is still protected** — by the in-action `requireSession()`, unit-proved in
- * `app/p/[profileId]/actions.test.ts`. What is gone is the RUNTIME proof of it, and `tech-debt.md`
- * carries that in the same row as the deferred un-bypassed server, because both halves of this
- * evidence went in one diff. ⚠️ Do not cite "no unauthenticated request does DB work" as a runtime
- * property of this suite any more.
+ * Its checks are **soft**, so the tail always runs. The tail ("a fresh load still has the original
+ * order") is the no-write proof.
  *
- * What survives pins: nothing runs, nothing leaks, nothing changes. An `"ok":` of either value in the
- * body would mean the action ran.
+ * ⚠️ **What this cannot show:** that no data was read. A missing session and a missing permission are
+ * refused byte-identically by design (`app/p/mutation-entry.ts`), so "the entry check runs before any
+ * lookup" stays unit-owned (`app/p/[profileId]/actions.test.ts`). Do not cite "no unauthenticated
+ * request does DB work" as a runtime property of this suite.
+ *
+ * ✅ **To be probed red** (recorded when run): drop the second server's `''` override, so it is
+ * armed. The Save really runs, and both the soft copy check and the tail ("a replay ran: the routine
+ * was saved") go red. Run that probe under `e2e:local` only, because it writes to the seed.
  */
-test('a forwarded-spoofed POST to a public path with a real action id runs nothing and leaks nothing', async ({
+test('a real Server Action replayed by a stranger, or spoofed onto a public path, runs nothing', async ({
   page,
   browser,
 }) => {
@@ -146,33 +231,45 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
   await expect.poll(() => captured).not.toBeNull();
   const request = captured as unknown as Request;
   const headers = request.headers();
+  const data = request.postDataBuffer();
+  expect(data, 'the captured Save has a body to replay').not.toBeNull();
+  const actionHeaders = {
+    'next-action': headers['next-action']!,
+    'content-type': headers['content-type']!,
+    accept: 'text/x-component',
+  };
 
-  // ⚠️ A plain context, not an empty cookie jar: the bypass principal is process-wide, so "anon"
-  // would be a lie. The spoofed header, not the absence of a cookie, is what this proves.
   const replayCtx = await browser.newContext();
-  const variants: Record<string, string>[] = [{ 'x-action-forwarded': '1' }];
   // Every public path, not just `/` (PRIV-2): each one is an unauthenticated POST endpoint on the
-  // same terms, so a new entry in `PUBLIC_PATHS` inherits this runtime proof instead of needing a
-  // new test that nobody writes.
+  // same terms, so a new entry in `PUBLIC_PATHS` inherits this runtime proof.
   for (const publicPath of PUBLIC_PATHS) {
-    for (const extra of variants) {
-      const label = `${publicPath} spoofed-forwarded replay`;
-      const res = await replayCtx.request.post(publicPath, {
-        headers: {
-          'next-action': headers['next-action']!,
-          'content-type': headers['content-type']!,
-          accept: 'text/x-component',
-          ...extra,
-        },
-        data: request.postDataBuffer() ?? undefined,
-        maxRedirects: 0,
-      });
-      const body = await res.text();
-      expect(body, `${label}: the action ran`).not.toMatch(/"ok":(true|false)/);
-      for (const leak of [' at ', 'node_modules', '/apps/web/', PICKER_COPY.heading]) {
-        expect(body, `${label} leaks "${leak}"`).not.toContain(leak);
-      }
+    const label = `${publicPath} spoofed-forwarded replay`;
+    const res = await replayCtx.request.post(`${APP_ORIGIN}${publicPath}`, {
+      headers: { ...actionHeaders, 'x-action-forwarded': '1' },
+      data: data!,
+      maxRedirects: 0,
+    });
+    const body = await res.text();
+    expect(body, `${label}: the action ran`).not.toMatch(/"ok":(true|false)/);
+    for (const leak of [' at ', 'node_modules', '/apps/web/', PICKER_COPY.heading]) {
+      expect(body, `${label} leaks "${leak}"`).not.toContain(leak);
     }
+  }
+  for (const target of [routine, ...PUBLIC_PATHS]) {
+    const label = `${target} as-is replay by a stranger`;
+    const res = await replayCtx.request.post(`${SIGNED_OUT_ORIGIN}${target}`, {
+      headers: actionHeaders,
+      data: data!,
+      maxRedirects: 0,
+    });
+    const body = await res.text();
+    expect.soft(res.status(), `${label}: status`).toBe(200);
+    expect
+      .soft(res.headers()['x-nextjs-action-not-found'], `${label}: action not found`)
+      .toBeUndefined();
+    expect.soft(body, `${label}: not refused with the no-session copy`).toContain(NO_PROFILE_SAVE);
+    for (const secret of STRANGER_MUST_NOT_SEE)
+      expect.soft(body, `${label} sends a stranger "${secret}"`).not.toContain(secret);
   }
   await replayCtx.close();
 

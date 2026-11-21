@@ -43,9 +43,11 @@ import { runUnderSlot } from '../../../.github/scripts/heavy-slot.mjs';
  *     locally, so pooled == unpooled == the same string);
  *   - `E2E_PORT` → a free port, so the run can never collide with (or, via the config's
  *     `reuseExistingServer`, silently ATTACH to) a `pnpm dev` server already running.
+ *   - `E2E_SIGNED_OUT_PORT` → a second free port, for the signed-out server
+ *     (`docs/plans/td-signed-out-e2e.md`), which never reuses one.
  *
  * Usage:
- *   pnpm e2e:local                              # whole smoke (chromium + a11y)
+ *   pnpm e2e:local                              # whole smoke (chromium + a11y), both servers
  *   pnpm e2e:local --project=chromium           # extra args pass through to playwright
  *   pnpm e2e:local e2e/log-bodyweight.spec.ts   # …including a single spec
  *
