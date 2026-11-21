@@ -281,8 +281,10 @@ access token`, which reads like a permissions problem with the repo. The cause w
   Playwright's text and CSS locators read through open shadow roots. So once the day page was
   titled "Today · Fri, Nov 20", every `getByText(/^Today ·/)` hit a strict-mode violation (2
   elements). → Scope the locator to where the text is drawn (`dayLineText(page, re)`, inside the
-  day nav), never widen it with `.first()`. The same node is how to assert what a navigation
-  ANNOUNCED: `page.locator('#__next-route-announcer__')`, which `toHaveTitle` cannot show.
+  day nav), never widen it with `.first()`. ⚠️ **Don't assert that node's text** to prove what a
+  navigation announced: Next reads `document.title` when the tree commits, and a streamed title
+  that is still late leaves the node holding the page's `<h1>` instead. #798 asserted it, passed
+  its own CI and main's, then failed another PR's attempt and retry (run 44908009063).
 - **A journey that builds its own athlete and program failed twice before it reached what it tested
   (FAM-1 12c-iii, #761).** (1) Put on timed out finding the new athlete's checkbox: `addAthlete` had
   not landed when the spec read `page.url()` and moved on. (2) Then "no rows to tick": `locator.count()`

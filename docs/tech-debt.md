@@ -319,6 +319,25 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
+### The route announcer sometimes says the athlete, not the day (added 2026-11-21)
+
+- **What & why it's debt:** #798 titled the day page with its day so Next's route announcer would
+  say it on arrival and on paging. Next's announcer (`app-router-announcer.js`, Next 16.4) reads
+  `document.title` once when the router commits the new tree, and falls back to the page's `<h1>`
+  when the title is empty. The title is streamed metadata (it arrives after the shell), so on a
+  slow render the announcer reads the `<h1>` and says the athlete's name instead of the day. Seen on
+  CI: run 44908009063 (#809, no app code), attempt and retry, the node held "Athlete One".
+  ⚠️ **Two ways it goes wrong**, by what `document.title` holds at that moment: **empty** → it
+  reads the `<h1>` (observed); **still the old title** → it says nothing, or the old day again
+  (inferred from the code, not observed). It announces only a title that differs from the last.
+- **Impact:** low. The name is already on screen (no D8 leak), and the tab's title is right; a
+  screen-reader user paging days sometimes hears the athlete instead of the day.
+- **Proposed fix:** an in-page polite `Announcer` that says `dayTitle(day, today)` when the viewed
+  day changes, so the day is always said. ⚠️ It double-speaks whenever Next's own announcement is
+  right, so it needs a UX check and the maintainer's call. Not `htmlLimitedBots: /.*/`, which would
+  hold every page's shell until its metadata resolves, app-wide.
+- **Severity:** low.
+
 ### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09) — ✅ CLOSED 2026-11-20
 
 > **Closed (FAM-1 day-page a11y, 2026-11-20).** The day page's title is its day line, short
