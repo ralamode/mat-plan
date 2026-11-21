@@ -48,8 +48,17 @@ export const runtime = 'nodejs';
  * of a short page it takes no attention from "who's logging today?". The provider still lives in the
  * root layout, so the choice applies everywhere and the gate and the landing still follow the device.
  */
-/** A plain title (the picker's heading); Next's route announcer reads it on arrival. */
-export const metadata: Metadata = { title: PICKER_COPY.heading };
+/**
+ * A plain title, the page's own `<h1>` (Next's route announcer reads it on arrival): "Who's logging
+ * today?" above "No household for this account" would be false. `householdState` is `cache()`d.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  await requireSession();
+  const { state } = await householdState();
+  return {
+    title: state === HOUSEHOLD_STATE.none ? NO_HOUSEHOLD_COPY.heading : PICKER_COPY.heading,
+  };
+}
 
 export default async function ProfilePickerPage() {
   // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**

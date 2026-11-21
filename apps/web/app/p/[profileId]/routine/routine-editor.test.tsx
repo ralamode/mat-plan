@@ -104,3 +104,26 @@ describe('RoutineEditor — "Routine saved." is heard (day-page a11y)', () => {
     expect(region.firstChild).not.toBe(first);
   });
 });
+
+describe('RoutineEditor — an edit after a save ends "Routine saved."', () => {
+  it('an edit empties the region, and going back to the saved order does not say it again', async () => {
+    render(
+      <RoutineEditor
+        profileId="p"
+        initialOrder={[{ key: STRENGTH_KEY, conditional: true }]}
+        catalog={routineCatalogItems()}
+      />,
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: ROUTINE_COPY.save })));
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe(ROUTINE_COPY.saved);
+    const add = screen.getByRole('button', { name: `+ ${practiceLabel}` });
+    fireEvent.click(add);
+    expect(region.textContent).toBe('');
+    // Back to the saved order (remove what was added): still empty, so nothing is announced.
+    fireEvent.click(
+      screen.getByRole('button', { name: `Remove ${practiceLabel} from the routine` }),
+    );
+    expect(region.textContent).toBe('');
+  });
+});

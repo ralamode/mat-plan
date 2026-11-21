@@ -59,7 +59,10 @@ export function RoutineEditor({
     setSavedJson(routineJson);
     setSaves((n) => n + 1);
   });
-  const showSaved = savedJson !== null && savedJson === routineJson;
+  // The first edit after a save ends it: going back to the saved order is not a save, so it is neither
+  // shown nor said again (a render-phase adjustment, not an effect).
+  if (savedJson !== null && savedJson !== routineJson) setSavedJson(null);
+  const showSaved = savedJson !== null && !state.error;
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -153,18 +156,21 @@ export function RoutineEditor({
         </Button>
       </div>
 
-      {/* Mounted while empty, beside (never inside) the error branch: a region that mounts with its
-          text is silent (`Announcer` rule 1). Seen as well as heard. */}
-      <Announcer
-        className="text-muted-foreground text-sm"
-        message={showSaved ? ROUTINE_COPY.saved : ''}
-        messageKey={saves}
-      />
-      {state.error ? (
-        <p role="alert" className="text-destructive text-sm">
-          {state.error}
-        </p>
-      ) : null}
+      {/* One wrapper, so the empty region adds no `gap-6` of its own. The region is mounted while
+          empty, beside (never inside) the error branch: a region that mounts with its text is
+          silent (`Announcer` rule 1). Seen as well as heard. */}
+      <div className="flex flex-col gap-2">
+        <Announcer
+          className="text-muted-foreground text-sm"
+          message={showSaved ? ROUTINE_COPY.saved : ''}
+          messageKey={saves}
+        />
+        {state.error ? (
+          <p role="alert" className="text-destructive text-sm">
+            {state.error}
+          </p>
+        ) : null}
+      </div>
     </form>
   );
 }

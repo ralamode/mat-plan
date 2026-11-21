@@ -68,6 +68,11 @@ const ROWS = {
 const LOG_PREFIX = DAY_COPY.logLabel('');
 const today = () => isoDaysAgo(0);
 /** The look-ahead notice's first sentence ("Coming up."), from the copy rather than re-typed. */
+/**
+ * Next's route announcer: a `#__next-route-announcer__` node in an OPEN shadow root (Next 16,
+ * `app-router-announcer.js`), which Playwright's CSS pierces. It holds what was last said on a route.
+ */
+const ROUTE_ANNOUNCER = '#__next-route-announcer__';
 const COMING_UP = new RegExp(`^${PROGRAM_COPY.comingUp('', today()).split('.')[0]}\\.`);
 /** A writable day with Morning habits: today, or yesterday when today is Sunday. */
 const logDay = () => (localWeekday(today()) === 0 ? isoDaysAgo(1) : today());
@@ -198,8 +203,17 @@ test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }
   await nav.getByRole('link', { name: /^Next day/ }).click();
   await page.waitForURL((u) => u.searchParams.get('d') === tomorrow);
   await expect(page.getByText(/^Tomorrow ·/)).toBeVisible();
-  // The tab's title is the day, which Next's route announcer reads; never the athlete's name (D8).
+  // The tab's title is the day, never the athlete's name (D8), and Next's route announcer SAYS it: its
+  // node holds the new day, not the last one (a title that streams in after the tree commits would
+  // leave it silent, or one navigation behind; #798 review).
   await expect(page).toHaveTitle(/^Tomorrow · \w{3}, \w{3} \d{1,2}$/);
+  const announced = page.locator(ROUTE_ANNOUNCER);
+  await expect(announced).toHaveText(/^Tomorrow ·/);
+  await nav.getByRole('link', { name: /^Previous day/ }).click();
+  await expect(page).toHaveTitle(/^Today ·/);
+  await expect(announced).toHaveText(/^Today ·/);
+  await nav.getByRole('link', { name: /^Next day/ }).click();
+  await page.waitForURL((u) => u.searchParams.get('d') === tomorrow);
   await expect(page.getByText(COMING_UP)).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
   await expect(ticks(page)).toHaveCount(0);
@@ -209,6 +223,8 @@ test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }
 test('more than the look-ahead ahead renders today', async ({ page }) => {
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${addDays(today(), LOOK_AHEAD_DAYS + 1)}`);
   await expect(page.getByText(/^Today ·/)).toBeVisible();
+  // The title names the day shown, after the fallback, not the one asked for.
+  await expect(page).toHaveTitle(/^Today ·/);
   // The last day it does show is still Coming up.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${addDays(today(), LOOK_AHEAD_DAYS)}`);
   await expect(page.getByText(COMING_UP)).toBeVisible();
@@ -575,7 +591,7 @@ test.describe('Bodyweight and Life on real data', () => {
     await page.goto(athleteRoutinePath(athleteId), { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: `+ ${practice}`, exact: true }).click();
     await page.getByRole('button', { name: ROUTINE_COPY.save, exact: true }).click();
-    await expect(page.locator('form').getByRole('status')).toBeVisible();
+    await expect(page.locator('form').getByRole('status')).toHaveText(ROUTINE_COPY.saved);
 
     // 2. Both logged during this visit: both stay open, each now offering Collapse.
     await page.goto(dayPage, { waitUntil: 'networkidle' });

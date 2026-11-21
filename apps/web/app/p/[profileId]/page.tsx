@@ -116,9 +116,14 @@ const resolveDayView = cache(async (profileId: string, d: string | undefined) =>
  */
 export async function generateMetadata({ params, searchParams }: DayPageProps): Promise<Metadata> {
   const { profileId } = await params;
-  const { d } = await searchParams;
-  const { today, day } = await resolveDayView(profileId, typeof d === 'string' ? d : undefined);
+  const { today, day } = await resolveDayView(profileId, viewedDayParam(await searchParams));
   return { title: dayTitle(day, today) };
+}
+
+/** `?d=`, as both readers pass it to `resolveDayView` (one key, one resolution): `?d=a&d=b` is none. */
+function viewedDayParam(searchParams: Record<string, string | string[] | undefined>) {
+  const { d } = searchParams;
+  return typeof d === 'string' ? d : undefined;
 }
 
 type DayPageProps = {
@@ -129,10 +134,9 @@ type DayPageProps = {
 
 export default async function TodayPage({ params, searchParams }: DayPageProps) {
   const { profileId } = await params;
-  const { d } = await searchParams;
   const { profile, canExportAthletes, timeZone, today, day, plan } = await resolveDayView(
     profileId,
-    typeof d === 'string' ? d : undefined,
+    viewedDayParam(await searchParams),
   );
   // 🔴 **THREE reasons a day is read-only, and they must not be conflated** — the day (before
   // yesterday, or after today) and archive. `dayPageFlags` keeps them apart and is unit-tested; see
