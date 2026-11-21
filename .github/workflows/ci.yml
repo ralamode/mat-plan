@@ -247,12 +247,12 @@ jobs:
       # TABLE, TRUNCATE CASCADE, RENAME — which is exactly how GAP-3's contract
       # step gets caught rather than merged.
       #
-      # ADDED FILES ONLY (--diff-filter=A). All-files is not viable: 20 findings
-      # remain across 6 migrations already on main, and Squawk has no baseline or
+      # ADDED FILES ONLY (--diff-filter=A). All-files is not viable: 47 findings
+      # remain across 15 migrations already on main, and Squawk has no baseline or
       # suppression feature. Scoping to added files composes with the forward-only
       # guard above — that makes migrations add-only, so "added" IS "new".
       #
-      # The 20 pre-existing findings are therefore never linted. Each one is listed
+      # The 47 pre-existing findings are therefore never linted. Each one is listed
       # with its reason in docs/tech-debt.md ("Squawk lints new migrations only"),
       # with the command that reproduces them, so the gate does not imply main is
       # clean.

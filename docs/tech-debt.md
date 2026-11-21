@@ -15,6 +15,38 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The builder's copy is split into its own chunk in four route groups, so moving between them downloads it again (added 2026-11-20, from #805's diagnosis)
+
+- **What & why it's debt:** Turbopack now puts the program builder's copy into its own chunk of
+  about 35 KiB in four route groups: `/p/[profileId]`, `/programs/[programId]`, the two workout
+  pages and `/design/program`. That copy is `components/program-builder/builder-text.ts`'s
+  `BUILDER_COPY`, plus what it pulls from `lib/constants` (`AMEND_COPY`, `HOME_LINK`,
+  `itemCountText`). It used to share one chunk. Tiny edits in lane C's #798 set off the regrouping
+  (Native Scaling's #805 diagnosis).
+
+  Two import paths keep that copy reachable from both sides:
+  - **Code outside the builder imports pieces of it:**
+    - `components/day/day-copy.ts`: `BUILDER_COPY.programs` and `weekdayName`;
+    - `components/day/program-order-dialog.tsx`: `lastDayText`;
+    - `components/layout/nav-rail.tsx`: `BUILDER_COPY.programs`;
+    - `app/p/new/add-athlete-form.tsx`: `BUILDER_COPY.programs`;
+    - `app/p/page.tsx`: `programsNavLink`.
+  - **`builder-text.ts` imports from `lib/constants`**, the app's widest-shared module.
+
+- **Impact:** each page's own first load is unchanged (+1 KiB at most). The cost is a repeated
+  download of about 35 KiB when moving between those pages on a phone. It is not measured by any
+  gate: #805 moved the bundle check's synthetic row to lazy chunks, and the PERF-1 entry names it.
+- **The fix, to weigh (not yet chosen):**
+  - **(a)** Move the few pieces used outside the builder into a small shared module (for example
+    `lib/program-copy.ts`: the `programs` label, `programsNavLink`, `weekdayName`, `lastDayText`),
+    so `BUILDER_COPY` is reached only from the builder's routes.
+  - **(b)** Cut `builder-text.ts`'s import of `lib/constants` (or the reverse dependency), so the
+    bundler keeps one shared chunk.
+  - Either may be enough, and they combine. **Measure before and after:** a local `pnpm build`, then
+    compare `.next/static/chunks` across the four routes for a chunk holding `BUILDER_COPY`.
+- **Severity:** low. Lane B owns `builder-text.ts`; the day files are lane C's, so edits there would
+  be guest edits.
+
 ### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
 
 - **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by
@@ -775,17 +807,15 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
-### Squawk lints new migrations only, and the CONCURRENTLY rule is review-enforced (recorded 2026-11-20)
+### Squawk lints new migrations only, so the findings in the old ones are listed here (recorded 2026-11-20)
 
-- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**, and `.squawk.toml` excludes
-  `require-concurrent-index-creation`. Linting every file is not viable as a gate: Squawk has **no
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. Linting every file is not viable as a gate: Squawk has **no
   baseline or suppression file**, so a gate over the findings below would be red on arrival. The
   forward-only guard makes those files immutable, so nothing in them can change; the findings are
   history, not a backlog, and each is accounted for below.
 - **Every finding on `main`, with its reason** (2026-11-20, Squawk 2.66.0, 33 files). Lines are
   1-based, the statement's first line. Reproduce:
-  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` (the 20); for the 27,
-  the same with a copy of `.squawk.toml` whose `excluded_rules` keeps only `prefer-bigint-over-int`.
+  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` reports all 47.
 
   **The 20 under the repo's config** (all in 0001–0009, written before Squawk was wired):
 
@@ -799,8 +829,8 @@ success.` Harmless there — nothing referenced the files yet.
   | 0009:27 (`sessions_day_role_check`)                                    | `constraint-missing-not-valid`                                  | The column was created in the statement above, so every row was NULL and passes; 0009's own comment.                                                                                                                                                              |
   | 0003:16 (`entries.kind` DROP NOT NULL)                                 | `ban-drop-not-null`                                             | A deliberate expand step: no column or data is removed, so it was safe to race the concurrent deploy (0003's header).                                                                                                                                             |
 
-  **The 27 under `require-concurrent-index-creation`**, which `.squawk.toml` excludes because
-  `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
+  **The 27 under `require-concurrent-index-creation`**, excluded in `.squawk.toml` until
+  2026-11-20 because `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
   that already existed; Squawk does not flag an index on a table the same file creates. A plain
   `CREATE INDEX` holds a `SHARE` lock, blocking writes but not reads, for the build, which on this
   app's row counts is milliseconds:
@@ -809,14 +839,13 @@ success.` Harmless there — nothing referenced the files yet.
   says why in a comment above the index; 0001, 0002 (header), 0005 and 0010 predate that habit.
   0027–0032 have none.
 
-- **Impact:** low. The record is now a fact rather than an implication. What stays open is the gate
-  itself: a NEW migration's non-concurrent index on a populated table passes CI, and only review
-  catches it, while a table is small enough that this is harmless.
-- **Proposed fix:** remove `require-concurrent-index-creation` from `excluded_rules`, so each new
-  index on an existing table needs a `-- squawk-ignore require-concurrent-index-creation` with its
-  reason (the 0024 idiom). That turns the review rule into a gate that asks for a written reason. The
-  real fix, a runner that applies a `CONCURRENTLY` file outside the transaction, is only worth
-  building when a table is large enough for the lock to matter.
+- **Impact:** low. Nothing in these files can change, so the list stays true; a Squawk version
+  bump may add findings to it, and the bump's PR re-runs the command above.
+- **Closed part:** a new migration's non-concurrent index on an existing table now fails Squawk
+  unless it carries `-- squawk-ignore require-concurrent-index-creation` with its reason
+  (`.squawk.toml`, maintainer 2026-11-20). The runner that would apply a `CONCURRENTLY` file outside
+  the transaction is still unbuilt; it is worth building only when a table is large enough for the
+  lock to matter.
 - **Severity:** low.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)
