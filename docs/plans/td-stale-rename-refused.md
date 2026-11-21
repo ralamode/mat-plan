@@ -46,7 +46,10 @@ history (`PROF-1` a-r keeps none, deliberately). After this change:
    `stale` **before** the duplicate guard. Then the existing fold and duplicate guard, unchanged.
 4. **The race is closed by the UPDATE's `WHERE`**, which carries `eq(profiles.name, seenName)`. If a
    rename commits between the pre-read and the UPDATE, the UPDATE matches 0 rows. Then one re-read
-   through the existing scoped `profileNameFor` is classified again: `refused`, `ok` or `stale`.
+   through the existing scoped `profileNameFor` is classified again: `refused`, `ok` or `stale`. The
+   classifier's fourth answer, "proceed" (stored = seenName ≠ name), means an A→B→A flip around the
+   UPDATE. It is reachable deterministically under mutation 33. **On the re-read it answers
+   `stale{current: stored}`**, never a second UPDATE, so there is no loop.
    Under READ COMMITTED a blocked UPDATE re-evaluates its `WHERE` against the committed row.
 5. **The action** maps `stale` to `{ ok: false, error: null, stale: { current } }`, a new typed member
    of `ActionState` that mirrors `duplicate`. It revalidates the edit path, so the page heading shows
@@ -62,7 +65,7 @@ history (`PROF-1` a-r keeps none, deliberately). After this change:
      renders. It has an `id`, `role="alert"` and `tabIndex={-1}`, takes focus, and is added to the
      field's and the submit's `aria-describedby`. The stored name sits in a `NAME_WRAP_CLASS` span.
    - **While it shows,** the submit reads `ATHLETE_FORM_COPY.saveAnyway`, outline, `size="lg"`. The
-     overwrite is then a differently labelled tap, never a retry of the same button.
+     overwrite is then a differently labelled tap, never a retry of the same button. **Enter or Go in the field does not overwrite**: the duplicate flow's disabled-default-button sentinel (`write-path.md` invariant 4) is reused while the message shows.
    - **The field keeps the parent's typing.**
    - **The heading** shows the stored name after the revalidate.
 7. **Proofs:**
@@ -80,7 +83,7 @@ history (`PROF-1` a-r keeps none, deliberately). After this change:
   - `PROFILE_ECHO_MAX` is a **new named const** (`PROFILE_NAME_MAX * 20`), the bound the two
     `acknowledgedDuplicate` fields already type by hand; both switch to it, and the tests import it.
   - It is not `athleteNameSchema`: it is the stored value echoed back, compared and never stored.
-  - It is **required**, so a form regression cannot silently bring back last-write-wins. Every
+  - It is **required**, so a form regression cannot silently bring back last-write-wins. A crafted `seenName` with a NUL never reaches SQL: the JS comparison answers `stale` first, and the conjunct only ever binds a value equal to the stored one. That is one more reason to keep both checks. Every
     app-written name has passed `athleteNameSchema` (trimmed, single-spaced, no control characters),
     so the HTML and multipart round trip returns it byte for byte, and `===` matches Postgres `=`.
 - **`packages/db/src/writers/profile.ts`:**
@@ -104,22 +107,22 @@ history (`PROF-1` a-r keeps none, deliberately). After this change:
 
 ## File-by-file changes
 
-| File                                                                                 | Change                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/profiles.ts`                                                    | EDIT. `PROFILE_ECHO_MAX` (used by both acknowledgement fields too), and `seenName`.                                                                                                    |
-| `packages/db/src/writers/profile.ts`                                                 | EDIT. As Design.                                                                                                                                                                       |
-| `packages/db/scripts/verify.ts`                                                      | EDIT. Every `renameProfile` call gains its true `seenName` (about 15). The new proofs. The vacuous `assert.ok(renameProfile(…))` at about :8524 becomes `renamedId(…)`.                |
-| `packages/db/scripts/mutations/428-…`, `429-…`, `430-…` (+ README)                   | NEW. 428 drops the pre-check; 429 drops the replay arm; 430 drops the conjunct.                                                                                                        |
-| `packages/db/scripts/mutations/13-…`, `32-…`, `33-…`                                 | RE-CUT for the new context. 33's `.expect` is re-pointed if its first red moves.                                                                                                       |
-| `apps/web/lib/dal/profiles.ts` (+ `profiles.test.ts`, `writes-quiet-errors.test.ts`) | EDIT. The argument; the recorded pre-read returns the seen name.                                                                                                                       |
-| `apps/web/app/p/[profileId]/action-state.ts`                                         | EDIT. `stale`.                                                                                                                                                                         |
-| `apps/web/app/p/profile-actions.ts` (+ test)                                         | EDIT. The parse and the map. Every rename body in the test gains a valid `seenName`, and one test pins that it reaches the DAL verbatim.                                               |
-| `apps/web/app/p/[profileId]/edit/rename-form.tsx` (+ test)                           | EDIT. As Acceptance 6.                                                                                                                                                                 |
-| `apps/web/e2e/athletes.spec.ts`                                                      | EDIT. One test: two pages, rename in B to a 40-character name, Save in A at 360px.                                                                                                     |
-| `apps/web/lib/constants.ts`                                                          | EDIT. The copy.                                                                                                                                                                        |
-| `docs/features/write-path.md`                                                        | EDIT. The rename row: where the branch lives (in the writer, unlike the amends, so `db:verify` proves it), the `seenName` lifetime invariant, and the superseded self-match race note. |
-| `docs/tech-debt.md`                                                                  | EDIT. This entry is closed. `stale` is added to the unhydrated-refusal entry.                                                                                                          |
-| `docs/changelog/…`                                                                   | NEW fragment.                                                                                                                                                                          |
+| File                                                                                 | Change                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/shared/src/profiles.ts`                                                    | EDIT. `PROFILE_ECHO_MAX` (used by both acknowledgement fields too), and `seenName`.                                                                                                                                                                                                                                                                                                                                      |
+| `packages/db/src/writers/profile.ts`                                                 | EDIT. As Design.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `packages/db/scripts/verify.ts`                                                      | EDIT. Every `renameProfile` call gains its true `seenName` (about 15). The new proofs. The vacuous `assert.ok(renameProfile(…))` at about :8524 becomes `renamedId(…)`.                                                                                                                                                                                                                                                  |
+| `packages/db/scripts/mutations/428-…`, `429-…`, `430-…` (+ README)                   | NEW. 428 drops the pre-check; 429 drops the replay arm; 430 drops the conjunct.                                                                                                                                                                                                                                                                                                                                          |
+| `packages/db/scripts/mutations/13-…`, `32-…`, `33-…`                                 | RE-CUT for the new context. 33's `.expect` is re-pointed if its first red moves.                                                                                                                                                                                                                                                                                                                                         |
+| `apps/web/lib/dal/profiles.ts` (+ `profiles.test.ts`, `writes-quiet-errors.test.ts`) | EDIT. The argument; the recorded pre-read returns the seen name.                                                                                                                                                                                                                                                                                                                                                         |
+| `apps/web/app/p/[profileId]/action-state.ts`                                         | EDIT. `stale`.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/app/p/profile-actions.ts` (+ test)                                         | EDIT. The parse and the map. Every rename body in the test gains a valid `seenName`, and one test pins that it reaches the DAL verbatim.                                                                                                                                                                                                                                                                                 |
+| `apps/web/app/p/[profileId]/edit/rename-form.tsx` (+ test)                           | EDIT. As Acceptance 6.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/web/e2e/athletes.spec.ts`                                                      | EDIT. One test: two pages, rename in B to a 40-character name, Save in A at 360px.                                                                                                                                                                                                                                                                                                                                       |
+| `apps/web/lib/constants.ts`                                                          | EDIT. The copy.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `docs/features/write-path.md`                                                        | EDIT. The rename row: where the branch lives (in the writer, unlike the amends, so `db:verify` proves it), the `seenName` lifetime invariant, and the `seenName` lifetime. The self-match race note is **narrowed, not retired**: the replay arm covers a rival that commits before the pre-read, but one landing between the pre-read and `findNameMatch` still self-matches (the comment at `profile.ts:125-132` too). |
+| `docs/tech-debt.md`                                                                  | EDIT. This entry is closed. `stale` is added to the unhydrated-refusal entry.                                                                                                                                                                                                                                                                                                                                            |
+| `docs/changelog/…`                                                                   | NEW fragment.                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 **Size:** about 400–450 lines of code, tests and docs, plus this plan. That is **over the 400-line
 target**. The bulk is the required argument rippling through about 15 existing proof calls and test
@@ -133,13 +136,22 @@ bodies. Splitting would ship a guard that an optional argument lets callers skip
     unacknowledged → `stale`, not `duplicate`. This is what makes mutation **428** observable;
   - **replay:** seen `A` ≠ stored `B` = name `B` → `ok`, no write. The no-edit shape cannot tell, so
     this is what makes mutation **429** observable;
-  - **the race:** a Proxy over the executor runs a direct `UPDATE … SET name = 'Rival'` when the
-    writer's pre-read resolves → `stale{current:'Rival'}`, stored `Rival`. With the conjunct dropped
-    the UPDATE overwrites and answers `ok`, so mutation **430** goes RED. A rival that writes the
-    submitted name instead proves the 0-row `ok` arm;
+  - **the race:** a Proxy over the executor traps **`update`**, and returns a small recursive Proxy
+    over the builder whose `then` first awaits a direct `UPDATE … SET name = 'Rival'` on the raw
+    handle (about 12 lines). It does not reuse `program.ts`'s `stealing()`, which traps the async
+    `transaction` this writer never opens.
+    - The rival runs **after** the duplicate guard and just before the writer's UPDATE →
+      `stale{current:'Rival'}`, stored `Rival`.
+    - With the conjunct dropped the UPDATE overwrites and answers `ok`, so mutation **430** goes RED.
+    - A rival that writes the submitted name proves the 0-row `ok` arm. Hooked at the pre-read
+      instead, it would answer `duplicate` (the self-match below);
   - **tenancy, both directions:** `B_SCOPE` on A's athlete with a wrong `seenName`, and with
     name = A's stored name, both → `refused`, no `current`, nothing written.
 - **The mutations:** `db:mutations --only 428-430`, plus `--only 13,32,33` after the re-cut.
+  - **428 is cut at the pre-read's call site**, never inside the shared `classifyRename`. Cut there,
+    it would land on the re-read's path and redden a different assertion.
+  - **33's first red moves** to the tenancy assertion, because under 33 the re-read's `stale` would
+    carry A's name to household B. Its `.expect` names that, knowingly.
 - **The action:** boundary tests (Acceptance 7) and the verbatim pass-through.
 - **The form:** the three-answer sequence (stale → duplicate → Save anyway), asserting `seenName` on
   the third submit; the label switch; focus; `aria-describedby`.
@@ -225,3 +237,16 @@ bodies. Splitting would ship a guard that an optional argument lets callers skip
 | R3  | Reuse                                | Where the branch lives differs from the amends.                                                                          | **accepted** | The write-path guide says so: in the writer, so `db:verify` proves it.                                                                                                               |
 | N   | All                                  | NITs: the untracked sheet cite, the mutation range (428–439 is lane S's own block), the stale comments, the replay's id. | **accepted** | Applied.                                                                                                                                                                             |
 | X1  | Correctness (outside)                | `verify.ts:~8524` `assert.ok(renameProfile(…))` cannot fail.                                                             | **accepted** | Fixed in this PR, since that call is edited anyway.                                                                                                                                  |
+
+### Correctness re-review (round 2), 2026-11-20
+
+> Model: Fable, medium effort. No BLOCKING. Each of 428, 429 and 430 goes RED on its stated
+> assertion, and the `seenName` lifetime is correct (no `cacheComponents`, so the form does not
+> survive a navigation).
+
+| #   | Critique (short)                                                                                                                | Verdict      | Resolution                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------- |
+| R1  | Hook the rival at `update`, not at the pre-read; `stealing()` traps a transaction this writer lacks                             | **accepted** | § Test plan, the race.                                                            |
+| R2  | A pre-read hook makes the "rival writes the same name" case answer `duplicate`; the self-match race is narrowed, not superseded | **accepted** | Hooked at `update`; the guide and comment narrowed.                               |
+| R3  | The re-read's fourth answer ("proceed") is undefined, and reachable under mutation 33                                           | **accepted** | It answers `stale`; 33's `.expect` is re-pointed knowingly.                       |
+| N   | Where 428 cuts; Enter overwrites while stale shows; the NUL note                                                                | **accepted** | 428 cuts at the call site; the sentinel is reused; the note is beside the schema. |
