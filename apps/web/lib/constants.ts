@@ -1007,6 +1007,12 @@ export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other:
  */
 export const LOOK_AHEAD_DAYS = 6;
 
+/**
+ * A write that cannot say what happened and needs the page's fresh data: a row or entry that is gone,
+ * or a request whose day is malformed or not open yet. Its own constant because three places say it.
+ */
+export const NOT_SAVED_RELOAD = 'Not saved. Reload the page.';
+
 /** The day page's day arrows and date line: `day-nav.tsx`'s `<nav>`, and how a test finds it. */
 export const DAY_NAV_LABEL = 'Change day';
 
@@ -1559,15 +1565,16 @@ export const CLEAR_DAY_COPY = {
    */
   refused: {
     bad_value: 'That didn’t go through. Try again.',
-    not_found: 'Not saved. Reload the page.',
+    not_found: NOT_SAVED_RELOAD,
     closed_day: 'This day is locked now, so nothing was restored.',
     retry: 'Too many changes at once. Wait a moment and try again.',
   } satisfies Record<DayClearRefusal, string>,
   /**
    * Clear this day's own `closed_day` line. Not `refused.closed_day` (Restore all's: "This day is
    * locked now, so nothing was restored."): a clear refused just after midnight is of a day that is
-   * now yesterday, still open to every other write and to Restore all, so "locked" would be false. Names both causes, since the answer cannot tell them
-   * apart: past midnight, or the athlete archived (the writer's own check, since the archive-race fix).
+   * now yesterday, still open to every other write and to Restore all, so "locked" would be false.
+   * Names both causes, since the answer cannot tell them apart: past midnight, or the athlete
+   * archived (the writer's own check, since the archive-race fix).
    */
   clearClosed: 'This day can’t be cleared now: only today can, and not for an archived athlete.',
   /** The action threw (a dropped connection, a server error): no cause is claimed. */
@@ -1595,7 +1602,7 @@ export const AMEND_ERROR_COPY = {
   /**
    * A change or a clear of a value on a day the page no longer offers (V1-24 3b-bw, plan W8). Not
    * the logging copy ("That day is locked now. Reload the page."): nothing was being logged, and the
-   * action has already revalidated the page, whose closed-day notice gives the reason.
+   * action has already revalidated the page, whose notice (closed-day or archived) gives the reason.
    */
   dayReadOnly: (subject: string) => `That day is locked now, so the ${subject} wasn't changed.`,
 } as const;

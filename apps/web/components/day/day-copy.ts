@@ -1,7 +1,7 @@
 import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-plan/shared';
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
-import { UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
+import { NOT_SAVED_RELOAD, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
 import { onDayText } from '@/lib/date';
 import { formatList, plural } from '@/lib/i18n/plural';
 
@@ -133,7 +133,7 @@ export const DAY_COPY = {
 /** "Couldn't save. Try again.": a ✓ and a reorder say the same thing when the server refuses. */
 const SAVE_FAILED = 'Couldn’t save. Try again.';
 const STALE = 'This changed since the page loaded.';
-const NOT_FOUND_COPY = 'Not saved. Reload the page.';
+const NOT_FOUND_COPY = NOT_SAVED_RELOAD;
 
 /** The athlete the plan is for, by name (the plan names its own athlete in `athletes`). */
 export function athleteNameOf(plan: DayPlan): string {
