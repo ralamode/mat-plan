@@ -12,14 +12,17 @@
  * BEST-EFFORT, NOT A SECURITY BOUNDARY. It reads the forms that get typed, through the shared wrapper
  * walk in `shell-commands.mjs` (and the main-checkout guard's `lex()`).
  *
- *   denied   any git subcommand given `--no-verify` (or an abbreviation git accepts, `--no-ver`);
+ *   denied   on the subcommands that run hooks (commit, push, merge, pull, rebase, am, revert,
+ *            cherry-pick): `--no-verify` (or a prefix of it; git itself needs `--no-veri`);
  *            `git commit -n`, alone or in a short-flag cluster (`-nm`, `-anm`);
- *            `HUSKY=0` or `HUSKY=false` as a prefix, through `env`, or `export`ed;
+ *            `HUSKY=0` or `HUSKY=false` as a prefix or through `env`/`sudo` (and `export`ed, anywhere);
  *            `git -c core.hooksPath=…` and `--config-env=core.hooksPath=…`, any case;
- *            `git config … core.hooksPath …` that sets or unsets it (reading it is allowed);
+ *            and anywhere: `git config … core.hooksPath …` that WRITES it (a write flag, or a value);
+ *            reading it, and restoring husky's own `.husky/_`, are allowed;
  *            `GIT_CONFIG_KEY_<n>=core.hooksPath`, and `core.hooksPath` in `GIT_CONFIG_PARAMETERS`.
- *   allowed  `git push -n` (a dry run), `git commit -m "… no-verify …"` (a message), any text that only
- *            MENTIONS these forms (an `echo`, a heredoc fed to anything but a bare shell).
+ *   allowed  `git push -n` (a dry run), `git commit -m "… no-verify …"` (a message), `git log -S
+ *            --no-verify` (a search), `git -c core.hooksPath=/dev/null worktree add` (the hardened
+ *            checkout of untrusted code), and any text that only MENTIONS these forms.
  *
  * KNOWN GAPS: a script file run by name; git launched from another program; a hooksPath already set
  * in ~/.gitconfig or .git/config; `chmod -x` on a hook; deleting `.husky/`; `git commit` through an
@@ -30,14 +33,59 @@
  * imports nothing. Malformed input or an internal error ALLOWS (fails open), as its siblings do.
  */
 const ESCAPE = 'MAT_PLAN_ALLOW_HOOK_SKIP=1';
-/** `--no-verify` and every unambiguous prefix git accepts for it (`--no-v` … `--no-verify`). */
+/** `--no-verify` and the prefixes that match it (git itself needs at least `--no-veri`). */
 const NO_VERIFY = /^--no-v(e(r(i(fy?)?)?)?)?$/;
 const HOOKS_PATH = /^core\.hookspath(=|$)/i;
+/** The subcommands that run this repo's hooks (pre-commit, commit-msg, pre-push) or a commit's. */
+const HOOK_SUBS = new Set([
+  'commit',
+  'push',
+  'merge',
+  'pull',
+  'rebase',
+  'am',
+  'revert',
+  'cherry-pick',
+]);
 /** `git commit` short options whose value follows (attached, or as the next word). */
-const COMMIT_VALUE = new Set(['m', 'F', 'C', 'c', 't', 'S', 'u']);
+const COMMIT_SHORT_VALUE = new Set(['m', 'F', 'C', 'c', 't', 'S', 'u']);
+/** `git commit` long options that take the next word as their value when not `--opt=value`. */
+const COMMIT_LONG_VALUE = new Set([
+  '--message',
+  '--file',
+  '--author',
+  '--date',
+  '--trailer',
+  '--template',
+  '--reuse-message',
+  '--reedit-message',
+  '--fixup',
+  '--squash',
+  '--cleanup',
+  '--pathspec-from-file',
+]);
 /** git's global options that take the next word as their value. */
-const GIT_GLOBAL_VALUE = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace']);
-const CONFIG_READ = new Set(['--get', '--get-all', '--get-regexp', '-l', '--list', 'get', 'list']);
+const GIT_GLOBAL_VALUE = new Set([
+  '-C',
+  '-c',
+  '--git-dir',
+  '--work-tree',
+  '--namespace',
+  '--config-env',
+]);
+/** `git config` forms that WRITE; anything else naming the key is a read. */
+const CONFIG_WRITE = new Set([
+  '--unset',
+  '--unset-all',
+  '--replace-all',
+  '--add',
+  '--rename-section',
+  '--remove-section',
+  'set',
+  'unset',
+]);
+/** Restoring husky's own path writes the key but puts the hooks back. */
+const HUSKY_PATH = '.husky/_';
 
 const REASON =
   "git's hooks always run: they are the local half of the gate. The docs-only rule skips waiting " +
@@ -45,10 +93,6 @@ const REASON =
 
 /** Why one unwrapped command (`shell-commands.mjs`) is refused, or null. */
 function hookSkipRefusal({ base, restText, assignments }) {
-  for (const a of assignments) {
-    const why = assignmentRefusal(a);
-    if (why) return why;
-  }
   if (base === 'export' || base === 'declare' || base === 'typeset') {
     for (const a of restText) {
       const why = assignmentRefusal(a);
@@ -59,47 +103,69 @@ function hookSkipRefusal({ base, restText, assignments }) {
   if (base !== 'git') return null;
 
   let i = 0;
+  const globalConfig = []; // `-c` and `--config-env` values
   for (; i < restText.length && restText[i].startsWith('-'); i++) {
     const a = restText[i];
-    const value = a.includes('=') ? a.slice(a.indexOf('=') + 1) : restText[i + 1];
-    if (a === '-c' && HOOKS_PATH.test(value ?? '')) return '`git -c core.hooksPath=…`';
-    if (a.startsWith('--config-env') && HOOKS_PATH.test(value ?? ''))
-      return '`git --config-env=core.hooksPath=…`';
+    if (a === '-c' || a === '--config-env') globalConfig.push(restText[i + 1] ?? '');
+    else if (a.startsWith('--config-env=')) globalConfig.push(a.slice('--config-env='.length));
     if (GIT_GLOBAL_VALUE.has(a)) i++;
   }
   const sub = restText[i];
   const args = restText.slice(i + 1);
   if (sub === undefined) return null;
+  if (sub === 'config') return configRefusal(args);
+  if (!HOOK_SUBS.has(sub)) return null; // `git log -S --no-verify`, a hardened `-c … worktree add`
 
-  for (const a of args) {
-    if (a === '--') break;
-    if (NO_VERIFY.test(a)) return `\`git ${sub} --no-verify\``;
+  for (const a of assignments) {
+    const why = assignmentRefusal(a);
+    if (why) return why;
   }
-  if (sub === 'commit' && commitHasShortN(args)) return '`git commit -n`';
-  if (
-    sub === 'config' &&
-    args.some((a) => HOOKS_PATH.test(a)) &&
-    !args.some((a) => CONFIG_READ.has(a))
-  )
-    return '`git config core.hooksPath`';
+  if (globalConfig.some((v) => HOOKS_PATH.test(v))) return `\`git -c core.hooksPath=… ${sub}\``;
+  for (const a of optionWords(sub, args)) {
+    if (NO_VERIFY.test(a)) return `\`git ${sub} --no-verify\``;
+    if (sub === 'commit' && /^-[^-]/.test(a) && shortHasN(a)) return '`git commit -n`';
+  }
   return null;
 }
 
-/** `-n` in `git commit`'s short options, stopping where a value starts (`-m 'not -n'`). */
-function commitHasShortN(args) {
+/** The option words of `git <sub> <args>`, skipping option values (`-m '--'`) and stopping at `--`. */
+function* optionWords(sub, args) {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--') return false;
-    if (!/^-[^-]/.test(a)) continue;
-    for (let k = 1; k < a.length; k++) {
-      if (a[k] === 'n') return true;
-      if (COMMIT_VALUE.has(a[k])) {
-        if (k === a.length - 1 && !'Su'.includes(a[k])) i++; // the value is the next word
-        break;
+    if (a === '--') return;
+    if (!a.startsWith('-')) continue;
+    yield a;
+    if (sub !== 'commit') continue;
+    if (COMMIT_LONG_VALUE.has(a)) i++;
+    else if (/^-[^-]/.test(a)) {
+      for (let k = 1; k < a.length; k++) {
+        if (a[k] === 'n') break;
+        if (COMMIT_SHORT_VALUE.has(a[k])) {
+          if (k === a.length - 1 && !'Su'.includes(a[k])) i++; // the value is the next word
+          break;
+        }
       }
     }
   }
+}
+
+/** `-n` in one `git commit` short-flag cluster, before a value starts (`-mn` is `-m n`). */
+function shortHasN(a) {
+  for (let k = 1; k < a.length; k++) {
+    if (a[k] === 'n') return true;
+    if (COMMIT_SHORT_VALUE.has(a[k])) return false;
+  }
   return false;
+}
+
+/** `git config` writing `core.hooksPath`, or null for a read (`git config core.hooksPath`). */
+function configRefusal(args) {
+  const key = args.findIndex((a) => HOOKS_PATH.test(a));
+  if (key < 0) return null;
+  const value = args.slice(key + 1).find((a) => !a.startsWith('-'));
+  const writes = args.some((a) => CONFIG_WRITE.has(a)) || value !== undefined;
+  if (!writes || value === HUSKY_PATH) return null;
+  return '`git config core.hooksPath` (a write)';
 }
 
 function assignmentRefusal(a) {

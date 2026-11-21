@@ -100,7 +100,8 @@ function analyze(tokens, found, inheritedEscape, lex, escapeName) {
       for (i++; i < words.length; i++) {
         const a = text(i);
         if (SUDO_WITH_VALUE.has(a)) i++;
-        else if (!a.startsWith('-') && !ASSIGNMENT.test(a)) break;
+        else if (ASSIGNMENT.test(a)) assignments.push(a);
+        else if (!a.startsWith('-')) break;
       }
     } else if (base === 'env') {
       for (i++; i < words.length; i++) {
