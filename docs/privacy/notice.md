@@ -248,7 +248,7 @@ because nothing about it is held on your phone. Things worth saying plainly:
 - **A restore sometimes cannot bring an entry back**, when something has since been logged in its
   place; the app says so rather than failing quietly. And ticking a cleared workout row again writes
   the new numbers over the cleared ones.
-- **A workout's name and its "how it felt" note stay.** Clearing hides the day's entries, an
+- **Workout names, and any notes written with them, stay.** Clearing hides the day's entries, an
   entry's own note included. The workout's name, its group names and any "how it felt" note stay
   with the day until the athlete or household is deleted.
 - **Nothing is erased yet.** A cleared entry stays in the database, out of sight and out of the
@@ -469,7 +469,7 @@ one.**
 who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
 2026-11-19** against the export becoming the household owners' and its rate limit, and against
 Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
-the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name.
+the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name. The Clear this day bullet's heading now says "workout names, and any notes written with them" _(the maintainer approved it)_.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out

@@ -1826,7 +1826,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "A workout's name and its \"how it felt\" note stay."
+                  "text": "Workout names, and any notes written with them, stay."
                 }
               ]
             },
@@ -3068,7 +3068,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", and so was the old box for typing a movement's name.\n"
+        "text": ", and so was the old box for typing a movement's name. The Clear this day bullet's heading now says \"workout names, and any notes written with them\" "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(the maintainer approved it)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ".\n"
       },
       {
         "k": "strong",

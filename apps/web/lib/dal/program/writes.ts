@@ -161,7 +161,7 @@ export async function takeOffHouseholdProgram(
  * (`lockAthletes`: this household's, live, not archived) and of the list (a permutation of the
  * athlete's current programs, else `invalid`). A `not_found` reports the athlete id, the one id it
  * answers `not_found` for. An `invalid` reports the first program id that is not this household's
- * (`reportOrderProgramMiss`, the Programs list read once); a stale list of the household's live
+ * (`reportOrderProgramMiss`, one query for every id); a stale list of the household's live
  * programs reports nothing. Either way the answer is the writer's.
  */
 export async function reorderHouseholdPrograms(
@@ -176,7 +176,7 @@ export async function reorderHouseholdPrograms(
   );
   if (isNotFound(result)) return missed(report);
   if (!result.ok && result.reason === PROGRAM_REFUSAL.invalid) {
-    await reportOrderProgramMiss(scope, input.programPublicIds, today);
+    await reportOrderProgramMiss(scope, input.programPublicIds);
   }
   return result;
 }
