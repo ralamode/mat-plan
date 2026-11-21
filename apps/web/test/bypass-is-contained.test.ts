@@ -44,6 +44,11 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
   const INJECTORS = ['scripts/e2e-local.ts', 'scripts/screenshot-ephemeral.ts'];
   /** The one module allowed to turn the predicate into a principal. */
   const READS_PREDICATE = 'lib/dal/session.ts';
+  /**
+   * DISARMS it: the signed-out e2e server's `env` sets it to `''` (`docs/plans/td-signed-out-e2e.md`).
+   * Not an injector, so a separate category with its own, stricter assertion below.
+   */
+  const DISARMS = 'playwright.config.ts';
 
   const relative = (f: string) => f.replace(/^.*apps\/web\//, '');
 
@@ -57,7 +62,17 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
     expect(
       namers.sort(),
       'an auth bypass is armed in ONE module and injected only by throwaway harnesses',
-    ).toEqual([ARMS, ...INJECTORS].sort());
+    ).toEqual([ARMS, ...INJECTORS, DISARMS].sort());
+  });
+
+  it('the config only ever DISARMS it: one mention, set to the empty string', () => {
+    // 🔴 Counted on the prefix, so an import of the fixture constant (`E2E_SESSION_BYPASS_USER`)
+    // counts too. One mention, on a line that is exactly the empty-value key: a second entry, an
+    // `'' || …`, or `undefined` (which `spawn` drops, letting `.env.local` win) all fail here.
+    const src = code(join(WEB_DIR, DISARMS));
+    const mentions = src.split('\n').filter((line) => /E2E_SESSION_BYPASS_USER/.test(line));
+    expect(mentions, `${DISARMS} must name the bypass exactly once`).toHaveLength(1);
+    expect(mentions[0]).toMatch(/^\s*E2E_SESSION_BYPASS_USER_ID: '',?$/);
   });
 
   it('reads `process.env` for it in the armer alone', () => {
@@ -165,7 +180,7 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
     // `pages-need-a-session.test.ts`'s dead-entry rule: a stale name silently excuses a file somebody may
     // later recreate at that exact path.
     const present = appSources().map(relative);
-    for (const entry of [ARMS, ...INJECTORS, READS_PREDICATE]) {
+    for (const entry of [ARMS, ...INJECTORS, READS_PREDICATE, DISARMS]) {
       expect(present, `${entry} is allowlisted but no longer exists`).toContain(entry);
     }
   });

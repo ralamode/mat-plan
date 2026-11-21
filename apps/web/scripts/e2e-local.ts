@@ -101,11 +101,16 @@ async function main(): Promise<void> {
     await linkFixtureMember(dbUrl);
 
     const appPort = await freePort();
+    // The signed-out server's own free port (`docs/plans/td-signed-out-e2e.md`): `appPort + 1` is
+    // unchecked, and an occupied port would make that server fail to start.
+    const signedOutPort = await freePort();
+    if (signedOutPort === appPort) throw new Error('freePort() returned the app port twice');
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       DATABASE_URL: dbUrl,
       DATABASE_URL_UNPOOLED: dbUrl,
       E2E_PORT: String(appPort),
+      E2E_SIGNED_OUT_PORT: String(signedOutPort),
       // AUTH-1 1c-3a — the session seam. Without it, every spec reaching a `requireSession()` page
       // lands on `/sign-in` from 1c-3b onward. `lib/env.ts` refuses to arm unless `DATABASE_URL` is
       // a local host, which `assertLocalDbUrl` has already proved for `dbUrl` above.
