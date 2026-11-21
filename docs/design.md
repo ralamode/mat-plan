@@ -163,11 +163,11 @@ text-destructive-foreground`, 4.76:1 light / 6.19:1 dark) is for the one button 
   44px tap-target bar — is `calc(var(--spacing) * 11)`. Below `0.25rem` every control drops under the
   bar.
 - **One pair in the current palette is under AA** (red text on a red tint, the `destructive` button's
-  old look), and the hairlines miss SC 1.4.11. Muted text clears AA on every ground since
-  `--muted-foreground` moved to L 0.54 (2026-11-20). None is
-  rendered by a route today, which is why CI is green. Both are pinned in
-  `app/design/tokens/token-sets.test.ts` as inputs to the reskin, not background noise, measured as a
-  browser composites them (gamma-encoded sRGB); they are not restated here.
+  old look), and the hairlines miss SC 1.4.11. Neither the red tint nor the hairlines is rendered by
+  a route today, which is why CI is green. Both are pinned in `app/design/tokens/token-sets.test.ts`
+  as inputs to the reskin, not background noise, measured as a browser composites them
+  (gamma-encoded sRGB); they are not restated here. Muted text clears AA on every ground since
+  `--muted-foreground` moved to L 0.54 (2026-11-20), pinned in the same file.
 
 ⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`, **except
 `contrast.ts` (with its `contrast.test.ts`) and `css-block.ts`**, which `app/done-tokens.test.ts`
