@@ -15,22 +15,6 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
-### The import pins hold names by barrel and by direct import, not by origin (added 2026-11-20, #779)
-
-- **What & why it's debt:** `apps/web/test/program-imports.test.ts` checks each `@mat-plan/db` name
-  by the name imported from `packages/db/src/index.ts`, and the DAL re-export rule by an `export`
-  that names it directly ([plan](./plans/td-program-tables-import-graph.md), § Goal). Two holes the
-  regex guard also had stay open: a lane P writer re-published by another `packages/db` module under
-  a new name, and a DAL passing one on through a local binding (`export { s }` of an aliased import,
-  an object literal, `cache(x)`).
-- **Impact:** code written that way could reach a writer outside the DAL without the guard refusing
-  it. Every writer still takes a `HouseholdScope`, which only the DAL resolves, so the damage is
-  limited to a path a reviewer must catch.
-- **The fix:** key names by origin, walking `index.ts`'s re-export graph so a writer keeps its
-  identity under any name; and, in the DALs, allow a lane P name only as a direct callee. The second
-  is a new restriction, with a false-positive risk (a writer handed to a transaction wrapper).
-- **Severity:** low.
-
 ### The e2e suite spends about 22 of its household's 25 athlete slots per run, leaving about 3 for retries (added 2026-11-20, from lane C)
 
 - **What & why it's debt:** the e2e database is fresh per run and seeds one household, capped at

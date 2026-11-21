@@ -181,7 +181,7 @@ const LOADERS = new Set(['require', '__webpack_require__', '__non_webpack_requir
 const NODE_MODULE = new Set(['module', 'node:module']);
 
 /** Is this identifier a reference, not a property name, a key or a label? */
-function isReference(n: ts.Identifier): boolean {
+export function isReference(n: ts.Identifier): boolean {
   const p = n.parent;
   if (!p) return true;
   if (ts.isPropertyAccessExpression(p) && p.name === n) return false;
@@ -381,45 +381,102 @@ export function barrelNames(
   return { names, unreadable, diagnostics };
 }
 
+/** Where a published name is defined: its file (repo-relative) and its name there. */
+export type Origin = { file: string; name: string };
+
 /**
- * Every name a module publishes, through its `export *` chain (repo-relative `file`). Syntactic:
- * declarations, `export { … }` (local or `from`), `export * as ns`, `export default`, and each
- * `export *` target's names. What a pin's table names must be among these, or the row guards nothing.
+ * Every name a module publishes, mapped to its ORIGIN (repo-relative `file`): followed through
+ * `export *`, `export { a as b } from`, and a local `export { x }` of an imported binding, while the
+ * target stays under `inside`. A target outside it (third-party, a sibling package) is the origin
+ * itself, not walked. `null` is a name whose origin cannot be traced: a specifier that does not
+ * resolve, or two `export *` chains publishing one name from different origins. A guard keyed on the
+ * origin fails closed on `null`, so a renamed re-export keeps its identity. `texts` reads a file's
+ * text from a fixture.
  */
-export function exportedNames(file: string, seen = new Set<string>()): Set<string> {
-  const names = new Set<string>();
-  if (seen.has(file)) return names;
-  seen.add(file);
-  const { imports, sf } = importsOf(join(REPO_DIR, file));
+export function originsOf(
+  file: string,
+  texts: Readonly<Record<string, string>> = {},
+  inside = 'packages/db/src/',
+  memo = new Map<string, Map<string, Origin | null>>(),
+): Map<string, Origin | null> {
+  const cached = memo.get(file);
+  if (cached) return cached;
+  const out = new Map<string, Origin | null>();
+  memo.set(file, out); // a cycle reads what is known so far
+  const { imports, sf } = importsOf(join(REPO_DIR, file), texts[file]);
+  const refOf = (st: ts.Node) => imports.find((i) => i.text === st.getText(sf));
+  /** The origin of `name` as published by `target` (a resolved path, or null). */
+  const through = (target: string | null, name: string): Origin | null => {
+    if (target === null) return null;
+    if (!target.startsWith(inside)) return { file: target, name };
+    if (name === '*') return { file: target, name };
+    return originsOf(target, texts, inside, memo).get(name) ?? null;
+  };
+  /** Local bindings that come from an import: local name → (resolved target, imported name). */
+  const imported = new Map<string, { target: string | null; name: string }>();
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !st.importClause) continue;
+    const target = refOf(st)?.resolved ?? null;
+    const clause = st.importClause;
+    if (clause.name) imported.set(clause.name.text, { target, name: 'default' });
+    const b = clause.namedBindings;
+    if (b && ts.isNamespaceImport(b)) imported.set(b.name.text, { target, name: '*' });
+    else
+      b?.elements.forEach((e) =>
+        imported.set(e.name.text, { target, name: (e.propertyName ?? e.name).text }),
+      );
+  }
+  const set = (name: string, origin: Origin | null) => {
+    const had = out.get(name);
+    const same = (a: Origin | null | undefined, b: Origin | null) =>
+      !!a && !!b && a.file === b.file && a.name === b.name;
+    out.set(name, had === undefined || same(had, origin) ? origin : null);
+  };
+  const local = (name: string): Origin | null => {
+    const from = imported.get(name);
+    return from ? through(from.target, from.name) : { file, name };
+  };
   for (const st of sf.statements) {
     if (ts.isExportDeclaration(st)) {
       const clause = st.exportClause;
+      const target = st.moduleSpecifier ? (refOf(st)?.resolved ?? null) : undefined;
       if (clause && ts.isNamedExports(clause))
-        clause.elements.forEach((e) => names.add(e.name.text));
-      else if (clause && ts.isNamespaceExport(clause)) names.add(clause.name.text);
-      else {
-        const target = imports.find((i) => i.kind === 'star' && i.text === st.getText(sf));
-        if (target?.resolved) exportedNames(target.resolved, seen).forEach((n) => names.add(n));
-      }
-    } else if (ts.isExportAssignment(st)) names.add('default');
-    else if (
+        for (const e of clause.elements) {
+          const name = (e.propertyName ?? e.name).text;
+          set(e.name.text, target === undefined ? local(name) : through(target, name));
+        }
+      else if (clause && ts.isNamespaceExport(clause))
+        set(clause.name.text, through(target ?? null, '*'));
+      else if (target === null || target === undefined) set('*', null);
+      else if (!target.startsWith(inside)) set(`* from ${target}`, null);
+      else
+        for (const [name, origin] of originsOf(target, texts, inside, memo))
+          if (name !== 'default') set(name, origin);
+    } else if (ts.isExportAssignment(st)) {
+      const x = unwrapExpression(st.expression);
+      set('default', ts.isIdentifier(x) ? local(x.text) : { file, name: 'default' });
+    } else if (
       ts.canHaveModifiers(st) &&
       ts.getModifiers(st)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
     ) {
+      const isDefault = ts.getModifiers(st)?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword);
       if (ts.isVariableStatement(st))
         st.declarationList.declarations.forEach(
-          (d) => ts.isIdentifier(d.name) && names.add(d.name.text),
+          (d) => ts.isIdentifier(d.name) && set(d.name.text, { file, name: d.name.text }),
         );
       else if (
         (ts.isFunctionDeclaration(st) ||
           ts.isClassDeclaration(st) ||
           ts.isInterfaceDeclaration(st) ||
           ts.isTypeAliasDeclaration(st) ||
-          ts.isEnumDeclaration(st)) &&
+          ts.isEnumDeclaration(st) ||
+          ts.isModuleDeclaration(st)) &&
         st.name
-      )
-        names.add(st.name.text);
+      ) {
+        const name = isDefault ? 'default' : st.name.text;
+        set(name, { file, name });
+      }
     }
   }
-  return names;
+  return out;
 }
