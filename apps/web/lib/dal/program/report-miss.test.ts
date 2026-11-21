@@ -46,6 +46,7 @@ import {
 const PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a1';
 const OTHER_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000a2';
 const FOREIGN_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000af';
+const SECOND_FOREIGN_PROGRAM_ID = '019826b4-0000-7000-8000-0000000000ae';
 const WORKOUT_ID = '019826b4-0000-7000-8000-0000000000b1';
 const SCOPE = { householdId: 7 } as never;
 const ATHLETE_ID = '019826b4-0000-7000-8000-000000000001';
@@ -300,7 +301,14 @@ describe('a Program order refused as invalid (FAM-1 15c): the first program id t
   });
 
   it('🔴 another household’s program in the order is reported once, with ONE query for every id', async () => {
-    const order = [PROGRAM_ID, FOREIGN_PROGRAM_ID, OTHER_PROGRAM_ID, FOREIGN_PROGRAM_ID];
+    // Two foreign ids, so only the FIRST in the order's order may be the one reported.
+    const order = [
+      PROGRAM_ID,
+      FOREIGN_PROGRAM_ID,
+      OTHER_PROGRAM_ID,
+      SECOND_FOREIGN_PROGRAM_ID,
+      FOREIGN_PROGRAM_ID,
+    ];
     await reportOrderProgramMiss(SCOPE, order);
     expect(vi.mocked(reportScopeMiss).mock.calls).toEqual([[programMissOf(FOREIGN_PROGRAM_ID)]]);
     expect(vi.mocked(programIdsIn).mock.calls).toEqual([[db, SCOPE, order]]);

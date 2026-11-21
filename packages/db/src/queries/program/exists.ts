@@ -46,14 +46,24 @@ export async function liveProgramBlockId(
  * **Which of `programPublicIds` are this household's live programs**, in one query: the set of those
  * ids that `programIn` would answer `true` for. For a caller holding several ids at once (the Program
  * order's scope-miss report, FAM-1 15c), so a refusal costs one read, not the Programs list. Ids that
- * are not uuids are left out without being sent; an empty or all-invalid list reads nothing.
+ * are not uuids are left out without being sent; an empty or all-invalid list reads nothing. The set
+ * holds each id in the lower case `uuidSchema` gives it.
  */
 export async function programIdsIn(
   exec: Executor,
   scope: HouseholdScope,
   programPublicIds: readonly string[],
 ): Promise<ReadonlySet<string>> {
-  const ids = [...new Set(programPublicIds)].filter((id) => uuidSchema.safeParse(id).success);
+  // Each id as `uuidSchema` reads it (lower case, as Postgres returns a uuid), so an id sent in
+  // upper case is answered as `programIn` would answer it, and `.has` on the result matches.
+  const ids = [
+    ...new Set(
+      programPublicIds.flatMap((id) => {
+        const parsed = uuidSchema.safeParse(id);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  ];
   if (ids.length === 0) return new Set();
   const rows = await exec
     .select({ publicId: schema.programBlocks.publicId })

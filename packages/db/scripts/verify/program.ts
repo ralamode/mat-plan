@@ -1125,11 +1125,23 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
     );
 
     // ── programIdsIn: programIn for several ids, in one query (tech-debt, 15c's order report) ──
-    const asked = [programPublicId, aOther, 'not-a-uuid', newId()];
+    // The household's seeded legacy block too: not a program (`kind = template`), so never answered.
+    const legacyBlock = await seededBlock(tx, A_SCOPE);
+    const asked = [
+      programPublicId,
+      aOther.toUpperCase(),
+      legacyBlock.publicId,
+      'not-a-uuid',
+      newId(),
+    ];
     assert.deepEqual(
       [...(await programIdsIn(exec, A_SCOPE, asked))].sort(),
       [programPublicId, aOther].sort(),
       'FAM-1 15c: programIdsIn answers exactly the ids that are this household’s live programs',
+    );
+    assert.ok(
+      !(await programIdsIn(exec, A_SCOPE, [legacyBlock.publicId])).has(legacyBlock.publicId),
+      'FAM-1 15c: programIdsIn: the household’s legacy block is not one of its programs',
     );
     assert.deepEqual(
       [...(await programIdsIn(exec, B_SCOPE, asked))],
