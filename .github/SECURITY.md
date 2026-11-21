@@ -137,6 +137,33 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
 - Public/URL/API IDs are **UUIDv7** (non-enumerable → anti-IDOR).
 - **Middleware is NOT the auth boundary** (CVE-2025-29927) — the real checks live in the DAL, on
   every read and write. Keep Next.js patched.
+- **The test session bypass is an authentication bypass in production code, contained three ways.**
+  `E2E_SESSION_BYPASS_USER_ID` makes `getCurrentUser()` (`apps/web/lib/dal/session.ts`) return a
+  synthetic principal before Clerk is asked, so the Playwright smoke and `screenshot:ephemeral` can
+  reach session-gated pages with no Clerk keys. It must never arm anywhere real:
+  1. **Two refusals at boot, not per request** (`apps/web/lib/env.ts`, `BYPASS_PRINCIPAL`). The
+     module throws on import, so a mis-wired deployment fails its build instead of promoting with
+     the bypass armed:
+     - the value must **equal** the committed fixture `E2E_SESSION_BYPASS_USER`
+       (`packages/shared/src/seed-ids.ts`), never a real Clerk id and never an unbounded string;
+     - the process must be a **local throwaway harness**: no `VERCEL` / `VERCEL_ENV`, and a
+       `DATABASE_URL` whose host is local (`isLocalDbHost`, `packages/shared/src/db-environment.ts`).
+       The database check is the primary one, because Vercel's system variables can be switched off
+       per project, and would then pass silently.
+
+     Neither refusal sits behind `SKIP_ENV_VALIDATION`, so that one variable cannot switch both off.
+
+  2. **One decision, frozen at module scope**, so the boot check and every later answer are the
+     same evaluation.
+  3. **Containment, pinned by a test** (`apps/web/test/bypass-is-contained.test.ts`): the raw
+     variable is named only where it is declared, validated and injected, and only
+     `lib/dal/session.ts` calls `sessionBypassUserId()`.
+
+  ⚠️ **What the pin does not see:** it scans `apps/web` source minus tests. The injectors outside it
+  are reviewed as what they are: `scripts/e2e-local.ts` and `scripts/screenshot-ephemeral.ts` pass
+  the shared constant, and `.github/workflows/ci.yml`'s e2e job sets the same value at step level,
+  as a literal (YAML cannot import it). A workflow change that touches that line is a security
+  review.
 
 ## Sensitive data
 
