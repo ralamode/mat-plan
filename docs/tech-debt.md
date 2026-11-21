@@ -383,39 +383,29 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 > **Still unmeasured:** the CWV timings themselves (real-user p75 is `PERF-1` (a), lab scores are
 > `PERF-2`).
 
-### Two runtime auth proofs went with the gate, and the harness cannot replace them (found 2026-11-05, AUTH-1 1d)
+### A signed-out request is proved at runtime only on the no-Clerk branch (found 2026-11-05, AUTH-1 1d; narrowed 2026-11-20)
 
-- **What & why:** the e2e harness arms a principal in the **process environment**
-  (`E2E_SESSION_BYPASS_USER_ID`, snapshotted at module scope in `lib/env.ts`), so **no browser context
-  in the suite can be unauthenticated.** While the gate existed that did not matter: the proxy bounced
-  a cookie-less request, and three specs used that bounce as their witness. `1d` deletes it, and with
-  it:
-  - `e2e/landing.spec.ts`'s unauthenticated-action proof loses **variant 1** — the as-is replay, whose
-    only protection was "the internal fetch meets the proxy without a cookie". After `1d` that fetch
-    is bypass-authenticated, the Save action genuinely runs, and the spec's own tail assertion would
-    redden. Variant 2 (spoofed `x-action-forwarded`) survives on its own premise.
-  - `landing.spec.ts`'s "the app itself is still gated" is **deleted, not repointed**: the equivalent
-    claim is "`/p` redirects to `/sign-in`", which this harness cannot establish.
-  - `e2e/export-csv.spec.ts`'s "a request without the access cookie gets nothing" is **deleted**, and
-    it is the one case that was caught by observation rather than reasoning: it went RED in
-    `e2e:local`, because the export now correctly returns **200 with a real zip** to the
-    bypass-authenticated request. Rewriting it to accept 200 would have inverted its own subject.
-- **Impact:** production is **still protected** — the in-action `requireSession()` and the per-page
-  `requireSession()` are unit-proved, and `app/pages-need-a-session.test.ts` asserts the call per route.
-  What is lost is the **runtime** proof that an unauthenticated request does no work. 🔴 **Do not cite
-  "no unauthenticated request reaches the DB" as a property this SUITE demonstrates any more** — it
-  was cited that way in `docs/plans/ai-1-nl-logging.md`'s spend argument, and both halves of that
-  evidence vanished in one diff.
-- **Fix:** a **second, un-bypassed Playwright `webServer`** — one project whose server boots without
-  the bypass variable, carrying only the specs that need a genuine stranger. ⚠️ Deliberately NOT done
-  in `1d`: three review lenses independently found that a second server also proves the
-  _dark-deployment_ branch rather than the one under test (the harness has no Clerk keys either), and
-  it would break `test/bypass-is-contained.test.ts`'s pin on the exact set of sources naming the
-  bypass variable — Playwright's `webServer.env` can only SET a key, so the config must name it.
-  Design it against both constraints or not at all.
-- **Interim:** `proxy.test.ts` pins the matcher's SHAPE (`has`/`missing` absent on the compiled entry),
-  which catches the SEC-1 mutation at the config layer. It does **not** catch the exclusion being
-  re-introduced at another layer — an early `return` in `proxy()` keyed on a header.
+- **What & why:** AUTH-1 1d deleted three runtime proofs that a signed-out request is refused,
+  because the e2e harness armed a principal process-wide (`E2E_SESSION_BYPASS_USER_ID`, `lib/env.ts`).
+  A second, un-bypassed e2e server restored them on 2026-11-20 ([plan](plans/td-signed-out-e2e.md)).
+  That server has no Clerk keys, as neither harness does, so it takes the **dark** branch: `getCurrentUser()` returns
+  `null` at `lib/dal/session.ts:77` before `auth()`, and the proxy returns before `clerkMiddleware()`
+  is composed (`proxy.ts:172`).
+- **Impact:** what is runtime-proved is the refusal from `null` onward: every protected page sends a
+  stranger to sign-in, a real Server Action POST is refused and writes nothing, and the export answers
+  a member and refuses a stranger. What stays **unit-proved only** is the configured branch: the
+  Clerk-composed proxy, and a real `auth()` answering no `userId` (`session.test.ts:66`, `:174`,
+  `:194`).
+  - 🔴 **Do not cite "no unauthenticated request reaches the DB" as a property this SUITE
+    demonstrates**, on either branch. A missing session and a missing permission are refused
+    byte-identically by design, so no runtime proof can show which layer refused, or that nothing was
+    read. That stays unit-owned (`app/p/[profileId]/actions.test.ts`). It was cited that way in
+    `docs/plans/ai-1-nl-logging.md`'s spend argument.
+- **Fix:** Clerk development-instance keys on the e2e job, for the signed-out server only, so it
+  takes the configured branch. **Not now** _(maintainer, 2026-11-20: "no Clerk keys in CI")_: it
+  would put a live secret on a job that runs PR code, and Clerk's network in every e2e run.
+- **Severity:** P3. Production is protected by the unit-proved checks; this is the runtime evidence
+  for one branch.
 
 ### The `mp_gate` tombstone is removable on 2027-02-04 (added 2026-11-05, AUTH-1 1d)
 

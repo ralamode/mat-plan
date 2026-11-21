@@ -267,6 +267,15 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A redirect chain read from the browser was wrong on two CI runs (td-signed-out-e2e, #791).**
+  (1) Concatenating `response.request().redirectedFrom()` hops with `framenavigated` URLs counted each
+  hop twice. (2) Reading either one alone still failed: a late navigation from the previous page
+  landed in the next page's chain (`[/sign-in, /p, /sign-in]`), and a 307's history was lost
+  (`[/sign-in]`). → Follow a redirect chain over HTTP with `request.get(url, { maxRedirects: 0 })`:
+  a 3xx `Location`, or, for a redirect thrown under a `loading.tsx`, the streamed
+  `<meta id="__next-page-redirect" … content="1;url=…">`. That meta is what the browser follows, so
+  the chain is the visitor's, and it is deterministic. Diagnose from the "Received" array: a repeated
+  or leading `/sign-in` means the events crossed pages.
 - **A page that gets a title makes `page.getByText(<that text>)` match twice (#798).** Next's route
   announcer says the new title in a `#__next-route-announcer__` node, in an OPEN shadow root, and
   Playwright's text and CSS locators read through open shadow roots. So once the day page was

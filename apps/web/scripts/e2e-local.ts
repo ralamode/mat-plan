@@ -43,9 +43,11 @@ import { runUnderSlot } from '../../../.github/scripts/heavy-slot.mjs';
  *     locally, so pooled == unpooled == the same string);
  *   - `E2E_PORT` → a free port, so the run can never collide with (or, via the config's
  *     `reuseExistingServer`, silently ATTACH to) a `pnpm dev` server already running.
+ *   - `E2E_SIGNED_OUT_PORT` → a second free port, for the signed-out server
+ *     (`docs/plans/td-signed-out-e2e.md`), which never reuses one.
  *
  * Usage:
- *   pnpm e2e:local                              # whole smoke (chromium + a11y)
+ *   pnpm e2e:local                              # whole smoke (chromium + a11y), both servers
  *   pnpm e2e:local --project=chromium           # extra args pass through to playwright
  *   pnpm e2e:local e2e/log-bodyweight.spec.ts   # …including a single spec
  *
@@ -101,11 +103,16 @@ async function main(): Promise<void> {
     await linkFixtureMember(dbUrl);
 
     const appPort = await freePort();
+    // The signed-out server's own free port (`docs/plans/td-signed-out-e2e.md`): `appPort + 1` is
+    // unchecked, and an occupied port would make that server fail to start.
+    const signedOutPort = await freePort();
+    if (signedOutPort === appPort) throw new Error('freePort() returned the app port twice');
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       DATABASE_URL: dbUrl,
       DATABASE_URL_UNPOOLED: dbUrl,
       E2E_PORT: String(appPort),
+      E2E_SIGNED_OUT_PORT: String(signedOutPort),
       // AUTH-1 1c-3a — the session seam. Without it, every spec reaching a `requireSession()` page
       // lands on `/sign-in` from 1c-3b onward. `lib/env.ts` refuses to arm unless `DATABASE_URL` is
       // a local host, which `assertLocalDbUrl` has already proved for `dbUrl` above.

@@ -159,6 +159,9 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
      - in `apps/web` the raw variable is named only in `lib/env.ts` and the two harness injectors
        (`scripts/e2e-local.ts`, `scripts/screenshot-ephemeral.ts`), and only `lib/dal/session.ts`
        calls `sessionBypassUserId()`;
+     - it is **disarmed** in one place only: `playwright.config.ts`'s signed-out `webServer` sets it
+       to `''`, which counts as unset (the `DISARMS` category: one mention, empty-valued, and the
+       entry's parsed `env` is exactly that one key, with `reuseExistingServer: false`);
      - across `.github/workflows/`, only `ci.yml` names it, exactly once, as a step-scoped
        `key: value` entry whose value equals the committed constant.
 
