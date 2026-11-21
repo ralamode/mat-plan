@@ -127,10 +127,10 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY'); // legacy backstop for frame-ancestors
   response.headers.set('Referrer-Policy', REFERRER_POLICY);
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), browsing-topics=()',
-  );
+  // No `browsing-topics=()`: Chrome deprecated the Topics API (M144) and removed it, so a current
+  // Chromium logs "Unrecognized feature" for it on every page, and no other engine ever shipped it.
+  // The opt-out it expressed has nothing left to opt out of.
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   return response;
 }

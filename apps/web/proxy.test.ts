@@ -185,6 +185,13 @@ describe('the proxy redirects nothing (AUTH-1 1d)', () => {
     const { res } = await run('/');
     expect(res.headers.get('referrer-policy')).toBe(REFERRER_POLICY);
   });
+
+  it('turns off camera, microphone and geolocation, and names no feature browsers have dropped', async () => {
+    // The contract pin. `browsing-topics` was removed (Chrome dropped the Topics API, and a current
+    // Chromium logs "Unrecognized feature" for it on every page); re-adding it fails here.
+    const { res } = await run('/');
+    expect(res.headers.get('permissions-policy')).toBe('camera=(), microphone=(), geolocation=()');
+  });
 });
 
 /**
