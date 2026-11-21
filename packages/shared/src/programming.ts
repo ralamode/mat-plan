@@ -39,8 +39,9 @@ import {
  * newest program block **only if they are a child**. The adult in the household logs freely and gets their own
  * program later; today they would otherwise inherit the kids' PPL block, which is not his training.
  *
- * ⚠️ **This constant is DELETED by `ASSIGN-READ` (D4)**, along with its call site,
- * `packages/db/src/queries/program-day.ts`'s block subquery. There is no predicate function: the
+ * ⚠️ **This constant is DELETED by `ASSIGN-READ` (D4)**, along with its one runtime reader,
+ * `packages/db/src/queries/program-day.ts`'s block subquery, and its `db:verify` proof in
+ * `scripts/verify/schema.ts`. There is no predicate function: the
  * query compares `profiles.kind` to it inline (the `readsHouseholdProgram` wrapper had no caller and
  * went with LEGACY-1 PR A).
  * It is a stopgap with a named end, not a rule of the domain, which is why it lives beside the day
