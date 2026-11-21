@@ -234,7 +234,19 @@ const isImportMeta = (e: ts.Node): e is ts.MetaProperty =>
  *   object of a property access; any identifier `createRequire`; any import of `module` or
  *   `node:module`.
  */
-export function importsOf(
+export function importsOf(file: string, text?: string, options?: ts.CompilerOptions): FileImports {
+  // A tracked file read as it is on disk does not change within a run: parse it once. A fixture's
+  // text or options are never cached. The importer map reads every `packages/db/src` file once per
+  // fixture, which under load ran past vitest's 5s default (first seen on a pre-push, 2026-11-20).
+  if (text !== undefined || options !== undefined) return parseImports(file, text, options);
+  let out = ON_DISK.get(file);
+  if (!out) ON_DISK.set(file, (out = parseImports(file)));
+  return out;
+}
+
+const ON_DISK = new Map<string, FileImports>();
+
+function parseImports(
   file: string,
   text: string = readFileSync(file, 'utf8'),
   options: ts.CompilerOptions = optionsFor(file),

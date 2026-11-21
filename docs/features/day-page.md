@@ -330,7 +330,8 @@ contract's `quantityText` (C1, #436).
 - **The collapse (12c-iii, D50, the maintainer's "Accept all six", 2026-11-19):** opening and
   collapsing are not spoken as "Opened"/"Collapsed"; the workout line keeps the app's heading
   level; the label and count use `done-muted-foreground` (the prototype's grey fails AA on the
-  tint); Bodyweight stays open with two or more weights; a folded region keeps its plain name; a
+  tint; the app's `muted-foreground` clears it at 4.57:1 since L 0.54, and `done-muted-foreground`
+  stays for its hue and margin, `row-parts.tsx`); Bodyweight stays open with two or more weights; a folded region keeps its plain name; a
   workout with a failed save stays open. Unlike the prototype, a folded body is hidden, not removed.
 
 ## Changing it

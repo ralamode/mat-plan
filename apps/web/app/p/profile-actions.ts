@@ -96,6 +96,7 @@ export async function renameAthleteAction(
       // `?? undefined`: `formData.get` returns NULL for an absent field, and `z.string().optional()`
       // rejects null. Probed on the add form, where it would have made every first submit refuse.
       acknowledgedDuplicate: formData.get('acknowledgedDuplicate') ?? undefined,
+      seenName: formData.get('seenName'),
     });
     if (!parsed.success) {
       const fieldErrors = parsed.error.flatten().fieldErrors;
@@ -108,7 +109,8 @@ export async function renameAthleteAction(
       // a parent has no input to correct; falling through to the `name` branch would answer
       // `fieldErrors: { name: undefined }`, which renders NOTHING — the dead state the add form hit
       // and the reason `addAthleteAction` groups its own hidden fields the same way.
-      if (fieldErrors.profileId || fieldErrors.acknowledgedDuplicate) {
+      // `seenName` joins them (the stale-rename fix): a hidden echo, nothing a parent can correct.
+      if (fieldErrors.profileId || fieldErrors.acknowledgedDuplicate || fieldErrors.seenName) {
         return { ok: false, error: NO_ATHLETE_SAVE };
       }
       // Field-level, so the form can mark the input `aria-invalid` and show the message under it
@@ -123,11 +125,17 @@ export async function renameAthleteAction(
     // `addAthleteAction` does: a boolean would let consent to "Ada" wave "Bea" through after an
     // edit. `createProfile`'s sibling comment has the full reasoning; a crafted body can still forge
     // it, and duplicates are advisory rather than a boundary.
-    const saved = await renameAthlete(profile.id, parsed.data.name, {
+    const saved = await renameAthlete(profile.id, parsed.data.name, parsed.data.seenName, {
       acknowledgedDuplicate: parsed.data.acknowledgedDuplicate,
     });
 
     if (!saved.ok) {
+      if (saved.reason === 'stale') {
+        // The form showed an out-of-date name; nothing was saved. Revalidate so the page heading shows
+        // the stored one, and hand it back so the form compares against it next time.
+        revalidatePath(athleteEditPath(profile.id));
+        return { ok: false, error: null, stale: { current: saved.current } };
+      }
       if (saved.reason === 'duplicate') {
         // Not a `fieldError`: the typed name is not INVALID, and `aria-invalid` on a correct value
         // is a lie. The form renders a callout from this and offers the one choice.
