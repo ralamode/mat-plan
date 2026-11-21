@@ -15,6 +15,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A fixtures seed cannot tell production from a fixtures database before the fresh start (added 2026-11-20, CAT-3 A2-ii)
+
+- **What & why it's debt:** `assertSeedOwnsDatabase` (`packages/db/src/seed.ts`) refuses a fixtures seed
+  only on a database where a live household exists and none carries `SEED_HOUSEHOLD_PUBLIC_ID`.
+  Migration 0001 wrote that id into every database, and production's family household still carries
+  it until CAT-3's fresh start (R2). So a `SEED_FIXTURES=1` run that passed the URL allowlist through
+  one of its accepted limits (a production database named `*preview*`, a localhost tunnel) would write
+  the global test library and the fixture athletes into production.
+- **Impact:** needs an operator mistake past the allowlist; nothing automated sets the flag against
+  production (`seed-fixtures-is-contained.test.ts`). `db:verify` pins the gap: the check resolves on a
+  freshly migrated database.
+- **The fix:** a real marker that only a fixtures database carries (for example, refuse when a live
+  `household_members` principal is not the committed fixture principal, after checking the preview
+  database passes), or the fresh start itself, which erases the seed-id household.
+- **Severity:** low today; it closes at R2.
+
 ### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
 
 - **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by

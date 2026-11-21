@@ -1,0 +1,14 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index ea91dfae..b51c3da5 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -700,8 +700,7 @@ const movementsOwnershipReport: Correction = {
+         CATALOG_SLUGS.has(r.slug),
+     );
+     const isCurated = (r: (typeof global)[number]) =>
+-      MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId) ||
+-      (r.modality !== null && CATALOG_SLUGS.has(r.slug));
++      MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId);
+     const curated = global.filter(isCurated);
+     const residual = global.filter((r) => !isCurated(r));
+     const modalityNotLibrary = residual.filter((r) => r.modality !== null);

@@ -74,3 +74,52 @@ describe('the program-fixtures flag is contained (FAM-1 D10)', () => {
     expect(flag).toBeGreaterThan(spread);
   });
 });
+
+/**
+ * 🔴 **CAT-3 K29 condition 1: every database the app reads with the test library is seeded with it.**
+ *
+ * The app reads `CATALOG_FIXTURE` on a local or preview-named database (`catalogLibraryNameFor`), and
+ * the seed writes it only with `SEED_FIXTURES=1`. So every seed of such a database must set the flag,
+ * or the app would match over a library the database does not hold. The sites: CI's e2e job, the
+ * preview migration, the runbook's manual preview seed, and the local harness (above, `migrateAndSeed`,
+ * which `dev-local`, `e2e-local` and `screenshot-ephemeral` all call). Production's one seed, in
+ * `migrate.yml`, must not set it.
+ */
+describe('every fixtures-database seed sets the flag (CAT-3 K29)', () => {
+  const FLAG = SEED_FIXTURES_ENV;
+  const SEED = /\bdb:seed\b/;
+  /** Lines that RUN the seed: a pnpm command, not prose that names it. */
+  const seedRuns = (text: string) =>
+    text.split('\n').filter((line) => SEED.test(line) && /\bpnpm\b/.test(line));
+
+  it("each workflow seed line but production's sets SEED_FIXTURES=1", () => {
+    const lines = globSync('.github/workflows/*.{yml,yaml}', { cwd: REPO }).flatMap((f) =>
+      seedRuns(readFileSync(join(REPO, f), 'utf8')).map((line) => ({ f, line: line.trim() })),
+    );
+    const flagged = lines.filter((l) => l.line.startsWith(`${FLAG}=1 `)).map((l) => l.f);
+    const bare = lines.filter((l) => !l.line.startsWith(`${FLAG}=1 `)).map((l) => l.f);
+    expect(flagged.sort()).toEqual([
+      '.github/workflows/ci.yml',
+      '.github/workflows/migrate-preview.yml',
+    ]);
+    expect(bare, 'only production seeds without fixtures').toEqual([
+      '.github/workflows/migrate.yml',
+    ]);
+  });
+
+  it("the runbook's manual seed of the preview sets it", () => {
+    const runs = seedRuns(readFileSync(join(REPO, 'docs/runbooks.md'), 'utf8')).filter((line) =>
+      line.includes('PREVIEW'),
+    );
+    expect(runs.length).toBeGreaterThan(0);
+    for (const line of runs) expect(line.trim().startsWith(`${FLAG}=1 `), line).toBe(true);
+  });
+
+  it('every local harness seeds through migrateAndSeed', () => {
+    for (const script of ['dev-local.ts', 'e2e-local.ts', 'screenshot-ephemeral.ts']) {
+      const text = readFileSync(join(WEB_DIR, 'scripts', script), 'utf8');
+      expect(text, script).toMatch(/await migrateAndSeed\(/);
+      expect(text, `${script} runs no seed of its own`).not.toMatch(/['"]db:seed['"]/);
+    }
+  });
+});

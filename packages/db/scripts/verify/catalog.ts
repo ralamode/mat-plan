@@ -13,6 +13,7 @@ import {
   type Muscle,
 } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
@@ -432,11 +433,19 @@ const LEGACY_SLUGS = new Set<string>(MOVEMENT_SEED_ROWS.map((r) => r.slug));
 
 /**
  * D5.2, **E1 on a database with no global movements.** Called right after
- * `verifyCatalogMigrationFacts`, before Proof A's first seed, and entirely inside `rolledBack`, so
- * the shared verify database never holds a catalog row (erasure P7 and patches 318/319 stay as they
- * are until A2-ii).
+ * `verifyCatalogMigrationFacts`, before Proof A, and entirely inside `rolledBack`. From the first
+ * fixtures seed on, the shared database holds the test library's rows (CAT-3 A2-ii); this proof runs
+ * before it, on a database with no global movement.
  */
 export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
+  // CAT-3 A2-ii (mutation 515): no seed() path passes an empty library any more, so the writer's
+  // empty-list guard (drizzle throws on an empty insert) is proved here, first, on its own.
+  await rolledBack(async (tx) => {
+    await assert.doesNotReject(
+      () => seedReference(asDb(tx), { library: { entries: [], legacyMovements: true } }),
+      'CAT-3 A2-ii: seedReference resolves on an empty library list (A2-i D5.4)',
+    );
+  });
   await rolledBack(async (tx) => {
     const [before] = await tx
       .select({ n: sql<number>`count(*)::int` })
@@ -444,9 +453,10 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
       .where(isNull(schema.movements.householdId));
     assert.equal(before?.n, 0, 'CAT-3 A2-i E1: the proof starts with no global movement');
 
-    const counts = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS }).catch(
-      (e: unknown) =>
-        assert.fail(`CAT-3 A2-i E1: the catalog seed resolves on a fresh database (${String(e)})`),
+    const counts = await seedReference(asDb(tx), {
+      library: { entries: CATALOG_MOVEMENTS, legacyMovements: true },
+    }).catch((e: unknown) =>
+      assert.fail(`CAT-3 A2-i E1: the catalog seed resolves on a fresh database (${String(e)})`),
     );
     const state = await catalogStateOn(tx);
 
@@ -499,7 +509,9 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
     const idsBefore = await joinIds();
     let again: Awaited<ReturnType<typeof seedReference>> | undefined;
     await assert.doesNotReject(async () => {
-      again = await seedReference(asDb(tx), { catalog: CATALOG_MOVEMENTS });
+      again = await seedReference(asDb(tx), {
+        library: { entries: CATALOG_MOVEMENTS, legacyMovements: true },
+      });
     }, 'CAT-3 A2-i rule 7: a second run, with every entry present, resolves');
     assert.deepEqual(
       [again!.catalogInserted, again!.catalogPresent],
@@ -584,7 +596,9 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
         .where(and(eq(schema.movements.slug, entry.slug), isNull(schema.movements.householdId)));
     const before = await legacyOf();
     assert.equal(before.length, 1, 'CAT-3 A2-i E2: one legacy global sled_push before the seed');
-    const counts = await seedReference(asDb(tx), { catalog: [entry] });
+    const counts = await seedReference(asDb(tx), {
+      library: { entries: [entry], legacyMovements: true },
+    });
     assert.deepEqual(
       await legacyOf(),
       before,
@@ -632,7 +646,9 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
     // it reaches the same public log.
     let counts!: Awaited<ReturnType<typeof seedReference>>;
     const printed = await captureOutput(async () => {
-      counts = await seedReference(asDb(tx), { catalog: [entry] });
+      counts = await seedReference(asDb(tx), {
+        library: { entries: [entry], legacyMovements: true },
+      });
       reportSeed(counts);
     });
     assert.deepEqual(
@@ -669,14 +685,18 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
   // A household row on a slug that is both a legacy and a library slug is counted ONCE, as legacy.
   await rolledBack(async (tx) => {
     const entry = CATALOG_MOVEMENTS.find((e) => e.slug === 'sled_push')!;
-    const baseline = await seedReference(asDb(tx), { catalog: [] });
+    const baseline = await seedReference(asDb(tx), {
+      library: { entries: [], legacyMovements: true },
+    });
     await insertMovementOwnedBy(asTx(tx), ctx.A_SCOPE, {
       publicId: newId(),
       slug: entry.slug,
       name: 'A2-i shared-slug item',
       isBodyweight: false,
     });
-    const counts = await seedReference(asDb(tx), { catalog: [entry] });
+    const counts = await seedReference(asDb(tx), {
+      library: { entries: [entry], legacyMovements: true },
+    });
     assert.deepEqual(
       [
         counts.householdRowsOnSeedSlugs - baseline.householdRowsOnSeedSlugs,
@@ -741,6 +761,43 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
       await blockers(tx),
       before + 1,
       'CAT-3 A2-i: …and a global row with neither a pattern nor a modality is one',
+    );
+  });
+
+  // CAT-3 A2-ii (plan D4, A9): a library row is curated, by an exact test (a modality AND a
+  // CATALOG_MOVEMENTS slug), so it never reaches the orphan input; a global row with a modality on any
+  // other slug is not, and has its own line. Deltas: the shared database holds other proofs' rows.
+  const reportCount = async (tx: VerifyTx, prefix: string) => {
+    const line =
+      ((await report.run(tx as unknown as Database, false)) as string[]).find((l) =>
+        l.startsWith(prefix),
+      ) ?? '';
+    const n = /: (\d+)$/.exec(line)?.[1];
+    assert.ok(n !== undefined, `CAT-3 A2-ii A9: the report has a "${prefix}" count (${line})`);
+    return Number(n);
+  };
+  const ORPHANS = 'TEN-2b-2 input';
+  const STRAY = 'global rows with a modality but no CATALOG_MOVEMENTS slug';
+  await rolledBack(async (tx) => {
+    const before = { orphans: await reportCount(tx, ORPHANS), stray: await reportCount(tx, STRAY) };
+    const entry = CATALOG_MOVEMENTS.find(
+      (e) => !LEGACY_SLUGS.has(e.slug) && !CATALOG_FIXTURE.some((f) => f.slug === e.slug),
+    )!;
+    await seedCatalog(asDb(tx), [entry]);
+    assert.deepEqual(
+      { orphans: await reportCount(tx, ORPHANS), stray: await reportCount(tx, STRAY) },
+      before,
+      'CAT-3 A2-ii A9: a library row is curated: it is not an orphan the next correction would remove',
+    );
+    await tx
+      .insert(schema.movements)
+      .values(
+        movementRow('cat3_a2ii_not_a_library_slug', { modality: MODALITY.mobility, pattern: null }),
+      );
+    assert.deepEqual(
+      { orphans: await reportCount(tx, ORPHANS), stray: await reportCount(tx, STRAY) },
+      { orphans: before.orphans + 1, stray: before.stray + 1 },
+      'CAT-3 A2-ii A9: …but a global row with a modality on a slug the library does not have is not, and is counted on its own line',
     );
   });
 

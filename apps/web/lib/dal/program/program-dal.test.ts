@@ -1,10 +1,23 @@
 import { PROGRAM_REFUSAL } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { familyProgram, heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('../db', () => ({ db: { the: 'db' } }));
+// CAT-3 K29: the library in effect, set per test (under vitest the real `lib/env.ts` would pick the
+// test library, since DATABASE_URL is local). The name-to-list map has its own test.
+const library = vi.hoisted(() => ({ entries: undefined as unknown }));
+vi.mock('../catalog-library', async () => {
+  const { CATALOG_MOVEMENTS: real } = await import('@mat-plan/shared/catalog/data');
+  library.entries = real;
+  return {
+    get CATALOG_LIBRARY() {
+      return library.entries;
+    },
+  };
+});
 vi.mock('../household', () => ({ getHouseholdScope: vi.fn() }));
 vi.mock('@mat-plan/db', () => ({
   createProgram: vi.fn(async () => ({ ok: true, programPublicId: PROGRAM_ID })),
@@ -251,10 +264,18 @@ describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
     expect(vi.mocked(copyWorkout).mock.calls[0]).toEqual([db, SCOPE, copy()]);
     const item = { name: 'Bear crawl', trackingType: TRACKING_TYPE.reps };
     await newHouseholdItem(item);
-    // The same library the picker's read gets (K23); the K29 PR derives it from the database.
+    // The same library the picker's read gets (K23), the one in effect (K29).
     expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item, CATALOG_MOVEMENTS]);
     expect(reportWeekMiss).not.toHaveBeenCalled();
     expect(reportCopyMiss).not.toHaveBeenCalled();
+  });
+
+  it('CAT-3 K29: on a fixtures database newItem matches over the test library', async () => {
+    library.entries = CATALOG_FIXTURE;
+    const item = { name: 'Bear crawl', trackingType: TRACKING_TYPE.reps };
+    await newHouseholdItem(item);
+    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item, CATALOG_FIXTURE]);
+    library.entries = CATALOG_MOVEMENTS;
   });
 
   it('a week’s not_found reports its program and every workout it names, in order', async () => {

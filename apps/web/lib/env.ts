@@ -2,6 +2,9 @@ import 'server-only';
 
 import {
   assertDatabaseEnvironment,
+  CATALOG_LIBRARY_FIXTURE_NOTICE,
+  type CatalogLibraryName,
+  catalogLibraryNameFor,
   CLERK_USER_ID_PATTERN,
   E2E_SESSION_BYPASS_USER,
   isLocalDbHost,
@@ -146,6 +149,28 @@ assertDatabaseEnvironment({
   allowLiveDb: !!process.env.ALLOW_LIVE_DB,
   context: 'apps/web/lib/env.ts',
 });
+
+/**
+ * 🔴 **CAT-3 K29: the movement library this process reads**, decided once at module scope. The rule is
+ * `catalogLibraryNameFor` (`db-environment.ts`): the test library exactly on a database the seed fills
+ * with fixtures (local, or preview-named) and off production; the real library otherwise, production
+ * always. Read straight from `process.env` and outside `SKIP_ENV_VALIDATION`, as the OPS-1 guard
+ * above is, so no environment variable can turn the choice off. `lib/dal/catalog-library.ts` maps the
+ * name to the list.
+ *
+ * K29 condition 2: when it is the test library, one fixed line says so in the server log (pinned by
+ * equality in `env-catalog-library.test.ts`); nothing is logged for the real one.
+ */
+const CATALOG_LIBRARY_NAME: CatalogLibraryName = catalogLibraryNameFor({
+  databaseUrl: process.env.DATABASE_URL,
+  vercelEnv: process.env.VERCEL_ENV,
+});
+if (CATALOG_LIBRARY_NAME === 'fixture') console.info(CATALOG_LIBRARY_FIXTURE_NOTICE);
+
+/** The movement library in effect (K29). The one reader is `lib/dal/catalog-library.ts`. */
+export function catalogLibraryName(): CatalogLibraryName {
+  return CATALOG_LIBRARY_NAME;
+}
 
 /**
  * AUTH-1 1c-3a — **is the test session bypass allowed to arm in this process?**
