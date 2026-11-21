@@ -5,7 +5,7 @@
 > rules 4, 6 and 7, decisions **K22 to K24**, and the rows **A3**, **Post-R2 cleanup** and **F1** of
 > "Chunks, in order". Branch for this plan: `docs/cat-3-after-the-fresh-start-plan`.
 >
-> **Draft 3, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
+> **Draft 4, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
 > (`b6ef8287`) and #770's branch. Two panel rounds (two lenses each) and the feasibility checks of lane B,
 > lane P and the Native Scaling thread are applied; the log is at the end. The maintainer approves
 > it before any of its PRs is built.
@@ -259,27 +259,38 @@ procedure this PR removes.
 
 What E6 asks, with lane P's and the panel's points as the design.
 
-1. **Read and compare; write only the rows that differ**, with
-   `onConflictDoUpdate({ target, targetWhere: modality IS NOT NULL })`, as E6 names and as `units`
-   is already written. `migrate.yml` seeds production on every push; a blanket update would lock and
-   rewrite every library row each time. A push with no entry change updates no row. (The insert
-   still advances the identity sequence, as `migrate.yml`'s header says.)
+1. **Read, compare, and update by id only the rows that differ.** New entries keep A2's insert, which
+   does nothing on a conflict. For a stored catalog row whose entry differs, the seed runs
+   `UPDATE movements … WHERE id = … AND household_id IS NULL AND modality IS NOT NULL`. A push with
+   no entry change updates no row and takes no row lock. (The insert still advances the identity
+   sequence, as `migrate.yml`'s header says.) **This is not E6's `onConflictDoUpdate`, and this PR
+   amends E6's wording** (lane A's finding): the only arbiter for a global slug is the index
+   `WHERE household_id IS NULL`, Postgres infers a partial index only from a predicate that implies
+   it, and it does not use a CHECK constraint for that, so `targetWhere: modality IS NOT NULL` fails
+   with "no unique or exclusion constraint matching", and the seed would throw on every push. An
+   upsert would also lock all 587 rows each push, and could not report why a row was skipped.
 2. **Only live catalog rows.** `id` and `public_id` never change. Kept equal to the entry: name,
    kind of training, pattern, `unitDefault`, `isBodyweight`; the update sets `updated_at` itself,
    since no trigger does. It never writes `deleted_at`, `household_id` or `tracking_type`, and never
-   clears `modality`. A row with `deleted_at` set is skipped and counted. Aliases, the supervision
-   label and the steps are not stored, so nothing here touches them.
+   clears `modality`. A row with `deleted_at` set is skipped and counted, on the insert path too:
+   today a soft-deleted global row holds its slug and the insert passes over it silently. Aliases,
+   the supervision label and the steps are not stored, so nothing here touches them.
 3. **Join rows by difference**, in the same transaction. A muscle whose role changes is updated in
-   place, never deleted and re-inserted, and a change of primary demotes first, then promotes: that
-   respects both the pair index (one row per movement and muscle) and the one-primary index. This is
-   the first code that deletes a catalog join row, so it carries its own proof that it never touches
-   a household's row.
-4. **It never throws on catalog data** (rule 7). `migrate.yml` has no rollback, and a throw after
-   the migrations leaves every later push red. Each change is checked before it is written: a
-   unit, equipment or muscle code the reference tables lack, or a change that would break
+   place, never deleted and re-inserted, and a change of primary is two statements, the demotion
+   and then the promotion: neither the pair index (one row per movement and muscle) nor the
+   one-primary index can be deferred, so each row is checked as it is written. The stored rows end
+   **equal as a set** to the entry's; their order is not kept, and no reader may rely on it (the
+   read orders by the vocabulary, K31), so `seedCatalog`'s docblock stops promising the authored
+   order. This is the first code that deletes a catalog join row, so it carries its own proof that
+   it never touches a household's row.
+4. **It never throws on catalog data** (rule 7), for an update or for a new entry. `migrate.yml` has
+   no rollback, and a throw after the migrations leaves every later push red. Each write is checked
+   first: a unit, equipment or muscle code the reference tables lack, or a change that would break
    `movements_global_row_has_pattern` or the pattern and kind-of-training checks, is skipped and
-   counted. The library transaction is the only
-   unit. A mutation proves a would-fail row turns `db:verify` red if it is thrown and not skipped.
+   counted. That replaces A2's "a bad entry is fixed forward" throw on the insert path, since a new
+   entry with a mistyped code would block deploys exactly as an edit would. The library transaction
+   is the only unit. A mutation proves a would-fail row turns `db:verify` red if it is thrown and
+   not skipped.
 5. **The tracking type is never updated.** If a stored type differs from the lockfile's, the row is
    skipped and counted, as E6 says; a real type change is a new movement.
 6. **No slug is retired here.** The append-only check and the lockfile test (`lockfileIssues`) keep
@@ -290,7 +301,7 @@ What E6 asks, with lane P's and the panel's points as the design.
    and removed, and rows skipped; a second run prints 0 for each. Only the counts go in the PR. The
    merge needs the maintainer's go. The child branch is deleted in the same sitting. The counts are
    of library rows only, never of a household's rows, and nothing else from the branch is pasted.
-8. **Proofs.** Its own mutation range. It re-cuts A2-ii's "a second run inserts nothing" into
+8. **Proofs.** Its own mutation range, a block lane A asks the board for (about six: 505 re-cut; thrown, not skipped; a join-row delete reaching a household's row; a second run that writes; a write to the tracking type; an old row adopted). It re-cuts A2-ii's "a second run inserts nothing" into
    "updates nothing when no entry changed, and exactly the changed rows when one did", and
    `assertOnlyLibraryRowsAdded` into "an existing global row changes only where its entry changed".
    It re-cuts mutation 505 to drop `targetWhere`, so that it would adopt an old or a household's
@@ -306,7 +317,7 @@ What E6 asks, with lane P's and the panel's points as the design.
     in exports, so the PR records that the inventory's §1a and the notice's words on movement names
     were re-read and that neither changes.
 
-**Acceptance.** E6 as written, plus: a seed run after an entry's name, equipment and primary muscle
+**Acceptance.** E6 as amended, plus: a seed run after an entry's name, equipment and primary muscle
 change leaves that row and its join rows equal to the entry and every other row's `updated_at`
 unchanged; a household's row of the same name is untouched; a changed type, a soft-deleted row and
 a would-fail change are each skipped and counted.
@@ -401,3 +412,9 @@ finding is accepted.
 correctness lens found one non-blocking gap. Both of their last points are applied: the two pins on
 the shadow count's filter (mutation 518 and A2-i's E5 pin), and why a prefix count is sound as an
 alarm where the code forbids it as a selector.
+
+**Lane A's feasibility check of PR 4, 2026-11-20** (lane A had restarted; it is A3's builder). One
+blocking point: E6's `onConflictDoUpdate` cannot name its arbiter, so the design updates by id and E6's
+wording is amended in this PR. Also applied: the primary change as two statements; join rows equal as
+a set, not in order; the pre-check and the soft-deleted count extended to the insert path; A3's
+mutation block.

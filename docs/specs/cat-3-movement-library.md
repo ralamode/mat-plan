@@ -247,9 +247,13 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
   households own rows that collide with catalog slugs.
 - **E6 (chunk A3, after the fresh start).** When an entry's name, modality, pattern, equipment,
   muscles, `unitDefault` or `isBodyweight` changes in the const, the seed shall change the stored
-  **catalog** row to match (`onConflictDoUpdate` with `targetWhere` on the global slug index, updating
-  only rows where `modality IS NOT NULL`), keep its `id` and `public_id`, write join rows by
-  difference, and leave an unchanged row unwritten (`updated_at` unchanged on a second seed). If a
+  **catalog** row to match (an update by id of the rows that differ, only where `household_id IS NULL`
+  and `modality IS NOT NULL`; _amended 2026-11-20 from "`onConflictDoUpdate` with `targetWhere`", which
+  cannot name its arbiter: the global slug index is partial on `household_id IS NULL`, and Postgres
+  does not infer it from a predicate on `modality`; see
+  [the plan](../plans/cat-3-after-the-fresh-start.md), PR 4_), keep its `id` and `public_id`, write
+  join rows by difference, and leave an unchanged row unwritten (`updated_at` unchanged on a second
+  seed). If a
   stored type differs from the lockfile's, then it shall skip that row and count it.
 
 ### Data (lane N)
