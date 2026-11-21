@@ -43,8 +43,8 @@ Every authenticated **app screen** is rendered inside **`apps/web/components/lay
   fails a page that declares its own.
 - **The rail is a column, not a page.** It wraps names (never truncates — PROF-1 D11), shows each
   athlete's kind as the picker tile does, and scrolls itself when a large household outgrows the
-  viewport. The **open row is outlined, not filled**: a muted line on `--accent` measures 4.34:1 in
-  the light palette, under AA.
+  viewport. The **open row is outlined, not filled**, a choice since muted text on `--accent` passes AA
+  (4.64:1 light, since `--muted-foreground` moved to L 0.54).
 - **Tailwind v4 breakpoints are `rem`-based**, so `lg` is 64rem — not 1024 device pixels for a reader
   at enlarged browser text. Design the switch as "when there is room", not "on a laptop".
 
@@ -90,8 +90,8 @@ in both themes:
   disappears, so a ticked ✓ needs a second cue there (a thicker border or a different glyph).
 - **The tint is decoration.** `done-surface` is about 1.1:1 against a card in light and 1.3:1 in
   dark. A done card keeps a `border-done` edge, which is what shows the row's boundary.
-- **Text on the tint** is `card-foreground`, or `done-muted-foreground` for secondary text:
-  `muted-foreground` is 4.27:1 there in light, under AA. `done` is never text on its own; a word or
+- **Text on the tint** is `card-foreground`, or `done-muted-foreground` for secondary text, for its
+  green hue and its margin (`muted-foreground` would measure 4.57:1 there, just over AA). `done` is never text on its own; a word or
   the ✓ goes with it ("Done ✓").
 - **Focus on a ✓ is a full-opacity `ring-foreground` ring OUTSIDE the ✓**, offset onto the tint or
   the card, where it is at least 3:1 in both themes. Never inset it on the fill: there it is 2.0:1
@@ -162,9 +162,10 @@ text-destructive-foreground`, 4.76:1 light / 6.19:1 dark) is for the one button 
 - **Density only goes up.** Tailwind derives the spacing scale from `--spacing`, and `min-h-11` — the
   44px tap-target bar — is `calc(var(--spacing) * 11)`. Below `0.25rem` every control drops under the
   bar.
-- **Two pairs in the current palette are already under AA** (`muted-foreground` on `muted`, and red
-  text on a red tint, the `destructive` button's old look), and the hairlines miss SC 1.4.11. None is
-  rendered by a route today, which is why CI is green. They are pinned in
+- **One pair in the current palette is under AA** (red text on a red tint, the `destructive` button's
+  old look), and the hairlines miss SC 1.4.11. Muted text clears AA on every ground since
+  `--muted-foreground` moved to L 0.54 (2026-11-20). None is
+  rendered by a route today, which is why CI is green. Both are pinned in
   `app/design/tokens/token-sets.test.ts` as inputs to the reskin, not background noise, measured as a
   browser composites them (gamma-encoded sRGB); they are not restated here.
 

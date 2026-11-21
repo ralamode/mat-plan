@@ -153,6 +153,8 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
       ['card-foreground', 'card', 'text on a card'],
       ['muted-foreground', 'background', 'muted text'],
       ['muted-foreground', 'muted', 'muted text on a muted surface'],
+      ['muted-foreground', 'accent', 'muted text on a hovered or selected row'],
+      ['muted-foreground', 'secondary', 'muted text on a secondary surface'],
       ['primary-foreground', 'primary', 'a label on the primary button'],
       ['secondary-foreground', 'secondary', 'a label on the secondary button'],
       ['accent-foreground', 'accent', 'a label on an accent surface'],
@@ -218,14 +220,15 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
 });
 
 /**
- * Two AA failures that exist in the palette shipping TODAY, pinned with their measured ratios.
+ * The AA failure that exists in the palette shipping TODAY, pinned with its measured ratio. (Muted
+ * text on a muted surface, 4.34:1, was the second until 2026-11-20: `--muted-foreground` moved to
+ * L 0.54, and `the live palette's muted text` below pins it at AA on every ground.)
  *
  * ⚠️ This is a **characterization test, not an endorsement.** AGENTS.md's rule for this PR was
  * "report a contrast failure, do not loosen the test", and the honest report is a number that fails
- * loudly if anyone changes it. Neither pair is rendered by any route today, which is the only reason
+ * loudly if anyone changes it. The pair is rendered by no route today, which is the only reason
  * `e2e/a11y.spec.ts` has been green: no screen puts red text on a red tint (the `destructive` button
- * has been a solid fill since V1-9b B2-prep, pinned in `app/destructive-tokens.test.ts`), and none
- * puts `text-muted-foreground` on `bg-muted`.
+ * has been a solid fill since V1-9b B2-prep, pinned in `app/destructive-tokens.test.ts`).
  *
  * The tint figure is composited as a browser draws it (`over()`, gamma-encoded sRGB; `status-line.tsx`
  * records a measured 3.97:1 for the same red). The dark-mode 20% tint pinned here until 2026-11-20 was
@@ -240,12 +243,6 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
 describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to fix)', () => {
   const root = blockOf(globals, ':root')!;
   const dark = blockOf(globals, '.dark')!;
-
-  it('muted text on a muted surface is 4.34:1 in light mode (needs 4.5)', () => {
-    const ratio = ratioOf(root['muted-foreground']!, root['muted']!, root['background']!)!;
-    expect(ratio).toBeCloseTo(4.34, 1);
-    expect(ratio).toBeLessThan(AA_NORMAL);
-  });
 
   it('red text on a 10% red tint is 3.99:1 in light mode (needs 4.5)', () => {
     // The old `destructive` button's look (`bg-destructive/10 text-destructive`), no longer the
@@ -268,5 +265,33 @@ describe('known AA failures in the live palette (UI-3 inputs, not this PR’s to
     expect(darkRatio).toBeCloseTo(1.32, 1);
     expect(light).toBeLessThan(AA_LARGE);
     expect(darkRatio).toBeLessThan(AA_LARGE);
+  });
+});
+
+/**
+ * **The live palette's muted text clears AA on every ground it can sit on, in both themes**
+ * (2026-11-20, tech debt). A hover or selected row fills with `--accent`, and axe only measures the
+ * rendered state, so no route scan sees a hover: until `--muted-foreground` moved to L 0.54 the
+ * light pair was 4.34:1 on accent, muted and secondary, and nothing in CI said so. This is the check.
+ */
+describe.each([
+  ['light', ':root'],
+  ['dark', '.dark'],
+] as const)("the live palette's muted text, %s", (_theme, selector) => {
+  const t = blockOf(globals, selector)!;
+  const GROUNDS = [
+    'background',
+    'card',
+    'popover',
+    'muted',
+    'accent',
+    'secondary',
+    'sidebar',
+    'sidebar-accent',
+  ] as const;
+  it.each(GROUNDS)('muted-foreground clears 4.5:1 on %s', (ground) => {
+    expect(ratioOf(t['muted-foreground']!, t[ground]!, t['background']!)!).toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    );
   });
 });
