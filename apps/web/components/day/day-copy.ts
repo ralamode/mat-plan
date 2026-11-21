@@ -83,7 +83,7 @@ export const DAY_COPY = {
    * The whole screen turns read-only after the first `closed_day`. It says only what happened: the
    * day closed under the page, or the athlete was archived mid-session, and the page's own notice,
    * which the reload brings, gives the reason (maintainer, 2026-11-17; UX panel, 12c). The page's
-   * `CLOSED_DAY_NOTICE` ("only today and yesterday") would be false for an archived athlete.
+   * `CLOSED_DAY_NOTICE` ("today and yesterday stay open") would be false for an archived athlete.
    */
   closed: 'Not saved. This day can’t be logged any more.',
   progress: (done: number, total: number) => `${done} of ${total}`,
