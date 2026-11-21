@@ -301,7 +301,9 @@ and complete; this is the one thing it cannot reach.
   PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
   read as persisted. Don't replace it with an effect or a boolean. It is an `Announcer`, mounted while empty
   and beside (never inside) the error branch, with a `messageKey` per save, so a second save of the
-  same routine is heard too. The routine page's title is `ROUTINE_COPY.heading`.
+  same routine is heard too. The snapshot is the order SUBMITTED (taken on submit), so an edit made
+  while the save is in flight is never marked or said as saved; the first edit after a save clears
+  it. The routine page's title is `ROUTINE_COPY.heading`.
 
 - **Every page under `/p/` calls `requireSession()`, in-process** — and as of `AUTH-1` **1d** that is
   the whole rule. The routine editor is one of the four. ⚠️ **This said "calls `requireGatedPage()`

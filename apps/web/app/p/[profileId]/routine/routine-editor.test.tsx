@@ -127,3 +127,25 @@ describe('RoutineEditor — an edit after a save ends "Routine saved."', () => {
     expect(region.textContent).toBe('');
   });
 });
+
+describe('RoutineEditor — an edit made while the save is in flight', () => {
+  it('is not marked or said as saved: the snapshot is what was submitted', async () => {
+    const { editRoutineAction } = await import('../actions');
+    let answer!: () => void;
+    vi.mocked(editRoutineAction).mockImplementationOnce(
+      () => new Promise((resolve) => (answer = () => resolve({ ok: true, error: null }))),
+    );
+    render(
+      <RoutineEditor
+        profileId="p"
+        initialOrder={[{ key: STRENGTH_KEY, conditional: true }]}
+        catalog={routineCatalogItems()}
+      />,
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: ROUTINE_COPY.save })));
+    // Mid-save: the list is not locked, so an item is added before the answer comes.
+    fireEvent.click(screen.getByRole('button', { name: `+ ${practiceLabel}` }));
+    await act(async () => answer());
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
+});

@@ -55,8 +55,11 @@ export function RoutineEditor({
   const [savedJson, setSavedJson] = useState<string | null>(null);
   // Each save is a new node in the live region, so a second save of the same routine is heard too.
   const [saves, setSaves] = useState(0);
+  // What was SUBMITTED, not what the list holds when the answer comes: Save is the only control locked
+  // while pending, so an edit made mid-save must not be marked, or said, as saved.
+  const [submittedJson, setSubmittedJson] = useState<string | null>(null);
   useOnActionSuccess(state, () => {
-    setSavedJson(routineJson);
+    setSavedJson(submittedJson);
     setSaves((n) => n + 1);
   });
   // The first edit after a save ends it: going back to the saved order is not a save, so it is neither
@@ -65,7 +68,11 @@ export function RoutineEditor({
   const showSaved = savedJson !== null && !state.error;
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form
+      action={formAction}
+      onSubmit={() => setSubmittedJson(routineJson)}
+      className="flex flex-col gap-6"
+    >
       <input type="hidden" name="profileId" value={profileId} readOnly />
       <input type="hidden" name="routine" value={routineJson} readOnly />
 
