@@ -110,6 +110,7 @@ const OVERRIDES: Record<string, readonly string[]> = {
   logRow: [DAY_DAL],
   untickRow: [DAY_DAL],
   retickRow: [DAY_DAL],
+  amendRow: [DAY_DAL],
   prescriptionLiveIn: [DAY_DAL],
   readLiveSets: [ENTRIES_DAL],
   insertProgramBlockOwnedBy: [],
@@ -781,6 +782,9 @@ describe.skipIf(process.env.RUN_IMPORT_PINS === 'false')(
       ],
       'ALLOWED_IN: each name, only where it lists': [
         fixture(DAY_X, "import { workoutInHousehold, logRow } from '@mat-plan/db';"),
+        // Change's row writer (12d) is the day DAL's, like logRow, untickRow and retickRow.
+        fixture(DAY_X, "import { amendRow } from '@mat-plan/db';"),
+        fixture(C, "import { amendRow } from '@mat-plan/db';", `name: amendRow → ${ONLY_DAY}`),
         fixture(
           DAY_X,
           "import { workoutInHousehold, saveWorkout } from '@mat-plan/db';",
