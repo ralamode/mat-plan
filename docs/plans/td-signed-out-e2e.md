@@ -115,13 +115,15 @@ The pin grows deliberately rather than being dodged.
   (`scripts/embedded-pg.ts:74`), asserted to differ from the app port.
 - **Shared helpers**, moved rather than copied:
   - `routeOf`, `pages` and the floor move out of `app/pages-need-a-session.test.ts` into a new
-    `test/app-routes.ts`, and both the vitest file and proof 1 import it (reuse 2). Its functions take
+    `e2e/app-routes.ts`, and both the vitest file and proof 1 import it (reuse 2). Its functions take
     the app directory **as an argument**, and the module reads no `import.meta` of its own. **Probed
     2026-11-20:** Playwright 1.64.1's transform cannot load a module that reads `import.meta` at module
     scope (`test/source-scan.ts`; `SyntaxError: Cannot use 'import.meta' outside a module` under
     `playwright test --list`). So `source-scan.ts` is not the home. The vitest file passes its own
     `import.meta`-derived path, and the spec passes one built from `__dirname`, which Playwright's
     CommonJS transform provides.
+    **As built, it lives in `e2e/`, not `test/`:** `test/program-imports.test.ts` forbids any file
+    outside `apps/web/test/` from importing a test helper, and the spec is outside it.
   - `routineOrder`, the Save capture and the leak list stay inside the one replay test that uses them.
     Proof 2 extends that test rather than copying it (scope 1), so nothing is hoisted.
 - **`app/p/[profileId]/routine` capture:** the capture page runs on the **bypassed** origin

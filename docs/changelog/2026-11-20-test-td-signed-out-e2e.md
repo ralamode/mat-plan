@@ -18,7 +18,7 @@
   - a new check shows every public path answers without a redirect;
   - the bypass containment test gains a `DISARMS` category, which pins the config to one empty-valued
     mention;
-  - the route list is one helper (`test/app-routes.ts`), shared with the static session guard.
+  - the route list is one helper (`e2e/app-routes.ts`), shared with the static session guard.
 
   The tech-debt row is narrowed, not closed. The configured-Clerk branch is still unit-proved only, and
   "no unauthenticated request reaches the database" is still not a property this suite shows.

@@ -4,7 +4,7 @@ import { newId, SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared'
 import { expect, test, type Frame, type Page, type Request } from '@playwright/test';
 
 import { PUBLIC_PATH_TREES, PUBLIC_PATHS } from '../lib/public-paths';
-import { MIN_PROTECTED_PAGES, protectedPageFiles, routeOf } from '../test/app-routes';
+import { MIN_PROTECTED_PAGES, protectedPageFiles, routeOf } from './app-routes';
 import {
   APP_HOME_PATH,
   APP_NAME,
@@ -80,7 +80,7 @@ test.describe('public', () => {
    * successor to "the app itself is still gated", deleted at AUTH-1 1d, which checked `/p` alone.
    *
    * - **The pages** are every `page.tsx` under `app/` whose route is not `isPublicPath()`, read from the
-   *   file system (`test/app-routes.ts`, the list `app/pages-need-a-session.test.ts` checks
+   *   file system (`e2e/app-routes.ts`, the list `app/pages-need-a-session.test.ts` checks
    *   statically). The design previews are included.
    * - **(a) Where it lands.** The main-frame chain is exactly `[route, SIGN_IN_PATH]`. It is built
    *   from the document's HTTP redirects and the frame's navigations, because a page under a

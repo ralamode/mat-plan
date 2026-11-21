@@ -11,7 +11,7 @@ import {
   MIN_PROTECTED_PAGES,
   pageFiles,
   routeOf as routeOfIn,
-} from '@/test/app-routes';
+} from '@/e2e/app-routes';
 import {
   code,
   exportedActionSlices,
@@ -41,7 +41,7 @@ import {
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 
-// The route helpers are shared with the signed-out runtime sweep (`test/app-routes.ts`), which is
+// The route helpers are shared with the signed-out runtime sweep (`e2e/app-routes.ts`), which is
 // why they take the app directory as an argument.
 const routeOf = (file: string) => routeOfIn(APP_DIR, file);
 const pages = pageFiles(APP_DIR);
