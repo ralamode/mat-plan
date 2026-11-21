@@ -1,4 +1,4 @@
-import { ENTRY_STATUS, TRACKING_TYPE } from '@mat-plan/shared';
+import { ENTRY_STATUS, PROFILE_NOT_FOUND, TRACKING_TYPE } from '@mat-plan/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
@@ -116,23 +116,6 @@ describe('listEntriesForDay — sets through readLiveSets', () => {
     vi.doUnmock('./db');
     vi.resetModules();
   });
-
-  it('only lib/dal/entries.ts imports readLiveSets from @mat-plan/db', async () => {
-    const { globSync } = await import('node:fs');
-    const { join, resolve } = await import('node:path');
-    const { code, WEB_DIR } = await import('@/test/source-scan');
-    const importers = globSync('**/*.{ts,tsx}', { cwd: WEB_DIR })
-      .filter(
-        (f) => !f.includes('node_modules') && !f.includes('.next/') && !/\.test\.tsx?$/.test(f),
-      )
-      .filter((f) =>
-        /\{[^}]*\breadLiveSets\b[^}]*\}\s*from\s*['"]@mat-plan\/db['"]/.test(
-          code(resolve(join(WEB_DIR, f))),
-        ),
-      );
-    // Internal ids in, no ownership of its own: a new importer is a reviewed change.
-    expect(importers).toEqual(['lib/dal/entries.ts']);
-  });
 });
 
 // TEN-1 1c: `logCheckinEntries` resolves the profile itself (it is not behind a `packages/db` write
@@ -154,7 +137,7 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
     // The profile resolve is the FIRST query after the households probe, and the only one that can
     // run: the recording pool answers it with zero rows, so the writer throws before the INSERT.
     await expect(logCheckinEntries({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS })) //
-      .rejects.toThrow('Profile not found');
+      .rejects.toThrow(PROFILE_NOT_FOUND);
     const resolve = queryMatching(recording, /from "profiles"/);
     const where = whereOf(resolve);
     expect(where).toContain('"profiles"."public_id" = $');
@@ -175,7 +158,7 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
     const { logCheckinEntries: scoped } = await import('./entries');
     await expect(
       scoped({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS }),
-    ).rejects.toThrow('Profile not found');
+    ).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(dark.queries.filter((q) => /from "profiles"/.test(q.text))).toEqual([]);
     vi.doUnmock('./db');
     vi.resetModules();

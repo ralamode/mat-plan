@@ -414,7 +414,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The import-pins guard (apps/web/test/program-imports.test.ts) skips only on a literal
+      # 'false': the scopes step above found no changed file it reads. A missing output runs it.
       - name: Test
+        env:
+          RUN_IMPORT_PINS: ${{ steps.scopes.outputs.run_import_pins }}
         run: pnpm test
 
       # EVAL-0's required check. Two gates, scored separately, failing differently on purpose:

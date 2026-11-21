@@ -175,6 +175,10 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   smoke; the next push skipped it. Every label check in `ci.yml` reads the payload. → **After adding a
   label, push** (an empty commit is fine). Found by DX-5(b)'s panel before its own label shipped
   ([plan](./plans/dx-5b-local-gates-in-ci.md)).
+  ⚠️ **Labelling at creation is the same trap.** `gh pr create --label` applies the label AFTER the
+  `opened` event, so the first run never sees it (#747 and #750, 2026-11-20, both red on the
+  feature-guide guard while carrying `docs-skip-feature-map`). Push once more after creating, or
+  prefer a one-line guide touch over the skip.
 
 - **A stacked PR reports `MERGED` and its code is nowhere on `main`.** → GitHub merges a PR into
   whatever its **base** is, and a stacked PR's base is the parent's branch. Merge the parent first and
@@ -798,6 +802,17 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   through `blockedInlineScripts` in `e2e/csp.ts`, and keep its proof (a stripped nonce must be
   caught). **The general rule: an assertion that a list is empty needs a sibling that makes the list
   non-empty**, or a wrong filter reads as a pass.
+- 🔴 **An import guard written as a regex meets a new spelling with each fix.** The program-tables
+  pins (#552) matched specifier text, and each hardening met another form that reached the same
+  module: a comment inside the braces, a backtick, `require (`, a `../node_modules` path, an `@/`
+  walking out of `apps/web`, a dot segment (`@mat-plan/./db`) that also gets past `exports`. The
+  cause: the guard matched TEXT, while the bundler follows the module GRAPH.
+  → Resolve every specifier the way the compiler does (`ts.resolveModuleName` with the project's
+  tsconfig, from an explicit directory, never `process.cwd()`), compare the **resolved file**, and
+  fail closed on a first-party specifier that does not resolve. Pin the premises the resolver rests
+  on (the alias, `exports`, the bundler config) as assertions. `importsOf` in
+  `apps/web/test/import-graph.ts`; the guard is `apps/web/test/program-imports.test.ts`.
+
 - 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
   mutation patch is still applied in your worktree.** `pnpm verify` runs `db:mutations`, which
   applies each patch in `packages/db/scripts/mutations/`, runs the proofs and reverts it. Run a

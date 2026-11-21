@@ -1,4 +1,4 @@
-import { ENTRY_KIND } from '@mat-plan/shared';
+import { ENTRY_KIND, PROFILE_NOT_FOUND } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // `logBodyweight` is now a pass-through to `insertBodyweightEntry` (V1-24 1e), which `db:verify` proves
@@ -77,7 +77,7 @@ describe('logBodyweight — the DAL half of the create path (V1-24 1e)', () => {
   });
 
   it('an unknown (or soft-deleted, or foreign-household) profile rejects and never reaches the writer', async () => {
-    await expect(logBodyweight(ARGS)).rejects.toThrow('Profile not found');
+    await expect(logBodyweight(ARGS)).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(insertBodyweightEntry).not.toHaveBeenCalled();
   });
 
@@ -87,7 +87,7 @@ describe('logBodyweight — the DAL half of the create path (V1-24 1e)', () => {
     // not describe the server's state to a crafted POST.
     state.scope = null;
     state.profileRows = [{ id: 42 }];
-    await expect(logBodyweight(ARGS)).rejects.toThrow('Profile not found');
+    await expect(logBodyweight(ARGS)).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(insertBodyweightEntry).not.toHaveBeenCalled();
   });
 });

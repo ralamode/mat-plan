@@ -72,7 +72,9 @@ rules it starts under. Each step below adds its files, its diagram and its invar
    a **column request** to lane A, added expand-only in its next migration (plan §6). The one
    exception is a **seam turn the board grants**: 6a-ii's line in `packages/db/src/index.ts` and its
    case in `apps/web/test/program-tables-stay-dark.test.ts`, and (board, 2026-11-17) that test's
-   allowance for `lib/dal/day/` to import `workoutInHousehold` alone; and (board, 2026-11-19) the
+   allowance for `lib/dal/day/` to import `workoutInHousehold` alone (since 2026-11-20 both are
+   rows of `ALLOWED_IN` in `apps/web/test/program-imports.test.ts`, which also asserts the two
+   barrels publish only by `export { … } from`); and (board, 2026-11-19) the
    e2e athlete's lines in `packages/shared/src/seed-ids.ts`, `packages/db/src/seed.ts`,
    `packages/db/src/index.ts`, `packages/db/scripts/verify.ts` and `packages/db/scripts/verify/schema.ts`.
 2. 🔴 **A read deep-equals the contract's fixture.** Seed the state the fixture describes, run the

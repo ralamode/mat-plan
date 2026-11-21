@@ -9,7 +9,7 @@
 set -uo pipefail
 
 : "${GITHUB_OUTPUT:?scopes-step.sh needs GITHUB_OUTPUT}"
-all() { printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\n' >>"$GITHUB_OUTPUT"; }
+all() { printf 'run_mutations=true\nrun_build=true\nrun_e2e=true\nrun_import_pins=true\n' >>"$GITHUB_OUTPUT"; }
 
 script="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/changed-scopes.mjs"
 if [ -n "${BASE_SHA:-}" ] && git show "$BASE_SHA:.github/scripts/changed-scopes.mjs" >"$script" 2>/dev/null; then

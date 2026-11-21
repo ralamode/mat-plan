@@ -165,9 +165,9 @@ text-destructive-foreground`, 4.76:1 light / 6.19:1 dark) is for the one button 
 - **Two pairs in the current palette are already under AA** (`muted-foreground` on `muted`, and red
   text on a red tint, the `destructive` button's old look), and the hairlines miss SC 1.4.11. None is
   rendered by a route today, which is why CI is green. They are pinned in
-  `app/design/tokens/token-sets.test.ts` as inputs to the reskin, not background noise; the tint
-  figures there may be off (the helper blends alpha in linear light), so they are not restated here.
+  `app/design/tokens/token-sets.test.ts` as inputs to the reskin, not background noise, measured as a
+  browser composites them (gamma-encoded sRGB); they are not restated here.
 
 ⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`, **except
-`contrast.ts` and `css-block.ts`**, which `app/done-tokens.test.ts` imports; that PR moves them to
-`lib/` rather than deleting the pins with them.
+`contrast.ts` (with its `contrast.test.ts`) and `css-block.ts`**, which `app/done-tokens.test.ts`
+imports; that PR moves them to `lib/` rather than deleting the pins with them.
