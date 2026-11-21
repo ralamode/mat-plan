@@ -212,7 +212,8 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     archived notice ("… Nothing new can be logged. Restore them in Household settings."), else
     "Coming up" on a future day, else the closed-day sentence, above the program line (D36). The screen
     adds none of its own except its `closed_day` callout, which says only what happened ("Not
-    saved. This day can't be logged any more."), so it is true for an archived athlete too.
+    saved. This day is locked now."; "locked", like the closed-day notice, maintainer 2026-11-21),
+    so it is true for an archived athlete too.
     "Not on a program." says "Bodyweight and practice log here." only on a writable day. On TODAY,
     an athlete on no program today with one from tomorrow reads "Starts on a program tomorrow."
     (`startsTomorrow`, D46): 🔴 only on today, since `canGoForward` is true on every past day and

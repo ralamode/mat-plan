@@ -1539,15 +1539,15 @@ export const CLEAR_DAY_COPY = {
   /** The closed day's cleared sentence, inside the page's one notice box. */
   closedCleared: (n: number) =>
     plural(n, {
-      one: 'This day was also cleared: 1 entry is hidden. It is kept, not erased.',
-      other: `This day was also cleared: ${n} entries are hidden. They are kept, not erased.`,
+      one: 'This day was cleared: 1 entry is hidden. It is kept, not erased.',
+      other: `This day was cleared: ${n} entries are hidden. They are kept, not erased.`,
     }),
   /**
    * An archived athlete on a day still open for Restore all: the control is "Restore {name}" in
    * Household settings (`SETTINGS_COPY.restoreFor`), then Restore all here.
    */
   archivedCleared: (name: string, n: number, deadline: string) =>
-    `This day was also cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
+    `This day was cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
       name,
     )} in ${SETTINGS_COPY.heading}, then tap Restore all here before ${deadline} to bring ${
       n === 1 ? 'it' : 'them'
@@ -1594,8 +1594,8 @@ export const AMEND_ERROR_COPY = {
   staleWrite: 'That was changed on another device — the latest is showing now.',
   /**
    * A change or a clear of a value on a day the page no longer offers (V1-24 3b-bw, plan W8). Not
-   * the logging copy ("no longer open for logging. Reload the page."): nothing was being logged, and
-   * the action has already revalidated the page, whose read-only notice gives the reason.
+   * the logging copy ("That day is locked now. Reload the page."): nothing was being logged, and the
+   * action has already revalidated the page, whose closed-day notice gives the reason.
    */
-  dayReadOnly: (subject: string) => `That day is read-only now, so the ${subject} wasn't changed.`,
+  dayReadOnly: (subject: string) => `That day is locked now, so the ${subject} wasn't changed.`,
 } as const;

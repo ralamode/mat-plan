@@ -13,7 +13,7 @@ import { getActiveLocalDay } from '@/lib/active-timezone';
 import { LOOK_AHEAD_DAYS } from '@/lib/constants';
 
 /** Shown when a form submits a day too far from the server's active-tz today (a stale tab). */
-export const DECLARED_DAY_CLOSED_ERROR = 'That day is no longer open for logging. Reload the page.';
+export const DECLARED_DAY_CLOSED_ERROR = 'That day is locked now. Reload the page.';
 
 export type DeclaredDayResult = { ok: true; day: string } | { ok: false; error: string };
 

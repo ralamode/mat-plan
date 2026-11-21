@@ -85,7 +85,7 @@ export const DAY_COPY = {
    * which the reload brings, gives the reason (maintainer, 2026-11-17; UX panel, 12c). The page's
    * `CLOSED_DAY_NOTICE` ("today and yesterday stay open") would be false for an archived athlete.
    */
-  closed: 'Not saved. This day can’t be logged any more.',
+  closed: 'Not saved. This day is locked now.',
   progress: (done: number, total: number) => `${done} of ${total}`,
   notSaved: (count: number) => `${count} not saved`,
   logLabel: (name: string) => `Log ${name}`,

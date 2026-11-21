@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { CLOSED_DAY_NOTICE, NOTICE_CLASS } from '@/lib/constants';
+import { CLEAR_DAY_COPY, CLOSED_DAY_NOTICE, NOTICE_CLASS } from '@/lib/constants';
 
 import { ClosedDayNotice } from './closed-day-notice';
 
@@ -18,7 +18,7 @@ describe('ClosedDayNotice', () => {
   });
 
   it('adds the cleared line after it', () => {
-    const cleared = 'This day was also cleared: 3 sets.';
+    const cleared = CLEAR_DAY_COPY.closedCleared(3);
     const { container } = render(<ClosedDayNotice clearedLine={cleared} />);
     const lines = [...container.querySelectorAll('p')].map((p) => p.textContent);
     expect(lines).toEqual([CLOSED_DAY_NOTICE, cleared]);
