@@ -6,6 +6,13 @@ import { describe, expect, it } from 'vitest';
 
 import { isPublicPath, PUBLIC_PATHS } from '@/lib/public-paths';
 import {
+  appFiles,
+  handlerFiles,
+  MIN_PROTECTED_PAGES,
+  pageFiles,
+  routeOf as routeOfIn,
+} from '@/test/app-routes';
+import {
   code,
   exportedActionSlices,
   serverActionModules,
@@ -34,22 +41,12 @@ import {
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 
-/** `app/p/[profileId]/page.tsx` → `/p/[profileId]`; route groups `(x)` add no segment. */
-function routeOf(file: string): string {
-  const segments = relative(APP_DIR, dirname(file))
-    .split('/')
-    .filter((s) => s !== '' && !/^\(.*\)$/.test(s));
-  return `/${segments.join('/')}`;
-}
-
-const app = (pattern: string) =>
-  globSync(pattern, { cwd: APP_DIR })
-    .filter((f) => !/\.test\.[jt]sx?$/.test(f))
-    .map((f) => join(APP_DIR, f));
-
-// Every extension Next serves a page or route from, so a `route.tsx` or `page.js` cannot slip past.
-const pages = app('**/page.{tsx,ts,jsx,js}');
-const handlers = app('**/route.{ts,tsx,js,jsx}');
+// The route helpers are shared with the signed-out runtime sweep (`test/app-routes.ts`), which is
+// why they take the app directory as an argument.
+const routeOf = (file: string) => routeOfIn(APP_DIR, file);
+const pages = pageFiles(APP_DIR);
+const handlers = handlerFiles(APP_DIR);
+const app = (pattern: string) => appFiles(APP_DIR, pattern);
 
 describe('every page requires a session or is deliberately public', () => {
   it('finds the pages (an empty glob would pass everything below)', () => {
@@ -504,7 +501,7 @@ describe('UI-5 · one <main>, declared in the shell', () => {
   const authenticated = pages.filter((f) => !isPublicPath(routeOf(f)));
 
   it('finds the authenticated pages (an empty glob would pass everything below)', () => {
-    expect(authenticated.length).toBeGreaterThan(4);
+    expect(authenticated.length).toBeGreaterThanOrEqual(MIN_PROTECTED_PAGES);
   });
 
   // ⚠️ The non-vacuity floor above counts pages; this one proves the MATCHER works. Without it a
