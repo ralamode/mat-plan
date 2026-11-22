@@ -21,19 +21,16 @@ const { writers, state } = vi.hoisted(() => {
   const names = [
     'insertBodyweightEntry',
     'writeCheckinEntries',
-    'writeStrengthSession',
     'updateBodyweightEntryById',
     'clearBodyweight',
     'clearPractice',
     'updatePracticeEntryById',
-    'updateStrengthSetById',
     'restoreClear',
     'clearDay',
     'renameProfile',
     'archiveProfile',
     'restoreProfile',
     'createProfile',
-    'resolveSessionMovements',
   ] as const;
   return {
     writers: Object.fromEntries(names.map((n) => [n, vi.fn()])) as Record<
@@ -127,17 +124,6 @@ const WRITES: [string, () => Promise<unknown>][] = [
       }),
   ],
   [
-    'logStrengthSession',
-    () =>
-      entries.logStrengthSession({
-        profilePublicId: ID,
-        sessionType: 'lift',
-        clientId: CLIENT,
-        day: '2026-11-17',
-        movements: [],
-      }),
-  ],
-  [
     'editBodyweight',
     () =>
       entries.editBodyweight({
@@ -165,10 +151,6 @@ const WRITES: [string, () => Promise<unknown>][] = [
   [
     'editPractice',
     () => entries.editPractice({ profilePublicId: ID, entryId: ENTRY, minutes: 1, seenValue: 2 }),
-  ],
-  [
-    'editStrengthSet',
-    () => entries.editStrengthSet({ profilePublicId: ID, setId: ENTRY, reps: 5, weight: 100 }),
   ],
   [
     'restoreClearedDay',
@@ -207,8 +189,6 @@ const READS: Record<string, string> = {
 beforeEach(() => {
   state.scope = { householdId: 1 };
   for (const fn of Object.values(writers)) fn.mockReset().mockRejectedValue(dbFailure());
-  // The session cases reach `writeStrengthSession`; the find-or-create has its own case below.
-  writers.resolveSessionMovements.mockReset().mockResolvedValue([]);
 });
 
 describe('a failed write carries no data out (V1-9b B1-2)', () => {
@@ -229,25 +209,6 @@ describe('a failed write carries no data out (V1-9b B1-2)', () => {
       .sort();
     const classified = [...WRITES.map(([name]) => name), ...Object.keys(READS)].sort();
     expect(exported).toEqual(classified);
-  });
-
-  it("a typed name's find-or-create INSERT rethrows under its own name, before the session", async () => {
-    writers.resolveSessionMovements.mockReset().mockRejectedValue(dbFailure());
-    const thrown = await entries
-      .logStrengthSession({
-        profilePublicId: ID,
-        sessionType: 'lift',
-        clientId: CLIENT,
-        day: '2026-11-17',
-        movements: [],
-      })
-      .catch((error: unknown) => error);
-    expect(thrown).toBeInstanceOf(DbWriteError);
-    expect((thrown as Error).message).toBe(
-      'logStrengthSession.resolveMovements failed (DrizzleQueryError, SQLSTATE 23505)',
-    );
-    expect(String((thrown as Error).stack)).not.toContain(LEAK);
-    expect(writers.writeStrengthSession).not.toHaveBeenCalled();
   });
 
   it('a missing scope is still the plain refusal, never a DbWriteError', async () => {

@@ -484,10 +484,10 @@ The shapes those lanes agree on, the fakes and the preview route are
        the actual seam. A cross-tenant **write** primitive surviving its own refusal, which is
        categorically worse than a read leak. ⚠️ **Two vehicles, not one proof:** `db:verify`'s
        refused-write case is a **fixture reproducing the DAL's call order** (it calls
-       `findOrCreateMovement` itself, so its last assertion cannot fail); the order itself is pinned
-       by `apps/web/lib/dal/entries.test.ts` → _"find-or-create runs, and commits, before the refused
-       write"_, which asserts on the SQL `logStrengthSession` emits that the movement `INSERT` precedes
-       the session transaction's `BEGIN` and the profile resolve that refuses.
+       `findOrCreateMovement` itself, so its last assertion cannot fail); the order was pinned
+       by an `entries.test.ts` test on the SQL `logStrengthSession` emitted. ✅ **That DAL function is
+       deleted (LEGACY-1 C1, 2026-11-21)**, and the test was retired deliberately with a record in
+       its place; `TEN-2b-1` closed as overtaken. The writer below it goes in C2.
        ✅ **`PICK-1` PR 2 narrowed this, and did not close it.** `resolveSessionMovements` resolves
        every submitted movement **id** before it creates any typed name, so a body refused _for its
        id_ now commits nothing at all — proved by `db:verify` (a), whose typed sibling is chosen to

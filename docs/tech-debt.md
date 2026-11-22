@@ -15,6 +15,24 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The seed's session timeouts are fired, not awaited, so its first query races them (added 2026-11-21, from CAT-3 A2-ii's rehearsal)
+
+- **What & why it's debt:** `packages/db/scripts/seed.ts` sets `lock_timeout` and
+  `statement_timeout` in `pool.on('connect', …)` with `void client.query("SET …")`, unawaited. The
+  seed's first query is then issued on that client while the `SET` is still executing. pg 8 queues
+  it, so the timeouts do apply first, but logs `DeprecationWarning: Calling client.query() when the
+client is already executing a query is deprecated and will be removed in pg@9.0` (seen in the
+  maintainer's production rehearsal, 2026-11-21, and in every `screenshot:ephemeral` run).
+- **Impact:** none on pg 8 beyond the warning. **The trigger is pg 9**: once the queueing is removed,
+  the seed's first statements could run before the timeouts are set, or fail, on `migrate.yml`'s
+  production run.
+- **The fix:** set the session state before the first query, awaited. For example, pass
+  `options: '-c lock_timeout=5s -c statement_timeout=60s'` where the connection allows it (the
+  comment above the handler says a pooler may refuse startup parameters, so check the unpooled string
+  is what the seed uses), or wrap `seed()`'s work so each client runs the `SET` first and awaits it.
+  Re-check `migrate.ts` for the same pattern at the same time.
+- **Severity:** P3; act before any pg 9 bump (Dependabot's PR is the reminder).
+
 ### A fixtures seed cannot tell production from a fixtures database before the fresh start (added 2026-11-20, CAT-3 A2-ii)
 
 - **What & why it's debt:** `assertSeedOwnsDatabase` (`packages/db/src/seed.ts`) refuses a fixtures seed
@@ -202,8 +220,8 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `apps/web/lib/dal/quiet-db-errors.ts` (shared since 12b, moved out of `lib/dal/program/`) with only
   the operation, the error's type, the SQLSTATE and the stack's frame lines, so the gate above is
   met. **Closed by `V1-9b` B1-2:** every write in `lib/dal/entries.ts` and `lib/dal/profiles.ts`
-  (fourteen functions, fifteen calls: `logStrengthSession`'s movement find-or-create has its own,
-  `logStrengthSession.resolveMovements`), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
+  (thirteen functions, one call each, re-counted 2026-11-21 when LEGACY-1 C1 deleted the legacy
+  strength DAL), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
   read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
   (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
@@ -248,7 +266,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 
 - **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
   capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
-  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet`;
+  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet` (deleted, LEGACY-1 C1);
   `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
   (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
   (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;

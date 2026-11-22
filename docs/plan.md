@@ -2287,7 +2287,12 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   writer-enforced; a predicate would make a card vanish, and in `export-month` would silently drop a
   month of CSV), and the backfill's _"logs each one"_ became a count, for privacy.
 
-- **TEN-2b-1 — move find-or-create inside `writeStrengthSession`'s transaction.** _(Beta 0; deferred
+- ✅ **TEN-2b-1 — CLOSED as overtaken (LEGACY-1 C1, 2026-11-21).** Its creator, `logStrengthSession`,
+  is deleted, and its ordering test was retired deliberately with a record in `entries.test.ts`. The
+  live creator, `newItem`, creates in one transaction and refuses before it inserts. The reasoning is
+  the [LEGACY-1 plan](./plans/legacy-1-retire-strength-path.md)'s "The rows this settles". The
+  original row follows.
+  **TEN-2b-1 — move find-or-create inside `writeStrengthSession`'s transaction.** _(Beta 0; deferred
   from TEN-2b, which is where the reasoning lives.)_ Today `logStrengthSession` resolves every
   movement **before** the write core opens its transaction, so a session the household seam refuses
   has already committed its catalog text. **TEN-2b defused the cross-tenant half** — that row now
@@ -2313,8 +2318,14 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   in the meantime.
 
 - **TEN-2b-2 — the orphan-row correction: a custom movement nothing references.** _(Beta 0; deferred
-  from TEN-2b; runs AFTER `TEN-2b-1` per TEN-2a's rule (d), or it deletes rows the live app is still
-  creating.)_ 1d's surviving-refusal primitive creates exactly these. The row is **removed, not
+  from TEN-2b.)_ ⚠️ **RE-SCOPED, NOT BUILDABLE AS WRITTEN (LEGACY-1 C1, 2026-11-21; the maintainer
+  deferred the boundary to this row's own plan, 2026-11-20).** `TEN-2b-1` closed as overtaken, so the
+  ordering this row waited on is gone. Its predicate is wrong now: `newItem` deliberately commits a
+  household movement that no workout uses yet. The picker lists it and the item cap counts it, so
+  "nothing references it → hard DELETE" would delete items a person made on purpose. Its plan must
+  first fix a boundary, for example rows created before the FAM-1 12f PR 3 deploy (the last moment
+  the legacy creator could run), or close the row in favour of an in-app item removal. The original
+  text follows. 1d's surviving-refusal primitive creates exactly these. The row is **removed, not
   assigned**, and it must be a **HARD `DELETE`**: the registry's only delete precedent is a **soft**
   one, and a tombstoned app-authored row still occupies its slug in a namespace whose resolver has no
   `deleted_at` filter, so it would be handed back forever. Justified by `corrections/README.md` rule 8.
