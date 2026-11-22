@@ -1,1 +1,1 @@
-CAT-3 A1 S2: no movement_muscles row of a global movement is matched by household A
+OPS-2 A: seed({ fixtures: false }) writes no movement_muscles row

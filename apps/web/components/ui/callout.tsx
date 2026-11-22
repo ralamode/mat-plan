@@ -67,7 +67,7 @@ export function Callout({
         {/* 🔴 The message is the FIRST child and carries its own id. A caller pointing
             `aria-describedby` at the whole callout would make a screen reader read the button
             labels as part of the description. `text-foreground`, never muted: this is the sentence
-            the parent has to read, and `text-muted-foreground` sits on the AA floor at 4.74:1. */}
+            the parent has to read, and `text-muted-foreground` sits near the AA floor at 5.06:1. */}
         <p id={messageId} className="max-w-prose text-sm">
           {message}
         </p>

@@ -10,7 +10,7 @@ pg_version = "17.0"
 # which runs every PENDING migration inside ONE transaction (drizzle-orm 0.45.4,
 # pg-core/dialect.js; not one per file, as this comment once said). Without this, Squawk assumes
 # no transaction and `prefer-robust-stmts` fires 99 times spuriously — 188 issues
-# rather than 33. If the transaction-stripping runner AGENTS.md describes (for
+# rather than 33. If a runner that applies a file outside the transaction (for
 # CREATE INDEX CONCURRENTLY) is ever built, this flag becomes a lie for those
 # files and those 99 findings come back.
 assume_in_transaction = true
@@ -19,11 +19,14 @@ excluded_rules = [
   # Domain integers — idx, reps, seconds, superset_order — are deliberately int4.
   # These are ordinals and small counts, not identity columns.
   "prefer-bigint-over-int",
-
-  # Correct-but-unsatisfiable HERE: CONCURRENTLY cannot run inside a transaction,
-  # and drizzle wraps every file in one. AGENTS.md describes an "isolated file +
-  # transaction-stripping runner" to work around this — it DOES NOT EXIST. So this
-  # gate does NOT enforce the CONCURRENTLY rule; that gap survives this PR and is
-  # recorded in docs/tech-debt.md. Re-enable if that runner is ever built.
-  "require-concurrent-index-creation",
 ]
+
+# `require-concurrent-index-creation` is ON (maintainer, 2026-11-20). CONCURRENTLY
+# cannot run inside drizzle's single migrate transaction, and no runner applies a
+# file outside it, so a new migration cannot satisfy the rule. Each plain
+# CREATE INDEX on a table that already exists therefore carries
+#   -- squawk-ignore require-concurrent-index-creation
+# on the line directly above it, with its reason above that. The written reason
+# IS the gate. Squawk does not flag an index on a table the same file creates.
+# Migrations 0001-0026 hold 27 such indexes from when the rule was excluded;
+# Squawk lints added files only, so they never reach it (docs/tech-debt.md).

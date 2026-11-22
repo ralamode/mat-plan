@@ -30,8 +30,8 @@ import { NO_HOUSEHOLD_COPY } from '@/lib/constants';
  *    no-household picker is unreachable from the Playwright suite, which runs `fullyParallel` against
  *    one shared seeded database. ⚠️ That cell does NOT cover the `<h1>`, the subhead or the theme
  *    block, which are the parts most likely to overflow at 200% text.
- *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (4.74:1 — AA by
- *    0.24). Prose read once, cold, on a phone should not sit on the AA floor. (1c-2 carried a muted
+ *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (5.06:1 — AA by
+ *    0.56). Prose read once, cold, on a phone should not sit on the AA floor. (1c-2 carried a muted
  *    `notYet` exception; 1c-3b shipped the control it apologised for and deleted it.)
  *
  * ⚠️ **Props-free and no Clerk import**, deliberately: the inventory cell renders it directly, and a

@@ -1302,9 +1302,11 @@ function OptionList({
  *
  * - **Multi:** a `button role="checkbox"` with the box on the LEFT (the accepted prototype's), so
  *   ticks line up whether or not a row has "How to", and no thumb aimed at the box lands on it
- *   (UX panel, B2). A ticked row is outlined, never filled: muted text on the accent fill is under AA.
- * - **Single:** a button, `aria-current` on the card's movement. Hover outlines it too, for the same
- *   contrast reason, now that the row has a muted second line.
+ *   (UX panel, B2). A ticked row is outlined, never filled: muted text on the accent fill was under AA
+ *   when this was written (4.34:1, 4.64:1 since `--muted-foreground` moved to L 0.54); the outline
+ *   stays as a choice.
+ * - **Single:** a button, `aria-current` on the card's movement. Hover outlines it too, as the ticked
+ *   row is, now that the row has a muted second line.
  * - The tag joins the second line: three lines and a tag line left under two rows on a phone with
  *   the keyboard up (UX panel, B2).
  * - With a loader, a row without steps keeps the "How to" column empty (the prototype's spacer), so
@@ -1448,8 +1450,8 @@ function OptionRow({
 /**
  * The open "How to" (CAT-3 P16, K17): a named region with the name as its heading, **the
  * supervision label first** whenever the movement has one (from the option, so a loader that leaves
- * it out cannot drop it), then the steps. All text at full contrast: the box is `bg-muted`, where
- * muted text is under AA.
+ * it out cannot drop it), then the steps. All text at full contrast on the `bg-muted` box: steps are
+ * must-read, though muted text there passes AA since L 0.54 (4.64:1).
  */
 function HowToSteps({
   id,

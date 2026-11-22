@@ -1,9 +1,9 @@
 import 'server-only';
 
 import {
+  programIdsIn,
   programIn,
   programWorkoutIds,
-  readProgramList,
   workoutInHousehold,
   type HouseholdScope,
 } from '@mat-plan/db';
@@ -186,23 +186,17 @@ export async function reportAthleteMiss(
  * is also the writer's answer for a stale list (a put on, a take off, midnight), so an id that is
  * one of the household's live programs reports nothing: only one that names something outside it is a scope miss.
  *
- * **One read of the household's Programs list, however many ids the order names** (at most
- * `MAX_ORDER_PROGRAMS`): `readProgramList`, the same scoped read the Programs page makes. That is
- * 2 + one query per live athlete (≤ 27 at `MAX_HOUSEHOLD_ATHLETES`), on a refusal only; a one-query
- * id lookup beside `programIn` is owed (tech-debt). Read once on the
- * first probe, each id looked up in its set. The caller has a scope here: with none, the DAL answers
- * `not_found` and reports the athlete before the writer runs.
+ * **One query, however many ids the order names** (at most `MAX_ORDER_PROGRAMS`): `programIdsIn`,
+ * which answers which of them are this household's live programs by the same scope `programIn` uses.
+ * Read once on the first probe, each id looked up in its set. The caller has a scope here: with none,
+ * the DAL answers `not_found` and reports the athlete before the writer runs.
  */
 export async function reportOrderProgramMiss(
   scope: HouseholdScope,
   programPublicIds: readonly string[],
-  today: string,
 ): Promise<void> {
   let known: Promise<ReadonlySet<string>> | undefined;
-  const programs = () =>
-    (known ??= readProgramList(db, scope, today).then(
-      (list) => new Set(list.map((program) => program.programPublicId)),
-    ));
+  const programs = () => (known ??= programIdsIn(db, scope, programPublicIds));
   await reportFirstMiss(
     scope,
     [...new Set(programPublicIds)].map((id): Probe => ({

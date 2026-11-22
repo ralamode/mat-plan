@@ -26,6 +26,8 @@ for f in apps/web/app/pages-need-a-session.test.ts apps/web/app/tenancy-is-not-c
   apps/web/lib/privacy/notice-content.test.ts; do
   put "$f" "import { globSync, readFileSync } from 'node:fs';"
 done
+# The import-pins guard: a scanner, scoped by changed-scopes.mjs's importPinsInScope.
+put apps/web/test/program-imports.test.ts "import { readFileSync } from 'node:fs';"
 put packages/shared/src/units.ts 'export const UNITS = ["kg"];'
 put packages/shared/src/units.test.ts "import { UNITS } from './units';"
 put apps/web/app/layout.tsx 'export default function Layout() {}'
@@ -56,6 +58,34 @@ out="$(dry)"
 if has "$out" 'scanner: apps/web/app/pages-need-a-session.test.ts'; then
   ok 'a new committed page.tsx selects pages-need-a-session'
 else bad 'new page.tsx' "$out"; fi
+
+# The import-pins guard runs only when importPinsInScope finds a changed file it reads (D7 of
+# docs/plans/td-program-tables-import-graph.md); the other scanners run either way.
+reset
+put packages/db/scripts/x.ts 'export const x = 1;'
+g add -A && g commit -qm 'chore: a db script'
+out="$(dry)"
+if has "$out" 'scanner: apps/web/app/pages-need-a-session.test.ts' &&
+  ! has "$out" 'scanner: apps/web/test/program-imports.test.ts'; then
+  ok 'a packages/db/scripts change runs the scanners but not the import-pins guard'
+else bad 'packages/db/scripts change: the import-pins guard' "$out"; fi
+
+reset
+put apps/web/app/layout.tsx 'export default function Layout() { return null; }'
+g commit -qam 'feat: layout'
+out="$(dry)"
+if has "$out" 'scanner: apps/web/test/program-imports.test.ts'; then
+  ok 'an apps/web change runs the import-pins guard'
+else bad 'apps/web change: the import-pins guard' "$out"; fi
+
+# The same predicate as CI's run_import_pins: a workflow change runs it too.
+reset
+put .github/workflows/x.yml 'name: x'
+g add -A && g commit -qm 'ci: a workflow'
+out="$(dry)"
+if has "$out" 'scanner: apps/web/test/program-imports.test.ts'; then
+  ok 'a workflow change runs the import-pins guard (as CI does)'
+else bad 'workflow change: the import-pins guard' "$out"; fi
 
 # 🔴 The working tree is not the push (2026-11-17: an applied mutation patch made a db push run the
 # editor suites). An uncommitted edit is reported, never traced.
@@ -124,6 +154,13 @@ if [ "$code" -eq 2 ] && printf '%s' "$out" | grep -qF 'apps/web/test/bypass-is-c
   ! printf '%s' "$out" | grep -qF 'pages-need-a-session'; then
   ok 'a required scanner the grep no longer finds: exit 2, naming it'
 else bad "missing scanner: exit $code" "$out"; fi
+
+reset
+g rm -q apps/web/test/program-imports.test.ts && g commit -qm 'test: drop the guard'
+out="$(cd "$repo" && CI= GITHUB_ACTIONS= node "$script" --base origin/main --dry-run 2>&1)"; code=$?
+if [ "$code" -eq 2 ] && printf '%s' "$out" | grep -qF 'apps/web/test/program-imports.test.ts'; then
+  ok 'the import-pins guard is a required scanner: missing, exit 2, naming it'
+else bad "missing import-pins guard: exit $code" "$out"; fi
 
 # The real repo, dry: the derivation finds every required scanner.
 out="$(cd "$real" && node "$script" --list-scanners 2>&1)"; code=$?

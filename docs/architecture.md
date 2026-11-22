@@ -171,7 +171,10 @@ row, re-checked in-process — and as of `1d` that is the ONLY requirement.**
 `app/pages-need-a-session.test.ts` reports the offender by name, asking the question differently per kind:
 a **page** or **Route Handler** names the check itself, while an **action** must call `enterMutation`
 and **return its refusal** — the session check, the limiter and their order are asserted once inside
-that helper.
+that helper. **At runtime**, a second, un-bypassed e2e server (`SIGNED_OUT_ORIGIN`) shows a stranger
+sent to sign-in from every protected page, refused by a real Server Action, and refused the export,
+through the no-Clerk branch only ([plan](plans/td-signed-out-e2e.md); the configured branch is a
+`tech-debt.md` row).
 
 **Why in-process, and why it matters MORE now.** `1c-3b` required the access code AND a session
 because `getHouseholdScope()` did not consult the principal until `1c-4`, so a session alone meant

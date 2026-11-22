@@ -5,7 +5,7 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
 } from './seed-ids';
-import { keyBySelf, PROFILE_KIND, type ProfileKind } from './enums';
+import { keyBySelf, PROFILE_KIND } from './enums';
 import {
   LEGACY_SESSION_TYPE_LABELS,
   LEGACY_SESSION_TYPES,
@@ -39,8 +39,11 @@ import {
  * newest program block **only if they are a child**. The adult in the household logs freely and gets their own
  * program later; today they would otherwise inherit the kids' PPL block, which is not his training.
  *
- * ⚠️ **This predicate and its constant are DELETED by `ASSIGN-READ` (D4)**, along with both call
- * sites — `packages/db/src/queries/program-day.ts`'s block subquery and the day page's role label.
+ * ⚠️ **This constant is DELETED by `ASSIGN-READ` (D4)**, along with its one runtime reader,
+ * `packages/db/src/queries/program-day.ts`'s block subquery, and its `db:verify` proof in
+ * `scripts/verify/schema.ts`. There is no predicate function: the
+ * query compares `profiles.kind` to it inline (the `readsHouseholdProgram` wrapper had no caller and
+ * went with LEGACY-1 PR A).
  * It is a stopgap with a named end, not a rule of the domain, which is why it lives beside the day
  * roles rather than in `enums.ts` with the durable ones.
  *
@@ -51,10 +54,6 @@ import {
  * invariant.
  */
 export const PROGRAM_READ_KIND = PROFILE_KIND.kid;
-
-export function readsHouseholdProgram(kind: ProfileKind): boolean {
-  return kind === PROGRAM_READ_KIND;
-}
 
 export const DAY_ROLES = [
   ...LEGACY_SESSION_TYPES,
@@ -96,15 +95,6 @@ export const DAY_ROLE_TO_SESSION_TYPE: Record<DayRole, SessionType> = {
   strength_b: 'strength',
   strength_c: 'strength',
 };
-
-/**
- * The day roles that belong to a STRENGTH session — the only ones the log form offers, and the only
- * ones its schema accepts. DERIVED from `DAY_ROLE_TO_SESSION_TYPE` rather than re-listed, so adding a
- * `strength_d` needs one edit, and a conditioning role can never leak into a strength session's picker.
- */
-export const STRENGTH_DAY_ROLES = DAY_ROLES.filter(
-  (role) => DAY_ROLE_TO_SESSION_TYPE[role] === 'strength',
-);
 
 /**
  * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card
@@ -264,7 +254,7 @@ function fixed(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
  * every session — so the athlete does a jump *or* a swing daily while each individual movement lands
  * every other session.
  *
- * ⚠️ **The letter is derived from the CALENDAR, not from completed sessions** — `resolveDayRole`.
+ * ⚠️ **The letter is derived from the CALENDAR, not from completed sessions.**
  * The spec is emphatic that it should come from a completed-session count and names the failure mode
  * (`date % 2` doubles up box jumps after a missed day). **Ray accepted that deliberately**
  * (2026-09-24): *"I don't mind if they miss a day and end up doing the same thing twice, that's on

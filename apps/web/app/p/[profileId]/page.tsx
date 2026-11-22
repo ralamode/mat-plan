@@ -1,6 +1,8 @@
 import { clearDayOpenFor } from '@mat-plan/shared';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 
 import { AthleteSwitcher } from '@/components/day/athlete-switcher';
 import { PROGRAM_COPY } from '@/components/day/day-copy';
@@ -30,7 +32,6 @@ import {
   ALL_ATHLETES_LINK,
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
-  CLOSED_DAY_NOTICE,
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
   NOTICE_CLASS,
@@ -43,9 +44,10 @@ import {
 import { BodyweightSection } from './bodyweight-section';
 import { ClearDay } from './clear-day';
 import { ClearDayBanner } from './clear-day-banner';
+import { ClosedDayNotice } from './closed-day-notice';
 import { clearedNoticeLine } from './clear-day-notice';
 import { LifeSection } from './life-section';
-import { DayNav } from './day-nav';
+import { DayNav, dayTitle } from './day-nav';
 import {
   amendRowAction,
   logRowAction,
@@ -58,14 +60,13 @@ import {
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
 export const runtime = 'nodejs';
 
-export default async function TodayPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ profileId: string }>;
-  // Next 16: a Promise, and `?d=a&d=b` arrives as an array.
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+/**
+ * The athlete, today and the VIEWED day with its plan, resolved once per request (React `cache()`,
+ * per-request only: ADR 0006's guard forbids a cross-request cache here). The page and
+ * `generateMetadata` both read it, so the title names the day the page shows, look-ahead fallback
+ * included.
+ */
+const resolveDayView = cache(async (profileId: string, d: string | undefined) => {
   // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**
   // 🔴 **The session IS the boundary (AUTH-1 1d).** `getHouseholdScope()` resolves the signed-in
   // principal's `household_members` row, so a session proves WHOSE data this is rather than only
@@ -76,7 +77,6 @@ export default async function TodayPage({
   // skipping the matcher entirely. `app/pages-need-a-session.test.ts` is what keeps this call here
   // (PR C renames that file to `pages-need-a-session.test.ts`; its contents already moved here).
   await requireSession();
-  const { profileId } = await params;
   // Re-validate the URL-supplied public id server-side (the V1-3 ownership seam;
   // profile tiles are a UX switch, not a security boundary). Unknown → 404.
   const profile = await getProfileByPublicId(profileId);
@@ -94,8 +94,7 @@ export default async function TodayPage({
   // V1-15: the VIEWED day — today, or a validated `?d=`. Floored at the profile's first day; a
   // malformed value renders today rather than 404ing, because every date is a legal day and a stale
   // URL should land somewhere usable.
-  const { d } = await searchParams;
-  let day = resolveViewedDay(typeof d === 'string' ? d : undefined, today, profile.firstDay);
+  let day = resolveViewedDay(d, today, profile.firstDay);
   // FAM-1 12c: the athlete's programs on that day, which the day screen and its placed parts read.
   // `today` is read here, never below (day-page invariant 17).
   let plan = await getDayPlan({ profilePublicId: profile.id, day, today });
@@ -107,6 +106,38 @@ export default async function TodayPage({
   }
   // The athlete resolved above, so the plan can only be missing if the household did meanwhile.
   if (!plan) notFound();
+  return { profile, canExportAthletes, timeZone, today, day, plan };
+});
+
+/**
+ * The tab's title, which Next's route announcer reads on arrival (it announces a title that
+ * CHANGES): the day line, short ("Today · Fri, Nov 20"). 🔴 **Never the athlete's name** (D8: a
+ * title leaks into history, tab lists and screen shares), so switching athletes on one day is silent.
+ */
+export async function generateMetadata({ params, searchParams }: DayPageProps): Promise<Metadata> {
+  const { profileId } = await params;
+  const { today, day } = await resolveDayView(profileId, viewedDayParam(await searchParams));
+  return { title: dayTitle(day, today) };
+}
+
+/** `?d=`, as both readers pass it to `resolveDayView` (one key, one resolution): `?d=a&d=b` is none. */
+function viewedDayParam(searchParams: Record<string, string | string[] | undefined>) {
+  const { d } = searchParams;
+  return typeof d === 'string' ? d : undefined;
+}
+
+type DayPageProps = {
+  params: Promise<{ profileId: string }>;
+  // Next 16: a Promise, and `?d=a&d=b` arrives as an array.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function TodayPage({ params, searchParams }: DayPageProps) {
+  const { profileId } = await params;
+  const { profile, canExportAthletes, timeZone, today, day, plan } = await resolveDayView(
+    profileId,
+    viewedDayParam(await searchParams),
+  );
   // 🔴 **THREE reasons a day is read-only, and they must not be conflated** — the day (before
   // yesterday, or after today) and archive. `dayPageFlags` keeps them apart and is unit-tested; see
   // its docblock.
@@ -247,10 +278,7 @@ export default async function TodayPage({
           {PROGRAM_COPY.comingUp(profile.name, day)}
         </p>
       ) : view.notice === 'closed' ? (
-        <div className={`${NOTICE_CLASS} flex flex-col gap-2`}>
-          <p>{CLOSED_DAY_NOTICE}</p>
-          {clearedLine ? <p>{clearedLine}</p> : null}
-        </div>
+        <ClosedDayNotice clearedLine={clearedLine} />
       ) : null}
 
       {/* V1-9b B2: the day's clears and Restore all, on a day open for it. Mounted on every day and

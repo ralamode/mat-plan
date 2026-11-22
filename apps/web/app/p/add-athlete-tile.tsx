@@ -20,7 +20,7 @@ import { ADD_ATHLETE_COPY, ADD_ATHLETE_PATH } from '@/lib/constants';
  * 🔴 **`border-muted-foreground`, an OPAQUE token — NOT `foreground/28`.** The prototype used a 28%
  * alpha, which measures **1.93:1** light and **2.35:1** dark against the page: a border a person with
  * low vision cannot find, and under SC 1.4.11's 3:1 floor for non-text contrast. `muted-foreground`
- * is 4.73:1 / 7.63:1. ⚠️ `token-sets.test.ts` pins that, because **nothing else measures it**: axe
+ * is 5.06:1 / 7.63:1. ⚠️ `token-sets.test.ts` pins that, because **nothing else measures it**: axe
  * has no non-text-contrast rule, so neither the `/design/tokens` scan nor the route scans would see a
  * regression here (UX lens 2, B3).
  *

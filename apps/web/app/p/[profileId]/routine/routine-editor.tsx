@@ -3,6 +3,7 @@
 import { type RoutineConfig, type RoutineItem, ROUTINE_VERSION } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
+import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ROUTINE_COPY, SAVING_LABEL } from '@/lib/constants';
 import { type RoutineCatalogItem, savedOrder } from '@/lib/routine/catalog';
@@ -52,11 +53,26 @@ export function RoutineEditor({
   // saved payload during render when the action flips to ok (`useOnActionSuccess`, not an effect). Any later edit changes `routineJson`, so the stale "saved" message clears and can't mislead the
   // coach into thinking un-submitted edits are persisted.
   const [savedJson, setSavedJson] = useState<string | null>(null);
-  useOnActionSuccess(state, () => setSavedJson(routineJson));
-  const showSaved = savedJson !== null && savedJson === routineJson;
+  // Each save is a new node in the live region, so a second save of the same routine is heard too.
+  const [saves, setSaves] = useState(0);
+  // What was SUBMITTED, not what the list holds when the answer comes: Save is the only control locked
+  // while pending, so an edit made mid-save must not be marked, or said, as saved.
+  const [submittedJson, setSubmittedJson] = useState<string | null>(null);
+  useOnActionSuccess(state, () => {
+    setSavedJson(submittedJson);
+    setSaves((n) => n + 1);
+  });
+  // The first edit after a save ends it: going back to the saved order is not a save, so it is neither
+  // shown nor said again (a render-phase adjustment, not an effect).
+  if (savedJson !== null && savedJson !== routineJson) setSavedJson(null);
+  const showSaved = savedJson !== null && !state.error;
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form
+      action={formAction}
+      onSubmit={() => setSubmittedJson(routineJson)}
+      className="flex flex-col gap-6"
+    >
       <input type="hidden" name="profileId" value={profileId} readOnly />
       <input type="hidden" name="routine" value={routineJson} readOnly />
 
@@ -147,15 +163,21 @@ export function RoutineEditor({
         </Button>
       </div>
 
-      {showSaved ? (
-        <p role="status" className="text-muted-foreground text-sm">
-          Routine saved.
-        </p>
-      ) : state.error ? (
-        <p role="alert" className="text-destructive text-sm">
-          {state.error}
-        </p>
-      ) : null}
+      {/* One wrapper, so the empty region adds no `gap-6` of its own. The region is mounted while
+          empty, beside (never inside) the error branch: a region that mounts with its text is
+          silent (`Announcer` rule 1). Seen as well as heard. */}
+      <div className="flex flex-col gap-2">
+        <Announcer
+          className="text-muted-foreground text-sm"
+          message={showSaved ? ROUTINE_COPY.saved : ''}
+          messageKey={saves}
+        />
+        {state.error ? (
+          <p role="alert" className="text-destructive text-sm">
+            {state.error}
+          </p>
+        ) : null}
+      </div>
     </form>
   );
 }

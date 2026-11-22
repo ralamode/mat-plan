@@ -22,11 +22,13 @@ lane N's ([catalog-data.md](./catalog-data.md)).
 | `movements.modality`                           | `MODALITIES`. Set only on a global catalog row; it is what marks one.                                                                                                   |
 | `movementGlobalRowHasPattern` (`schema`)       | The global-row CHECK's predicate, once; `verify.ts` re-adds it at runtime.                                                                                              |
 | `verify/catalog.ts`                            | A1's proofs: one entry point right after `migrate()`, one with the modules; A2-i's writer proofs (one on a fresh database, the rest first in the modules' entry point). |
-| `seedCatalog` (`seed.ts`)                      | The library's one writer (A2-i), called by `seedReference` with the list it is given; production's `seed()` gives it `[]` until A2-ii.                                  |
+| `seedCatalog` (`seed.ts`)                      | The library's one writer (A2-i), called by `seedReference` with the library `seedLibraryOf` names: `CATALOG_MOVEMENTS` in production, `CATALOG_FIXTURE` with fixtures.  |
 | `movementIsCatalog()` (`writers/ownership.ts`) | Rule 2's predicate: global and `modality IS NOT NULL`. Never a slug test.                                                                                               |
 
-All four tables are empty of catalog rows in production until A2-ii switches the seed on. Since
-CAT-3 P11-ii-b the picker's read reads the two join tables (`catalogTaxonomyRows` in
+Since A2-ii production's seed writes `CATALOG_MOVEMENTS` and no legacy rows; a fixtures database gets
+`CATALOG_FIXTURE`, then the 35 legacy rows ([plan](../plans/cat-3-a2-ii-seed-switch.md), E4). The app
+reads the library that database holds (K29: `catalogLibraryNameFor`, `apps/web/lib/env.ts`).
+Since CAT-3 P11-ii-b the picker's read reads the two join tables (`catalogTaxonomyRows` in
 `queries/program/movement-options.ts`); the stays-dark scan that held them unread until then is retired,
 and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutations `605`–`609`, and (b4)'s parse throws in `catalog-arm-option.test.ts`.
 
@@ -57,6 +59,13 @@ and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutati
    is public, and a slug a household also holds says what that household typed. The proofs capture
    everything printed to stdout and stderr around
    the whole seed run.
+8. **`db:verify`'s shared database is a fixtures database** (A2-ii, D3): the test library plus the
+   legacy rows, as every e2e and preview database is. Every production seed in `db:verify` runs inside
+   `rolledBack` with `seed(asDb(tx), …)` and reads on `tx` (a read through `db` hangs on PGlite's one
+   connection). A proof that needs the real library writes it in its own rolled-back transaction.
+9. **"A library row" is an exact test where it feeds a decision** (A2-ii, D4): a modality AND a slug of
+   the library in effect. `movementIsCatalog()` alone (a modality) is the read's arm, not a census:
+   the `movements-ownership` report and `db:verify`'s TEN-2 discriminators use the exact one.
 
 ## Traps
 
@@ -66,20 +75,15 @@ and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutati
 - **Done in A2-i:** the `movements-ownership` report's blocker count reads the CHECK's own predicate
   (`movementGlobalRowHasPattern`); Proof A classes the join tables with `movements`; S4's guarantee
   moved from the stay-dark scan to invariant 6's proofs.
-- **Still owed by A2-ii:** once a catalog row exists in the shared verify database, erasure P7's "no
-  row is matched by both households" becomes the first failure under mutations `318` and `319`, so
-  their `.expect` moves to P7's message (or P7 keeps them out). A2-i's proofs all roll back, so it
-  does not happen yet.
-- **Still owed by A2-ii, before the switch** (A2-i's db-safety review):
-  - 🔴 **The `movements-ownership` report classes "curated" by `MOVEMENT_SEED_PUBLIC_IDS`**, so after
-    the switch it would count every catalog row as "TEN-2b-2 input (global, non-curated,
-    unreferenced)", the orphan-removal input. Its "legacy or catalog" discriminator lands with or
-    before the switch, or a correction built on that report would delete the library.
-  - Cut a Neon restore branch, run `db:seed` against it from the operator's console, and confirm the
-    counts line (`CATALOG_MOVEMENTS.length − 12` inserted, 12 held by a legacy row). `db:verify` runs the real library only
-    on PGlite inside a savepoint; this is its first real-Postgres run.
-  - Run the runbook's shadow query on production first, so the household count is known in advance.
-  - A runbook entry for a seed run that fails on catalog data (fix forward; nothing is left behind).
+- **Done in A2-ii:** the ownership report's curated set includes library rows (invariant 9); the
+  OPS-2 B digests count household rows only, and a separate check holds that production's seed adds
+  only library rows; the runbook's entry for a seed that fails on catalog data. The rehearsal on a
+  Neon branch is the maintainer's, before the merge (the plan's "Risks, the rehearsal, and rollback").
+- **A fixtures seed checks it owns the database before writing** (`assertSeedOwnsDatabase`, A2-ii D2).
+  The fixture library is global: written into a database the seed does not own and then refused, it
+  would stay, and production's next seed would keep it on a shared slug (E2). Mutation `603`. ⚠️ It
+  does not guard production before the fresh start: production's family household still carries the
+  seed's `public_id` (erased at R2), so there the check passes, and the URL allowlist is the only guard.
 - **A proof that a catalog write fails as a whole runs on `db`, outside any transaction.**
   `expectRejectedBy(…, tx)` runs its probe in a savepoint, which rolls the partial rows back itself,
   so a writer with no transaction could not fail it (mutation `502`).
