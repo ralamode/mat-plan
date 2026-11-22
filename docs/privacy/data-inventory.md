@@ -606,11 +606,12 @@ separately. **Four were reached by the UI** (two until `PROF-1` a-r; the fourth,
 
 1. **`sessions.feel`** — "how it felt". **No page writes it any more** (re-read 2026-11-20): its one
    input was on the strength form (deleted in #725), and the action that wrote it went in #741. Rows
-   written before keep it. The callerless DAL wrapper (`logStrengthSession`) still accepts it
-   (`docs/tech-debt.md`), so wiring a caller back is a re-review trigger for this list.
+   written before keep it. The DAL wrapper that still accepted it (`logStrengthSession`) is deleted
+   (LEGACY-1, 2026-11-21), so nothing in the app can write it.
 2. **The movement-name box — historical** (re-read 2026-11-20). Its input was on the strength form
    (`strength-form.tsx`, deleted in #725), which wrote `entries.movement_name` **and** a `movements`
-   row; no page does now, and the path survives only in the callerless `logStrengthSession`. Today a
+   row; no page does now, and the DAL that remained (`logStrengthSession`) is deleted (LEGACY-1,
+   2026-11-21). Today a
    typed movement name comes only from the program builder's "+ New item", which writes a
    `movements` row in the household's own namespace. What stays live is the stock below. **This was
    the one that left the household**, and since TEN-1 1d that is measured rather

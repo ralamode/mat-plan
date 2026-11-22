@@ -220,8 +220,8 @@ client is already executing a query is deprecated and will be removed in pg@9.0`
   `apps/web/lib/dal/quiet-db-errors.ts` (shared since 12b, moved out of `lib/dal/program/`) with only
   the operation, the error's type, the SQLSTATE and the stack's frame lines, so the gate above is
   met. **Closed by `V1-9b` B1-2:** every write in `lib/dal/entries.ts` and `lib/dal/profiles.ts`
-  (fourteen functions, fifteen calls: `logStrengthSession`'s movement find-or-create has its own,
-  `logStrengthSession.resolveMovements`), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
+  (thirteen functions, one call each, re-counted 2026-11-21 when LEGACY-1 C1 deleted the legacy
+  strength DAL), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
   read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
   (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
@@ -266,7 +266,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 
 - **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
   capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
-  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet`;
+  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet` (deleted, LEGACY-1 C1);
   `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
   (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
   (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;

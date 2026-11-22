@@ -99,10 +99,10 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     repair step. **Two of 1d's three defects ARE closed by `TEN-2b`:** a session write the seam
     refuses now leaves its row in the **caller's own** namespace (garbage, not a cross-tenant write),
     and the other household's Today card can no longer render it — `seedProgram` resolves the global
-    namespace only and **refuses** loudly instead. ⚠️ **Still true and unchanged:** the surviving-row
-    primitive needs no second household, because `logStrengthSession` runs find-or-create _before_ the
-    write core's in-transaction profile resolve (`apps/web/lib/dal/entries.ts`) — moving it inside is
-    `TEN-2b-1`. ⚠️ **This said "the rate limiter is wired to the gate login only, so a gate-code
+    namespace only and **refuses** loudly instead. ✅ **The surviving-row primitive is gone (LEGACY-1, 2026-11-21):**
+    it was `logStrengthSession` running find-or-create _before_ the write core's in-transaction
+    profile resolve, and that DAL function is deleted. The live creator, `newItem`, creates in one
+    transaction and refuses before it inserts. `TEN-2b-1` closed as overtaken. ⚠️ **This said "the rate limiter is wired to the gate login only, so a gate-code
     holder can still mint unbounded `movements` rows of chosen text" — that is false as of AUTH-1 1d,
     in the SAFE direction, and leaving it would tell a reader a live minting primitive exists.** The
     gate and its limiter are deleted; every mutation now goes through `enterMutation`, which checks a
