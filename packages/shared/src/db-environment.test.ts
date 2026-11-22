@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   assertDatabaseEnvironment,
   assertMigrationTarget,
+  CATALOG_LIBRARY_FIXTURE_NOTICE,
+  catalogLibraryNameFor,
   databaseNameOf,
   DB_ENV_MESSAGE,
+  isFixturesDatabase,
   isLocalDbHost,
   MIGRATION_TARGETS,
   PREVIEW_DB_NAME,
@@ -327,5 +330,85 @@ describe('the message contract', () => {
     for (const message of EVERY_MESSAGE) {
       expect(message).toContain('docs/runbooks.md');
     }
+  });
+});
+
+/**
+ * CAT-3 K29: which movement library an app reads. Every case by EQUALITY. The production rows are
+ * the pins: no input with VERCEL_ENV=production reads the fixture library, whatever the URL says.
+ */
+describe('catalogLibraryNameFor (CAT-3 K29)', () => {
+  const LOCAL = 'postgres://u:p@localhost:5432/mat_plan_e2e';
+  const PREVIEW = 'postgres://u:p@ep-x.aws.neon.tech/mat_plan_preview';
+  const PROD = 'postgres://u:p@ep-x.aws.neon.tech/mat_plan';
+  const cases: ReadonlyArray<
+    [
+      string,
+      { databaseUrl: string | undefined; vercelEnv: string | undefined },
+      'catalog' | 'fixture',
+    ]
+  > = [
+    ['production + a local database', { databaseUrl: LOCAL, vercelEnv: 'production' }, 'catalog'],
+    [
+      'production + a preview-named database',
+      { databaseUrl: PREVIEW, vercelEnv: 'production' },
+      'catalog',
+    ],
+    [
+      'VERCEL_ENV padded " production "',
+      { databaseUrl: LOCAL, vercelEnv: ' production ' },
+      'catalog',
+    ],
+    [
+      'no VERCEL_ENV + a remote production name (dev:prod, ALLOW_LIVE_DB=1)',
+      { databaseUrl: PROD, vercelEnv: undefined },
+      'catalog',
+    ],
+    [
+      'a remote database with no name',
+      { databaseUrl: 'postgres://u:p@ep-x.aws.neon.tech', vercelEnv: undefined },
+      'catalog',
+    ],
+    [
+      'a host= override behind localhost',
+      { databaseUrl: 'postgres://u:p@localhost/db?host=ep-x.neon.tech', vercelEnv: undefined },
+      'catalog',
+    ],
+    [
+      'an encoded %68ost= override',
+      { databaseUrl: 'postgres://u:p@localhost/db?%68ost=ep-x.neon.tech', vercelEnv: undefined },
+      'catalog',
+    ],
+    ['an unparseable string', { databaseUrl: 'not a url', vercelEnv: undefined }, 'catalog'],
+    ['no DATABASE_URL', { databaseUrl: undefined, vercelEnv: undefined }, 'catalog'],
+    [
+      'no VERCEL_ENV + a remote preview name',
+      { databaseUrl: PREVIEW, vercelEnv: undefined },
+      'fixture',
+    ],
+    [
+      'a preview deployment + the preview database',
+      { databaseUrl: PREVIEW, vercelEnv: 'preview' },
+      'fixture',
+    ],
+    ['a local database, off production', { databaseUrl: LOCAL, vercelEnv: undefined }, 'fixture'],
+    [
+      'an encoded preview name, off production',
+      { databaseUrl: 'postgres://u:p@ep-x.aws.neon.tech/mat_plan_%70review', vercelEnv: undefined },
+      'fixture',
+    ],
+  ];
+  it.each(cases)('%s', (_label, input, want) => {
+    expect(catalogLibraryNameFor(input)).toBe(want);
+  });
+
+  it('isFixturesDatabase is the seed allowlist: local or preview-named, nothing else', () => {
+    expect([LOCAL, PREVIEW, PROD].map(isFixturesDatabase)).toEqual([true, true, false]);
+  });
+
+  it('the notice is fixed text that names the rule and nothing from a URL', () => {
+    expect(CATALOG_LIBRARY_FIXTURE_NOTICE).toBe(
+      'catalog library: CATALOG_FIXTURE (isFixturesDatabase(DATABASE_URL), not production; CAT-3 K29)',
+    );
   });
 });

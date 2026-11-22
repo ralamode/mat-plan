@@ -31,7 +31,7 @@ vi.mock('./session', () => ({ getCurrentUser: async () => ({ userId: FIXTURE_PRI
 import { LOCK_TIMEOUT } from '@mat-plan/db';
 import { PROFILE_KIND } from '@mat-plan/shared';
 
-import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
+import { ONE_HOUSEHOLD_ID, queryMatching, RECORDED_PROFILE_NAME, whereOf } from './recording-db';
 
 import {
   createAthlete,
@@ -117,7 +117,7 @@ describe('updateProfileRoutine — the write uses the SAME predicate as the read
  */
 describe('renameAthlete — the rename uses the SAME predicate as the read', () => {
   it('scopes the UPDATE by public_id, live, AND household_id', async () => {
-    await renameAthlete(PROFILE, 'Renamed');
+    await renameAthlete(PROFILE, 'Renamed', RECORDED_PROFILE_NAME);
     const update = queryMatching(recording, /^update "profiles"/i);
     const where = whereOf(update);
     expect(where).toContain('"profiles"."public_id" = $');
@@ -133,13 +133,13 @@ describe('renameAthlete — the rename uses the SAME predicate as the read', () 
    * `isLiveProfile` has quietly grown a UX filter.
    */
   it('does not filter on archived_at', async () => {
-    await renameAthlete(PROFILE, 'Renamed');
+    await renameAthlete(PROFILE, 'Renamed', RECORDED_PROFILE_NAME);
     expect(whereOf(queryMatching(recording, /^update "profiles"/i))).not.toContain('archived_at');
   });
 
   /** It writes the name and the server-side `updated_at`, and nothing else — not `kind`. */
   it('sets name and updated_at, and never kind', async () => {
-    await renameAthlete(PROFILE, 'Renamed');
+    await renameAthlete(PROFILE, 'Renamed', RECORDED_PROFILE_NAME);
     const update = queryMatching(recording, /^update "profiles"/i);
     const setClause = update.text.slice(0, update.text.toLowerCase().indexOf(' where '));
     expect(setClause).toContain('"name" = $');
@@ -150,7 +150,7 @@ describe('renameAthlete — the rename uses the SAME predicate as the read', () 
 
   /** The returned shape is the public id only — never a row the caller could render as a name. */
   it('returns the public id, not a row', async () => {
-    await renameAthlete(PROFILE, 'Renamed');
+    await renameAthlete(PROFILE, 'Renamed', RECORDED_PROFILE_NAME);
     expect(queryMatching(recording, /^update "profiles"/i).text).toMatch(/returning "public_id"/i);
   });
 });
@@ -294,7 +294,7 @@ describe('no household → dark, not leaky', () => {
     // PROF-1 a-r: a rename with no resolved household must not reach the database either. Without
     // this the new writer would be the one path in the file that fails OPEN of the scope check.
     // a-1d-ren made the result discriminated; a no-scope miss is the tagged refusal, not `null`.
-    await expect(scoped.renameAthlete(PROFILE, 'Renamed')).resolves.toEqual({
+    await expect(scoped.renameAthlete(PROFILE, 'Renamed', RECORDED_PROFILE_NAME)).resolves.toEqual({
       ok: false,
       reason: 'refused',
     });

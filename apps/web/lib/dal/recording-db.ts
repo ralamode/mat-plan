@@ -41,6 +41,9 @@ export type RecordingDb = {
 /** One live household, so a scoped DAL read gets past `getHouseholdScope()` and emits its query. */
 export const ONE_HOUSEHOLD_ID = 4242;
 
+/** The stored name the stub's profile pre-read answers; a rename proof sends it as `seenName`. */
+export const RECORDED_PROFILE_NAME = 'Recorded Name';
+
 /**
  * The default answer: one row for the households probe, nothing for anything else. The id is
  * arbitrary but FIXED, so a test can assert it appears in the scoped query's bound values — which is
@@ -74,7 +77,11 @@ export function oneHouseholdThenEmpty(sql: string): unknown[][] {
   // mean the UPDATE under test is **never emitted**, so the four emitted-SQL proofs would assert
   // against a query that does not exist. Narrowly matched on the single-column select the guard
   // emits, so no broader `from "profiles"` read is affected.
-  if (/^select "name" from "profiles"/i.test(sql)) return [['Recorded Name']];
+  // The stale-rename fix widened that read to `name, public_id`, and the writer only UPDATEs when the
+  // stored name equals the `seenName` sent, so a rename proof sends `RECORDED_PROFILE_NAME` as it.
+  if (/^select "name", "public_id" from "profiles"/i.test(sql)) {
+    return [[RECORDED_PROFILE_NAME, '019826b4-0000-7000-8000-000000000099']];
+  }
   // The athlete-cap lock (`createProfile`, tech-debt fix): one row means the household row was found
   // and locked. Zero would make every add answer `refused` before the queries this stub exists to
   // record are ever emitted.

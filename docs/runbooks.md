@@ -445,6 +445,23 @@ are clean.
 
 ---
 
+## The seed fails on the movement library (`CAT-3` A2-ii)
+
+**When:** `migrate.yml`'s `db:seed` step is red with a foreign-key or `CHECK` error on `movements`,
+`movement_equipment` or `movement_muscles`. Since A2-ii production's seed writes `CATALOG_MOVEMENTS`
+([plan](./plans/cat-3-a2-ii-seed-switch.md)), so a library entry the database refuses fails every push.
+
+- **Nothing is left behind.** The library is written in one transaction (`seedCatalog`), so a failed
+  run writes no catalog row and no join row.
+- **`db:migrate` ran first, in the same job.** A red run may still have applied its migrations; read
+  the log's migrate step, not the run's colour, before the next migration is merged (AGENTS.md → Queue).
+- **Fix forward:** correct the entry in `packages/shared/src/catalog/data/` in a PR. Never edit the
+  database by hand to let the entry in.
+- **A timeout is different: re-run, do not fix forward.** A `57014` (statement timeout) or `55P03`
+  (lock timeout) on the catalog insert also leaves nothing behind. Re-dispatch `migrate.yml`
+  (`workflow_dispatch`, which runs `main`) once traffic is quiet, and compare the wall time the A2-ii
+  rehearsal recorded with the 60-second statement timeout (`packages/db/scripts/seed.ts`).
+
 ## The seed's shadow guard fired (a WARNING since `TEN-2c` — it no longer refuses)
 
 **When:** a `migrate.yml` run is **green** and its `db:seed` step logs
@@ -678,6 +695,14 @@ database — so if you paste the production string by mistake, nothing is applie
 
 **Confirm:** both commands print their `✓` line. In the Neon console the `units`, `profiles`,
 `entries` tables exist and `units` is seeded.
+
+**A preview seeded before `CAT-3` A2-ii** keeps the household items earlier seeds made (Goblet squat,
+Side plank, Jump rope, Easy run) beside the test library's rows, which now shadow them. The app reads
+the test library there (K29). The picker then hides those four household items (a live global row on
+the same slug shadows them) while the programs already made still prescribe them, until the preview is
+reset.
+The same holds for a local database once seeded without `SEED_FIXTURES=1`: it then holds the real
+library, which the app does not read there. Reset either rather than mix the two.
 
 ### 4. A second Upstash database, for Preview
 
@@ -972,7 +997,10 @@ gh run list --workflow ci.yml --commit "$MAIN" --json conclusion,status
   database secret", below). Until it is deleted, the rule is only written down. The cut-off is two
   commits: `OPS-2` PR 1 (no household or athlete) and `CAT-3` A2 (no legacy movements).
   `workflow_dispatch` is safe: it runs `main`.
-- **Hand-run a seed only from a freshly fetched `origin/main`** ("Manually re-seed", above).
+- **Hand-run a seed only from a freshly fetched `origin/main`** ("Manually re-seed", above). The one
+  exception is `CAT-3` A2-ii's pre-merge rehearsal: the PR's head, on a Neon **child branch** of
+  production that is deleted afterwards, never on production or its restore branch
+  ([plan](./plans/cat-3-a2-ii-seed-switch.md), "Risks, the rehearsal, and rollback").
 - Production's `migrate.yml` runs are **never deleted**: they are the record of which DDL reached
   production and when.
 - **From the fresh start's step 3 on, `OPS-2` PR 1 is fixed forward only**: a revert would re-create

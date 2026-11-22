@@ -160,10 +160,12 @@ export type SharedMovementRow = {
  *   references at all, which can simply go.
  *
  * Seeded catalog rows come back too and are **not** a defect — they are reference data, shared by
- * design. Discriminating them is exact membership in `MOVEMENT_SEED_PUBLIC_IDS`, which lives in
- * `@mat-plan/shared` and is the **caller's** filter: this query must not grow a second, weaker
- * discriminator (a slug test, or a `public_id` prefix test — both were tried and both were wrong;
- * `db:verify` → the authorship discriminator records why).
+ * design. Discriminating them is the **caller's** filter, and an exact one: a legacy seed row is a
+ * member of `MOVEMENT_SEED_PUBLIC_IDS` (`@mat-plan/shared`); since CAT-3 A2-ii a library row is a
+ * global row with a modality AND a slug of the library in effect (its `public_id` is generated, so
+ * there is no id set to test). This query must not grow a second, weaker discriminator: a slug test
+ * alone, a modality test alone, or a `public_id` prefix test (`db:verify` → the authorship
+ * discriminator records why).
  */
 export async function sharedMovementRows(exec: Executor): Promise<SharedMovementRow[]> {
   return (

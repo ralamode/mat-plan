@@ -1,0 +1,22 @@
+{
+  "next": "16.4.6",
+  "routes": {
+    "(lazy client chunks)": 24586,
+    "/": 695714,
+    "/_not-found": 695714,
+    "/design/program": 1133868,
+    "/design/tokens": 934385,
+    "/p": 901655,
+    "/p/[profileId]": 1028574,
+    "/p/[profileId]/edit": 904022,
+    "/p/[profileId]/routine": 904031,
+    "/p/new": 922205,
+    "/privacy": 695714,
+    "/programs": 920539,
+    "/programs/[programId]": 992370,
+    "/programs/[programId]/workouts/[workoutId]": 1017625,
+    "/programs/[programId]/workouts/new": 1017625,
+    "/settings": 896677,
+    "/sign-in/[[...rest]]": 884246
+  }
+}

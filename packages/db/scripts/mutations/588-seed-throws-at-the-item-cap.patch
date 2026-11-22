@@ -1,10 +1,10 @@
 diff --git a/packages/db/src/writers/program/seed-fixtures.ts b/packages/db/src/writers/program/seed-fixtures.ts
-index 25607014..757002a7 100644
+index 0da207d1..95d20d40 100644
 --- a/packages/db/src/writers/program/seed-fixtures.ts
 +++ b/packages/db/src/writers/program/seed-fixtures.ts
-@@ -191,7 +191,6 @@ async function seedWorld(
+@@ -202,7 +202,6 @@ async function seedWorld(
      const { name, type } = world.catalog[key];
-     const result = await newItem(tx, scope, { name, trackingType: type }, CATALOG_MOVEMENTS);
+     const result = await newItem(tx, scope, { name, trackingType: type }, library);
      // The household's item cap is state a person can make: skipped, never thrown.
 -    if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
      const made = must(result, `item ${key}`);

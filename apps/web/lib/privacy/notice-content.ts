@@ -260,7 +260,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — a free-text box."
+              "text": " — a note typed in a free-text box. Notes typed before November 2026 are\nstill stored; the app no longer asks for one."
             }
           ]
         }
@@ -347,7 +347,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " \"How it felt\"; the box where a movement can be typed by name;\nan "
+        "text": " An "
       },
       {
         "k": "strong",
@@ -1826,7 +1826,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "A workout's name and its \"how it felt\" note stay."
+                  "text": "Workout names, and any notes written with them, stay."
                 }
               ]
             },
@@ -2479,6 +2479,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
+        "text": "What changed on 20 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "\"How it felt\" and the box for typing a movement's name are no longer listed as text boxes."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " No\npage shows either any more. A note or a movement name typed there before is still kept with its\nworkout, as \"How long we keep it\" says. A movement you add in the program builder is still named by\nwhat you type, and is still in that list."
+      }
+    ]
+  },
+  {
+    "k": "h2",
+    "children": [
+      {
+        "k": "text",
         "text": "What changed on 19 November 2026"
       }
     ]
@@ -3010,6 +3037,45 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           {
             "k": "text",
             "text": "(both pending the maintainer's re-read)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "2026-11-20:"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " \"How it felt\" removed from\nthe text-box list, which no page renders any more "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(the maintainer approved it)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", and so was the old box for typing a movement's name. The Clear this day bullet's heading now says \"workout names, and any notes written with them\" "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(the maintainer approved it)"
           }
         ]
       },

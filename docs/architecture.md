@@ -171,7 +171,10 @@ row, re-checked in-process — and as of `1d` that is the ONLY requirement.**
 `app/pages-need-a-session.test.ts` reports the offender by name, asking the question differently per kind:
 a **page** or **Route Handler** names the check itself, while an **action** must call `enterMutation`
 and **return its refusal** — the session check, the limiter and their order are asserted once inside
-that helper.
+that helper. **At runtime**, a second, un-bypassed e2e server (`SIGNED_OUT_ORIGIN`) shows a stranger
+sent to sign-in from every protected page, refused by a real Server Action, and refused the export,
+through the no-Clerk branch only ([plan](plans/td-signed-out-e2e.md); the configured branch is a
+`tech-debt.md` row).
 
 **Why in-process, and why it matters MORE now.** `1c-3b` required the access code AND a session
 because `getHouseholdScope()` did not consult the principal until `1c-4`, so a session alone meant
@@ -861,13 +864,13 @@ flowchart TB
   DEV["feature branch → PR"] --> CI
   subgraph CI["GitHub Actions — on every PR"]
     S["<b>changed-scopes.mjs</b> (base's copy)<br/>run_mutations · run_build · run_e2e<br/>skip only on a literal false<br/>catalog data: not a mutation trigger"]
-    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build (scoped)<br/>+ drizzle-kit check + drift guard + PGlite db:verify"]
+    Q["<b>quality</b><br/>prettier · eslint · tsc · vitest · next build (scoped) · bundle size<br/>+ drizzle-kit check + drift guard + PGlite db:verify"]
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>skips docs-only PRs (scoped) · ci-skip-e2e label override"]
     M["<b>mutations</b> × 4 shards (scoped on a PR; skipped jobs take no runner)<br/>each patch must turn db:verify RED<br/>→ <b>mutations-total</b>: every patch ran once"]
     S --> Q
     S --> E
     S --> M
-    G["<b>gitleaks</b> (required)"]
+    G["<b>gitleaks</b>"]
   end
   CI --> PREV["Vercel preview<br/>(preview scope: seed-only Neon project,<br/>own Upstash, no prod secret)"]
   DEV -. "a writer comments @claude review<br/>(on request only)" .-> CR["<b>claude-review</b> (advisory, never required)<br/>review: model, read-only token, PR head as data<br/>→ post: no model; scans, then one comment"]

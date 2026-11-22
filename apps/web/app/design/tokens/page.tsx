@@ -157,8 +157,9 @@ export default async function TokenSetsPage() {
           WCAG 2.x ratios computed from the OKLCH values themselves, so &ldquo;reads in a sunlit
           gym&rdquo; is a number rather than an adjective. Text needs {AA_NORMAL}:1, hairlines{' '}
           {AA_LARGE}:1 (SC 1.4.11, which axe does not check). The control is omitted here because it
-          declares no values of its own — for the record, today&rsquo;s palette has three pairs
-          under AA, listed in <code>token-sets.test.ts</code>.
+          declares no values of its own — for the record, today&rsquo;s palette has one text pair
+          under AA, and hairlines under SC 1.4.11&rsquo;s 3:1, listed in{' '}
+          <code>token-sets.test.ts</code>.
         </p>
         {/* A table may be wider than the phone, in its OWN scroll container — the page body still
             never scrolls horizontally (AGENTS.md). `tabIndex={0}` + a `region` name is REQUIRED, not

@@ -10,8 +10,8 @@
  *
  * BEST-EFFORT, NOT A SECURITY BOUNDARY. A heuristic shell reader, like its sibling
  * `guard-main-checkout.mjs`, whose lexer it borrows (`lex()`). It does NOT use the sibling's
- * `invocations()`, which reports only git and gh; it has its own, smaller wrapper walk (the shared
- * walk is tracked in docs/tech-debt.md → "Two shell-wrapper walks").
+ * `invocations()`, which reports only git and gh; it walks the wrappers with `shell-commands.mjs`,
+ * shared with `guard-hook-skip.mjs` since 2026-11-21 (docs/tech-debt.md → "Two shell-wrapper walks").
  *
  *   denied   `pkill`, `killall`, `fuser -k` (any spelling of the flag), in any form;
  *            `kill` whose target is a command substitution (`$(pgrep …)`, backticks) or whose
@@ -45,14 +45,7 @@
  * `permissionDecision: "deny"` with the reason, or nothing (allow). Malformed input or an internal
  * error ALLOWS (fails open), the same contract as the sibling.
  */
-import { basename } from 'node:path';
-
 const ESCAPE = 'MAT_PLAN_ALLOW_PATTERN_KILL=1';
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
-const KEYWORDS = new Set(['!', '{', '}', 'then', 'do', 'else', 'if', 'elif', 'while', 'until']);
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
-const XARGS_WITH_VALUE = new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-a', '--arg-file']);
-const SUDO_WITH_VALUE = new Set(['-u', '-g', '-C', '-D', '-h', '-p', '-U', '-r', '-t', '-T']);
 /** `$!`, `$name`, `${name}`, `$1`, `$$`: one variable, so one pid the script captured. */
 const ONE_VARIABLE = /^\$(!|\$|\d|\{?[A-Za-z_][A-Za-z0-9_]*\}?)$/;
 
@@ -61,162 +54,39 @@ const REASON =
   'other lanes run the same scripts on this machine.';
 
 /** The first refused form in `command` (a short description), or null to allow. */
-function refusal(command, lex) {
-  const found = [];
-  walk(lex(command), found, false, lex);
-  return found[0] ?? null;
+function refusal(command, lex, commands) {
+  for (const c of commands(command, lex, ESCAPE)) {
+    const what = killRefusal(c);
+    if (what) return what;
+  }
+  return null;
 }
 
-function walk(tokens, found, escape, lex) {
-  let segment = [];
-  const flush = () => {
-    if (segment.length) analyze(segment, found, escape, lex);
-    segment = [];
-  };
-  for (const t of tokens) {
-    if (t.op) flush();
-    else segment.push(t);
-  }
-  flush();
-}
-
-function analyze(tokens, found, inheritedEscape, lex) {
-  for (const t of tokens) for (const sub of t.subs ?? []) walk(sub, found, inheritedEscape, lex);
-
-  const words = []; // { text, subs }
-  const stdin = []; // heredoc / here-string bodies: commands only if they feed a bare shell
-  for (let k = 0; k < tokens.length; k++) {
-    if (tokens[k].stdin) stdin.push(tokens[k].stdin.body);
-    else if (tokens[k].redir) {
-      if (tokens[k].herestring && tokens[k + 1]?.text !== undefined) stdin.push(tokens[k + 1].text);
-      k++; // the redirection's target
-    } else words.push(tokens[k]);
-  }
-  const text = (j) => words[j]?.text;
-  const reLex = (src, esc) => walk(lex(src), found, esc, lex);
-
-  let i = 0;
-  let escape = inheritedEscape;
-  for (; i < words.length && ASSIGNMENT.test(text(i)); i++) if (text(i) === ESCAPE) escape = true;
-  if (escape) return;
-
-  let viaXargs = false; // the command's arguments arrive on stdin
-  for (;;) {
-    const w = text(i);
-    if (w === undefined) return;
-    const base = basename(w);
-    const opts = (withValue) => {
-      for (i++; text(i)?.startsWith('-'); i++) if (withValue?.(text(i))) i++;
-    };
-    if (KEYWORDS.has(w) || base === 'builtin' || base === 'coproc') i++;
-    else if (w === 'function') i += 2;
-    else if (base === 'time' || base === 'nohup') opts();
-    else if (base === 'stdbuf') opts((a) => /^-[ioe]$/.test(a));
-    else if (base === 'caffeinate') opts((a) => /^-[tw]$/.test(a));
-    else if (base === 'doas') opts((a) => /^-[uC]$/.test(a));
-    else if (base === 'arch') opts((a) => /^-(arch|e|d)$/.test(a));
-    else if (base === 'exec' || base === 'nice') opts((a) => ['-a', '-n'].includes(a));
-    else if (base === 'xargs') {
-      viaXargs = true;
-      opts((a) => XARGS_WITH_VALUE.has(a));
-    } else if (base === 'timeout') {
-      opts((a) => ['-s', '-k'].includes(a));
-      i++; // the duration
-    } else if (base === 'command') {
-      for (i++; text(i)?.startsWith('-'); i++) if (/^-[a-zA-Z]*[vV]/.test(text(i))) return; // lookup only
-    } else if (base === 'pnpm' || base === 'npx') {
-      let j = i + 1;
-      for (; text(j)?.startsWith('-'); j++) if (/^(-C|--dir|--filter|-F)$/.test(text(j))) j++;
-      if (base === 'npx') i = j;
-      else if (text(j) === 'exec') i = j + 1;
-      else return; // any other pnpm command runs a script by name: a known gap
-    } else if (base === 'sudo') {
-      for (i++; i < words.length; i++) {
-        const a = text(i);
-        if (SUDO_WITH_VALUE.has(a)) i++;
-        else if (!a.startsWith('-') && !ASSIGNMENT.test(a)) break;
-      }
-    } else if (base === 'env') {
-      for (i++; i < words.length; i++) {
-        const a = text(i);
-        if (a === '-S' || a === '--split-string' || a.startsWith('--split-string=')) {
-          const str = a.includes('=') ? a.slice(a.indexOf('=') + 1) : text(++i);
-          const rest = words.slice(i + 1).map((t) => t.text);
-          return reLex([str, ...rest].join(' '), escape);
-        }
-        if (['-u', '--unset', '-C', '--chdir'].includes(a)) i++;
-        else if (!a.startsWith('-') && !ASSIGNMENT.test(a)) break;
-      }
-    } else if (base === 'script') {
-      // BSD `script [-q…] [file [command …]]`; util-linux `script -c 'command' [file]`.
-      for (i++; text(i)?.startsWith('-'); i++) {
-        if (text(i) === '-c' || text(i) === '--command') return reLex(text(i + 1) ?? '', escape);
-        if (/^-[tTFI]$/.test(text(i))) i++;
-      }
-      i++; // the typescript file
-    } else break;
-  }
-
-  const cmd = text(i);
-  const base = basename(cmd);
-  const rest = words.slice(i + 1);
-  const restText = rest.map((t) => t.text);
-
-  if (base === 'eval') return reLex(restText.join(' '), escape);
-  if (base === 'watch') {
-    let j = 0;
-    for (; restText[j]?.startsWith('-'); j++) if (/^(-n|--interval)$/.test(restText[j])) j++;
-    return reLex(restText.slice(j).join(' '), escape);
-  }
-  if (base === 'find') {
-    for (let j = 0; j < rest.length; j++) {
-      if (!/^-(exec|execdir|ok|okdir)$/.test(restText[j])) continue;
-      const inner = [];
-      for (j++; j < rest.length && restText[j] !== ';' && restText[j] !== '+'; j++)
-        inner.push(rest[j]);
-      analyze(inner, found, escape, lex);
-    }
-    return;
-  }
-  if (SHELLS.has(base)) {
-    let sawC = false;
-    let script;
-    for (const a of restText) {
-      if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(a)) sawC = true;
-      else if (!/^[-+]/.test(a)) {
-        script = a;
-        break;
-      }
-    }
-    if (sawC && script !== undefined) reLex(script, escape);
-    else if (script === undefined) for (const body of stdin) reLex(body, escape);
-    return;
-  }
-
-  if (base === 'pkill' || base === 'killall') return void found.push(`\`${base}\``);
+/** One command, already unwrapped (`shell-commands.mjs`): why it is refused, or null. */
+function killRefusal({ base, rest, restText, viaXargs }) {
+  if (base === 'pkill' || base === 'killall') return `\`${base}\``;
   if (base === 'fuser') {
     if (restText.some((a) => /^-[a-zA-Z]*k[a-zA-Z]*$/.test(a) || a === '--kill'))
-      found.push('`fuser -k`');
-    return;
+      return '`fuser -k`';
+    return null;
   }
-  if (base !== 'kill') return;
+  if (base !== 'kill') return null;
 
-  if (viaXargs) return void found.push('`kill` fed its pids by `xargs`');
+  if (viaXargs) return '`kill` fed its pids by `xargs`';
   // One signal option may lead: `-9`, `-TERM`, `-s TERM`, `-n 9`. A lone `-1` is a pid, not a signal.
   const first = restText[0];
-  if (first !== undefined && /^-[lL]$/.test(first)) return; // `kill -l`: list the signal names
+  if (first !== undefined && /^-[lL]$/.test(first)) return null; // `kill -l`: list the signal names
   let j = 0;
   if (['-s', '-n', '--signal'].includes(first)) j = 2;
   else if (first?.startsWith('-') && first !== '--' && rest.length > 1) j = 1;
   for (const t of rest.slice(j)) {
     const a = t.text;
-    if (a === '--') return void found.push('`kill -- …`');
-    if (t.subs?.length) return void found.push('`kill` of a command substitution');
-    if (/^-\d+$/.test(a))
-      return void found.push(`\`kill ${a}\` (a process group, or every process)`);
-    if (/^\d+$/.test(a) && Number(a) < 2) return void found.push(`\`kill ${a}\``);
+    if (a === '--') return '`kill -- …`';
+    if (t.subs?.length) return '`kill` of a command substitution';
+    if (/^-\d+$/.test(a)) return `\`kill ${a}\` (a process group, or every process)`;
+    if (/^\d+$/.test(a) && Number(a) < 2) return `\`kill ${a}\``;
     if (a.includes('$') && !ONE_VARIABLE.test(a))
-      return void found.push('`kill` of an expansion that is not one variable');
+      return '`kill` of an expansion that is not one variable';
   }
 }
 
@@ -235,7 +105,8 @@ async function main() {
   // Loaded only here, after the CI exit below. Safe to import: the sibling runs its own main only
   // when it is the entry point (`isEntryPoint()`), and here it is not.
   const { lex } = await import('./guard-main-checkout.mjs');
-  const what = refusal(command, lex);
+  const { commands } = await import('./shell-commands.mjs');
+  const what = refusal(command, lex, commands);
   if (!what) return;
   process.stdout.write(
     JSON.stringify({

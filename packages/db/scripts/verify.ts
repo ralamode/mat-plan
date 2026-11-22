@@ -28,6 +28,7 @@ import {
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
+  PROFILE_NOT_FOUND,
   PROFILE_NAME_MAX,
   PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
@@ -63,12 +64,14 @@ import {
   type RoutineConfig,
   uuidSchema,
 } from '@mat-plan/shared';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { FIXTURE_ITEMS } from '@mat-plan/shared/program/fixtures';
-import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
 import { writeCheckinEntries } from '../src/writers/checkin';
+import { SEED_PROGRAM_CLIENT_IDS } from '../src/writers/program/seed-fixtures';
 import { hideEntries, restoreHidden } from '../src/writers/hide';
 import { hiddenDayCounts, hiddenEntriesForDay } from '../src/queries/hidden-entries';
 import {
@@ -153,6 +156,7 @@ import { verifyDay } from './verify/day';
 import { verifySeedLeavesHouseholdsAlone, verifySeedOnAFreshDatabase } from './verify/seed';
 import { verifyErasure } from './verify/erasure';
 import {
+  asDb,
   asPg,
   assertCheckCoversConst,
   captureOutput,
@@ -168,6 +172,20 @@ import {
   rolledBack,
   type VerifyContext,
 } from './verify/harness';
+
+/**
+ * CAT-3 A2-ii (plan D3, D4): the shared verify database is a fixtures database, so its library rows
+ * are the test library's. A library row is curated reference data by an EXACT test: global, a
+ * modality, and a `CATALOG_FIXTURE` slug. `movementIsCatalog()` alone (a modality) is not enough.
+ */
+const FIXTURE_LIBRARY_SLUGS: ReadonlySet<string> = new Set(CATALOG_FIXTURE.map((e) => e.slug));
+function isFixtureLibraryRow(m: {
+  householdId: number | null;
+  modality: string | null;
+  slug: string;
+}): boolean {
+  return m.householdId === null && m.modality !== null && FIXTURE_LIBRARY_SLUGS.has(m.slug);
+}
 import { ADVISORY_LOCK } from '../src/writers/locks';
 import { verifyProgram } from './verify/program';
 import { verifySchema } from './verify/schema';
@@ -260,6 +278,49 @@ await seed(asPg, { fixtures: true }).catch((e: unknown) =>
 await seed(asPg, { fixtures: true }).catch((e: unknown) =>
   assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
 );
+
+// 🔴 CAT-3 A2-ii, E4 (A2): a fixtures seed writes the test library, then the legacy rows, then the
+// household fixtures, and EVERY fixture program. Here, before any other proof reads the shared state,
+// so a fixtures seed that writes the wrong library (mutation 599) fails on this line. Every program:
+// since #763 each name the world shares with the test library logs the same way, and a program with
+// one item whose library row logs another way would be skipped whole (`seedProgramFixtures`).
+{
+  const globalRows = await db
+    .select({
+      publicId: schema.movements.publicId,
+      householdId: schema.movements.householdId,
+      slug: schema.movements.slug,
+      modality: schema.movements.modality,
+    })
+    .from(schema.movements)
+    .where(isNull(schema.movements.householdId));
+  assert.deepEqual(
+    {
+      library: globalRows
+        .filter(isFixtureLibraryRow)
+        .map((m) => m.slug)
+        .sort(),
+      legacy: globalRows.filter((m) => MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId)).length,
+      other: globalRows.filter(
+        (m) => !isFixtureLibraryRow(m) && !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+      ).length,
+    },
+    { library: [...FIXTURE_LIBRARY_SLUGS].sort(), legacy: MOVEMENT_SEED_ROWS.length, other: 0 },
+    'CAT-3 A2-ii A2: seed({ fixtures: true }) writes the test library and the 35 legacy rows, and no other global row',
+  );
+  const programs = await db
+    .select({ clientId: schema.programBlocks.clientId })
+    .from(schema.programBlocks)
+    .where(inArray(schema.programBlocks.clientId, [...SEED_PROGRAM_CLIENT_IDS]));
+  assert.deepEqual(
+    programs.map((p) => p.clientId).sort(),
+    [...SEED_PROGRAM_CLIENT_IDS].sort(),
+    'CAT-3 A2-ii A2: …and every fixture program, none skipped for an item the test library logs another way',
+  );
+  console.log(
+    '✓ CAT-3 A2-ii A2: a fixtures seed writes the test library, the legacy rows and every fixture program',
+  );
+}
 
 const units = await db.select().from(schema.units);
 const profiles = await db.select().from(schema.profiles);
@@ -364,11 +425,59 @@ console.log(
       /refusing to seed into a household this seed does not own/,
       'AUTH-1 1c-4: a live household under a foreign public_id makes the seed REFUSE, by the message it throws — not by a TypeError',
     );
+    // 🔴 CAT-3 A2-ii (plan D2, A3): that refusal comes BEFORE any write. The fixture library is global
+    // and would stay; so a stale unit label, which `seedReference` would rewrite, must still be stale
+    // after the refused run (mutation 603 moves the check back after `seedReference`).
+    await rolledBack(async (tx) => {
+      const [first] = UNITS;
+      await tx
+        .update(schema.units)
+        .set({ label: 'CAT-3 A2-ii stale' })
+        .where(eq(schema.units.code, first.code));
+      // The test library's rows retired in this transaction (a slug of their own, and `deleted_at`),
+      // so a seed that wrote before refusing would leave fresh ones on its slugs.
+      await tx
+        .update(schema.movements)
+        .set({ slug: sql`'a2ii_retired_' || ${schema.movements.id}`, deletedAt: sql`now()` })
+        .where(and(isNull(schema.movements.householdId), isNotNull(schema.movements.modality)));
+      await assert.rejects(
+        () => seed(asDb(tx), { fixtures: true }),
+        /refusing to seed into a household this seed does not own/,
+        'CAT-3 A2-ii A3: the fixtures seed refuses a database it does not own',
+      );
+      const written = await tx
+        .select({ slug: schema.movements.slug })
+        .from(schema.movements)
+        .where(
+          and(
+            isNull(schema.movements.householdId),
+            inArray(schema.movements.slug, [...FIXTURE_LIBRARY_SLUGS]),
+          ),
+        );
+      assert.deepEqual(
+        written,
+        [],
+        'CAT-3 A2-ii A3: a refused fixtures seed writes no test-library row',
+      );
+      const [unit] = await tx
+        .select({ label: schema.units.label })
+        .from(schema.units)
+        .where(eq(schema.units.code, first.code));
+      assert.equal(
+        unit.label,
+        'CAT-3 A2-ii stale',
+        'CAT-3 A2-ii A3: a refused fixtures seed writes nothing first: ownership is checked before seedReference',
+      );
+    });
     // OPS-2 Proof C: production's seed never refuses: the refusal is the fixtures' alone (`327`).
-    await assert.doesNotReject(
-      () => seed(asPg, { fixtures: false }),
-      'OPS-2 C: with a live household under a foreign public_id, seed({ fixtures: false }) resolves',
-    );
+    // Rolled back since CAT-3 A2-ii: it writes the real library, and the shared database stays a
+    // fixtures database (plan D3).
+    await rolledBack(async (tx) => {
+      await assert.doesNotReject(
+        () => seed(asDb(tx), { fixtures: false }),
+        'OPS-2 C: with a live household under a foreign public_id, seed({ fixtures: false }) resolves',
+      );
+    });
 
     const liveAfter = await db
       .select({ id: schema.households.id })
@@ -650,10 +759,23 @@ assert.equal(
   METRIC_DEFINITION_SEED_ROWS.length,
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
-assert.equal(
-  movements.filter((m) => m.householdId === null).length,
-  MOVEMENT_SEED_ROWS.length,
-  'movements: full catalog seeded from the shared const, exactly once',
+// CAT-3 A2-ii (plan D3): the shared database is a fixtures database, as every e2e and preview one is:
+// the 35 legacy rows plus the test library, each exactly once.
+assert.deepEqual(
+  {
+    legacy: movements.filter(
+      (m) => m.householdId === null && MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+    ).length,
+    library: movements.filter((m) => isFixtureLibraryRow(m)).length,
+    other: movements.filter(
+      (m) =>
+        m.householdId === null &&
+        !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) &&
+        !isFixtureLibraryRow(m),
+    ).length,
+  },
+  { legacy: MOVEMENT_SEED_ROWS.length, library: FIXTURE_LIBRARY_SLUGS.size, other: 0 },
+  'movements: the legacy catalog and the test library seeded from their shared consts, exactly once (CAT-3 A2-ii)',
 );
 // The seed writes household items only through the fixture programs (FAM-1 6c-i): each one in the
 // seed household, and each named for a fixture item the catalog does not already have.
@@ -2327,7 +2449,8 @@ assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW
 assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
 
 // V1-30: a non-mass set is UNEDITABLE by design. The edit guard keys on a live primary MASS quantity
-// (writers/strength-session.ts), and the form's `isEditableSet` agrees (strength-logging invariant 3).
+// (writers/strength-session.ts). The old strength form, whose `isEditableSet` mirrored it, was retired
+// at FAM-1 12f, so this guard is the whole rule now.
 // This set has no mode flag and one quantity, so the dimension is the ONLY thing refusing it. Since
 // V1-30 the form can save time and distance sets, so this is the population the refusal now covers;
 // recovering a typo in one means writing a correction (docs/features/strength-logging.md).
@@ -5006,8 +5129,8 @@ const [verifyProfileRow] = await db
 // resolver onto `membershipHousehold` — it counts a principal's memberships now, and two live
 // households is the intended Beta 0 end state. A gate asserting a control that no longer exists is
 // worse than no gate, so what this proves is re-stated as what it is: `liveHouseholdIds` keeps its
-// `LIMIT 2` ambiguity probe, and its two surviving callers (this file, and
-// `screenshot-ephemeral.ts`'s fixture scope) both refuse rather than pick when it returns 2.
+// `LIMIT 2` ambiguity probe, and its one surviving caller (this file) refuses rather than picks when
+// it returns 2.
 assert.equal(
   (await liveHouseholdIds(asPg)).length,
   2,
@@ -5703,7 +5826,7 @@ for (const [label, profilePublicId, ownScope, otherScope, day] of [
       activityTypeId: scLiftActivityId,
       movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
     }),
-    /Profile not found/,
+    { message: PROFILE_NOT_FOUND },
     `TEN-1: …and the other household cannot write it (${label})`,
   );
   assert.equal(
@@ -6119,7 +6242,7 @@ await assert.rejects(
       },
     ],
   }),
-  /Profile not found/,
+  { message: PROFILE_NOT_FOUND },
   'TEN-1 1d: the household seam refuses the cross-household session write (as 1c proves)',
 );
 assert.equal(
@@ -6709,10 +6832,16 @@ console.log(
     .select({
       publicId: schema.movements.publicId,
       householdId: schema.movements.householdId,
+      slug: schema.movements.slug,
+      modality: schema.movements.modality,
       pattern: schema.movements.pattern,
     })
     .from(schema.movements);
-  const appAuthored = allMovements.filter((m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId));
+  // CAT-3 A2-ii (plan D4): curated is a legacy seed row OR a library row of the library in effect
+  // (here the test library), by an exact test: a modality and one of its slugs.
+  const appAuthored = allMovements.filter(
+    (m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) && !isFixtureLibraryRow(m),
+  );
   assert.ok(
     appAuthored.length > 0,
     'TEN-2a anti-vacuity: at least one movements row was authored by the app’s find-or-create (outside MOVEMENT_SEED_PUBLIC_IDS) — otherwise the dark assertion below holds for want of a writer, not because the writer leaves the column alone',
@@ -6737,6 +6866,8 @@ console.log(
       id: schema.movements.id,
       publicId: schema.movements.publicId,
       householdId: schema.movements.householdId,
+      slug: schema.movements.slug,
+      modality: schema.movements.modality,
     })
     .from(schema.movements)
     .where(inArray(schema.movements.id, TEN2B_RESOLVER_IDS));
@@ -6747,7 +6878,10 @@ console.log(
   );
   assert.deepEqual(
     resolverTouched.filter(
-      (m) => m.householdId === null && !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
+      (m) =>
+        m.householdId === null &&
+        !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) &&
+        !isFixtureLibraryRow(m),
     ),
     [],
     'TEN-2b THE COLUMN IS LIVE: every row the REAL findOrCreateMovement returned in this run is either a CURATED global row (resolved, not cloned) or OWNED by the household that asked — none is an app-authored row left in the shared namespace. ⚠️ This replaces TEN-2a’s all-NULL gate; a row appearing here means the resolver wrote outside the asking household’s namespace, which is the leak TEN-2 exists to close. Do NOT relax it',
@@ -6803,6 +6937,7 @@ console.log(
   );
   assert.deepEqual(
     resolverGlobal
+      .filter((m) => !isFixtureLibraryRow(m))
       .map((m) => m.publicId)
       .filter((id) => !MOVEMENT_SEED_PUBLIC_IDS.has(id))
       .sort(),
@@ -8052,6 +8187,8 @@ console.log(
       .where(eq(schema.profiles.publicId, publicId));
     return row?.name;
   };
+  /** The name a form showing this row would carry as `seenName`: the stored one (any for a missing row). */
+  const seenNameOf = async (publicId: string) => (await nameOf(publicId)) ?? 'Nobody Stored';
 
   await db.insert(schema.profiles).values([
     {
@@ -8085,7 +8222,13 @@ console.log(
     r.ok ? r.publicId : `REFUSED:${r.reason}`;
 
   // 1 · The ordinary case: A renames A's own athlete, one row back, and the name really changed.
-  const renamed = await renameProfile(asPg, A_SCOPE, AR_A_P, 'A-r Renamed');
+  const renamed = await renameProfile(
+    asPg,
+    A_SCOPE,
+    AR_A_P,
+    'A-r Renamed',
+    await seenNameOf(AR_A_P),
+  );
   assert.equal(
     renamedId(renamed),
     AR_A_P,
@@ -8096,7 +8239,15 @@ console.log(
   // 2 · 🔴 CRITERION 4. B tries to rename A's athlete: zero rows, `null`, and — the half a return
   // value alone would not catch — A's name is UNTOUCHED.
   assert.equal(
-    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'Renamed By The Wrong Household')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        B_SCOPE,
+        AR_A_P,
+        'Renamed By The Wrong Household',
+        await seenNameOf(AR_A_P),
+      ),
+    ),
     'REFUSED:refused',
     "PROF-1 a-r: household B renaming A's profile updates 0 rows",
   );
@@ -8109,7 +8260,15 @@ console.log(
   // 2b · …and the same in the OTHER direction, which is this file's standing rule for a seam: a
   // predicate that happened to hard-code one household would pass case 2 and fail here.
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_B_P, 'Renamed By The Wrong Household')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        AR_B_P,
+        'Renamed By The Wrong Household',
+        await seenNameOf(AR_B_P),
+      ),
+    ),
     'REFUSED:refused',
     "PROF-1 a-r: household A renaming B's profile updates 0 rows",
   );
@@ -8122,7 +8281,15 @@ console.log(
   // 3 · A soft-deleted profile is not renameable, in its OWN household: `deleted_at IS NULL` is the
   // second conjunct, and it is the one a "scope the writes by household" refactor would drop.
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_DELETED, 'Renamed A Dead Row')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        AR_A_DELETED,
+        'Renamed A Dead Row',
+        await seenNameOf(AR_A_DELETED),
+      ),
+    ),
     'REFUSED:refused',
     'PROF-1 a-r: a soft-deleted profile updates 0 rows even for its own household',
   );
@@ -8130,7 +8297,15 @@ console.log(
 
   // 4 · An unknown id is refused the same way, so the three refusals are one answer (ADR 0006).
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-00000004d0ff', 'Nobody')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        '019826b4-0000-7000-8000-00000004d0ff',
+        'Nobody',
+        await seenNameOf('019826b4-0000-7000-8000-00000004d0ff'),
+      ),
+    ),
     'REFUSED:refused',
     'PROF-1 a-r: an unknown public id updates 0 rows',
   );
@@ -8141,7 +8316,15 @@ console.log(
   // fixable without restoring them first. If this ever fails, a UX filter has been folded into the
   // ownership seam. Mutation patch `13-rename-locks-archived` is what proves this assertion can fail.
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_ARCHIVED, 'A-r Archived Renamed')),
+    renamedId(
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        AR_A_ARCHIVED,
+        'A-r Archived Renamed',
+        await seenNameOf(AR_A_ARCHIVED),
+      ),
+    ),
     AR_A_ARCHIVED,
     'PROF-1 a-r: an ARCHIVED athlete is still renameable',
   );
@@ -8158,7 +8341,7 @@ console.log(
   // that closes this; it was a claim before this assertion existed.
   const AT_CAP = 'W'.repeat(PROFILE_NAME_MAX);
   assert.equal(
-    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP)),
+    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP, await seenNameOf(AR_A_P))),
     AR_A_P,
     'PROF-1 a-r: a name at PROFILE_NAME_MAX is accepted by the column',
   );
@@ -8204,7 +8387,13 @@ console.log(
   // 🔴 THE CASE THE WHOLE GUARD EXISTS FOR. Fixing the casing of one of two same-named athletes must
   // not warn about the other. ⚠️ Fold-EQUAL but string-DIFFERENT on purpose: `'Ren Twin'` unchanged
   // would pass on string equality and prove nothing about the fold.
-  const casingFix = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'REN TWIN');
+  const casingFix = await renameProfile(
+    asPg,
+    A_SCOPE,
+    twinTwo.publicId,
+    'REN TWIN',
+    await seenNameOf(twinTwo.publicId),
+  );
   assert.equal(
     renamedId(casingFix),
     twinTwo.publicId,
@@ -8218,7 +8407,13 @@ console.log(
   );
 
   // The real collision: renaming to a DIFFERENT live athlete's name warns, and writes nothing.
-  const collide = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Other');
+  const collide = await renameProfile(
+    asPg,
+    A_SCOPE,
+    twinTwo.publicId,
+    'Ren Other',
+    await seenNameOf(twinTwo.publicId),
+  );
   assert.equal(
     collide.ok === false && collide.reason,
     'duplicate',
@@ -8238,9 +8433,16 @@ console.log(
   // Acknowledged, the same name goes through: the warning is advisory, never a constraint.
   assert.equal(
     renamedId(
-      await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Other', {
-        acknowledgedDuplicate: foldName('Ren Other'),
-      }),
+      await renameProfile(
+        asPg,
+        A_SCOPE,
+        twinTwo.publicId,
+        'Ren Other',
+        await seenNameOf(twinTwo.publicId),
+        {
+          acknowledgedDuplicate: foldName('Ren Other'),
+        },
+      ),
     ),
     twinTwo.publicId,
     'PROF-1 a-1d-ren: an acknowledgement waves the collision through — advisory, not a constraint',
@@ -8250,9 +8452,16 @@ console.log(
   // ⚠️ Discriminated on `reason`, not on `.ok === false` alone: a writer that answered `refused` for
   // any reason would otherwise pass a test named for the acknowledgement, which is the shape
   // `db:mutations` exists to catch. The read-back is the other half — a warning must write nothing.
-  const staleAck = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Twin', {
-    acknowledgedDuplicate: foldName('Somebody Else'),
-  });
+  const staleAck = await renameProfile(
+    asPg,
+    A_SCOPE,
+    twinTwo.publicId,
+    'Ren Twin',
+    await seenNameOf(twinTwo.publicId),
+    {
+      acknowledgedDuplicate: foldName('Somebody Else'),
+    },
+  );
   assert.equal(
     staleAck.ok === false && staleAck.reason,
     'duplicate',
@@ -8277,11 +8486,158 @@ console.log(
     kind: PROFILE_KIND.kid,
   });
   assert.equal(
-    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'B Oracle')),
+    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'B Oracle', await seenNameOf(AR_A_P))),
     'REFUSED:refused',
     'PROF-1 a-1d-ren: household B renaming A’s athlete to a name B HOLDS answers refused, never ' +
       'duplicate — the fold guard’s pre-read is scoped, and a leak here would be an oracle on A’s ' +
       'stored name',
+  );
+
+  // ── The stale-rename fix: a rename applies only if the stored name is still the one the form
+  //    showed (`seenName`, the `seenValue` idiom), a replay is `ok`, and a stale one beats the
+  //    duplicate warning (plan: docs/plans/td-stale-rename-refused.md). Its own two athletes, so the
+  //    a-r ids above keep their histories.
+  const ST_P = '019826b4-0000-7000-8000-00000004d005';
+  const ST_RIVAL_NAME = 'Stale Rival Athlete';
+  await db.insert(schema.profiles).values([
+    { publicId: ST_P, name: 'Stale Start', kind: PROFILE_KIND.kid, householdId: households[0].id },
+    {
+      publicId: '019826b4-0000-7000-8000-00000004d006',
+      name: ST_RIVAL_NAME,
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
+    },
+  ]);
+
+  // (a) Stale: the form showed another name. Refused with the stored one, and nothing written.
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, 'Stale Try', 'Shown Elsewhere'),
+    { ok: false, reason: 'stale', current: 'Stale Start' },
+    'stale rename: a form showing an out-of-date name is refused with the stored name',
+  );
+  assert.equal(await nameOf(ST_P), 'Stale Start', 'stale rename: and nothing is written');
+
+  // (b) Stale beats duplicate: the new name collides too, unacknowledged. Mutation 428 (the
+  //     pre-read's classification skipped) answers `duplicate` here.
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, ST_RIVAL_NAME, 'Shown Elsewhere'),
+    { ok: false, reason: 'stale', current: 'Stale Start' },
+    'stale rename: a stale form whose new name also collides is answered stale, before the duplicate warning',
+  );
+
+  // (c) The replay: the Save already landed (stored = the new name), the form still says the old
+  //     one. `ok`, no write. Mutation 429 (the replay arm dropped) answers `stale`.
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, 'Stale Landed', 'Stale Start'),
+    { ok: true, publicId: ST_P },
+    'stale rename: a fresh rename applies',
+  );
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, ST_P, 'Stale Landed', 'Stale Start'),
+    { ok: true, publicId: ST_P },
+    'stale rename: a replay of a Save that landed answers ok, not stale',
+  );
+
+  // (d) The race, on one connection: a rival rename runs just before the writer's own UPDATE (after
+  //     its pre-read and duplicate guard). The UPDATE's `name = seenName` conjunct matches 0 rows and
+  //     the re-read answers stale. Mutation 430 (the conjunct dropped) overwrites and answers `ok`.
+  const rivalBeforeUpdate = (rival: () => Promise<unknown>) => {
+    let fired = false;
+    const builder = (b: object): object =>
+      new Proxy(b, {
+        get(target, prop, receiver) {
+          const v = Reflect.get(target, prop, receiver) as unknown;
+          if (prop === 'then') {
+            const then = (v as (ok: unknown, err: unknown) => unknown).bind(target);
+            return (ok: unknown, err: unknown) => {
+              const go = fired ? Promise.resolve() : ((fired = true), rival());
+              return go.then(() => then(ok, err), err as never);
+            };
+          }
+          return typeof v === 'function'
+            ? (...args: unknown[]) => {
+                const out = (v as (...a: unknown[]) => unknown).apply(target, args);
+                return out && typeof out === 'object' ? builder(out) : out;
+              }
+            : v;
+        },
+      });
+    return new Proxy(asPg, {
+      get(target, prop, receiver) {
+        const v = Reflect.get(target, prop, receiver) as unknown;
+        if (prop === 'update') {
+          return (...args: unknown[]) =>
+            builder((v as (...a: unknown[]) => object).apply(target, args));
+        }
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+      },
+    }) as typeof asPg;
+  };
+  const setStoredName = (name: string) => () =>
+    db.update(schema.profiles).set({ name }).where(eq(schema.profiles.publicId, ST_P));
+  assert.deepEqual(
+    await renameProfile(
+      rivalBeforeUpdate(setStoredName('Stale Rival')),
+      A_SCOPE,
+      ST_P,
+      'Stale Mine',
+      'Stale Landed',
+    ),
+    { ok: false, reason: 'stale', current: 'Stale Rival' },
+    'stale rename: a rename committed between the pre-read and the UPDATE is not overwritten',
+  );
+  assert.equal(await nameOf(ST_P), 'Stale Rival', 'stale rename: the rival name stands');
+  // …and a rival that wrote the SAME name answers ok through the 0-row re-read.
+  assert.deepEqual(
+    await renameProfile(
+      rivalBeforeUpdate(setStoredName('Stale Same')),
+      A_SCOPE,
+      ST_P,
+      'Stale Same',
+      'Stale Rival',
+    ),
+    { ok: true, publicId: ST_P },
+    'stale rename: a rival that chose the same name answers ok after the 0-row re-read',
+  );
+
+  // …and a row soft-deleted between the read and the write answers refused through the re-read
+  // (its own throwaway row, so ST_P's tenancy checks below keep theirs).
+  const ST_GONE = '019826b4-0000-7000-8000-00000004d007';
+  await db.insert(schema.profiles).values({
+    publicId: ST_GONE,
+    name: 'Stale Gone',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  });
+  const goneUnderUs = rivalBeforeUpdate(() =>
+    db
+      .update(schema.profiles)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.profiles.publicId, ST_GONE)),
+  );
+  assert.deepEqual(
+    await renameProfile(goneUnderUs, A_SCOPE, ST_GONE, 'Stale Gone Renamed', 'Stale Gone'),
+    { ok: false, reason: 'refused' },
+    'stale rename: a row deleted between the pre-read and the UPDATE answers refused',
+  );
+
+  // (e) Tenancy, both ways: another household never learns the name, whatever it sends.
+  assert.deepEqual(
+    await renameProfile(asPg, B_SCOPE, ST_P, 'B Probe', 'Wrong Seen'),
+    { ok: false, reason: 'refused' },
+    'stale rename: another household with a wrong seen name is refused, never told the stored name',
+  );
+  assert.deepEqual(
+    await renameProfile(asPg, B_SCOPE, ST_P, 'Stale Same', 'Stale Same'),
+    { ok: false, reason: 'refused' },
+    'stale rename: another household sending the stored name is refused, never ok',
+  );
+  assert.equal(await nameOf(ST_P), 'Stale Same', 'stale rename: and B wrote nothing');
+
+  console.log(
+    '✓ stale rename: a rename applies only if the stored name is still the one the form showed; a ' +
+      'replay is ok; a stale form beats the duplicate warning; a rename between the read and the ' +
+      'write is not overwritten; another household learns nothing',
   );
 
   console.log(
@@ -8516,8 +8872,11 @@ console.log(
   // deliberately absent from `isLiveProfile`, so the row still resolves, still renames and still
   // exports. If this goes red, someone folded archive into the ownership predicate and an archived
   // athlete's history just became unreachable.
-  assert.ok(
-    await renameProfile(asPg, A_SCOPE, B_P, 'B Athlete Renamed'),
+  // It answers `ok`, not merely a truthy result object (every arm of `RenameProfileResult` is
+  // truthy, which made this assertion unable to fail once the result became discriminated).
+  assert.deepEqual(
+    await renameProfile(asPg, A_SCOPE, B_P, 'B Athlete Renamed', 'B Athlete'),
+    { ok: true, publicId: B_P },
     'PROF-1 b: an ARCHIVED athlete is still renameable — archive is not a lock',
   );
   assert.deepEqual(

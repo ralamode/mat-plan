@@ -95,6 +95,7 @@ import {
 import { createProgram } from '../../src/writers/program/create-program';
 import { copyWorkout } from '../../src/writers/program/copy-workout';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { newItem } from '../../src/writers/program/new-item';
 import { catalogArmOption, matchableOption } from '../../src/queries/program/catalog-arm-option';
 import { catalogTaxonomyRows } from '../../src/queries/program/movement-options';
@@ -103,6 +104,7 @@ import { lostSlugRace } from '../../src/writers/program/program-name';
 import { renameProgram } from '../../src/writers/program/rename-program';
 import {
   movementOptions,
+  programIdsIn,
   programIn,
   programWorkoutIds,
   readProgramList,
@@ -181,6 +183,7 @@ export async function verifyProgram(ctx: VerifyContext): Promise<void> {
   await verifyReorderPrograms(ctx);
   await verifyCaps();
   await verifyNewItemLocksTheHousehold();
+  await verifySeedFixturesUseTheirLibrary();
 }
 
 /** A program block, by public id, as the proofs compare it. */
@@ -1122,6 +1125,45 @@ async function verifySaveWorkout({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<v
       false,
       'FAM-1 6a-ii: workoutIn: a workout under another program of the household is false',
     );
+
+    // ── programIdsIn: programIn for several ids, in one query (tech-debt, 15c's order report) ──
+    // The household's seeded legacy block too: not a program (`kind = template`), so never answered.
+    const legacyBlock = await seededBlock(tx, A_SCOPE);
+    const asked = [
+      programPublicId,
+      aOther.toUpperCase(),
+      legacyBlock.publicId,
+      'not-a-uuid',
+      newId(),
+    ];
+    assert.ok(
+      !(await programIdsIn(exec, A_SCOPE, [legacyBlock.publicId])).has(legacyBlock.publicId),
+      'FAM-1 15c: programIdsIn: the household’s legacy block is not one of its programs',
+    );
+    assert.deepEqual(
+      [...(await programIdsIn(exec, A_SCOPE, ['not-a-uuid']))],
+      [],
+      'FAM-1 15c: programIdsIn: a list with no uuid in it reads nothing and answers nothing',
+    );
+    assert.deepEqual(
+      [...(await programIdsIn(exec, A_SCOPE, asked))].sort(),
+      [programPublicId, aOther].sort(),
+      'FAM-1 15c: programIdsIn answers exactly the ids that are this household’s live programs',
+    );
+    assert.deepEqual(
+      [...(await programIdsIn(exec, B_SCOPE, asked))],
+      [],
+      "FAM-1 15c: programIdsIn: B finds none of A's programs",
+    );
+    await tx
+      .update(schema.programBlocks)
+      .set({ deletedAt: sql`now()` })
+      .where(eq(schema.programBlocks.publicId, aOther));
+    assert.deepEqual(
+      [...(await programIdsIn(exec, A_SCOPE, asked))],
+      [programPublicId],
+      'FAM-1 15c: programIdsIn: a removed program is not one of the household’s live programs',
+    );
   });
   console.log(
     '✓ FAM-1 6a-ii: saveWorkout (fixture read, replay, reorder, swap, refusals, households)',
@@ -1812,6 +1854,19 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   const DIP = libraryEntry('dip'); // beside the old built-in "Dips"
   const FOAM = libraryEntry('foam_rolling'); // alias "Foam roll"
   const LIB = [OHP, DIP, FOAM];
+  /**
+   * CAT-3 A2-ii (plan D3): the shared database is a fixtures database, and the test library holds
+   * `overhead_press` and `foam_rolling` too, with these names and aliases. Each case first retires those
+   * rows inside its own rolled-back transaction (a slug of their own, and `deleted_at`, so the read
+   * skips them), then writes the real entries it is about.
+   */
+  const writeLibrary = async (tx: VerifyTx, entries: typeof LIB) => {
+    await tx
+      .update(schema.movements)
+      .set({ slug: sql`'p11a_retired_' || ${schema.movements.id}`, deletedAt: sql`now()` })
+      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)));
+    await seedCatalog(asDb(tx), entries);
+  };
   const listedOn = async (tx: VerifyTx, scope: typeof A_SCOPE, library = CATALOG_MOVEMENTS) =>
     movementOptions(asTx(tx), scope, library);
   const catalogRowsOf = async (tx: VerifyTx) =>
@@ -1825,7 +1880,13 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
         trackingType: schema.movements.trackingType,
       })
       .from(schema.movements)
-      .where(and(movementIsGlobal(), isNotNull(schema.movements.modality)))
+      .where(
+        and(
+          movementIsGlobal(),
+          isNotNull(schema.movements.modality),
+          isNull(schema.movements.deletedAt),
+        ),
+      )
       .orderBy(asc(schema.movements.slug));
   /**
    * The option the plan describes, written here from `catalogOptionOf` and the row (not through
@@ -1871,7 +1932,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   };
 
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), LIB);
+    await writeLibrary(tx, LIB);
     const options = await listedOn(tx, A_SCOPE);
     const libraryRows = await catalogRowsOf(tx);
     assert.equal(
@@ -2016,7 +2077,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   // (a3) Nothing another household holds changes what A sees: B's items on a picker slug, a
   // library-only slug and a library alias. (a4) A household item a library row shadows is left out.
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), LIB);
+    await writeLibrary(tx, LIB);
     const before = await listedOn(tx, A_SCOPE);
     for (const [slug, name] of [
       ['box_jump', 'B box jump'],
@@ -2051,7 +2112,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
   // newItem matches over the library it is GIVEN, as the picker's read does (K23): with a library
   // that lacks the row's entry, its library alias selects nothing and a household item is made.
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), [FOAM]);
+    await writeLibrary(tx, [FOAM]);
     const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
     const answer = await newItem(
       asTx(tx),
@@ -2067,7 +2128,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
 
   // (a9) A library row with no entry in the library given: listed bare, never dropped (K22).
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), [FOAM]);
+    await writeLibrary(tx, [FOAM]);
     const without = CATALOG_MOVEMENTS.filter((e) => e.slug !== FOAM.slug);
     const listed = (await listedOn(tx, A_SCOPE, without)).find((o) => o.name === FOAM.name);
     const o = catalogOptionOf(FOAM, 'x');
@@ -2091,7 +2152,7 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
 
   // The catalog arm's live conjunct: a soft-deleted library row is not listed.
   await rolledBack(async (tx) => {
-    await seedCatalog(asDb(tx), [FOAM]);
+    await writeLibrary(tx, [FOAM]);
     await tx
       .update(schema.movements)
       .set({ deletedAt: new Date() })
@@ -2165,9 +2226,21 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     const options = await movementOptions(exec, A_SCOPE, CATALOG_MOVEMENTS);
     const ids = options.map((o) => o.publicId);
     const catalog = options.filter((o) => o.owner === 'catalog');
+    // CAT-3 A2-ii: the shared database is a fixtures database, so the catalog arm is the old built-ins
+    // AND the test library's rows (P11-ii-a lists every library row).
+    const libraryRows = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(
+        and(
+          movementIsGlobal(),
+          isNotNull(schema.movements.modality),
+          isNull(schema.movements.deletedAt),
+        ),
+      );
     assert.equal(
       catalog.length,
-      Object.keys(MOVEMENT_PICKER_ENTRIES).length,
+      Object.keys(MOVEMENT_PICKER_ENTRIES).length + libraryRows.length,
       'FAM-1 6a-iii-a: the read lists every catalog row the picker map names',
     );
     const rdl = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('RDL'));
@@ -3589,7 +3662,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       ).length,
     });
     const before = await snapshotOf();
-    await seedProgramFixtures(exec, A_SCOPE);
+    await seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE);
     assert.deepEqual(
       await snapshotOf(),
       before,
@@ -3616,7 +3689,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
       .set({ archivedAt: sql`now()` })
       .where(eq(schema.profiles.publicId, SEED_FIXTURE_ATHLETES.a2!));
     await orFail('FAM-1 6c-i: the seed succeeds with a seed athlete archived', () =>
-      seedProgramFixtures(exec, A_SCOPE),
+      seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE),
     );
     const made = new Set<string>();
     for (const id of SEED_FIXTURE_PROGRAM_CLIENT_IDS) {
@@ -3657,7 +3730,7 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
     );
     assert.ok(planted.ok && !planted.existed, 'FAM-1 6c-i: B makes its own item named like grip');
     await orFail('FAM-1 6c-i: the seed succeeds when an item has another type', () =>
-      seedProgramFixtures(exec, B_SCOPE),
+      seedProgramFixtures(exec, B_SCOPE, CATALOG_FIXTURE),
     );
     const written = [];
     for (const program of world.programs) {
@@ -3724,6 +3797,78 @@ async function verifyNewItemLocksTheHousehold(): Promise<void> {
   console.log(
     '✓ FAM-1 newItem: the household row is read FOR KEY SHARE (an erasure mid-call is not_found)',
   );
+}
+
+/**
+ * 🔴 CAT-3 A2-ii (A6, mutation 601): the seed's fixture world resolves over the library it is GIVEN.
+ * K29's seed half: on a fixtures database the world's items must match the library that database
+ * holds and the app reads. A fresh household (so no item of its own shadows a library row by name),
+ * and the test library with one change: `squat_jump` (reps) also answers to "Burpees", a world item
+ * that logs reps. So the world's Burpees must be the `squat_jump` row, never a household item; under a
+ * `seedProgramFixtures` that ignores its argument, Burpees is made as the household's own.
+ */
+async function verifySeedFixturesUseTheirLibrary(): Promise<void> {
+  const BURPEES = 'Burpees';
+  // Anti-vacuity: the test library does not answer to it, so only the given change can make the match.
+  // (The real library has a `burpee` entry, but no row of it is on this fixtures database; the proof
+  // below also checks that no live global row is named "Burpees".)
+  assert.deepEqual(
+    CATALOG_FIXTURE.filter((e) =>
+      [e.name, ...(e.aliases ?? [])].some((n) => movementNameKey(n) === movementNameKey(BURPEES)),
+    ).map((e) => e.slug),
+    [],
+    'CAT-3 A2-ii A6: the test library does not answer to "Burpees"',
+  );
+  const library = CATALOG_FIXTURE.map((e) =>
+    e.slug === 'squat_jump' ? { ...e, aliases: [...(e.aliases ?? []), BURPEES] } : e,
+  );
+  await rolledBack(async (tx) => {
+    const exec = asTx(tx);
+    const { scope, proofId } = await capsHousehold(tx);
+    const [squatJump] = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(and(movementIsGlobal(), eq(schema.movements.slug, 'squat_jump')));
+    assert.ok(
+      squatJump,
+      'CAT-3 A2-ii A6: the shared database holds the test library’s squat_jump row',
+    );
+    assert.deepEqual(
+      await tx
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(
+          and(
+            movementIsGlobal(),
+            isNull(schema.movements.deletedAt),
+            eq(schema.movements.name, BURPEES),
+          ),
+        ),
+      [],
+      'CAT-3 A2-ii A6: no live global row is named "Burpees"',
+    );
+    await seedProgramFixtures(exec, scope, library);
+    const onIt = await tx
+      .select({ id: schema.prescriptions.id })
+      .from(schema.prescriptions)
+      .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
+      .where(
+        and(
+          eq(schema.programBlocks.householdId, proofId),
+          eq(schema.prescriptions.movementId, squatJump.id),
+        ),
+      );
+    const made = await tx
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(and(movementInHousehold(scope), eq(schema.movements.name, BURPEES)));
+    assert.deepEqual(
+      { prescribedOnTheLibraryRow: onIt.length > 0, madeAsTheHouseholdsOwn: made.length },
+      { prescribedOnTheLibraryRow: true, madeAsTheHouseholdsOwn: 0 },
+      'CAT-3 A2-ii A6: seedProgramFixtures resolves the world over the library it is given (Burpees is the squat_jump row)',
+    );
+  });
+  console.log('✓ CAT-3 A2-ii A6: the seed’s fixture world resolves over the library it is given');
 }
 
 /** A new household of its own, so a count is exact: the caps are per household and per program. */
@@ -4070,7 +4215,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       ).length,
     });
     const before = await snapshot();
-    await seedProgramFixtures(exec, A_SCOPE);
+    await seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE);
     assert.deepEqual(
       await snapshot(),
       before,
@@ -4086,7 +4231,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
       .update(schema.profiles)
       .set({ archivedAt: sql`now()` })
       .where(eq(schema.profiles.publicId, SEED_PROFILE_4_PUBLIC_ID));
-    await seedProgramFixtures(exec, A_SCOPE);
+    await seedProgramFixtures(exec, A_SCOPE, CATALOG_FIXTURE);
     assert.equal(
       await programBlockByClientId(exec, A_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
       null,
@@ -4094,7 +4239,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
     );
 
     // A household without Athlete Four gets no test program.
-    await seedProgramFixtures(exec, B_SCOPE);
+    await seedProgramFixtures(exec, B_SCOPE, CATALOG_FIXTURE);
     assert.equal(
       await programBlockByClientId(exec, B_SCOPE, SEED_E2E_PROGRAM_CLIENT_ID),
       null,
@@ -4115,7 +4260,7 @@ async function verifySeedE2eAthlete({ A_SCOPE, B_SCOPE }: VerifyContext): Promis
         trackingType: TRACKING_TYPE.reps,
       });
     }
-    const result = await seedProgramFixtures(exec, scope).then(
+    const result = await seedProgramFixtures(exec, scope, CATALOG_FIXTURE).then(
       () => 'ok',
       (e: unknown) => String(e).slice(0, 120),
     );
