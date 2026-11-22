@@ -66,6 +66,12 @@ only a deleted export used is deleted too.
 - **Elsewhere:** `PROGRAM_READ_KIND`, `ACTIVITY_INPUT_SHAPES` (the array), `findOrCreateTypedMovement`,
   `insertEntrySetRows`, `readLiveSets`, `movementIsAvailableTo`, `isLiveProfile`, `ownedEntryIds`.
 
+## Amendment (2026-11-21, PR B)
+
+| Superseded passage                                                                                      | Replaced by                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Mutation patches" → "Re-aim … **36** → the surviving `movementIsAvailableTo` assertion" (done in PR B) | **36 is re-aimed in C2**, in the change that deletes the PICK-1 PR 2 block. Its live targets (`saveWorkout`, `row-steps.ts`, `newItem`, the day-plan read) are proved in the lane modules, which run after `verify.ts`'s body, so while the PICK-1 block exists its `(a)` assertion is always the first to fail. PR B leaves 36 unchanged |
+
 ## The proofs, by section
 
 🔴 **Rule:** a section is deleted only when everything it proves belongs to dead code. A section
@@ -109,6 +115,8 @@ verbatim, because mutation `.expect` files match on it.
 fixture call there would make every `log-row.ts` mutation fail on the wrong assertion.
 
 ## Mutation patches
+
+⚠️ Superseded 2026-11-21 (the re-aim of 36) — see § Amendment.
 
 | Action                                                                                                                         | Patches                                                                                                                                                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
