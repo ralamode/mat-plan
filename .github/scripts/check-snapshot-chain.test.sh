@@ -95,6 +95,15 @@ if grep -q '^::error::forged' <<<"$out"; then
   fails=$((fails + 1))
 else printf '✓ a value cannot become a workflow command\n'; fi
 
+# The runner also parses the older `##[cmd]` form ANYWHERE in a line, so `#` is escaped as well.
+d="$(meta inject2 0000_snapshot.json=a:$Z)"
+printf '{"id":"b","prevId":"##[error]forged"}' >"$d/0001_snapshot.json"
+expect 'a ##[cmd] value is reported as a broken link' "$d" 1 'prevId="\u0023\u0023[error]forged"'
+if grep -qF '##[' <<<"$out"; then
+  printf '✗ a value cannot form a ##[cmd] command\n%s\n' "$out"
+  fails=$((fails + 1))
+else printf '✓ a value cannot form a ##[cmd] command\n'; fi
+
 # The sort: APFS lists names in order, so on macOS no case here can catch a missing sort. On the
 # Linux runner, ext4 lists them in hash order, and "the real meta/" case above is what catches it.
 

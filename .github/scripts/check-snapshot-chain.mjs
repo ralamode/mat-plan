@@ -25,11 +25,16 @@
  * (no directory, no snapshots, a name that is not NNNN_snapshot.json, a file that is not a JSON
  * object with a string `id` and `prevId`, or any unexpected error). Every file is read before any
  * link is judged, so an unreadable file always exits 2. Values from the files are printed through
- * JSON.stringify, so none can be read by Actions as a workflow command.
+ * q() (JSON.stringify, with `#` escaped too), so none can be read by Actions as a workflow command:
+ * not a `::cmd::` line (newlines are escaped) and not the older `##[cmd]` form, which the runner
+ * parses anywhere in a line.
  */
 import { readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** A value quoted for the log: JSON escapes newlines, and `#` is escaped so `##[cmd]` cannot form. */
+const q = (v) => JSON.stringify(v).replace(/#/g, '\\u0023');
 
 export const DEFAULT_META_DIR = 'packages/db/migrations/meta';
 const SNAPSHOT_NAME = /^\d{4}_snapshot\.json$/;
@@ -52,21 +57,19 @@ export function readSnapshots(dir) {
   try {
     names = readdirSync(dir).filter((n) => n.endsWith('_snapshot.json'));
   } catch {
-    throw new CannotCheck(`cannot read the directory ${JSON.stringify(dir)}`);
+    throw new CannotCheck(`cannot read the directory ${q(dir)}`);
   }
-  if (names.length === 0) throw new CannotCheck(`no *_snapshot.json in ${JSON.stringify(dir)}`);
+  if (names.length === 0) throw new CannotCheck(`no *_snapshot.json in ${q(dir)}`);
   const bad = names.filter((n) => !SNAPSHOT_NAME.test(n));
   if (bad.length) {
-    throw new CannotCheck(
-      `not named NNNN_snapshot.json: ${bad.map((n) => JSON.stringify(n)).join(', ')}`,
-    );
+    throw new CannotCheck(`not named NNNN_snapshot.json: ${bad.map((n) => q(n)).join(', ')}`);
   }
   return names.sort().map((name) => {
     let body;
     try {
       body = JSON.parse(readFileSync(join(dir, name), 'utf8'));
     } catch {
-      throw new CannotCheck(`${JSON.stringify(name)} is not readable JSON`);
+      throw new CannotCheck(`${q(name)} is not readable JSON`);
     }
     if (
       body === null ||
@@ -75,7 +78,7 @@ export function readSnapshots(dir) {
       typeof body.id !== 'string' ||
       typeof body.prevId !== 'string'
     ) {
-      throw new CannotCheck(`${JSON.stringify(name)} is not an object with a string id and prevId`);
+      throw new CannotCheck(`${q(name)} is not an object with a string id and prevId`);
     }
     return { name, id: body.id, prevId: body.prevId };
   });
@@ -88,13 +91,11 @@ export function chainProblems(snapshots) {
     const before = snapshots[i - 1];
     if (before && s.prevId !== before.id) {
       problems.push(
-        `${JSON.stringify(s.name)}: prevId=${JSON.stringify(s.prevId)}, expected ${JSON.stringify(before.id)} (the id of ${JSON.stringify(before.name)})`,
+        `${q(s.name)}: prevId=${q(s.prevId)}, expected ${q(before.id)} (the id of ${q(before.name)})`,
       );
     }
     if (s.prevId === s.id) {
-      problems.push(
-        `${JSON.stringify(s.name)}: prevId === id (self-referential), id=${JSON.stringify(s.id)}`,
-      );
+      problems.push(`${q(s.name)}: prevId === id (self-referential), id=${q(s.id)}`);
     }
   });
   return problems;
@@ -118,8 +119,7 @@ function main(argv) {
       console.log('::error::Broken migration snapshot chain (see log; AGENTS.md → DB rules).');
     return 1;
   } catch (e) {
-    const why =
-      e instanceof CannotCheck ? e.message : `unexpected error: ${JSON.stringify(String(e))}`;
+    const why = e instanceof CannotCheck ? e.message : `unexpected error: ${q(String(e))}`;
     console.log(`Snapshot chain could not be checked — ${why}`);
     if (onCi) console.log('::error::Migration snapshot chain could not be checked (see log).');
     return 2;

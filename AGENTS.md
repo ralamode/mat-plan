@@ -336,7 +336,7 @@ movement picker.
   and rejected. `actions:check` runs here
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
   workflow changes); `snapshots:check` is the other, a direct `node` call before pnpm on every
-  event. Those two are the gates whose CI form is not the `package.json` script. `db:verify` runs on
+  event. Those two are the `verify` gates whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
   **Not covered by it:** `next build` (CI-only), bundle size (CI-only; the guard's header), the
   Playwright smoke (next bullet), gitleaks, Squawk, and the forward-only guard (Squawk and the guard
