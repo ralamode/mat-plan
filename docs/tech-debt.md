@@ -15,6 +15,24 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The seed's session timeouts are fired, not awaited, so its first query races them (added 2026-11-21, from CAT-3 A2-ii's rehearsal)
+
+- **What & why it's debt:** `packages/db/scripts/seed.ts` sets `lock_timeout` and
+  `statement_timeout` in `pool.on('connect', …)` with `void client.query("SET …")`, unawaited. The
+  seed's first query is then issued on that client while the `SET` is still executing. pg 8 queues
+  it, so the timeouts do apply first, but logs `DeprecationWarning: Calling client.query() when the
+client is already executing a query is deprecated and will be removed in pg@9.0` (seen in the
+  maintainer's production rehearsal, 2026-11-21, and in every `screenshot:ephemeral` run).
+- **Impact:** none on pg 8 beyond the warning. **The trigger is pg 9**: once the queueing is removed,
+  the seed's first statements could run before the timeouts are set, or fail, on `migrate.yml`'s
+  production run.
+- **The fix:** set the session state before the first query, awaited. For example, pass
+  `options: '-c lock_timeout=5s -c statement_timeout=60s'` where the connection allows it (the
+  comment above the handler says a pooler may refuse startup parameters, so check the unpooled string
+  is what the seed uses), or wrap `seed()`'s work so each client runs the `SET` first and awaits it.
+  Re-check `migrate.ts` for the same pattern at the same time.
+- **Severity:** P3; act before any pg 9 bump (Dependabot's PR is the reminder).
+
 ### The builder's copy is split into its own chunk in four route groups, so moving between them downloads it again (added 2026-11-20, from #805's diagnosis)
 
 - **What & why it's debt:** Turbopack now puts the program builder's copy into its own chunk of
