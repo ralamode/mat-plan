@@ -1,11 +1,14 @@
-import { RESTORE_REASON } from '@mat-plan/shared';
+import { PROFILE_NOT_FOUND, RESTORE_REASON } from '@mat-plan/shared';
+import { readFileSync } from 'node:fs';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Restore all's DAL half (V1-9b B1-2): `restoreClear` (which `db:verify` proves against a real
 // database) is mocked, and this pins what the DAL makes of its answer: two counts, and nothing else.
-const { state, restoreClear, clearEventsForDay } = vi.hoisted(() => ({
+const { state, restoreClear, clearDay, clearEventsForDay } = vi.hoisted(() => ({
   state: { scope: null as unknown },
   restoreClear: vi.fn<(exec: unknown, args: Record<string, unknown>) => Promise<unknown>>(),
+  clearDay: vi.fn<(exec: unknown, args: Record<string, unknown>) => Promise<unknown>>(),
   clearEventsForDay: vi.fn<(exec: unknown, args: Record<string, unknown>) => Promise<unknown>>(
     async () => [],
   ),
@@ -17,10 +20,11 @@ vi.mock('./catalog', () => ({}));
 vi.mock('@mat-plan/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@mat-plan/db')>()),
   restoreClear,
+  clearDay,
   clearEventsForDay,
 }));
 
-import { dayClearEvents, restoreClearedDay } from './entries';
+import { clearDayEntries, dayClearEvents, restoreClearedDay } from './entries';
 
 const ARGS = {
   profilePublicId: '019826b4-0000-7000-8000-000000000099',
@@ -38,6 +42,7 @@ const HELD_VALUE = '112.4';
 beforeEach(() => {
   state.scope = { householdId: 1 };
   restoreClear.mockReset();
+  clearDay.mockReset();
   clearEventsForDay.mockClear();
 });
 
@@ -76,7 +81,7 @@ describe('restoreClearedDay (V1-9b B1-2)', () => {
 
   it('a null scope THROWS, never a quiet "nothing to restore"', async () => {
     state.scope = null;
-    await expect(restoreClearedDay(ARGS)).rejects.toThrow('Profile not found');
+    await expect(restoreClearedDay(ARGS)).rejects.toThrow(PROFILE_NOT_FOUND);
     expect(restoreClear).not.toHaveBeenCalled();
   });
 });
@@ -102,5 +107,72 @@ describe('dayClearEvents (V1-9b B1-2)', () => {
     state.scope = null;
     expect(await dayClearEvents(ARGS.profilePublicId, ARGS.day)).toEqual([]);
     expect(clearEventsForDay).not.toHaveBeenCalled();
+  });
+});
+
+describe('clearDayEntries (V1-9b B2)', () => {
+  const CLEAR = { profilePublicId: ARGS.profilePublicId, day: ARGS.day };
+
+  it('passes the athlete, the day and the scope, and answers the clear’s count', async () => {
+    clearDay.mockResolvedValueOnce({ hiddenAt: ARGS.hiddenAt, count: 3 });
+    expect(await clearDayEntries(CLEAR)).toEqual({ count: 3 });
+    expect(clearDay.mock.calls[0]![1]).toEqual({ ...CLEAR, scope: state.scope });
+  });
+
+  it('answers 0, not a refusal, when nothing was left to clear', async () => {
+    clearDay.mockResolvedValueOnce({ notFound: true });
+    expect(await clearDayEntries(CLEAR)).toEqual({ count: 0 });
+  });
+
+  it('passes the writer’s closed (archived under its lock) through', async () => {
+    clearDay.mockResolvedValueOnce({ closed: true });
+    expect(await clearDayEntries(CLEAR)).toEqual({ closed: true });
+  });
+
+  it('answers 0 when a replay’s count raced a Restore all to 0', async () => {
+    clearDay.mockResolvedValueOnce({ hiddenAt: ARGS.hiddenAt, count: 0 });
+    expect(await clearDayEntries(CLEAR)).toEqual({ count: 0 });
+  });
+
+  it('never returns the clear’s token', async () => {
+    clearDay.mockResolvedValueOnce({ hiddenAt: ARGS.hiddenAt, count: 2 });
+    expect(JSON.stringify(await clearDayEntries(CLEAR))).not.toContain(ARGS.hiddenAt);
+  });
+
+  it('throws on a null scope, and never reaches the writer', async () => {
+    state.scope = null;
+    await expect(clearDayEntries(CLEAR)).rejects.toThrow(PROFILE_NOT_FOUND);
+    expect(clearDay).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 🔴 **Any member may clear a day and restore it** (V1-9b B2, the spec's table). An owner-only gate in
+ * this repo is `ownerScope(scope)` inside the DAL write (`profiles.ts`, `export.ts`), so this is where
+ * it would land, and where the decision is pinned: a member's scope reaches both writers, and neither
+ * wrapper names `ownerScope`. Making either owner-only is a decision, and it fails here first.
+ */
+describe('the day-level writes are any-member (V1-9b B2)', () => {
+  const MEMBER = { householdId: 1, role: 'member' };
+
+  it('a member’s scope reaches clearDay and restoreClear unchanged', async () => {
+    state.scope = MEMBER;
+    clearDay.mockResolvedValueOnce({ hiddenAt: ARGS.hiddenAt, count: 1 });
+    restoreClear.mockResolvedValueOnce({ items: [] });
+    await clearDayEntries({ profilePublicId: ARGS.profilePublicId, day: ARGS.day });
+    await restoreClearedDay(ARGS);
+    expect(clearDay.mock.calls[0]![1]).toMatchObject({ scope: MEMBER });
+    expect(restoreClear.mock.calls[0]![1]).toMatchObject({ scope: MEMBER });
+  });
+
+  it('neither wrapper names ownerScope', () => {
+    const source = readFileSync(new URL('./entries.ts', import.meta.url), 'utf8');
+    for (const name of ['clearDayEntries', 'restoreClearedDay']) {
+      const start = source.indexOf(`export async function ${name}(`);
+      expect(start, name).toBeGreaterThan(-1);
+      const next = source.indexOf('\nexport ', start + 1);
+      const body = source.slice(start, next === -1 ? undefined : next);
+      expect(body, name).not.toMatch(/ownerScope/);
+    }
   });
 });

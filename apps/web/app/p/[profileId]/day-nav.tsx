@@ -1,5 +1,5 @@
 import { addDays, isoDayDiff } from '@mat-plan/shared';
-import { athletePath, LOOK_AHEAD_DAYS, TICK_FOCUS_CLASS } from '@/lib/constants';
+import { athletePath, DAY_NAV_LABEL, LOOK_AHEAD_DAYS, TICK_FOCUS_CLASS } from '@/lib/constants';
 import Link from 'next/link';
 
 import { formatDayLong, formatDayShort, localWeekStartIso } from '@/lib/date';
@@ -55,13 +55,25 @@ export function dayNavBounds(args: {
   };
 }
 
-/** The date line: v12's `dayLabel`, short off-today so it fits between the arrows at 360px. */
-export function dayLine(day: string, today: string): string {
+function relativeDay(day: string, today: string, todayDate: (day: string) => string): string {
   const offset = isoDayDiff(day, today);
-  if (offset === 0) return `Today · ${formatDayLong(day)}`;
+  if (offset === 0) return `Today · ${todayDate(day)}`;
   if (offset === -1) return `Yesterday · ${formatDayShort(day)}`;
   if (offset === 1) return `Tomorrow · ${formatDayShort(day)}`;
   return formatDayShort(day);
+}
+
+/** The date line: v12's `dayLabel`, short off-today so it fits between the arrows at 360px. */
+export function dayLine(day: string, today: string): string {
+  return relativeDay(day, today, formatDayLong);
+}
+
+/**
+ * The page's title: the date line, short on every day ("Today · Fri, Nov 20"), so a phone's tab
+ * and the route announcer's arrival alert are not the long form with its year.
+ */
+export function dayTitle(day: string, today: string): string {
+  return relativeDay(day, today, formatDayShort);
 }
 
 export function DayNav({
@@ -70,7 +82,6 @@ export function DayNav({
   today,
   floor,
   canGoForward = false,
-  dayRoleLabel,
 }: {
   profileId: string;
   /** The day being viewed. */
@@ -81,8 +92,6 @@ export function DayNav({
   floor: string;
   /** Look-ahead: the athlete is on a program the next day (`DayPlan.canGoForward`). */
   canGoForward?: boolean;
-  /** What the PROGRAM says this day is ("Strength B") — derived metadata, travels with the day. */
-  dayRoleLabel?: string;
 }) {
   const href = (d: string) =>
     d === today ? athletePath(profileId) : `${athletePath(profileId)}?d=${d}`;
@@ -98,7 +107,7 @@ export function DayNav({
   const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (
-    <nav aria-label="Change day" className="flex flex-col gap-2">
+    <nav aria-label={DAY_NAV_LABEL} className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <DayArrow
           to={bounds.canGoBack ? href(prev) : null}
@@ -107,10 +116,7 @@ export function DayNav({
         />
         {/* The date itself is not a link — it is the current state, and a link to where you already
             are is a control that does nothing. */}
-        <p className="text-muted-foreground flex-1 text-center text-sm">
-          {dayLine(day, today)}
-          {dayRoleLabel ? ` · ${dayRoleLabel}` : ''}
-        </p>
+        <p className="text-muted-foreground flex-1 text-center text-sm">{dayLine(day, today)}</p>
         <DayArrow
           to={bounds.canGoForward ? href(next) : null}
           label={`Next day, ${formatDayLong(next)}`}

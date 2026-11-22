@@ -17,7 +17,7 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * Landed dark and alone in `1c-1`, so the fail-closed contract below could be reviewed and tested on
  * its own rather than inside the diff that moved the boundary. **Live since `1c-3b`**, which switched
  * the call sites: `requireSession()` in the four gated pages, `sessionUserOrNull()` in
- * `app/p/[profileId]/mutation-entry.ts` (on behalf of all seven mutating actions) and in
+ * `app/p/mutation-entry.ts` (on behalf of all seven mutating actions) and in
  * `app/p/[profileId]/export/route.ts`. ⚠️ This said `1c-4` was **still owed** — *"until then a session
  * says that you are someone, not whose data you get"*. It has shipped: `getHouseholdScope()` reads
  * this principal's `household_members` row, so a session now decides **whose** data a request gets.

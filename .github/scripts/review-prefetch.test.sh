@@ -123,7 +123,7 @@ guard_case_hooks() { # <name> <hook-body> <want-exit> [file]: the real settings.
   # of the given body; with [file], only that hook gets the body and the others stay CI-no-op.
   fresh
   mkdir -p "$tmp/repo/.claude/hooks" && cp "$real/.claude/settings.json" "$tmp/repo/.claude/"
-  for f in guard-main-checkout.mjs guard-process-kill.mjs session-context.mjs; do
+  for f in guard-main-checkout.mjs guard-process-kill.mjs guard-hook-skip.mjs session-context.mjs; do
     body="$2"
     [ -n "${4:-}" ] && [ "$f" != "$4" ] && body="$NOOP"
     printf '%s\n' "$body" >"$tmp/repo/.claude/hooks/$f"
@@ -140,6 +140,7 @@ guard_case "an UNTRACKED local settings.local.json (a person's own) → allow" .
 guard_case_hooks "only the pinned hooks, all CI-no-op → allow" "$NOOP" 0
 guard_case_hooks "a pinned hook that runs under CI → refuse" 'main();' 1
 guard_case_hooks "the kill guard alone runs under CI → refuse" "import('./guard-main-checkout.mjs'); main();" 1 guard-process-kill.mjs
+guard_case_hooks "the hook-skip guard alone runs under CI → refuse" "import('./shell-commands.mjs'); main();" 1 guard-hook-skip.mjs
 grep -qF '.claude/hooks/guard-process-kill.mjs' <<<"$(grep '^PINNED_HOOKS=' "$here/review-prefetch.sh")" && ok "the kill guard is a pinned hook" || bad "the kill guard is not in PINNED_HOOKS"
 # The pin is the committed settings.json: every PreToolUse/SessionStart hook it registers is pinned.
 for f in $(jq -r '.hooks[][].hooks[].command' "$real/.claude/settings.json" | grep -o '\.claude/hooks/[a-z-]*\.mjs'); do

@@ -13,6 +13,8 @@ vi.mock('@/lib/dal/household', () => ({
   HOUSEHOLD_STATE: { none: 'none', member: 'member' },
   householdState: vi.fn(async () => ({ state: 'member' })),
 }));
+vi.mock('@/lib/active-timezone', () => ({ getActiveLocalDay: vi.fn(async () => '2026-11-19') }));
+vi.mock('@/lib/dal/program/reads', () => ({ getProgramsByAthlete: vi.fn(async () => new Map()) }));
 // The page's other parts are their own tests'; here, only the Household nav.
 vi.mock('@/components/theme/theme-toggle', () => ({ ThemeToggle: () => null }));
 vi.mock('./add-athlete-tile', () => ({ AddAthleteTile: () => null }));

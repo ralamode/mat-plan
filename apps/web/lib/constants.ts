@@ -1,19 +1,14 @@
 import {
   ACTIVITY_TYPE_KEYS,
+  type DayClearRefusal,
   MAX_HOUSEHOLD_ATHLETES,
   PRACTICE_MINUTES_MAX,
   PRACTICE_MINUTES_MIN,
   type PracticeMinutesProblem,
-  isMassUnit,
-  LOGGABLE_DIMENSION_NOUNS,
-  type Unit,
-  UNIT_DIMENSION,
-  UNIT_DIMENSION_BY_CODE,
-  type UnitDimension,
-  UNIT_LABELS,
 } from '@mat-plan/shared';
 
-import { plural } from './i18n/plural';
+import type { RestoreDeadline } from './entries/restore-deadline';
+import { formatList, plural } from './i18n/plural';
 import { LIFE_ACTIVITIES } from './life/life-activities';
 
 /**
@@ -242,7 +237,7 @@ export const LANDING_COPY = {
  * (see `lib/clerk.ts`).
  *
  * `notYet` is the rest of the dark state. It leads with the state rather than an imperative (the
- * `BODYWEIGHT_COPY.duplicates` / `AMEND_COPY.locked` family — this comment used to cite
+ * `BODYWEIGHT_COPY.duplicates` family — this comment used to cite
  * `PICKER_EMPTY_COPY.notYet`, which PROF-1 a-1u deleted once adding an athlete became possible) and
  * says "isn't switched on yet" — a configuration fact, so the
  * maintainer verifying a deploy can tell dark from broken — and asks the reader for nothing.
@@ -369,6 +364,23 @@ export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as cons
  */
 export const NAV_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3';
+
+/**
+ * A program's name on the day page's programs line, as a link to its page ("Family program ›";
+ * FAM-1 15c, D49). Matched to the prototype's line buttons (`.txt` with `padding:0`,
+ * `program-order-ends-today.html`): no padding of its own; the line's gaps space the names.
+ *
+ * 🔴 **No underline until hover, because the "›" after each name marks it as a link** (WCAG 1.4.1:
+ * not by colour alone). The name is also the foreground colour on a muted label, so a link never
+ * relies on its colour. Drop the "›" and the underline must come back.
+ *
+ * 🔴 **`min-h-11` and `min-w-11` are load-bearing**: the 44px tap target, on a short name too
+ * ("Am" is narrower than a thumb). `wrap-anywhere` lets a long unbroken name wrap inside the link
+ * instead of overflowing at 360px; it is here rather than `NAME_WRAP_CLASS` because that one's
+ * `min-w-0` would win over `min-w-11` under `cn`.
+ */
+export const PROGRAM_NAME_LINK_CLASS =
+  'text-foreground focus-visible:ring-ring inline-flex min-h-11 min-w-11 items-center rounded-sm text-sm font-medium wrap-anywhere underline-offset-4 outline-none hover:underline focus-visible:ring-3';
 
 /**
  * A nav ROW — a full-width, bordered, tappable row. `NAV_LINK_CLASS` above is `w-fit` for inline
@@ -505,6 +517,10 @@ export const NO_HOUSEHOLD_COPY = {
 
 /** The routine editor's copy — the e2e replays its Save, so the label has one home. */
 export const ROUTINE_COPY = {
+  /** The routine page's `<h1>` and its title. */
+  heading: 'Edit routine',
+  /** Said, and shown, after a save (`routine-editor.tsx`'s `Announcer`). */
+  saved: 'Routine saved.',
   orderHeading: 'Routine order',
   save: 'Save routine',
 } as const;
@@ -684,22 +700,6 @@ export const SHELL_CELL_CLASS = 'lg:mx-0 lg:max-w-none';
 export const INPUT_CLASS =
   'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 aria-invalid:border-destructive';
 
-/**
- * The saved-state copy (V1-24 PR 1a) — one definition shared by the components and the specs.
- *
- * ⚠️ **This exists because the pattern already drifted.** `life-form.tsx` rendered
- * `"{label} · logged today"` and `e2e/steps.ts` asserted a **re-typed copy** of that same string —
- * the exact thing AGENTS.md's "tests use the same constant as the app" rule forbids. V1-24 adds more
- * saved surfaces, so the strings get a home before they multiply rather than after.
- *
- * `lib/constants.ts` and not `packages/shared`: this is app-only copy with no DB or engine consumer,
- * and this module is deliberately dependency-free so a `'use client'` component can import it.
- */
-export const SAVED_STATE_COPY = {
-  /** A log-once check-in field once it is logged (`checkin-form.tsx`). */
-  checkinLogged: 'Already logged today',
-} as const;
-
 /** A read-only day with nothing logged, in every single-value section (v12): one string, so they agree. */
 export const NOTHING_LOGGED = 'Nothing logged.';
 
@@ -750,6 +750,15 @@ export const FOCUS_TARGET_CLASS = 'focus-visible:ring-ring outline-none focus-vi
  */
 export const TICK_FOCUS_CLASS =
   'outline-none focus-visible:outline-solid focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-foreground';
+
+/**
+ * A `Button` that focuses like the ✓: `TICK_FOCUS_CLASS`'s outline, offset onto the surface, with the
+ * base ring and border turned off so the two do not overlap. On the day page's tint (Undo, the
+ * Change's ✕, "+ Add set"), and on the solid `destructive` variant, where `foreground` inside the
+ * dark fill would be under 3:1 (docs/design.md → the ✓'s focus rule). Here, not in
+ * `components/day/`, since V1-9b B2-prep: `components/ui/button.tsx` reads it.
+ */
+export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
 
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
 export const VALUE_JOINER = ', ';
@@ -874,15 +883,6 @@ const PRACTICE_LABEL = LIFE_ACTIVITIES.find(
 )!.label;
 
 /**
- * The check-in submit's per-field refusal for an item it cannot write as sent: a missing or malformed
- * `client_id`, or one another field of the same submit also carries. The form mints a fresh id per
- * field on every load, so a reload is the true remedy.
- */
-export const CHECKIN_COPY = {
-  itemNotSubmitted: 'Could not submit this item. Reload and try again.',
-} as const;
-
-/**
  * The practice row (V1-24 3b-life). One practice per athlete and day (3b-0's index), so the number is
  * the day's TOTAL, and the hint says so (plan A3).
  */
@@ -973,99 +973,10 @@ export const AMEND_COPY = {
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */
   valueLabel: (unit: string) => `Weight (${unit})`,
-  /** A strength set's save, announced by its own island — the subject names WHICH set (3a-i). */
-  setChanged: (subject: string, value: string) => `${subject} changed: ${value}.`,
-  /**
-   * Why a set can't be changed (V1-24 3a-i, the parent plan's Locked state), keyed by `lockedReason`.
-   * Each is TRUE for the sets it labels; "yet" appears only where a backlog row will change it
-   * (V1-33: time and distance). `status` has no sentence of its own: the badge already says it.
-   */
-  locked: {
-    mode: 'Bodyweight and band sets can’t be changed in the app.',
-    notMass: 'Timed and distance sets can’t be changed in the app yet.',
-    status: '',
-    shape: 'Some sets here can’t be changed in the app.',
-  },
-  /** A Locked sentence that names its movements first ("Pull-Up: Bodyweight and band sets …"), so
-   *  the names attach to the sets, not to "the app". */
-  lockedFor: (names: string, sentence: string) => `${names}: ${sentence}`,
-  /** Ends every Locked line. With no delete action, re-logging is the move that makes it permanent. */
-  lockedRecovery: 'Wrong? Don’t log it again — tell a parent so they can fix it.',
 } as const;
 
 /**
- * The word a dimension's primary number goes by IN THE FIELD — the placeholder and the accessible
- * name. A third per-dimension map beside `LOGGABLE_DIMENSION_LABELS` (the Measuring option) and
- * `LOGGABLE_DIMENSION_NOUNS` (running copy), because each serves a different surface and respelling
- * one must not garble the others.
- *
- * `length`, not `distance` or `height`: the dimension covers a box-jump HEIGHT and a broad-jump
- * DISTANCE, so either alone mislabels the main length movement, and it must not contradict the blank
- * copy "Enter the height or distance." It also has to fit the `w-24` field (~52px) — the row is
- * ≈ 275 of ≈ 294px at 360px.
- *
- * `constants.test.ts` requires a word for every loggable dimension, so adding one without a word
- * fails rather than silently falling back.
- */
-export const QUANTITY_FIELD_WORD: Partial<Record<UnitDimension, string>> = {
-  mass: 'weight',
-  length: 'length',
-  time: 'time',
-};
-
-/**
- * A set's number-input accessible name — one source for the field and every spec that finds it.
- *
- * MASS IS BYTE-IDENTICAL to the old `weightInputLabel` ("… weight in lb"), so every existing mass
- * locator holds; a missed one fails loudly rather than drifting. Non-mass spells the unit out
- * ("time in seconds", "length in inches") because `sec` and `in` read as nothing aloud.
- */
-export function quantityInputLabel(subject: string, unit?: Unit): string {
-  if (!unit) return `${subject} weight`;
-  const word = QUANTITY_FIELD_WORD[UNIT_DIMENSION_BY_CODE[unit]] ?? 'weight';
-  if (UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass) return `${subject} weight in ${unit}`;
-  return `${subject} ${word} in ${UNIT_LABELS[unit].toLowerCase()}`;
-}
-
-/**
- * The advisory sentence when the catalog's declared dimension differs from the chosen Measuring, and
- * (V1-26 PR-A) when a declared-loaded movement is logged BW. ONE function, so the two surfaces cannot
- * word the same warning two ways — V1-26's sentence is the `mass` branch, verbatim.
- *
- * A WARNING, never a lockout: the catalog's declaration is a normal case, not a rule, and an athlete
- * doing bodyweight KB swings is allowed to be right.
- */
-export function usuallyLoggedAs(movementName: string, dimension: UnitDimension): string {
-  const noun = LOGGABLE_DIMENSION_NOUNS[dimension];
-  if (dimension === UNIT_DIMENSION.mass) return `${movementName} is usually logged with a weight.`;
-  return `${movementName} is usually logged as a ${noun ?? 'number'}.`;
-}
-
-/**
- * The strength section's copy (V1-24 3a-ii). The h2 stays "Log strength" until 3b renames it to the
- * noun "Strength" (agreed; deferred for size), so `heading` is the CURRENT text the specs assert.
- */
-export const STRENGTH_COPY = {
-  heading: 'Log strength',
-  submit: 'Log strength',
-  submitting: 'Logging…',
-  logMore: 'Log more strength',
-  /** The open toggle. "Close", not "Cancel": closing KEEPS the typed draft (it is hidden, not reset). */
-  close: 'Close',
-  /** The opened form's group name — distinct from the h2 and the submit, which share "Log strength". */
-  group: 'New strength session',
-  /** The trust guard while "Log more" is open. "For this day", not "today": yesterday is writable too. */
-  alreadySaved: (names: string) => `Already saved for this day: ${names}.`,
-  newSession: 'Adds a new session.',
-  saved: 'Saved',
-  /** The island's announcement on its OWN save. Leads with the receipt's heading, so a second session
-   *  with the same movements is still a text change, and so it names the receipt focus lands on. */
-  announced: (heading: string, names: string) => `${heading} saved: ${names}.`,
-  skippedSuffix: '(skipped)',
-} as const;
-
-/**
- * "1 movement" / "3 movements": the one spelling, shared by the receipt and `strengthSummary`.
+ * "1 movement" / "3 movements": the one spelling, shared by the movement picker's counts.
  *
  * ⚠️ **Through `plural()`, not a `n === 1` ternary.** The ternary was correct English and still the
  * wrong shape: it is the pattern a new string copies, and a locale with three forms cannot be
@@ -1088,16 +999,6 @@ export const movementCount = (n: number) =>
  * number itself: the contract's `WorkoutSummary.itemCount`, and the builder's own parameter.
  */
 export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other: `${n} items` });
-export const skippedCount = (n: number) => `${n} skipped`;
-
-/** A session receipt's id in the strength section — the focus target after its save. The prefix is
- *  exported so a locator can find "any receipt" without re-typing it. */
-export const STRENGTH_RECEIPT_ID_PREFIX = 'strength-receipt-';
-export const strengthReceiptId = (sessionPublicId: string) =>
-  `${STRENGTH_RECEIPT_ID_PREFIX}${sessionPublicId}`;
-
-/** A strength set amend's error id, unique per island (20 sets must not share one id). */
-export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
 
 /**
  * How far past today the day page looks ahead (FAM-1 12c; maintainer, 2026-11-17: "6 days ahead",
@@ -1107,11 +1008,23 @@ export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPu
 export const LOOK_AHEAD_DAYS = 6;
 
 /**
- * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
- * on it can be logged or changed, so the sentence says that and names the two days that can.
+ * A write that cannot say what happened and needs the page's fresh data: a row or entry that is gone,
+ * or a request whose day is malformed or not open yet. Its own constant because three places say it.
  */
-export const CLOSED_DAY_NOTICE =
-  'This day is read-only. Only today and yesterday can be logged or changed.';
+export const NOT_SAVED_RELOAD = 'Not saved. Reload the page.';
+
+/** The day page's day arrows and date line: `day-nav.tsx`'s `<nav>`, and how a test finds it. */
+export const DAY_NAV_LABEL = 'Change day';
+
+/**
+ * The notice on a day before yesterday (V1-15). Since V1-24 3b-page nothing on such a day can be
+ * logged or changed, so the sentence says that and names the two days that can. Shown only on a PAST
+ * closed day (`dayPageFlags`' `showClosedNotice`: never a future day, never an archived athlete), so
+ * "Past days" is always true where it appears. Wording chosen by the maintainer (2026-11-21) over
+ * "This day is read-only. Only today and yesterday can be logged or changed.", which read as too
+ * technical; keep it plain.
+ */
+export const CLOSED_DAY_NOTICE = 'Past days are locked. Today and yesterday stay open.';
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';
@@ -1239,7 +1152,7 @@ export const HOUSEHOLD_FULL = `A household can hold ${MAX_HOUSEHOLD_ATHLETES} at
  * UX panel asked for that legend on **a-1's** add form, where the fieldset really does group a name
  * and a kind.
  *
- * `saved` is a **statement of fact**, not praise — the `SAVED_STATE_COPY` / `PICKER_EMPTY_COPY`
+ * `saved` is a **statement of fact**, not praise — the `NOTHING_LOGGED` / `PICKER_EMPTY_COPY`
  * family ("the app's voice is a receipt, not a coach", ONB-1 R20).
  */
 export const ATHLETE_FORM_COPY = {
@@ -1381,6 +1294,14 @@ export const ATHLETE_FORM_COPY = {
     alreadyAdvised
       ? `Or go back — ${stored} keeps their name.`
       : `Change the name, or go back — ${stored} keeps their name.`,
+  /**
+   * The stale-rename fix (maintainer, 2026-11-20, option c): the form showed an out-of-date name, so
+   * nothing was saved. It names the stored name, both routes out, and the button that overwrites
+   * ("Save anyway", `saveAnyway`, the duplicate warning's own label), so the overwrite is a deliberate,
+   * differently labelled tap. "Go back" is the page's Back link, which keeps the stored name.
+   */
+  renameStale: (stored: string) =>
+    `Not saved. This name was changed to “${stored}” on another device. Save anyway to replace it, or go back to keep it.`,
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,
@@ -1530,27 +1451,139 @@ export const NOTHING_TO_EXPORT = 'Nothing logged yet, so there is nothing to exp
  * `editStrengthSetAction` had `'That set could not be found.'` inline; a second amend surface would
  * have re-worded the same failure. One place, so the two cannot answer it differently.
  */
+const entriesText = (n: number) => plural(n, { one: '1 entry', other: `${n} entries` });
+
 /**
- * V1-9b — what a person is told when a write lands on their own **deleted** row.
+ * Clear this day and its banner (V1-9b B2-ii; plan `v1-9b-delete-and-restore.md` § "B2 as amended",
+ * the Amendment of 2026-11-15 as corrected there). Words for "hidden", never "deleted": nothing is
+ * erased, and Restore all brings it back.
  *
- * 🔴 **`own_hidden` is never `ok`** (criterion 9). After B0 made the `client_id` arbiters
- * non-partial, a hidden row HOLDS its id, so a replay conflicts instead of twinning — and reporting
- * that as "already logged" tells a kid their tap was saved when nothing was written.
- *
- * ⚠️ **Almost nothing can reach this string, and that is by design rather than by luck.** A UX panel
- * walked every UI path: the button's key now carries the day and the row's id, so a fresh id is
- * minted after a delete, after a day change and after a refusal. What is left is `/api/sync`'s
- * replay (v1.5), a no-JS form resubmission, and a crafted POST. So this is a **contract string**,
- * not an affordance — do not build UI around it, and do not assume a person has seen it.
- *
- * The second clause is only true because the form rotates its `client_id` on any `ok: false`
- * envelope (`life-form.tsx`). If that ever goes, this sentence becomes a lie and must go with it.
+ * - **The deadline is relative words**, from `restoreDeadline` (`lib/entries/restore-deadline.ts`):
+ *   "the end of tomorrow" cannot be misread as the start of a day.
+ * - **The summary counts, never names a value.** `other` is "entries this page doesn't show" (an
+ *   older strength session, a check-in), not "earlier", which reads as earlier days.
+ * - ⚠️ **`count` from the action is the day's newest clear's**, not what one tap hid, so no line
+ *   here says "you hid n": the banner reads the day's clears itself.
  */
-export const HIDE_COPY = {
-  loggedThenDeleted: 'That was deleted earlier, so nothing was logged — tap again to log it now.',
-  /** The batch form's header when one of several items landed on a deleted row; the row says which. */
-  loggedThenDeletedSome: "One of these was deleted earlier, so it wasn't logged — see below.",
+export const CLEAR_DAY_COPY = {
+  trigger: 'Clear this day…',
+  /** The dialog's title, with the day's short date ("Clear Wed, Nov 19?"). */
+  title: (dateLabel: string) => `Clear ${dateLabel}?`,
+  deadline: { today: 'the end of today', tomorrow: 'the end of tomorrow' } satisfies Record<
+    RestoreDeadline,
+    string
+  >,
+  /**
+   * The consequence, said BEFORE the step: the deadline, and that a re-log in an entry's place keeps
+   * it from coming back. "Logged for", not "logged by": a clear is most often of a day logged on the
+   * wrong athlete. `parts` are the summary's pieces, already phrased.
+   */
+  body: (name: string, parts: readonly string[], deadline: string) =>
+    `This hides the entries logged for ${name} today, for everyone in your household: ${formatList(
+      parts,
+    )}. You can put them back with Restore all until ${deadline}, unless something new is logged ` +
+    `in their place first.`,
+  /**
+   * When the day holds a workout or an older session: its record outlives a clear (PRIV-3 req. 2).
+   * "Any note" covers a "How did it feel?" note on an older session without naming a box no page
+   * shows any more (the strength form went in #725).
+   */
+  sessionStays:
+    'Workout names, and any notes written with them, stay with the day; only the entries are hidden.',
+  summaryWorkout: (name: string, count: number) => `${name} (${entriesText(count)})`,
+  summaryWeighIns: (n: number) => plural(n, { one: 'bodyweight', other: `${n} weigh-ins` }),
+  summaryPractices: (n: number) =>
+    plural(n, { one: 'wrestling practice', other: `${n} wrestling practices` }),
+  summaryOther: (n: number) =>
+    plural(n, {
+      one: '1 entry this page doesn’t show',
+      other: `${n} entries this page doesn’t show`,
+    }),
+  /** The input's label; the word is `CLEAR_DAY_CONFIRM_WORD`, rendered bold by the dialog. */
+  confirmLabel: { before: 'Type ', after: ' to confirm' },
+  confirmFirst: (word: string) => `Type ${word} first.`,
+  action: 'Clear day',
+  pending: 'Clearing…',
+  nothingLeft: 'Nothing was left to clear.',
+  /** Restore all's banner, for the newest clear of an open day. */
+  banner: (n: number, deadline: string) =>
+    plural(n, {
+      one: `Day cleared. 1 entry is hidden. You can put it back until ${deadline}.`,
+      other: `Day cleared. ${n} entries are hidden. You can put them back until ${deadline}.`,
+    }),
+  /** The same, once the day has been logged again since the clear. */
+  bannerRelogged: (n: number, deadline: string) =>
+    plural(n, {
+      one: `1 entry from a clear is hidden. You can put it back until ${deadline}.`,
+      other: `${n} entries from a clear are hidden. You can put them back until ${deadline}.`,
+    }) + ' Anything logged in its place since stays, and what it replaced won’t come back.',
+  earlier: (m: number) =>
+    `${plural(m, { one: '1 more', other: `${m} more` })} from an earlier clear ${
+      m === 1 ? 'is' : 'are'
+    } hidden too; you can restore ${m === 1 ? 'it' : 'them'} after these.`,
+  restoreAll: 'Restore all',
+  /** When "all" would be untrue: an earlier clear, or a day logged again since. */
+  restoreN: (n: number) => `Restore ${entriesText(n)}`,
+  restoring: 'Restoring…',
+  restored: 'Day restored.',
+  restoredSome: (r: number, k: number) =>
+    `Restored ${r}. ${plural(k, {
+      one: '1 wasn’t, because the day already has one in its place.',
+      other: `${k} weren’t, because the day already has one in each place.`,
+    })}`,
+  restoredNone: 'None came back: the day already has an entry in each place.',
+  /** A restore of the newest clear, with an older one left (it is the banner now). */
+  /** A partial restore of the newest clear, with an older one left (it is the banner now). */
+  restoredSomeOlderLeft: (r: number, k: number, m: number) =>
+    `Restored ${r}. ${plural(k, {
+      one: '1 wasn’t, because the day already has one in its place.',
+      other: `${k} weren’t, because the day already has one in each place.`,
+    })} ${entriesText(m)} from an earlier clear ${m === 1 ? 'is' : 'are'} still hidden.`,
+  restoredOlderLeft: (r: number, m: number) =>
+    `Restored ${r}. ${entriesText(m)} from an earlier clear ${m === 1 ? 'is' : 'are'} still hidden.`,
+  nothingToRestore: 'Nothing left to restore.',
+  /** The closed day's cleared sentence, inside the page's one notice box. */
+  closedCleared: (n: number) =>
+    plural(n, {
+      one: 'This day was cleared: 1 entry is hidden. It is kept, not erased.',
+      other: `This day was cleared: ${n} entries are hidden. They are kept, not erased.`,
+    }),
+  /**
+   * An archived athlete on a day still open for Restore all: the control is "Restore {name}" in
+   * Household settings (`SETTINGS_COPY.restoreFor`), then Restore all here.
+   */
+  archivedCleared: (name: string, n: number, deadline: string) =>
+    `This day was cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
+      name,
+    )} in ${SETTINGS_COPY.heading}, then tap Restore all here before ${deadline} to bring ${
+      n === 1 ? 'it' : 'them'
+    } back.`,
+  /**
+   * One line per refusal word (`DAY_CLEAR_REFUSALS`), for both actions. Not `components/day`'s
+   * `refusalCopy`: that is keyed by a row's write kind (a ✓, an un-tick, a Change), and a clear is none.
+   * Each is true for every cause of its word (`not_found` is also a lapsed session).
+   */
+  refused: {
+    bad_value: 'That didn’t go through. Try again.',
+    not_found: NOT_SAVED_RELOAD,
+    closed_day: 'This day is locked now, so nothing was restored.',
+    retry: 'Too many changes at once. Wait a moment and try again.',
+  } satisfies Record<DayClearRefusal, string>,
+  /**
+   * Clear this day's own `closed_day` line. Not `refused.closed_day` (Restore all's: "This day is
+   * locked now, so nothing was restored."): a clear refused just after midnight is of a day that is
+   * now yesterday, still open to every other write and to Restore all, so "locked" would be false.
+   * Names both causes, since the answer cannot tell them apart: past midnight, or the athlete
+   * archived (the writer's own check, since the archive-race fix).
+   */
+  clearClosed: 'This day can’t be cleared now: only today can, and not for an archived athlete.',
+  /** The action threw (a dropped connection, a server error): no cause is claimed. */
+  failed: 'Couldn’t reach the app. Try again.',
 } as const;
+
+/** The ids the clear's two islands share: the hand-off's target and the banner's outcome line. */
+export const RESTORE_ALL_ID = 'clear-day-restore-all';
+export const CLEAR_DAY_OUTCOME_ID = 'clear-day-outcome';
 
 export const AMEND_ERROR_COPY = {
   /**
@@ -1568,76 +1601,8 @@ export const AMEND_ERROR_COPY = {
   staleWrite: 'That was changed on another device — the latest is showing now.',
   /**
    * A change or a clear of a value on a day the page no longer offers (V1-24 3b-bw, plan W8). Not
-   * the logging copy ("no longer open for logging. Reload the page."): nothing was being logged, and
-   * the action has already revalidated the page, whose read-only notice gives the reason.
+   * the logging copy ("That day is locked now. Reload the page."): nothing was being logged, and the
+   * action has already revalidated the page, whose notice (closed-day or archived) gives the reason.
    */
-  dayReadOnly: (subject: string) => `That day is read-only now, so the ${subject} wasn't changed.`,
+  dayReadOnly: (subject: string) => `That day is locked now, so the ${subject} wasn't changed.`,
 } as const;
-
-/**
- * V1-27 — the strength form's partial-set copy. The plan (`docs/plans/v1-27-partial-sets.md`) explains
- * each: the summary line is the real mitigation for dropping trailing empty sets, the hint is the local
- * cue on a mixed card, and the missing-field message names the way out of a block.
- */
-export const PARTIAL_SETS_COPY = {
-  /** After **Add set** on a card with touched sets and a trailing empty run. "At the end" because a gap
-   *  card has a trailing run too, and its gap row still blocks. */
-  trailingHint: "Empty sets at the end won't be logged.",
-  /** Custom validity of a required, blank REPS input (log form only) when the card has a per-set
-   *  Remove button — it renders only when the movement has more than one set. */
-  missingReps: "Fill in the reps, or tap Remove if you didn't do this set.",
-  /** …and on a one-set card, which has no per-set Remove to point at. */
-  missingRepsOnly: 'Fill in the reps for this set.',
-  /** Custom validity of a required, blank WEIGHT input on a MASS unit. Points at BW / band, the real way
-   *  out for a set done with no weight — "if you didn't do it" would be false, and typing `0` records a
-   *  fake load. Use `missingQuantityMessage(unit)`, which also covers time and distance. */
-  missingWeight: "Enter the weight, or tap BW or band if there wasn't one.",
-  /** The summary line when nothing would be logged (including a payload of only skipped movements). */
-  empty: 'Nothing to log yet.',
-} as const;
-
-/**
- * The blank-quantity bubble for a set's number field, by unit. BW / band are modes of a WEIGHT (V1-30
- * refuses them on time and distance), so only a mass unit points at them; a time or distance asks for
- * the number, with the same noun the server's refusal uses (`LOGGABLE_DIMENSION_NOUNS`).
- */
-export function missingQuantityMessage(unit: Unit): string {
-  if (isMassUnit(unit)) return PARTIAL_SETS_COPY.missingWeight;
-  return `Enter the ${LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]] ?? 'measurement'}.`;
-}
-
-/** Longest movement name the blocked summary quotes before truncating — keeps the line on one row at
- *  360px (~44 chars × ~7px ≈ 308px of the ~328px usable). */
-export const SUMMARY_NAME_MAX = 20;
-
-/**
- * The summary line when the browser would refuse the tap, naming the FIRST blocker so a kid knows
- * where to look — on a phone it can be several cards up the page. `index` is the on-screen card
- * number (0-based), `setIndex` the on-screen set number (0-based).
- */
-export function blockedSummary(
-  blocker:
-    | { kind: 'name'; index: number }
-    | { kind: 'set'; index: number; setIndex: number; movementName: string },
-): string {
-  if (blocker.kind === 'name') return `Movement ${blocker.index + 1} needs a name.`;
-  const name = blocker.movementName.trim();
-  const label =
-    name === ''
-      ? `Movement ${blocker.index + 1}`
-      : name.length > SUMMARY_NAME_MAX
-        ? `${name.slice(0, SUMMARY_NAME_MAX - 1).trimEnd()}…`
-        : name;
-  return `${label} set ${blocker.setIndex + 1} needs finishing.`;
-}
-
-/**
- * The line above **Log strength**: what the tap will log, from the exact post-drop payload. A skipped
- * movement is sent with `sets: []` and is not "logged", so it is counted separately.
- */
-export function strengthSummary(movements: number, sets: number, skipped: number): string {
-  if (movements === 0) return PARTIAL_SETS_COPY.empty;
-  const m = movementCount(movements);
-  const s = `${sets} ${sets === 1 ? 'set' : 'sets'}`;
-  return `Logs ${m}, ${s}${skipped > 0 ? `, ${skippedCount(skipped)}` : ''}.`;
-}

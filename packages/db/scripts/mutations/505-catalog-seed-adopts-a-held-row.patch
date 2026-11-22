@@ -1,0 +1,17 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..69ef16e9 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -467,7 +467,11 @@ export async function seedCatalog(
+           isBodyweight: entry.isBodyweight,
+         })),
+       )
+-      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() })
++      .onConflictDoUpdate({
++        target: schema.movements.slug,
++        targetWhere: movementIsGlobal(),
++        set: { name: sql`excluded.name` },
++      })
+       .returning({ id: schema.movements.id, slug: schema.movements.slug });
+ 
+     const equipmentRows = inserted.flatMap(({ id, slug }) =>

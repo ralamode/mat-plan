@@ -1,0 +1,14 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 457659db..1089a122 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -434,6 +434,9 @@ export async function seedReference(
+   // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
+   // DO NOTHING skips it (the order A2-ii's fixtures need, spec E4).
+   const written = await seedCatalog(db, catalog);
++  if (householdRowsOnCatalogSlugs > 0) {
++    console.log(`seed: shared: ${catalog.map((e) => e.slug).join(', ')}`);
++  }
+ 
+   // No filter: every seeded movement is offered to the arbiter, which is the whole fix. CAT-3 A2-ii:
+   // only on a fixtures database (E4); production's 35 stay as they are until R2 deletes them.

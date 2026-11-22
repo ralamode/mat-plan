@@ -4,11 +4,12 @@ import {
   EQUIPMENT,
   MUSCLES,
   ACTIVITY_TYPE_SEED_ROWS,
-  databaseNameOf,
-  isLocalDbHost,
+  type CatalogLibraryName,
+  type CatalogMovement,
+  isFixturesDatabase,
   METRIC_DEFINITION_SEED_ROWS,
   MOVEMENT_SEED_ROWS,
-  namesPreviewDatabase,
+  MUSCLE_ROLE,
   newId,
   PROGRAM_SEED,
   QUANTITY_SLOT_ROWS,
@@ -25,6 +26,8 @@ import {
   SEED_PROFILE_PUBLIC_ID,
   UNITS,
 } from '@mat-plan/shared';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -32,21 +35,13 @@ import * as schema from './schema';
 import { householdScopeForScript } from './writers/household-scope-script';
 import {
   inHousehold,
+  movementIsCatalog,
   movementIsGlobal,
   movementIsOwned,
   programBlockIsLegacy,
 } from './writers/ownership';
 import { seedProgramFixtures } from './writers/program/seed-fixtures';
 
-/**
- * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
- * demonstrates A≠B vs Athlete One (whose own routine is `SEED_FULL_ROUTINE` since ONB-0 — it was NULL, i.e. the
- * old whole-catalog default). Exported so an app-side test can bind these keys
- * to the REAL catalog (`CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS`, which live app-side) — a stale seed key would
- * be silently dropped on render, so the test asserts every key resolves. The keys are grammar-valid
- * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Only differentiates on an EMPTY
- * target (fresh PGlite / Docker PG) — a prod re-seed no-ops via onConflictDoNothing.
- */
 /**
  * The PRE-ONB-0 default routine, written out explicitly — the full `ROUTINE_CATALOG` order
  * (strength → check-ins → life).
@@ -65,8 +60,9 @@ import { seedProgramFixtures } from './writers/program/seed-fixtures';
  *     today, so it is a no-op from the household's point of view.
  *
  * ⚠️ Hand-authored because `packages/db` cannot import the app-side `ROUTINE_CATALOG` (it is derived from
- * `CHECKIN_FIELDS`/`LIFE_ACTIVITIES`, which are React-adjacent). `apps/web/lib/routine/catalog.test.ts`
- * asserts this list EQUALS `ROUTINE_CATALOG` exactly, so the two cannot drift.
+ * `LIFE_ACTIVITIES`, which is React-adjacent). `apps/web/lib/routine/catalog.test.ts` asserts this list
+ * RESOLVES to `ROUTINE_CATALOG`, in order (`resolveProfileRoutine`; entries the catalog retired drop),
+ * so the two cannot drift.
  */
 export const SEED_FULL_ROUTINE = {
   version: 1,
@@ -91,6 +87,15 @@ export const SEED_FULL_ROUTINE = {
   ],
 } as const satisfies RoutineConfig;
 
+/**
+ * V1-18: Athlete Two's EXPLICIT routine (check-ins before strength, a conditional strength, Wake), so a
+ * fresh DB demonstrates A≠B against Athlete One (`SEED_FULL_ROUTINE` above). The keys are grammar-valid
+ * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Since FAM-1 12f PR 5 trimmed the
+ * routine catalog to `strength` and Wrestling practice, its check-in keys and Wake drop at read, and
+ * `apps/web/lib/routine/contract.test.ts` asserts it resolves to `strength` alone, with the marker. Only
+ * differentiates on an EMPTY target (fresh PGlite / Docker PG); a prod re-seed no-ops via
+ * onConflictDoNothing.
+ */
 export const SEED_ATHLETE_TWO_ROUTINE = {
   version: 1,
   order: [
@@ -164,13 +169,15 @@ export const FIXTURES_TARGET_REFUSED =
  * hand (the security lens's finding on the step-1 plan). Run after `assertMigrationTarget`, on the
  * same resolved string the seed connects with.
  *
- * Accepted limits, shared with OPS-1's guards (`db-environment.ts`): a production database named
- * `*preview*`, or a tunnel to production on localhost, would pass.
+ * The rule is `isFixturesDatabase` (`db-environment.ts`), the same one the app uses to choose the
+ * fixture movement library (CAT-3 K29), so a database the seed fills with fixtures is the database
+ * the app reads with them. Accepted limits, shared with OPS-1's guards: a production database named
+ * `*preview*`, or a tunnel to production on localhost, would pass. ⚠️ Until CAT-3's fresh start (R2)
+ * nothing else stops that: production's family household still carries the seed's `public_id`, so
+ * `assertSeedOwnsDatabase` passes there. It refuses a database another household owns, not production.
  */
 export function assertFixturesTargetAllowed(connectionString: string): void {
-  const local = isLocalDbHost(connectionString);
-  const preview = namesPreviewDatabase(databaseNameOf(connectionString) ?? '');
-  if (!local && !preview) throw new Error(FIXTURES_TARGET_REFUSED);
+  if (!isFixturesDatabase(connectionString)) throw new Error(FIXTURES_TARGET_REFUSED);
 }
 
 /** What a caller must decide about every seed run. `fixtures` is REQUIRED: none gets it by omission. */
@@ -198,22 +205,36 @@ export function resolveSeedOptions(
  * is two building blocks ([plan](../../../docs/plans/ops-2-split-the-seed.md), D1):
  *
  * - `seedReference` always: units, quantity slots, categories, equipment, muscles, activity types,
- *   metric definitions and the legacy movement catalog, plus the TEN-2c shadow detection. No row a
- *   household owns. It never reads `households` or `profiles`, so no household state can make it throw.
+ *   metric definitions and the movement library, plus the TEN-2c shadow detection. No row a household
+ *   owns. It never reads `households` or `profiles`, so no household state can make it throw.
  * - `seedFixtures` only with fixtures: the seed household (1c-4's guard and refusal) and its four
  *   fixture athletes, then the program and lane P's fixture world. Never in production: `migrate.yml`
  *   seeds without `SEED_FIXTURES`, and `resolveSeedOptions` refuses the flag for any database that is
  *   not provably local or the preview.
  *
+ * 🔴 **CAT-3 A2-ii (spec E4): the flag also picks the movement library** ([plan](../../../docs/plans/
+ * cat-3-a2-ii-seed-switch.md), D1). Without it, `CATALOG_MOVEMENTS` and no legacy rows (production);
+ * with it, `CATALOG_FIXTURE`, then the 35 legacy rows the e2e specs and fixtures name. One name decides
+ * both, so no caller can write the real library beside the legacy rows, or the reverse.
+ *
+ * 🔴 **With fixtures, ownership is checked before ANY write** (plan D2). The fixture library is global
+ * reference data, shown to every household: written into a database the seed does not own and then
+ * refused, it would stay, and on a shared slug production's next seed would keep it (E2). ⚠️ The check
+ * cannot tell production from a fixtures database before the fresh start: production's family
+ * household still carries the seed's `public_id` (migration 0001; erased at R2). There, only the URL
+ * allowlist (`assertFixturesTargetAllowed`) and the operator stand in the way.
+ *
  * ⚠️ **A household-scoped write belongs inside the `fixtures` branch**, never in `seedReference`
- * (`docs/features/write-path.md` → Traps). `MOVEMENT_SEED_ROWS` stays in `seedReference` until
- * `CAT-3` A2 moves the legacy movements under the flag (plan D1).
+ * (`docs/features/write-path.md` → Traps).
  */
 export async function seed(
   db: NodePgDatabase<typeof schema>,
   { fixtures }: SeedOptions,
 ): Promise<void> {
-  const shadowedSlugs = await seedReference(db);
+  if (fixtures) await assertSeedOwnsDatabase(db);
+
+  const library = seedLibraryOf(fixtures ? 'fixture' : 'catalog');
+  const counts = await seedReference(db, { library });
 
   // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
   // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
@@ -222,18 +243,70 @@ export async function seed(
   if (fixtures) {
     const household = await seedFixtures(db);
     await seedProgram(db, PROGRAM_SEED);
-    await seedProgramFixtures(db, householdScopeForScript(household.id));
+    // K29: the world's items resolve over the library this run wrote, the one the app reads here.
+    await seedProgramFixtures(db, householdScopeForScript(household.id), library.entries);
   }
 
-  reportShadowedMovements(shadowedSlugs);
+  reportSeed(counts);
 }
 
 /**
- * Every reference table, idempotently, and the TEN-2c shadow detection taken before the movements
- * insert (so it reads only what households owned beforehand). Returns the shadowed seed slugs for
- * `reportShadowedMovements`. Exported for `db:verify`; `seed` is its only other caller.
+ * What `seedReference` writes as movements (CAT-3 A2-ii, D1): the library's entries, and whether the
+ * legacy `MOVEMENT_SEED_ROWS` follow them. `seed` only ever builds one with `seedLibraryOf`; `db:verify`
+ * builds others to prove one case at a time.
  */
-export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<string[]> {
+export interface SeedLibrary {
+  readonly entries: readonly CatalogMovement[];
+  readonly legacyMovements: boolean;
+}
+
+/** The library a seed writes, by name (K29): the real one alone, or the test one plus the legacy rows. */
+export function seedLibraryOf(name: CatalogLibraryName): SeedLibrary {
+  return name === 'fixture'
+    ? { entries: CATALOG_FIXTURE, legacyMovements: true }
+    : { entries: CATALOG_MOVEMENTS, legacyMovements: false };
+}
+
+/** `seedReference`'s required options. No default, as `SeedOptions.fixtures` has none. */
+export interface SeedReferenceOptions {
+  readonly library: SeedLibrary;
+}
+
+/**
+ * What a seed run did, as **counts only** (CAT-3 spec rule 7, E5). 🔴 Every field is a number, and
+ * `seed.test.ts` pins that: `migrate.yml` prints this to a world-readable log, and a slug of a row a
+ * household owns says what that household typed. Naming rows is the operator's job, at their own
+ * console (`docs/runbooks.md` → "the seed's shadow guard fired").
+ */
+export interface SeedCounts {
+  /** Library entries written as new catalog rows. */
+  readonly catalogInserted: number;
+  /** Library entries whose slug a global row already held: catalog rows (left as they are, E2). */
+  readonly catalogPresent: number;
+  /** …held by a legacy global row instead (no `modality`; also left as it is). */
+  readonly catalogHeldByLegacy: number;
+  /** Library entries left out because an earlier entry in the same list has their slug. */
+  readonly catalogDuplicates: number;
+  /**
+   * Household-owned rows sitting on a library slug that is not also a legacy slug (counted before the
+   * write, never touched, E3); a row on a shared slug is in `householdRowsOnSeedSlugs` only.
+   */
+  readonly householdRowsOnCatalogSlugs: number;
+  /** Household-owned rows sitting on a legacy seed slug (TEN-2c's shadow report). */
+  readonly householdRowsOnSeedSlugs: number;
+}
+
+/**
+ * Every reference table, idempotently, then the library entries it is given (`seedCatalog`, before
+ * the legacy movements), with the TEN-2c and CAT-3 shadow counts taken before either movements insert
+ * (so they read only what households owned beforehand). Exported for `db:verify`; `seed` is its only
+ * other caller.
+ */
+export async function seedReference(
+  db: NodePgDatabase<typeof schema>,
+  { library }: SeedReferenceOptions,
+): Promise<SeedCounts> {
+  const catalog = library.entries;
   // GAP-3: the seed mirrors `UNITS` exactly (onConflictDoUPDATE, not DoNothing): the 7 pre-GAP-3 rows
   // already existed in every deployed DB, and DoNothing would leave them with whatever `dimension` the
   // migration backfilled, a reference table that silently stops mirroring its source.
@@ -343,26 +416,191 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
   // there costs: the job turns red on every subsequent push and *cannot clear itself by re-running*.
   // Recovery / context: `docs/runbooks.md` → "the seed's shadow guard fired".
   //
-  // ⚠️ The message names SEED SLUGS ONLY — a public const. Never the colliding row's `name`, which is
-  // uncontrolled household free text, because this lands in a world-readable Actions log. `db:verify`
-  // asserts both halves of that, and the privacy half is the one that is easy to lose in a rewrite.
-  const seedMovementSlugs = MOVEMENT_SEED_ROWS.map((m) => m.slug);
-  const shadowedSlugs = (
+  // ⚠️ **CAT-3 A2-i: the report is COUNTS ONLY** (spec rule 7). It used to name the seed slugs a
+  // household also owns; that slug is also the household's own row's slug, which says what they typed,
+  // and this lands in a world-readable Actions log. Never a slug, never a `name`. `db:verify` asserts
+  // the count is printed and the slug is not, and the privacy half is the one a rewrite loses first.
+  //
+  // CAT-3 A2-ii: taken whether or not this run writes the legacy rows. Production keeps its 35 until
+  // the fresh start (R2), and global-first keeps serving them, so a household row on one is still
+  // shadowed and still worth a count (plan D1; mutation 329).
+  const householdRowsOnSeedSlugs = await countOwnedRowsOn(
+    db,
+    MOVEMENT_SEED_ROWS.map((m) => m.slug),
+  );
+  // A library slug that is also a legacy slug is counted once, above.
+  const legacySlugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
+  const householdRowsOnCatalogSlugs = await countOwnedRowsOn(
+    db,
+    catalog.map((entry) => entry.slug).filter((slug) => !legacySlugs.has(slug)),
+  );
+
+  // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
+  // DO NOTHING skips it (the order A2-ii's fixtures need, spec E4).
+  const written = await seedCatalog(db, catalog);
+
+  // No filter: every seeded movement is offered to the arbiter, which is the whole fix. CAT-3 A2-ii:
+  // only on a fixtures database (E4); production's 35 stay as they are until R2 deletes them.
+  if (library.legacyMovements) {
     await db
-      .select({ slug: schema.movements.slug })
-      .from(schema.movements)
-      .where(and(inArray(schema.movements.slug, seedMovementSlugs), movementIsOwned()))
-  )
-    .map((r) => r.slug)
-    .sort();
+      .insert(schema.movements)
+      .values([...MOVEMENT_SEED_ROWS])
+      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+  }
 
-  // No filter: every seeded movement is offered to the arbiter, which is the whole fix.
-  await db
-    .insert(schema.movements)
-    .values([...MOVEMENT_SEED_ROWS])
-    .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+  return { ...written, householdRowsOnCatalogSlugs, householdRowsOnSeedSlugs };
+}
 
-  return shadowedSlugs;
+/** How many household-owned movements sit on one of `slugs`: a count, never the rows. */
+async function countOwnedRowsOn(
+  db: NodePgDatabase<typeof schema>,
+  slugs: readonly string[],
+): Promise<number> {
+  if (slugs.length === 0) return 0;
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.movements)
+    .where(and(inArray(schema.movements.slug, [...slugs]), movementIsOwned()));
+  return row?.n ?? 0;
+}
+
+/** `seedCatalog`'s counts: the `catalog*` half of `SeedCounts`. */
+export type CatalogSeedCounts = Pick<
+  SeedCounts,
+  'catalogInserted' | 'catalogPresent' | 'catalogHeldByLegacy' | 'catalogDuplicates'
+>;
+
+/**
+ * 🔴 **CAT-3 A2-i: the movement library's writer** (spec E1–E3, E5, rule 7; plan
+ * `docs/plans/cat-3-a2-i-catalog-seed.md`, D2). Writes each entry as a GLOBAL row with its `modality`,
+ * and its equipment and muscle rows, in ONE transaction: a failure part-way leaves nothing.
+ *
+ * - **Never touches a row that already holds the slug** (E2): the insert is `ON CONFLICT DO NOTHING` on
+ *   the global partial index (predicate repeated, the V1-5 lesson), and the join rows are keyed to the
+ *   ids its `RETURNING` gave back, never to a slug lookup, so a held slug gets no join row.
+ * - **Never a household's row** (E3): a household row on the slug sits outside the global index, so it
+ *   neither conflicts nor is touched, and nothing here sets `household_id`. No delete, no update.
+ * - **Resolves on every empty shape rule 7 lists**: an empty list, every entry already present, entries
+ *   with no equipment or no muscles. Each insert skips itself when it has nothing to write (drizzle
+ *   throws on an empty `values()`, and every production push after A2-ii's first has every entry
+ *   present). A duplicated slug keeps its first entry and counts the rest. **Any constraint violation
+ *   still throws, and leaves nothing** (one transaction): a bad entry is fixed forward.
+ * - **Order:** equipment and secondaries in the entry's authored order (the join rows' identity order
+ *   then records it), the primary first and only when there is one.
+ *
+ * Aliases, the supervision label, instructions and media are never written: no column holds them
+ * (spec rule 11), and the readers take them from the library by slug.
+ */
+export async function seedCatalog(
+  db: NodePgDatabase<typeof schema>,
+  entries: readonly CatalogMovement[],
+): Promise<CatalogSeedCounts> {
+  const bySlug = new Map<string, CatalogMovement>();
+  for (const entry of entries) if (!bySlug.has(entry.slug)) bySlug.set(entry.slug, entry);
+  const catalogDuplicates = entries.length - bySlug.size;
+  if (bySlug.size === 0) {
+    return { catalogInserted: 0, catalogPresent: 0, catalogHeldByLegacy: 0, catalogDuplicates };
+  }
+  const unique = [...bySlug.values()];
+
+  return db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(schema.movements)
+      .values(
+        unique.map((entry) => ({
+          publicId: newId(),
+          slug: entry.slug,
+          name: entry.name,
+          modality: entry.modality,
+          pattern: entry.pattern,
+          trackingType: entry.trackingType,
+          unitDefault: entry.unitDefault,
+          isBodyweight: entry.isBodyweight,
+        })),
+      )
+      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() })
+      .returning({ id: schema.movements.id, slug: schema.movements.slug });
+
+    const equipmentRows = inserted.flatMap(({ id, slug }) =>
+      bySlug.get(slug)!.equipment.map((equipmentCode) => ({ movementId: id, equipmentCode })),
+    );
+    if (equipmentRows.length > 0) {
+      await tx.insert(schema.movementEquipment).values(equipmentRows);
+    }
+
+    const muscleRows = inserted.flatMap(({ id, slug }) => {
+      const entry = bySlug.get(slug)!;
+      return [
+        ...(entry.primaryMuscle
+          ? [{ movementId: id, muscleCode: entry.primaryMuscle, role: MUSCLE_ROLE.primary }]
+          : []),
+        ...entry.secondaryMuscles.map((muscleCode) => ({
+          movementId: id,
+          muscleCode,
+          role: MUSCLE_ROLE.secondary,
+        })),
+      ];
+    });
+    if (muscleRows.length > 0) {
+      await tx.insert(schema.movementMuscles).values(muscleRows);
+    }
+
+    // What already held the other slugs: a catalog row (E2) or a legacy global row. Counts only.
+    const held = unique.length - inserted.length;
+    const catalogPresent =
+      held === 0
+        ? 0
+        : ((
+            await tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(schema.movements)
+              .where(
+                and(
+                  inArray(
+                    schema.movements.slug,
+                    unique.map((entry) => entry.slug),
+                  ),
+                  movementIsCatalog(),
+                ),
+              )
+          )[0]?.n ?? 0) - inserted.length;
+    return {
+      catalogInserted: inserted.length,
+      catalogPresent,
+      catalogHeldByLegacy: held - catalogPresent,
+      catalogDuplicates,
+    };
+  });
+}
+
+/** `seedFixtures`' refusal, and `assertSeedOwnsDatabase`'s: one message, asserted by `db:verify`. */
+export const SEED_HOUSEHOLD_REFUSED =
+  'seed: refusing to seed into a household this seed does not own — a live household exists ' +
+  'under a different public_id, so the guard above skipped the insert and there is no ' +
+  'seed-owned household to scope fixture rows to';
+
+/**
+ * 🔴 **CAT-3 A2-ii, D2: the fixtures run's ownership check, before ANY write.** `seedFixtures` refuses
+ * the same database, but only after `seedReference` has committed the fixture library, which is global
+ * and would stay. This is the same decision taken first: a live household exists, and none carries
+ * the seed's `public_id`. `seedFixtures` keeps its own check, so neither can drift alone.
+ *
+ * ⚠️ **What it does not cover:** production before CAT-3's fresh start, whose family household is the
+ * seed's (migration 0001's `public_id`), so it passes. It is a guard against a database another
+ * household owns, never a production guard.
+ */
+export async function assertSeedOwnsDatabase(db: NodePgDatabase<typeof schema>): Promise<void> {
+  const [live] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(isNull(schema.households.deletedAt))
+    .limit(1);
+  if (!live) return;
+  const [own] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+  if (!own) throw new Error(SEED_HOUSEHOLD_REFUSED);
 }
 
 /**
@@ -422,13 +660,7 @@ export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{
     .from(schema.households)
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
 
-  if (!household) {
-    throw new Error(
-      'seed: refusing to seed into a household this seed does not own — a live household exists ' +
-        'under a different public_id, so the guard above skipped the insert and there is no ' +
-        'seed-owned household to scope fixture rows to',
-    );
-  }
+  if (!household) throw new Error(SEED_HOUSEHOLD_REFUSED);
 
   // V1-3: the kid profiles the picker tiles render (two until PROF-1 b added a third for the
   // archive specs). Both scoped to the root
@@ -479,22 +711,32 @@ export async function seedFixtures(db: NodePgDatabase<typeof schema>): Promise<{
   return household;
 }
 
-/** The TEN-2c report, last and in both modes (see the note above the movements insert). */
-function reportShadowedMovements(shadowedSlugs: readonly string[]): void {
-  // TEN-2c: the shadow guard's REPORT, LAST (it was a `throw` until 0017 removed its premise — see
-  // the long note above the movements insert). A warning, not an error: the curated row IS inserted
-  // now, so there is nothing to recover from, and `migrate.yml` seeds production on every push to
-  // `main` where a throw would wedge the job permanently.
-  //
-  // ⚠️ Seed slugs only (a public const); NEVER the colliding row's `name`, which is uncontrolled
-  // household free text landing in a world-readable Actions log. `db:verify` asserts both.
-  if (shadowedSlugs.length > 0) {
+/**
+ * The seed's one report line, from its counts (CAT-3 A2-i, spec rule 7, E5), last and in both modes.
+ * 🔴 **Counts only**: it is printed to `migrate.yml`'s world-readable log, and naming a slug a household
+ * also holds says what that household typed. Never a slug, never a `name`. `db:verify` captures everything
+ * printed to stdout and stderr around the run and asserts it.
+ *
+ * The household lines are warnings, not errors: the curated row IS inserted (since TEN-2c the two
+ * namespaces are separate and global-first serves it), so nothing is broken, and a throw would wedge
+ * `migrate.yml`, which seeds production on every push to `main`.
+ */
+export function reportSeed(counts: SeedCounts): void {
+  if (counts.catalogInserted + counts.catalogPresent + counts.catalogHeldByLegacy > 0) {
+    console.log(
+      `seed: catalog: ${counts.catalogInserted} inserted, ${counts.catalogPresent} already present, ` +
+        `${counts.catalogHeldByLegacy} held by a legacy row, ${counts.catalogDuplicates} duplicate(s) ` +
+        'in the list.',
+    );
+  }
+  const owned = counts.householdRowsOnSeedSlugs + counts.householdRowsOnCatalogSlugs;
+  if (owned > 0) {
     console.warn(
-      `seed: ${shadowedSlugs.length} seeded movement slug(s) are ALSO owned by a household: ` +
-        `${shadowedSlugs.join(', ')}. The global catalog row(s) were inserted — since TEN-2c the two ` +
-        'namespaces are separate and global-first serves the curated row — so that household’s own ' +
-        'row is now permanently shadowed. Nothing is broken; TEN-2c-1 / TEN-2b-2 tidy those rows. ' +
-        'See docs/runbooks.md → "the seed\'s shadow guard fired".',
+      `seed: ${counts.householdRowsOnSeedSlugs} household-owned movement(s) share a legacy seed slug ` +
+        `and ${counts.householdRowsOnCatalogSlugs} share a library slug. The global row(s) were ` +
+        'inserted beside them and global-first serves the curated one, so those rows are shadowed. ' +
+        'Nothing is broken. To list them, run the query in docs/runbooks.md → "the seed\'s shadow ' +
+        'guard fired" from your own console; never paste its output anywhere tracked.',
     );
   }
 }

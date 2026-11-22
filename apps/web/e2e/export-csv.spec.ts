@@ -1,5 +1,9 @@
+import { SEED_PROFILE_2_PUBLIC_ID } from '@mat-plan/shared';
 import { expect, test } from '@playwright/test';
 
+import { athleteExportPath } from '../lib/constants';
+
+import { APP_ORIGIN, SIGNED_OUT_ORIGIN } from '../playwright.config';
 import { SEED_PROFILE_2_ROUTE } from './steps';
 
 /**
@@ -36,22 +40,39 @@ test('the export refuses an unknown profile, and says nothing about it', async (
   expect(res.status()).toBe(404);
 });
 
-// 🔴 **DELETED at AUTH-1 1d: "the export is gated — a request without the access cookie gets
-// nothing". It was not weakened, it was removed, because its assertion became FALSE.**
-//
-// It opened a fresh browser context (an empty cookie jar) and asserted the export did not return
-// 200. The empty jar was the whole mechanism: with no `mp_gate` cookie the proxy bounced the
-// request. After `1d` there is no cookie and no bounce, and the harness arms a principal in the
-// PROCESS ENVIRONMENT (`E2E_SESSION_BYPASS_USER_ID`) that no browser context can drop — so the
-// request is fully authenticated and the export correctly returns 200 with a real zip. Observed, not
-// reasoned: this test went red in `e2e:local` on exactly that.
-//
-// ⚠️ **Rewriting it to accept 200 would have inverted its own subject**, and leaving a weakened
-// version would have been a test named for a property it no longer examines. What it claimed is
-// still true and still proved — by the handler's unit-level session check and by
-// `app/pages-need-a-session.test.ts`'s per-handler source guard. What is GONE is the runtime proof, and
-// that loss is recorded in `docs/tech-debt.md` ("Two runtime auth proofs went with the gate"),
-// together with the un-bypassed second server that would restore it.
-//
+/**
+ * 🔴 **Proof 3: the export answers a member and refuses a stranger** (`docs/plans/td-signed-out-e2e.md`).
+ * The successor to "the export is gated", deleted at AUTH-1 1d because the bypassed harness could not
+ * be a stranger.
+ *
+ * - **The same URL, both servers.** Athlete Two's export gets 200 with a zip on the bypassed origin,
+ *   then 404 on the signed-out one.
+ * - **A real id, not a fresh one:** a fresh id answers 404 to a member too, so it could not fail.
+ * - **What it claims, and no more:** a stranger gets 404 where a member gets 200. Deleting the
+ *   handler's own session line would still answer 404, because the DAL's household scope refuses as
+ *   well; that line is unit-proved (`app/p/[profileId]/export/route.test.ts`).
+ *
+ * Athlete Two, as above: the warm-up's weigh-in is the history that makes the export non-empty.
+ *
+ * ✅ **Probed RED** (`e2e:local`, 2026-11-21): with the second server armed (its `''` dropped), the
+ * stranger got the export.
+ */
+test('the export answers a member, and refuses a stranger the same URL', async ({
+  request,
+  playwright,
+}) => {
+  const path = athleteExportPath(SEED_PROFILE_2_PUBLIC_ID);
+  const member = await request.get(`${APP_ORIGIN}${path}`, { maxRedirects: 0 });
+  expect(member.status(), 'the control: a member gets the export').toBe(200);
+  expect(member.headers()['content-type']).toContain('zip');
+
+  // Its own context: cookies on `localhost` ignore the port, so the member's jar must not ride along.
+  const strangerCtx = await playwright.request.newContext();
+  const stranger = await strangerCtx.get(`${SIGNED_OUT_ORIGIN}${path}`, { maxRedirects: 0 });
+  expect(stranger.status(), 'a stranger gets the export').toBe(404);
+  expect(stranger.headers()['content-type'] ?? '', 'a stranger gets a zip').not.toContain('zip');
+  await strangerCtx.dispose();
+});
+
 // ⚠️ This route lives under `/p/` and not `/api/` because the matcher excluded `/api` when V1-13b
 // sited it. That exclusion is gone (AUTH-1 1a), so the siting is history, not protection.

@@ -28,6 +28,7 @@ const { writers, state } = vi.hoisted(() => {
     'updatePracticeEntryById',
     'updateStrengthSetById',
     'restoreClear',
+    'clearDay',
     'renameProfile',
     'archiveProfile',
     'restoreProfile',
@@ -93,6 +94,8 @@ vi.mock('@mat-plan/db', async (importOriginal) => ({
   ...writers,
   ownerScope: (scope: unknown) => scope,
 }));
+
+import { PROFILE_NOT_FOUND } from '@mat-plan/shared';
 
 import * as entries from './entries';
 import * as profiles from './profiles';
@@ -176,8 +179,9 @@ const WRITES: [string, () => Promise<unknown>][] = [
         hiddenAt: '2026-11-17T18:04:05.123456Z',
       }),
   ],
+  ['clearDayEntries', () => entries.clearDayEntries({ profilePublicId: ID, day: '2026-11-17' })],
   ['updateProfileRoutine', () => profiles.updateProfileRoutine(ID, {} as never)],
-  ['renameAthlete', () => profiles.renameAthlete(ID, 'New Name')],
+  ['renameAthlete', () => profiles.renameAthlete(ID, 'New Name', 'Old Name')],
   ['archiveAthlete', () => profiles.archiveAthlete(ID)],
   ['restoreAthlete', () => profiles.restoreAthlete(ID)],
   ['createAthlete', () => profiles.createAthlete({ name: 'New', kind: 'kid' } as never)],
@@ -256,7 +260,7 @@ describe('a failed write carries no data out (V1-9b B1-2)', () => {
       })
       .catch((error: unknown) => error);
     expect(thrown).not.toBeInstanceOf(DbWriteError);
-    expect((thrown as Error).message).toBe('Profile not found');
+    expect((thrown as Error).message).toBe(PROFILE_NOT_FOUND);
     expect(writers.restoreClear).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import {
   E2E_SESSION_BYPASS_USER,
   PROFILE_KIND,
   PROFILE_KINDS,
+  PROFILE_ECHO_MAX,
   PROFILE_NAME_MAX,
   foldName,
 } from '@mat-plan/shared';
@@ -94,6 +95,8 @@ import { ACTION_REGISTRY } from './profile-actions.registry';
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
 const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
 const initial: ActionState = { ok: false, error: null };
+/** The name the rename form showed (`seenName`, the stale-rename fix): every rename body sends one. */
+const SEEN = 'Shown Name';
 
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
@@ -143,7 +146,8 @@ describeActionMatrices({
     },
   },
   validBody: {
-    renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
+    renameAthleteAction: () =>
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Renamed Athlete' }),
     archiveAthleteAction: () => form({ profileId: PROFILE_ID }),
     restoreAthleteAction: () => form({ profileId: PROFILE_ID }),
     addAthleteAction: () =>
@@ -153,12 +157,15 @@ describeActionMatrices({
 
 describe('renameAthleteAction — boundary (bad body → zod-reject, nothing written)', () => {
   it.each([
-    ['a blank name', { profileId: PROFILE_ID, name: '' }],
-    ['a whitespace-only name', { profileId: PROFILE_ID, name: '   ' }],
-    ['a name one over the cap', { profileId: PROFILE_ID, name: 'a'.repeat(PROFILE_NAME_MAX + 1) }],
-    ['a name that folds to nothing', { profileId: PROFILE_ID, name: '́̂' }],
-    ['a NUL byte', { profileId: PROFILE_ID, name: '\u0000Ada' }],
-    ['a zero-width space only', { profileId: PROFILE_ID, name: '\u200b' }],
+    ['a blank name', { profileId: PROFILE_ID, seenName: SEEN, name: '' }],
+    ['a whitespace-only name', { profileId: PROFILE_ID, seenName: SEEN, name: '   ' }],
+    [
+      'a name one over the cap',
+      { profileId: PROFILE_ID, seenName: SEEN, name: 'a'.repeat(PROFILE_NAME_MAX + 1) },
+    ],
+    ['a name that folds to nothing', { profileId: PROFILE_ID, seenName: SEEN, name: '́̂' }],
+    ['a NUL byte', { profileId: PROFILE_ID, seenName: SEEN, name: '\u0000Ada' }],
+    ['a zero-width space only', { profileId: PROFILE_ID, seenName: SEEN, name: '\u200b' }],
   ])('refuses %s as a FIELD error and never reaches the DAL', async (_label, fields) => {
     const res = await renameAthleteAction(initial, form(fields));
 
@@ -179,14 +186,14 @@ describe('renameAthleteAction — boundary (bad body → zod-reject, nothing wri
   it('collapses a pasted line break instead of refusing it', async () => {
     const res = await renameAthleteAction(
       initial,
-      form({ profileId: PROFILE_ID, name: 'Ada\nMae' }),
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada\nMae' }),
     );
     expect(res.ok).toBe(true);
     expect(vi.mocked(renameAthlete).mock.calls[0]!.slice(0, 2)).toEqual([PROFILE_ID, 'Ada Mae']);
   });
 
   it('refuses a missing name field (no `name` in the body at all)', async () => {
-    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID }));
+    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, seenName: SEEN }));
     expect(res.ok).toBe(false);
     expect(renameAthlete).not.toHaveBeenCalled();
   });
@@ -198,7 +205,10 @@ describe('renameAthleteAction — boundary (bad body → zod-reject, nothing wri
    * was at least shaped like an athlete".
    */
   it('answers a non-uuid profileId exactly as an unknown athlete', async () => {
-    const res = await renameAthleteAction(initial, form({ profileId: 'new', name: 'Ada' }));
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: 'new', seenName: SEEN, name: 'Ada' }),
+    );
     expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
     expect(res.fieldErrors).toBeUndefined();
     expect(getProfileByPublicId).not.toHaveBeenCalled();
@@ -210,7 +220,7 @@ describe('renameAthleteAction — happy path', () => {
   it('stores the collapsed, trimmed name and revalidates the three surfaces that render it', async () => {
     const res = await renameAthleteAction(
       initial,
-      form({ profileId: PROFILE_ID, name: '  Ada   Mae  ' }),
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: '  Ada   Mae  ' }),
     );
 
     expect(res).toEqual({ ok: true, error: null });
@@ -232,14 +242,20 @@ describe('renameAthleteAction — happy path', () => {
   it('revalidates using the id the DAL returned', async () => {
     const OTHER = '019826b4-0000-7000-8000-0000000000ff';
     vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: true, publicId: OTHER });
-    await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
+    await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' }),
+    );
     const paths = vi.mocked(revalidatePath).mock.calls.map(([p]) => p);
     expect(paths).toContain(athletePath(OTHER));
   });
 
   /** An accent is stored as typed — folding is for comparison only, never for storage. */
   it('stores a name with combining marks as typed', async () => {
-    await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Zoë' }));
+    await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Zoë' }),
+    );
     expect(vi.mocked(renameAthlete).mock.calls[0]!.slice(0, 2)).toEqual([PROFILE_ID, 'Zoë']);
   });
 });
@@ -254,7 +270,10 @@ describe('renameAthleteAction — the duplicate warning (PROF-1 a-1d-ren)', () =
 
   it('maps a duplicate to the envelope, with NO atCap — a rename creates nothing', async () => {
     vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: false, reason: 'duplicate', match });
-    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' }),
+    );
     // 🔴 `toEqual`, so the absence of `atCap` is pinned rather than merely untested. The add form's
     // envelope carries it because an archived twin occupies a slot in a full household; a rename
     // consults no quota, so a value there would always be `false` and read as meaningful.
@@ -268,18 +287,56 @@ describe('renameAthleteAction — the duplicate warning (PROF-1 a-1d-ren)', () =
   });
 
   it('threads the acknowledgement to the DAL, re-derived from the PARSED name', async () => {
-    const f = form({ profileId: PROFILE_ID, name: '  Ada  ' });
+    const f = form({ profileId: PROFILE_ID, seenName: SEEN, name: '  Ada  ' });
     f.set('acknowledgedDuplicate', foldName('Ada'));
     await renameAthleteAction(initial, f);
-    expect(vi.mocked(renameAthlete).mock.calls[0]![2]).toMatchObject({
+    expect(vi.mocked(renameAthlete).mock.calls[0]![3]).toMatchObject({
       acknowledgedDuplicate: foldName('Ada'),
     });
   });
 
   it('an OVERSIZE acknowledgement is a page-level refusal, and never reaches the DAL', async () => {
-    const f = form({ profileId: PROFILE_ID, name: 'Ada' });
-    f.set('acknowledgedDuplicate', 'x'.repeat(PROFILE_NAME_MAX * 20 + 1));
+    const f = form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' });
+    f.set('acknowledgedDuplicate', 'x'.repeat(PROFILE_ECHO_MAX + 1));
     expect(await renameAthleteAction(initial, f)).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
+    expect(renameAthlete).not.toHaveBeenCalled();
+  });
+});
+
+describe('renameAthleteAction — a stale form (the stale-rename fix)', () => {
+  it('passes the seen name to the DAL verbatim, never re-normalised', async () => {
+    // Not through `athleteNameSchema`: it is the stored value echoed back, compared byte for byte.
+    await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: 'Ada  Mae', name: 'Ada' }),
+    );
+    expect(vi.mocked(renameAthlete).mock.calls[0]![2]).toBe('Ada  Mae');
+  });
+
+  it('maps stale to its own envelope with the stored name, and revalidates the edit page', async () => {
+    vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: false, reason: 'stale', current: 'Bea' });
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' }),
+    );
+    // `toEqual`: no `duplicate`, no `fieldErrors`, no page-level `error` ride with it.
+    expect(res).toEqual({ ok: false, error: null, stale: { current: 'Bea' } });
+    expect(vi.mocked(revalidatePath).mock.calls.map(([p]) => p)).toEqual([
+      athleteEditPath(PROFILE_ID),
+    ]);
+  });
+
+  it.each([
+    ['a missing seen name', { profileId: PROFILE_ID, name: 'Ada' }],
+    [
+      'an oversize seen name',
+      { profileId: PROFILE_ID, name: 'Ada', seenName: 'x'.repeat(PROFILE_ECHO_MAX + 1) },
+    ],
+  ])('%s is a page-level refusal that never reaches the DAL', async (_label, fields) => {
+    expect(await renameAthleteAction(initial, form(fields))).toEqual({
+      ok: false,
+      error: NO_ATHLETE_SAVE,
+    });
     expect(renameAthlete).not.toHaveBeenCalled();
   });
 });
@@ -292,7 +349,10 @@ describe('renameAthleteAction — the DAL refuses', () => {
    */
   it('maps a 0-row UPDATE to the same refusal, with no revalidation', async () => {
     vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: false, reason: 'refused' });
-    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' }),
+    );
     expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
     // A refusal must not even confirm which path exists.
     expect(revalidatePath).not.toHaveBeenCalled();
@@ -300,7 +360,10 @@ describe('renameAthleteAction — the DAL refuses', () => {
 
   it('refuses when the profile does not resolve, before any write', async () => {
     vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
-    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' }),
+    );
     expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
     expect(renameAthlete).not.toHaveBeenCalled();
   });
@@ -312,7 +375,10 @@ describe('renameAthleteAction — the DAL refuses', () => {
    */
   it('a rate-limited call writes nothing', async () => {
     vi.mocked(checkMutationLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });
-    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, seenName: SEEN, name: 'Ada' }),
+    );
     expect(res).toEqual({ ok: false, error: RATE_LIMITED });
     expect(getProfileByPublicId).not.toHaveBeenCalled();
     expect(renameAthlete).not.toHaveBeenCalled();
@@ -536,7 +602,7 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     // characters into hundreds, so the field is bounded — and a crafted body must not be told which
     // hidden field it got wrong, so this answers with the generic refusal.
     const f = body();
-    f.set('acknowledgedDuplicate', 'x'.repeat(PROFILE_NAME_MAX * 20 + 1));
+    f.set('acknowledgedDuplicate', 'x'.repeat(PROFILE_ECHO_MAX + 1));
     expect(await addAthleteAction(initial, f)).toEqual({ ok: false, error: NO_ATHLETE_ADD });
     expect(createAthlete).not.toHaveBeenCalled();
   });

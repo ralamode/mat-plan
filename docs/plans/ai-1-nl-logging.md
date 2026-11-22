@@ -443,6 +443,11 @@ prevent.
 | 3   | **The call** — the Route Handler at `/p/[profileId]/extract` (**S8**), `lib/dal/nl-extract.ts` (`server-only`, owns the key), the second rate limiter (**S9**), `ANTHROPIC_API_KEY` in `lib/env.ts`, the typed error envelope, Sentry context. **No UI.** This is EVAL-2.                               | Needs chunk 2's contract to validate against, and must not merge before chunk 1 is green — the invariant class has to be able to fail before anything exists that could violate it.                           | ~250               |
 | 4   | **The chip** — the input, the call, the chip, correction, and `fillFromExtraction` beside `fillFromProgram` (`strength-form.tsx:322`), reusing its undo stash and announcement.                                                                                                                         | Last because it is the only chunk whose correctness cannot be proven without the other three, and because it is the chunk whose scope is most negotiable if the budget runs out. **Gets the UX panel.**       | ~350               |
 
+⚠️ _2026-11-19:_ `strength-form.tsx` was deleted by FAM-1 12f PR 1 (#725), so chunk 4 has no
+`fillFromProgram` to sit beside and no form to fill. If this plan is un-parked, chunk 4 needs
+re-scoping against the day page and its row writes ([day-page](../features/day-page.md),
+[day-writers](../features/day-writers.md)).
+
 **Parallel:** chunks 1 and 2 touch disjoint files and share no contract (EVAL-0's expectations are
 deliberately unbound), so they can run concurrently. Chunks 3 and 4 are serial after both.
 Every chunk is under the <400-line target.

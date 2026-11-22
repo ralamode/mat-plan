@@ -1,0 +1,1 @@
+B2 race proof 14: clearDay locks the profile FOR SHARE inside its transaction, before the day's entries

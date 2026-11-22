@@ -32,6 +32,7 @@ import {
   press,
   status,
   workout,
+  openFolded,
 } from './day-test-utils';
 import { LOGGED_CARD_CLASS, TINT_CLASS } from './row-parts';
 import { formatRowValues, spokenValues, unitSpoken, unitSuffix, valueParts } from './row-values';
@@ -188,6 +189,7 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
 
   it('a fully logged set card drops its tint while a row shows a message', async () => {
     mount(yesterdayHalfDone, { failNext: true });
+    openFolded();
     const neck = () => card('Morning habits', 'Neck bridge');
     expect(neck().classList.contains(TINT_CLASS)).toBe(true);
     await press(setTick(neck(), 'Neck bridge', 1));
@@ -245,6 +247,7 @@ describe('set rows, PREVIOUS and Add set, per set', () => {
 
   it('an extra set un-ticked keeps its row for the visit, after the page drops it, and ticks back', async () => {
     const control = mount(yesterdayEditedAfterLogging);
+    openFolded();
     const el = () => card('Morning habits', 'Push-ups');
     const last = item(yesterdayEditedAfterLogging, 'Morning habits', 'Push-ups').rows.at(-1)!.set;
     await press(setTick(el(), 'Push-ups', last));
@@ -475,6 +478,7 @@ describe('after the program was edited (D7)', () => {
 
   it('a set logged beyond a reduced count still shows as a row', () => {
     show(plan);
+    openFolded();
     const pushUps = item(plan, 'Morning habits', 'Push-ups');
     expect(pushUps.prescribedText).toBe('2 × 15');
     expect(bodyRows(card('Morning habits', 'Push-ups'))).toHaveLength(pushUps.rows.length);

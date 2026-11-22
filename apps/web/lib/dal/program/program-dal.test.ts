@@ -1,9 +1,23 @@
 import { PROGRAM_REFUSAL } from '@mat-plan/shared';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { familyProgram, heavyADraft } from '@mat-plan/shared/program/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('../db', () => ({ db: { the: 'db' } }));
+// CAT-3 K29: the library in effect, set per test (under vitest the real `lib/env.ts` would pick the
+// test library, since DATABASE_URL is local). The name-to-list map has its own test.
+const library = vi.hoisted(() => ({ entries: undefined as unknown }));
+vi.mock('../catalog-library', async () => {
+  const { CATALOG_MOVEMENTS: real } = await import('@mat-plan/shared/catalog/data');
+  library.entries = real;
+  return {
+    get CATALOG_LIBRARY() {
+      return library.entries;
+    },
+  };
+});
 vi.mock('../household', () => ({ getHouseholdScope: vi.fn() }));
 vi.mock('@mat-plan/db', () => ({
   createProgram: vi.fn(async () => ({ ok: true, programPublicId: PROGRAM_ID })),
@@ -11,6 +25,7 @@ vi.mock('@mat-plan/db', () => ({
   saveWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
   readWorkoutDraft: vi.fn(async () => null),
   readProgramList: vi.fn(async () => []),
+  readProgramsByAthlete: vi.fn(async () => new Map()),
   readProgramView: vi.fn(async () => null),
   saveWeek: vi.fn(async () => ({ ok: true })),
   copyWorkout: vi.fn(async () => ({ ok: true, workoutPublicId: WORKOUT_ID })),
@@ -23,6 +38,7 @@ vi.mock('@mat-plan/db', () => ({
   })),
   putOn: vi.fn(async () => ({ ok: true })),
   takeOff: vi.fn(async () => ({ ok: true, lastDay: null })),
+  reorderPrograms: vi.fn(async () => ({ ok: true })),
 }));
 // Which id missed is `report-miss.test.ts`'s; here, only WHEN the DAL asks, and with which ids.
 vi.mock('./report-miss', () => ({
@@ -30,6 +46,8 @@ vi.mock('./report-miss', () => ({
   reportWeekMiss: vi.fn(async () => {}),
   reportCopyMiss: vi.fn(async () => {}),
   reportAssignMiss: vi.fn(async () => {}),
+  reportAthleteMiss: vi.fn(async () => {}),
+  reportOrderProgramMiss: vi.fn(async () => {}),
 }));
 
 import {
@@ -38,9 +56,11 @@ import {
   newItem,
   putOn,
   readProgramList,
+  readProgramsByAthlete,
   readProgramView,
   readWorkoutDraft,
   renameProgram,
+  reorderPrograms,
   saveWeek,
   saveWorkout,
   takeOff,
@@ -50,14 +70,28 @@ import { emptyWeek, TRACKING_TYPE } from '@mat-plan/shared';
 import { db } from '../db';
 import { getHouseholdScope } from '../household';
 import { DbWriteError } from '../quiet-db-errors';
-import { getProgramEntry, getProgramList, getProgramView, getWorkoutDraft } from './reads';
-import { reportAssignMiss, reportCopyMiss, reportProgramMiss, reportWeekMiss } from './report-miss';
+import {
+  getProgramEntry,
+  getProgramList,
+  getProgramsByAthlete,
+  getProgramView,
+  getWorkoutDraft,
+} from './reads';
+import {
+  reportAssignMiss,
+  reportAthleteMiss,
+  reportCopyMiss,
+  reportOrderProgramMiss,
+  reportProgramMiss,
+  reportWeekMiss,
+} from './report-miss';
 import {
   copyHouseholdWorkout,
   createHouseholdProgram,
   newHouseholdItem,
   putOnHouseholdProgram,
   renameHouseholdProgram,
+  reorderHouseholdPrograms,
   saveHouseholdWeek,
   saveHouseholdWorkout,
   takeOffHouseholdProgram,
@@ -230,9 +264,18 @@ describe('the program DAL (FAM-1 7a-ii): week, copy, new item', () => {
     expect(vi.mocked(copyWorkout).mock.calls[0]).toEqual([db, SCOPE, copy()]);
     const item = { name: 'Bear crawl', trackingType: TRACKING_TYPE.reps };
     await newHouseholdItem(item);
-    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item]);
+    // The same library the picker's read gets (K23), the one in effect (K29).
+    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item, CATALOG_MOVEMENTS]);
     expect(reportWeekMiss).not.toHaveBeenCalled();
     expect(reportCopyMiss).not.toHaveBeenCalled();
+  });
+
+  it('CAT-3 K29: on a fixtures database newItem matches over the test library', async () => {
+    library.entries = CATALOG_FIXTURE;
+    const item = { name: 'Bear crawl', trackingType: TRACKING_TYPE.reps };
+    await newHouseholdItem(item);
+    expect(vi.mocked(newItem).mock.calls[0]).toEqual([db, SCOPE, item, CATALOG_FIXTURE]);
+    library.entries = CATALOG_MOVEMENTS;
   });
 
   it('a week’s not_found reports its program and every workout it names, in order', async () => {
@@ -328,6 +371,64 @@ describe('the program DAL (FAM-1 15): Put on and Take off', () => {
       reason: PROGRAM_REFUSAL.invalid,
     });
     expect(reportAssignMiss).not.toHaveBeenCalled();
+  });
+});
+
+describe('the program DAL (FAM-1 15c): Program order', () => {
+  const TODAY = '2026-11-21';
+  const ATHLETE = '019826b4-0000-7000-8000-000000000001';
+  const order = () => ({ profilePublicId: ATHLETE, programPublicIds: [PROGRAM_ID] });
+
+  it('goes through the caller’s scope, with the parsed input and today', async () => {
+    expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual({ ok: true });
+    expect(vi.mocked(reorderPrograms).mock.calls).toEqual([[db, SCOPE, order(), TODAY]]);
+    expect(reportAthleteMiss).not.toHaveBeenCalled();
+    expect(reportOrderProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('a not_found reports the athlete id once, and stays not_found', async () => {
+    vi.mocked(reorderPrograms).mockResolvedValueOnce(NOT_FOUND);
+    expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual(NOT_FOUND);
+    expect(vi.mocked(reportAthleteMiss).mock.calls).toEqual([[SCOPE, ATHLETE]]);
+    expect(reportOrderProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('no scope: not_found, the writer never called, the miss reported with no scope', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual(NOT_FOUND);
+    expect(reorderPrograms).not.toHaveBeenCalled();
+    expect(vi.mocked(reportAthleteMiss).mock.calls).toEqual([[null, ATHLETE]]);
+  });
+
+  it('an invalid stays invalid, and asks once which program id missed, with the scope, the ids and today', async () => {
+    vi.mocked(reorderPrograms).mockResolvedValueOnce({
+      ok: false,
+      reason: PROGRAM_REFUSAL.invalid,
+    });
+    expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.invalid,
+    });
+    expect(vi.mocked(reportOrderProgramMiss).mock.calls).toEqual([
+      [SCOPE, order().programPublicIds],
+    ]);
+    expect(reportAthleteMiss).not.toHaveBeenCalled();
+  });
+
+  it('another refusal passes through, and nothing is reported', async () => {
+    vi.mocked(reorderPrograms).mockResolvedValueOnce({ ok: false, reason: PROGRAM_REFUSAL.retry });
+    expect(await reorderHouseholdPrograms(order(), TODAY)).toEqual({
+      ok: false,
+      reason: PROGRAM_REFUSAL.retry,
+    });
+    expect(reportAthleteMiss).not.toHaveBeenCalled();
+    expect(reportOrderProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('a thrown database error leaves as a DbWriteError', async () => {
+    vi.mocked(reorderPrograms).mockRejectedValueOnce(new Error('update failed'));
+    const thrown = await reorderHouseholdPrograms(order(), TODAY).catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(DbWriteError);
   });
 });
 
@@ -428,5 +529,39 @@ describe('the program DAL (FAM-1 7b-ii): a workout page’s program entry', () =
     expect(await getProgramEntry('new', TODAY)).toBeNull();
     expect(readProgramList).not.toHaveBeenCalled();
     expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+});
+
+describe('the program DAL (FAM-1 15 PR 3): Home’s programs by athlete', () => {
+  const TODAY = '2026-11-19';
+  const ATHLETE_ID = '019826b4-0000-7000-8000-0000000000d1';
+
+  it('reads once through the scope, with the route’s today, and passes the map on', async () => {
+    const byAthlete = new Map([
+      [
+        ATHLETE_ID,
+        [{ programPublicId: PROGRAM_ID, name: 'Strength', activeFrom: TODAY, activeTo: null }],
+      ],
+    ]);
+    vi.mocked(readProgramsByAthlete).mockResolvedValueOnce(byAthlete);
+    expect(await getProgramsByAthlete(TODAY)).toBe(byAthlete);
+    expect(vi.mocked(readProgramsByAthlete).mock.calls).toEqual([[db, SCOPE, TODAY]]);
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('with no household is null, with no query and no report', async () => {
+    vi.mocked(getHouseholdScope).mockResolvedValue(null);
+    expect(await getProgramsByAthlete(TODAY)).toBeNull();
+    expect(readProgramsByAthlete).not.toHaveBeenCalled();
+    expect(reportProgramMiss).not.toHaveBeenCalled();
+  });
+
+  it('🔴 a read that throws is rethrown without its data', async () => {
+    vi.mocked(readProgramsByAthlete).mockRejectedValueOnce(
+      Object.assign(new Error('Failed query: select …\nparams: knee sore'), { code: '57014' }),
+    );
+    const thrown = await getProgramsByAthlete(TODAY).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(DbWriteError);
+    expect(String(thrown)).not.toContain('knee sore');
   });
 });

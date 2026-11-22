@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { AppShell } from '@/components/layout/app-shell';
@@ -15,6 +16,7 @@ import {
 } from '@/components/profiles/sign-out';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireSession } from '@/lib/dal/session';
+import { getActiveLocalDay } from '@/lib/active-timezone';
 import { clerkIsConfigured } from '@/lib/clerk';
 import {
   NAV_ROW_CLASS,
@@ -26,6 +28,7 @@ import {
   SIGN_OUT_COPY,
 } from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
+import { getProgramsByAthlete } from '@/lib/dal/program/reads';
 import { listHouseholdAthletes, listProfiles } from '@/lib/dal/profiles';
 
 // Route-segment config must be a static inline literal (Next can't follow an
@@ -45,6 +48,18 @@ export const runtime = 'nodejs';
  * of a short page it takes no attention from "who's logging today?". The provider still lives in the
  * root layout, so the choice applies everywhere and the gate and the landing still follow the device.
  */
+/**
+ * A plain title, the page's own `<h1>` (Next's route announcer reads it on arrival): "Who's logging
+ * today?" above "No household for this account" would be false. `householdState` is `cache()`d.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  await requireSession();
+  const { state } = await householdState();
+  return {
+    title: state === HOUSEHOLD_STATE.none ? NO_HOUSEHOLD_COPY.heading : PICKER_COPY.heading,
+  };
+}
+
 export default async function ProfilePickerPage() {
   // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**
   // 🔴 **The session IS the boundary (AUTH-1 1d).** `getHouseholdScope()` resolves the signed-in
@@ -69,6 +84,12 @@ export default async function ProfilePickerPage() {
   // every archive control off the picker). `listProfiles` has already dropped them, so the subtraction
   // is what tells us there are any.
   const archivedCount = noHousehold ? 0 : (await listHouseholdAthletes()).length - profiles.length;
+  // FAM-1 15 PR 3: each tile names its athlete's programs, from ONE DAL call for the whole page
+  // (never one per tile), as of the household's today, which only a route resolves (AGENTS.md →
+  // Time). That call is one query for the athletes plus one per athlete (`athletesOnPrograms`),
+  // capped by `MAX_HOUSEHOLD_ATHLETES` (25); batching it is in docs/tech-debt.md.
+  const today = await getActiveLocalDay();
+  const programsByAthlete = noHousehold || empty ? null : await getProgramsByAthlete(today);
 
   return (
     /*
@@ -127,7 +148,11 @@ export default async function ProfilePickerPage() {
           <ul aria-label={SETTINGS_COPY.athletes} className="flex flex-col gap-3">
             {profiles.map((profile) => (
               <li key={profile.id}>
-                <ProfileTile profile={profile} />
+                <ProfileTile
+                  profile={profile}
+                  programs={programsByAthlete?.get(profile.id)}
+                  today={today}
+                />
               </li>
             ))}
             {/* Last, always. A create affordance above the things it creates would put an

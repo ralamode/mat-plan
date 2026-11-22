@@ -51,8 +51,16 @@ updates:
       - dependency-name: 'eslint'
         update-types: ['version-update:semver-major']
     groups:
+      # Clerk gets its OWN PR, never ridden in with the weekly group: a Clerk bump changes the sign-in
+      # door and the session layer, and docs/runbooks.md (AUTH-1, "Give a Clerk bump its own reviewed
+      # PR") lists what to re-check (the 'use server' set, telemetry and keyless switches, the CSP
+      # directives, a styled card on the preview). The browser runtime (clerk-js, ui) stays on Clerk's
+      # floating major by decision (maintainer, 2026-11-19), so this group moves only the SDK.
+      clerk:
+        patterns: ['@clerk/*']
       minor-and-patch:
         update-types: ['minor', 'patch']
+        exclude-patterns: ['@clerk/*']
     commit-message:
       # commitlint enforces Conventional Commits on this repo — an unprefixed Dependabot commit would
       # fail the hook on merge.

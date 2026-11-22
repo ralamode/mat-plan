@@ -7,15 +7,16 @@ import {
   yesterdayHalfDone,
 } from '@mat-plan/shared/program/fixtures';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { createFakeDayActions } from '@/app/design/program/fakes';
 import { AMEND_COPY } from '@/lib/constants';
 
+import { ANNOUNCE_TOGETHER_MS } from './announcements';
 import { DAY_COPY, refusalCopy } from './day-copy';
-import { card, describedTexts, held, makeMount, press, status } from './day-test-utils';
+import { card, describedTexts, held, makeMount, press, status, openFolded } from './day-test-utils';
 import { CHANGED_FIELD_CLASS, LOGGED_FIELD_CLASS } from './row-parts';
-import { unitSpoken } from './row-values';
+import { spokenValues, unitSpoken } from './row-values';
 
 /**
  * Change (FAM-1 step 13b-ii): a logged number edited in place, with the maintainer's guards
@@ -115,15 +116,16 @@ describe('Change: where it applies', () => {
     // One field, the reps; the load is text with its own unit, never a kg field.
     expect(within(rowOne).getAllByRole('textbox')).toEqual([reps()]);
     expect(rowOne.textContent).toContain('27.5 lb');
-    // The line says why, asks for no conversion, and the ✓ and the reps field point at it.
-    // Every set logged in pounds has its own line; set 1's is the one its ✓ and field point at.
+    // The note says why, once for the exercise under its heading, and asks for no conversion; every
+    // logged set's ✓ and reps field point at it (#688 follow-up; maintainer, 2026-11-19).
     const said = DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
       noun: DAY_COPY.otherUnitNoun.load,
       unticked: null,
     });
-    expect(within(bench()).getAllByText(said).length).toBeGreaterThan(1);
+    expect(within(bench()).getAllByText(said)).toHaveLength(1);
     expect(describedTexts(benchTick())).toContain(said);
     expect(describedTexts(reps())).toContain(said);
+    expect(describedTexts(benchTick(2))).toContain(said);
     // The load cell says the unit's word, not its code, to a screen reader (plan U2.5).
     const cell = within(rowOne).getByText(unitSpoken('lb'));
     expect(cell.className).toContain('sr-only');
@@ -249,6 +251,7 @@ describe('Change: saving', () => {
 
   it('a single row (a Duration) changes the same way', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     const minutes = within(splits).getByRole<HTMLInputElement>('textbox');
     expect(minutes.value).toBe('5');
@@ -260,6 +263,7 @@ describe('Change: saving', () => {
 
   it('a single row’s ✕ is named for it and puts the number back, focus on its ✓', async () => {
     const { actions } = mount(yesterdayHalfDone, { change: true });
+    openFolded();
     const splits = card('Morning habits', 'Splits stretch');
     const minutes = within(splits).getByRole<HTMLInputElement>('textbox');
     type(minutes, '6');
@@ -478,6 +482,7 @@ describe('a ✓ after an un-tick that answers with the same entry (a writer that
         logRow: async (input) => ({ ok: true, entryPublicId: id, values: input.values }),
       }),
     });
+    openFolded();
     const el = () => card('Morning habits', 'Splits stretch');
     const tickButton = () =>
       within(el()).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') });
@@ -511,6 +516,7 @@ describe('an un-tick that the page’s data has caught up with (the same id may 
 
   it('another phone’s ✓ after this one’s un-tick shows the set logged', async () => {
     const control = mount(yesterdayHalfDone);
+    openFolded();
     await press(tickButton());
     expect(tickButton().getAttribute('aria-pressed')).toBe('false');
     expect(splitsOf(control.plan).rows[0]!.logged).toBeNull(); // the data has caught up
@@ -532,6 +538,7 @@ describe('an un-tick that the page’s data has caught up with (the same id may 
         untickRow: a.untickRow,
       }),
     });
+    openFolded();
     await press(tickButton());
     const minutes = within(el()).getByRole<HTMLInputElement>('textbox');
     fireEvent.change(minutes, { target: { value: '6' } });
@@ -842,6 +849,7 @@ describe('Change: second-pass fixes', () => {
         }),
       }),
     });
+    openFolded();
     const el = () => card('Morning habits', 'Splits stretch');
     const tickButton = () =>
       within(el()).getByRole('button', { name: DAY_COPY.logLabel('Splits stretch') });
@@ -1200,5 +1208,344 @@ describe('Change: a row logged in another unit (12d-iii)', () => {
     expect(within(item).queryAllByRole('textbox')).toHaveLength(0);
     const tick = within(item).getByRole('button', { name: DAY_COPY.logLabel('Vest weight') });
     expect(describedTexts(tick)).toContain(said);
+  });
+});
+
+describe('the other-unit note, once per exercise (#688 follow-up)', () => {
+  /** `yesterdayHalfDone` with the bench in kg, and only the given sets still logged (in lb). */
+  function inKg(keep: readonly number[] = []): DayPlan {
+    const kg: DayPlan = structuredClone(yesterdayHalfDone);
+    const item = kg.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!;
+    item.unit = 'kg';
+    if (keep.length) for (const row of item.rows) if (!keep.includes(row.set)) row.logged = null;
+    return kg;
+  }
+  const said = () =>
+    DAY_COPY.otherUnit(unitSpoken('lb'), unitSpoken('kg'), {
+      noun: DAY_COPY.otherUnitNoun.load,
+      unticked: null,
+    });
+  /** Every description in the card resolves: none points at an element that is not there. */
+  const noDangling = () => {
+    for (const el of within(bench())
+      .queryAllByRole('button')
+      .concat(within(bench()).queryAllByRole('textbox'))) {
+      expect(describedTexts(el).join(' | ')).not.toContain('(missing #');
+    }
+  };
+
+  it('the note stays for the visit when its last set is un-ticked; the row says its own line', async () => {
+    mount(inKg([1]), { change: true });
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    noDangling();
+    await press(benchTick());
+    // Un-ticked: the row's own line, with its own copy; the note above has not moved.
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    expect(describedTexts(benchTick()).some((t) => t.includes('Tap ✓'))).toBe(true);
+    noDangling();
+  });
+
+  it('an un-tick in flight keeps the note and adds no row line', async () => {
+    const gate = held();
+    mount(inKg([1]), {
+      change: true,
+      wrap: (a) => ({ untickRow: (input) => gate.after(() => a.untickRow(input)) }),
+    });
+    await act(async () => {
+      fireEvent.click(benchTick());
+    });
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    expect(describedTexts(benchTick())).toContain(said());
+    noDangling();
+    await gate.resolve();
+  });
+
+  it('the note goes when the workout changes back to the unit its sets were logged in', async () => {
+    const control = mount(inKg([1]), { change: true });
+    expect(within(bench()).getAllByText(said())).toHaveLength(1);
+    const back: DayPlan = structuredClone(control.plan);
+    back.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!.unit = 'lb';
+    await act(async () => control.setPlan(back));
+    // Never "Logged in pounds before the workout changed to pounds".
+    expect(within(bench()).queryByText(/before the workout changed/)).toBeNull();
+    noDangling();
+  });
+
+  it('a row never points at a note naming another unit than its own (a distance in two units)', async () => {
+    const logged = (set: number, unit: 'm' | 'yd', value: number) => ({
+      entryPublicId: `01930000-0000-7000-8000-0000000000f${set}`,
+      values: { quantities: [{ slot: 'distance' as const, unit, value }] },
+      prescribedText: '40 m',
+    });
+    const withRun = (unit: 'm' | 'mi', rows: Array<ReturnType<typeof logged> | null>): DayPlan => {
+      const plan: DayPlan = structuredClone(everyTypeOnce);
+      const item = plan.workouts
+        .flatMap((w) => w.items)
+        .find((i) => i.trackingType === 'distance')!;
+      item.unit = unit;
+      item.rows = rows.map((l, i) => ({ set: i + 1, previous: null, logged: l }));
+      return plan;
+    };
+    const control = mount(withRun('m', [logged(1, 'yd', 40), null]), { change: true });
+    const workout = control.plan.workouts.find((w) =>
+      w.items.some((i) => i.trackingType === 'distance'),
+    )!;
+    const item = workout.items.find((i) => i.trackingType === 'distance')!;
+    const el = () => card(workout.name, item.name);
+    // The item goes to miles; set 2 was logged in metres meanwhile: two other units now.
+    await act(async () =>
+      control.setPlan(withRun('mi', [logged(1, 'yd', 40), logged(2, 'm', 40)])),
+    );
+    const tick = (set: number) =>
+      within(el()).getByRole('button', {
+        name: DAY_COPY.logLabel(DAY_COPY.setLabel(item.name, set)),
+      });
+    expect(describedTexts(tick(2)).join(' ')).toMatch(/metres|meters/);
+    expect(describedTexts(tick(2)).join(' ')).not.toMatch(/yards/);
+    expect(describedTexts(tick(1)).join(' ')).toMatch(/yards/);
+    for (const set of [1, 2])
+      expect(describedTexts(tick(set)).join(' ')).not.toContain('(missing #');
+  });
+
+  it('no description dangles in any state: logged, un-ticked, re-ticked', async () => {
+    mount(inKg(), { change: true });
+    noDangling();
+    await press(benchTick());
+    noDangling();
+    await press(benchTick());
+    noDangling();
+  });
+});
+
+describe('another phone’s Change over a draft that was not an edit (12c-iii follow-up; #462)', () => {
+  /** The plan with set 1 of the bench amended to `value` lb, as another phone would. */
+  function amendedElsewhere(plan: DayPlan, value: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    const row = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!;
+    row.logged!.values.quantities[0]!.value = value;
+    return next;
+  }
+
+  it('a draft typed back to what was stored is dropped: no "Not saved", and a blur sends nothing', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    await act(async () => control.setPlan(amendedElsewhere(control.plan, 35)));
+    expect(load().value).toBe('35');
+    expect(within(bench()).queryByText(/^Not saved\./)).toBeNull();
+    await leave(load());
+    expect(control.actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('weight × reps: only the field typed back is dropped; the typed reps go with the other phone’s load', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    type(reps(), '9');
+    await act(async () => control.setPlan(amendedElsewhere(control.plan, 35)));
+    expect(load().value).toBe('35');
+    await leave(reps());
+    expect(control.actions.amendRow.mock.calls[0]![0]).toMatchObject({
+      values: { quantities: [{ value: 35 }], reps: 9 },
+    });
+  });
+
+  it('a new entry with new numbers keeps no part of the draft', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    type(reps(), '9');
+    const next: DayPlan = structuredClone(control.plan);
+    const row = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!;
+    row.logged!.entryPublicId = ENTRY_3;
+    row.logged!.values.quantities[0]!.value = 35;
+    await act(async () => control.setPlan(next));
+    await leave(reps());
+    expect(control.actions.amendRow).not.toHaveBeenCalled();
+  });
+
+  it('a real edit stays, and says what is stored now', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '40');
+    await act(async () => control.setPlan(amendedElsewhere(control.plan, 35)));
+    expect(load().value).toBe('40');
+    expect(within(bench()).getByText(DAY_COPY.change.notSaved('35 lb × 8'))).toBeTruthy();
+  });
+});
+
+describe('a failed save, then another phone’s Change to that entry', () => {
+  const failing = () => ({
+    amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }),
+  });
+  function changedElsewhere(plan: DayPlan, value: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = value;
+    return next;
+  }
+
+  it('no longer says "Still" the old number: the draft’s own line names what is stored now', async () => {
+    const control = mount(yesterdayHalfDone, { change: true, wrap: failing });
+    type(load(), '30');
+    await leave(load());
+    expect(within(bench()).getByText(DAY_COPY.change.failed('27.5 lb × 8'))).toBeTruthy();
+    expect(screen.getByText(DAY_COPY.notSaved(1))).toBeTruthy();
+    await act(async () => control.setPlan(changedElsewhere(control.plan, 35)));
+    expect(within(bench()).queryByText(/^Couldn’t save\./)).toBeNull();
+    expect(within(bench()).getByText(DAY_COPY.change.notSaved('35 lb × 8'))).toBeTruthy();
+    expect(load().value).toBe('30');
+    // Only a failed write counts as not saved; a typed draft never does.
+    expect(screen.queryByText(DAY_COPY.notSaved(1))).toBeNull();
+  });
+});
+
+describe('another phone’s change, said to a screen reader (only for a row this one was changing)', () => {
+  /** The plan with bench set 1's load at `value` lb, as another phone would leave it. */
+  function loadElsewhere(plan: DayPlan, value: number): DayPlan {
+    const next: DayPlan = structuredClone(plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = value;
+    return next;
+  }
+  /**
+   * Seconds later, as on a gym floor: past `ANNOUNCE_TOGETHER_MS`, so this phone's earlier sentence
+   * is no longer beside the change (jsdom runs a whole test inside the window).
+   */
+  async function later(run: () => void) {
+    const clock = vi
+      .spyOn(performance, 'now')
+      .mockReturnValue(performance.now() + ANNOUNCE_TOGETHER_MS * 10);
+    try {
+      await act(async () => run());
+    } finally {
+      clock.mockRestore();
+    }
+  }
+  const spoken = (value: number) => `${value} ${SPOKEN.lb}, 8 reps`;
+  const said = (value: number) => DAY_COPY.announce.changedElsewhere(setLabel(1), spoken(value));
+
+  it('a row nobody is changing here stays silent', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const before = status();
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(before);
+  });
+
+  it('a number typed back to what was stored (no "Not saved" shown) stays silent', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    const stored = load().value;
+    type(load(), '99');
+    type(load(), stored);
+    const before = status();
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(before);
+  });
+
+  it('a row showing "Not saved": one sentence, with the new number, and that this one is not saved', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(said(35));
+    expect(load().value).toBe('30');
+  });
+
+  it('the stored number caught up with what was typed: only what is saved, never "elsewhere"', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '35');
+    await act(async () => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spoken(35)));
+  });
+
+  it('this phone’s own write, landed with its answer lost: "is saved as", not "changed elsewhere"', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({
+        amendRow: async () => {
+          throw new Error('the answer was lost');
+        },
+      }),
+    });
+    type(load(), '30');
+    await leave(load());
+    await later(() => control.setPlan(loadElsewhere(control.plan, 30)));
+    expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spoken(30)));
+  });
+
+  it('the load moved to another unit, so it is no longer a field: only what is saved', async () => {
+    const control = mount(yesterdayHalfDone, { change: true });
+    type(load(), '30');
+    const next: DayPlan = structuredClone(control.plan);
+    const logged = next.workouts.find((w) => w.name === HEAVY)!.items.find((i) => i.name === BENCH)!
+      .rows[0]!.logged!;
+    logged.values.quantities[0] = { ...logged.values.quantities[0]!, unit: 'kg', value: 14 };
+    await act(async () => control.setPlan(next));
+    expect(status()).toBe(DAY_COPY.announce.savedAs(setLabel(1), spokenValues(logged.values)));
+  });
+
+  it('after a failed save, too', async () => {
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    await later(() => control.setPlan(loadElsewhere(control.plan, 35)));
+    expect(status()).toBe(said(35));
+  });
+
+  it('this phone’s own save is never "changed elsewhere": exactly its own sentence', async () => {
+    mount(yesterdayHalfDone, { change: true, wrap: () => ({ amendRow: amendOk }) });
+    type(load(), '30');
+    await leave(load());
+    expect(status()).toBe(
+      DAY_COPY.announce.changed(
+        setLabel(1),
+        `27.5 ${SPOKEN.lb}, 8 reps`,
+        `30 ${SPOKEN.lb}, 8 reps`,
+      ),
+    );
+  });
+});
+
+describe('another phone’s change beside this phone’s own sentence (one node each)', () => {
+  it('both are read, the earlier node untouched; this phone’s next sentence replaces its own', async () => {
+    // A fixed clock: the whole test is one moment, inside ANNOUNCE_TOGETHER_MS on any runner.
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(1_000_000);
+    onTestFinished(() => clock.mockRestore());
+    const control = mount(yesterdayHalfDone, {
+      change: true,
+      wrap: () => ({ amendRow: async () => ({ ok: false as const, reason: ROW_REFUSAL.retry }) }),
+    });
+    type(load(), '30');
+    await leave(load());
+    const region = screen.getByRole('status');
+    const failedNode = region.firstElementChild;
+    const next: DayPlan = structuredClone(control.plan);
+    next.workouts
+      .find((w) => w.name === HEAVY)!
+      .items.find((i) => i.name === BENCH)!.rows[0]!.logged!.values.quantities[0]!.value = 35;
+    await act(async () => control.setPlan(next));
+    expect(region.children).toHaveLength(2);
+    expect(region.firstElementChild).toBe(failedNode);
+    expect(region.lastElementChild!.textContent).toContain(
+      DAY_COPY.announce.changedElsewhere(setLabel(1), `35 ${SPOKEN.lb}, 8 reps`),
+    );
+    // This phone's own sentences never stack: Escape here is said beside the other phone's only.
+    const otherNode = region.lastElementChild;
+    fireEvent.keyDown(load(), { key: 'Escape' });
+    expect(region.children).toHaveLength(2);
+    // The other phone's sentence stays, the same node; this phone's failed one is gone.
+    expect(region.firstElementChild).toBe(otherNode);
+    expect(failedNode!.isConnected).toBe(false);
+    expect(region.lastElementChild!.textContent).toContain(
+      DAY_COPY.announce.cancelled(setLabel(1)),
+    );
   });
 });

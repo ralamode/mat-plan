@@ -1,7 +1,13 @@
 'use client';
 
-import { SUPERVISION_LABELS, TRACKING_TYPE, type DayItem, type RowValues } from '@mat-plan/shared';
-import { useEffect } from 'react';
+import {
+  SUPERVISION_LABELS,
+  TRACKING_TYPE,
+  type DayItem,
+  type RowValues,
+  type Unit,
+} from '@mat-plan/shared';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { INPUT_CLASS, NAME_WRAP_CLASS, SAVING_LABEL, TICK_FOCUS_CLASS } from '@/lib/constants';
@@ -12,6 +18,7 @@ import { DAY_COPY } from './day-copy';
 import {
   fieldsOf,
   otherUnitOf,
+  otherUnitsOf,
   placeholderOf,
   unitSpoken,
   unitSuffix,
@@ -28,7 +35,7 @@ import { useRow } from './use-row';
 /**
  * An item's card, and how a logged one looks (`docs/design.md` → the `done` tokens): a `border-done`
  * edge, which is the boundary, and a `done-surface` tint, which is decoration. Secondary text on the
- * tint is `done-muted-foreground`, since `muted-foreground` is under AA there.
+ * tint is `done-muted-foreground`, for its green hue and margin (`muted-foreground` is 4.57:1 there).
  *
  * ⚠️ **No tint while the row shows a message.** `destructive` text is 4.30:1 on the light tint,
  * under AA, and a failed un-tick puts "Still logged…" on a logged row. The edge and the filled ✓
@@ -62,7 +69,7 @@ const FIELD_FOCUS_CLASS = `focus-visible:ring-0 ${TICK_FOCUS_CLASS.replace(
 export const LOGGED_FIELD_CLASS = `${TINT_CLASS} ${LOGGED_CARD_CLASS} ${FIELD_FOCUS_CLASS}`;
 export const CHANGED_FIELD_CLASS = `bg-background border-2 border-foreground ${FIELD_FOCUS_CLASS}`;
 /** A button on the tint (Undo, the Change's ✕, "+ Add set"): the ✓'s outline, so the row's controls focus alike. */
-export const ON_TINT_BUTTON_FOCUS_CLASS = `focus-visible:ring-0 focus-visible:border-transparent ${TICK_FOCUS_CLASS}`;
+export { ON_TINT_BUTTON_FOCUS_CLASS } from '@/lib/constants';
 
 export const TICK_CLASS =
   'flex size-11 shrink-0 items-center justify-center rounded-lg border text-lg';
@@ -140,6 +147,7 @@ export function Tick({
   described,
   label,
   errorId,
+  unitNote,
   tickRef,
 }: {
   r: ReturnType<typeof useRow>;
@@ -147,6 +155,8 @@ export function Tick({
   described: boolean;
   label: string;
   errorId: string;
+  /** The item's other-unit note, when it shows (`rowUnitLine`). */
+  unitNote?: UnitNote;
   tickRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   if (r.canWrite) {
@@ -172,7 +182,7 @@ export function Tick({
           [
             described ? errorId : null,
             r.pending ? `${errorId}-saving` : null,
-            r.otherUnit ? otherUnitLineId(errorId) : null,
+            rowUnitLine(r, errorId, unitNote).id,
           ]
             .filter(Boolean)
             .join(' ') || undefined
@@ -289,6 +299,7 @@ export function RowInput({
   field,
   name,
   errorId,
+  unitNote,
   tickRef,
   inputRef,
   className,
@@ -299,6 +310,8 @@ export function RowInput({
   field: RowField;
   name: string;
   errorId: string;
+  /** The item's other-unit note, when it shows (`rowUnitLine`). */
+  unitNote?: UnitNote;
   tickRef: React.RefObject<HTMLButtonElement | null>;
   inputRef: (el: HTMLInputElement | null) => void;
   className: string;
@@ -332,7 +345,7 @@ export function RowInput({
       aria-label={DAY_COPY.fieldLabel(name, spoken)}
       aria-invalid={invalid || undefined}
       aria-describedby={
-        [r.error ? errorId : null, r.otherUnit ? otherUnitLineId(errorId) : null]
+        [r.error ? errorId : null, rowUnitLine(r, errorId, unitNote).id]
           .filter(Boolean)
           .join(' ') || undefined
       }
@@ -347,6 +360,74 @@ export function fieldHeader(item: DayItem, field: RowField): string {
   return item.unit === 'min' ? DAY_COPY.minHeader : unitSuffix(item.unit);
 }
 
+/**
+ * What a row's other-unit explanation is (#688 follow-up; maintainer, 2026-11-19): **the item's note
+ * under its heading** for a row logged in another unit while the note shows, or **the row's own
+ * line** for a row un-ticked this visit (its copy differs) and, as a fallback, for a logged row when
+ * there is no note (the page's data lags the row's own state on a first render, or the item's rows
+ * are in two other units). `id` is what the ✓ and the fields point at; `own` says the row renders
+ * its line. One rule for the rendering and the reference, so no description dangles.
+ */
+export function rowUnitLine(
+  r: ReturnType<typeof useRow>,
+  errorId: string,
+  unitNote: UnitNote | undefined,
+): { id: string | null; own: boolean } {
+  if (!r.otherUnit) return { id: null, own: false };
+  // Only a note that names THIS row's unit explains it (a distance can be logged in two units).
+  if (!r.otherUnit.unticked && unitNote?.unit === r.otherUnit.from) {
+    return { id: unitNote.id, own: false };
+  }
+  return { id: otherUnitLineId(errorId), own: true };
+}
+
+/**
+ * The item's other unit for the note under its heading, **kept for the visit once seen**, as a set
+ * row is (D20): an un-tick or a re-log in the new unit does not take the note away under a thumb
+ * and move every row below it; a reload decides afresh.
+ */
+export function useOtherUnitNote(item: DayItem): Unit | null {
+  const units = otherUnitsOf(item);
+  const live = units.size === 1 ? [...units][0]! : null;
+  const [held, setHeld] = useState(live);
+  // A new single other unit replaces the held one; two at once mean no note (one sentence names one
+  // unit, so each row keeps its own line). None keeps what was held, for the visit.
+  if (live !== null && live !== held) setHeld(live);
+  if (units.size > 1 && held !== null) setHeld(null);
+  // Never a note that names the item's own unit: the workout changed back, nothing is "other" now.
+  return held !== null && held !== item.unit ? held : null;
+}
+
+/** The item's other-unit note as the rows see it: its id, and the unit it names (`rowUnitLine`). */
+export type UnitNote = { id: string; unit: Unit };
+
+/**
+ * The note under an item's heading for its rows logged in another unit (#688 follow-up): once per
+ * exercise, the logged wording, `secondaryText` on the tint, not live. The rows' ✓ and fields point
+ * at it (`rowUnitLine`).
+ */
+export function OtherUnitNote({
+  item,
+  from,
+  id,
+  onTint,
+}: {
+  item: DayItem;
+  from: Unit;
+  id: string;
+  onTint: boolean;
+}) {
+  if (!item.unit) return null;
+  return (
+    <p id={id} className={cn('mt-1 text-sm', secondaryText(onTint))}>
+      {DAY_COPY.otherUnit(unitSpoken(from), unitSpoken(item.unit), {
+        noun: fixNoun(item),
+        unticked: null,
+      })}
+    </p>
+  );
+}
+
 /** The id of a row's other-unit line, from the row's message id (`OtherUnitLine`). */
 export const otherUnitLineId = (errorId: string) => `${errorId}-unit`;
 
@@ -359,14 +440,17 @@ export function OtherUnitLine({
   r,
   item,
   errorId,
+  unitNote,
   onTint,
 }: {
   r: ReturnType<typeof useRow>;
   item: DayItem;
   errorId: string;
+  /** The item's note, when it shows: a logged row in its unit points at it and shows no line. */
+  unitNote?: UnitNote;
   onTint: boolean;
 }) {
-  if (!r.otherUnit) return null;
+  if (!r.otherUnit || !rowUnitLine(r, errorId, unitNote).own) return null;
   const { from, to, unticked } = r.otherUnit;
   return (
     <p id={otherUnitLineId(errorId)} className={cn('text-sm', secondaryText(onTint))}>

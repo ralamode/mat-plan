@@ -445,10 +445,28 @@ are clean.
 
 ---
 
+## The seed fails on the movement library (`CAT-3` A2-ii)
+
+**When:** `migrate.yml`'s `db:seed` step is red with a foreign-key or `CHECK` error on `movements`,
+`movement_equipment` or `movement_muscles`. Since A2-ii production's seed writes `CATALOG_MOVEMENTS`
+([plan](./plans/cat-3-a2-ii-seed-switch.md)), so a library entry the database refuses fails every push.
+
+- **Nothing is left behind.** The library is written in one transaction (`seedCatalog`), so a failed
+  run writes no catalog row and no join row.
+- **`db:migrate` ran first, in the same job.** A red run may still have applied its migrations; read
+  the log's migrate step, not the run's colour, before the next migration is merged (AGENTS.md → Queue).
+- **Fix forward:** correct the entry in `packages/shared/src/catalog/data/` in a PR. Never edit the
+  database by hand to let the entry in.
+- **A timeout is different: re-run, do not fix forward.** A `57014` (statement timeout) or `55P03`
+  (lock timeout) on the catalog insert also leaves nothing behind. Re-dispatch `migrate.yml`
+  (`workflow_dispatch`, which runs `main`) once traffic is quiet, and compare the wall time the A2-ii
+  rehearsal recorded with the 60-second statement timeout (`packages/db/scripts/seed.ts`).
+
 ## The seed's shadow guard fired (a WARNING since `TEN-2c` — it no longer refuses)
 
 **When:** a `migrate.yml` run is **green** and its `db:seed` step logs
-`seed: N seeded movement slug(s) are ALSO owned by a household …`. Added at `TEN-2b` as a **throw**;
+`seed: N household-owned movement(s) share a legacy seed slug and M share a library slug …` (since
+`CAT-3` A2-i, 2026-11-19; before that, `seed: N seeded movement slug(s) are ALSO owned by a household …`). Added at `TEN-2b` as a **throw**;
 **demoted to a warning at `TEN-2c`** (2026-10-12), when migration `0017` removed the premise it was
 built on. ⚠️ **If a run went RED on that message, it is running a deploy older than `TEN-2c`** — the
 refusal and its recovery are at the end of this section.
@@ -472,13 +490,30 @@ nothing complaining loudly — a loud confidentiality guard turned into a silent
 reference data, which is strictly worse than what it replaced. So the filter is **gone** and the
 `throw` is a `console.warn`: `packages/db/src/seed.ts` → the long note above the `movements` insert.
 
-**If you want the shadowed row gone anyway — adopt or rename, never null.** Pick one, per named slug:
+**To see which rows, run this from your own console** (never in a workflow step, whose log is public):
+
+```sql
+-- Slugs and counts only. Never select `name` or a household's `public_id`: a row's name is a
+-- household's free text, and this output must never be pasted into a PR, issue, plan, changelog
+-- fragment or commit. Soft-deleted rows are included, as the seed's count includes them.
+SELECT m.slug, count(*) AS household_rows
+FROM movements m
+WHERE m.household_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM movements g WHERE g.household_id IS NULL AND g.slug = m.slug)
+GROUP BY m.slug
+ORDER BY m.slug;
+```
+
+**If you want the shadowed row gone anyway — adopt or rename, never null.** Pick one, per slug the
+query lists:
 
 1. **The household's row is the real one** (someone typed a movement the catalog later added): the
    household row and the curated row must be merged. That is `TEN-2c-1`'s split machinery in reverse —
    repoint that household's `entries.movement_id` / `prescriptions.movement_id` to the curated row,
    then delete the household row. Needs a guarded, dry-run-first correction
-   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`.
+   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`. 🔴 **The correction takes the slug
+   from the environment** (as `household-claim-2026-10-25` takes its targets), never as a committed
+   constant: a slug a household holds says what they typed, and `git log -S` keeps it after any removal.
 2. **The seed row is the mistake** (the slug should not have been added globally): revert the
    `MOVEMENT_SEED_ROWS` entry in its own PR. The seed then stops adding it and the warning stops.
 
@@ -487,10 +522,10 @@ that promotes one household's free text into the global reference namespace, whi
 `ON DELETE NO ACTION` exists to prevent (`packages/db/src/schema.ts` → the `movements` docblock).
 
 ⚠️ **The message is published, and a warning is published exactly as widely as the refusal was.**
-`migrate.yml` logs are world-readable on a public repo, so the message names **seed slugs only** — a
-public const — and never the colliding row's `name`, which is uncontrolled household free text.
-`db:verify` asserts both halves against the captured `console.warn`; keep that property if you extend
-it, because the privacy half is the one a rewrite loses first.
+`migrate.yml` logs are world-readable on a public repo, so since `CAT-3` A2-i the message is **counts
+only**: no slug (a slug a household also holds says what they typed) and never a row's `name`.
+`db:verify` asserts both against everything printed to stdout and stderr; keep that property if you
+extend it, because the privacy half is the one a rewrite loses first.
 
 **The refusal this replaced, for anyone reading an older run.** While the non-partial
 `movements_slug_unique` lived, Postgres inferred **both** arbiters for
@@ -660,6 +695,14 @@ database — so if you paste the production string by mistake, nothing is applie
 
 **Confirm:** both commands print their `✓` line. In the Neon console the `units`, `profiles`,
 `entries` tables exist and `units` is seeded.
+
+**A preview seeded before `CAT-3` A2-ii** keeps the household items earlier seeds made (Goblet squat,
+Side plank, Jump rope, Easy run) beside the test library's rows, which now shadow them. The app reads
+the test library there (K29). The picker then hides those four household items (a live global row on
+the same slug shadows them) while the programs already made still prescribe them, until the preview is
+reset.
+The same holds for a local database once seeded without `SEED_FIXTURES=1`: it then holds the real
+library, which the app does not read there. Reset either rather than mix the two.
 
 ### 4. A second Upstash database, for Preview
 
@@ -954,7 +997,10 @@ gh run list --workflow ci.yml --commit "$MAIN" --json conclusion,status
   database secret", below). Until it is deleted, the rule is only written down. The cut-off is two
   commits: `OPS-2` PR 1 (no household or athlete) and `CAT-3` A2 (no legacy movements).
   `workflow_dispatch` is safe: it runs `main`.
-- **Hand-run a seed only from a freshly fetched `origin/main`** ("Manually re-seed", above).
+- **Hand-run a seed only from a freshly fetched `origin/main`** ("Manually re-seed", above). The one
+  exception is `CAT-3` A2-ii's pre-merge rehearsal: the PR's head, on a Neon **child branch** of
+  production that is deleted afterwards, never on production or its restore branch
+  ([plan](./plans/cat-3-a2-ii-seed-switch.md), "Risks, the rehearsal, and rollback").
 - Production's `migrate.yml` runs are **never deleted**: they are the record of which DDL reached
   production and when.
 - **From the fresh start's step 3 on, `OPS-2` PR 1 is fixed forward only**: a revert would re-create
@@ -1032,6 +1078,158 @@ in **our** wiring (step 1–3), not Clerk's.
 ⚠️ **A preview URL that returns `<title>Login – Vercel</title>` is Vercel Deployment Protection**, not
 our app and not Clerk — an anonymous fetch cannot get past it, so curl-based checks of a preview test
 nothing until you are signed in to Vercel in that browser.
+
+## The fresh start (`CAT-3` R2) — ONE TIME
+
+> 🔴 **One time.** This section runs once, on the maintainer's go (spec R5: _"the fresh start runs
+> only on the maintainer's go, recorded with its date"_), and the spec's post-R2 cleanup removes it
+> afterwards so it never becomes a permanent list of dated steps. The plan is
+> [priv-3-fresh-start-prep.md](./plans/priv-3-fresh-start-prep.md); the order is the spec's
+> ([cat-3-movement-library.md](./specs/cat-3-movement-library.md) → "The fresh start, in order").
+
+**Preconditions** (the spec's list, every one checked before step 0): FAM-1 step 15, P11 and B3 in
+production; `OPS-2` PR 1 deployed (§ "A household or athlete with a seed id", the check); A2 deployed;
+`PRIV-3` 2a, RC and R0 merged; a launch-sized catalog on `main`; the maintainer's go, with its date.
+
+**How every production command here is run:**
+
+- **In the operator's own terminal, never in an agent session**, so no credential or count reaches a
+  transcript.
+- **The production direct string is read once and never typed into a command line.** History is the
+  leak (§ "Rotate a secret"):
+
+  ```bash
+  read -rs PROD_DB   # paste the production DIRECT (unpooled) string, then Enter; it does not echo
+  ```
+
+  Each command passes it inline as `DATABASE_URL_UNPOOLED="$PROD_DB"`, and step 8 ends with
+  `unset PROD_DB`.
+
+- **The output stays on the terminal.** Never paste it into a PR, an issue or the corrections
+  **Applied** table: the counts describe one family.
+
+### Step 0 — before anything is frozen
+
+1. **Only the seeded household exists.** Run step 3's dry run (below). It must print
+   `households not in SEED_PUBLIC_IDS: live 0, hidden 0`. Anything else stops the fresh start: no tool
+   here removes another household.
+2. **The household's data, offered first** (K15): each athlete's in-app export is taken, **and** the
+   full copy is offered (the in-app export leaves out hidden rows; § "Delete a household", step 1).
+   Either is taken, or the go records that it was declined. ⚠️ **A full copy is produced before step
+   5, and names its movements**: each `movement_id` on `entries` and `prescriptions` is replaced by
+   the movement's name and slug, or the copy carries those `movements` rows. After step 5 the legacy
+   ids name nothing, here or anywhere. Once it is delivered, delete your local copy and record the
+   date in the ledger.
+3. **The dry run's membership line** (`household_members: live L, hidden H`): an account whose only
+   membership is hidden is decided at the go and recorded in the ledger (step 3 deletes that row, and
+   step 7 binds only the accounts it is given).
+4. **The close-out notice PR** is open as a draft (plan D5).
+
+### Step 1 — freeze merges
+
+Tell the lanes. The newest `migrate.yml` run on `main` is green on `main`'s head, with nothing queued
+or running (§ "A household or athlete with a seed id", the check's step 1).
+
+_Second run:_ nothing to repeat.
+
+### Step 2 — cut the restore branch
+
+§ "Cut a Neon RESTORE branch". Write the ledger entry for this erasure (§ "The deletion ledger": the
+household grain, the seeded household's `public_id`, **no Clerk ids**, the go as the verifying
+channel, the export outcome, and the branch's name and expiry).
+
+_Second run:_ keep the same branch; do not cut a second one.
+
+### Step 3 — erase the seeded household (R0)
+
+```bash
+DATABASE_URL_UNPOOLED="$PROD_DB" pnpm --filter @mat-plan/db db:correct erase-seeded-household-2026-11-19
+#   → per-table counts, "total: N row(s)", any pre-flight that will refuse, the memberships line,
+#     the other-households line, then "T table(s), N row(s) would be erased …".
+EXPECT_ERASED_ROWS=N DATABASE_URL_UNPOOLED="$PROD_DB" \
+  pnpm --filter @mat-plan/db db:correct erase-seeded-household-2026-11-19 --apply
+#   → "✓ erased T table(s), N row(s)." and "Do NOT delete the Clerk users step 7 binds".
+```
+
+`N` is the dry run's total, typed back. **Do not delete any Clerk user** that step 7 binds (K15).
+
+**If `--apply` refuses or fails, nothing was erased** (one transaction). Then:
+
+- **A total mismatch** (`… but EXPECT_ERASED_ROWS is …`): someone logged between the dry run and
+  `--apply`. Re-run the dry run, then `--apply` with the new total.
+- **`40P01` (deadlock) or `55P03` (lock timeout)** in `failed (nothing committed): <code> …`: the app
+  was writing to the household at that moment (the core locks the parents in a fixed order, and a log
+  write can take them in the other). Wait a minute, re-run the dry run, then `--apply` with its total.
+  Repeated, ask the household to stop logging for a few minutes.
+- **A pre-flight** (`pre-flight (x) found …`): another household depends on these rows. Stop: no tool
+  here resolves it.
+
+_Second run:_ the dry run prints `the seeded household is not here; nothing to erase`, and `--apply`
+refuses. That is the success state.
+
+### Step 4 — check that no household exists
+
+Re-run step 3's **dry run**. It must print `the seeded household is not here` **and**
+`households not in SEED_PUBLIC_IDS: live 0, hidden 0`. A household found here stops the fresh start.
+
+### Step 5 — delete the old global movements (R1)
+
+```bash
+DATABASE_URL_UNPOOLED="$PROD_DB" pnpm --filter @mat-plan/db db:correct delete-legacy-movements-2026-11-20
+EXPECT_LEGACY_MOVEMENTS=M EXPECT_LEGACY_EQUIPMENT=E EXPECT_LEGACY_MUSCLES=U DATABASE_URL_UNPOOLED="$PROD_DB" \
+  pnpm --filter @mat-plan/db db:correct delete-legacy-movements-2026-11-20 --apply
+```
+
+It removes only global movements that are **not** catalog rows (`movementIsCatalog()`), or that carry
+a legacy seed `public_id`, never by slug, with their equipment and muscle rows. Catalog rows A2 has
+already seeded stay. The dry run always exits 0 and prints every count: the three to delete, the
+references from each table that points at `movements` (read from the catalog, hidden rows included),
+and a `would refuse --apply: …` line when `--apply` would refuse. `--apply` refuses while any reference
+is non-zero, on a foreign key into `movements` it cannot count or that does not abort a delete, and
+when `M`, `E` or `U` differs from what it finds under its lock: each rolls back and deletes nothing.
+**First read the report's "NOT curated" count** (`movements-ownership-2026-10-11`, the `global rows:`
+line): those rows go too when nothing references them, and one may hold a name a household typed
+before `TEN-2b` (`data-inventory.md` §5). The three numbers are a restatement of the current counts,
+not a binding to one dry run: copy them from the dry run just before `--apply`. `--apply` reads
+`DATABASE_URL_UNPOOLED` only and refuses when it is unset.
+
+_Second run:_ `No legacy movements here; nothing to do.`
+
+### Step 6 — seed the catalog
+
+Dispatch `migrate.yml` on `main` (`workflow_dispatch`). Its migrate step has nothing to do; its seed
+inserts every catalog row. **Its log must show zero entries skipped.** If it shows any, re-run step 5,
+then step 6.
+
+### Step 7 — create the household for the adult accounts (RC)
+
+Follow [RC's "What R1 must carry"](./plans/priv-3-rc-create-household.md) (the ids from the
+**production** Clerk dashboard, read at this step, through `read -rs`, the account count said aloud
+before the dry run), then `create-household-2026-11-17`'s dry run and `--apply`.
+
+### Step 8 — the report, then unfreeze
+
+`movements-ownership-2026-10-11` (R4): every `R4 (1)` to `R4 (4)` line reads 0, and so does the line
+"global rows with a modality but no CATALOG_MOVEMENTS slug" (A2-ii's). **A non-zero on any of them is
+a stop**: something wrote a row only the seed should (A2-ii's line is printed once #770 has merged;
+#710 merges after it), so investigate at the console before going on;
+step 5 does not delete those rows (lane P, 2026-11-20). Then `unset PROD_DB`, unfreeze merges, and
+merge the close-out notice PR. **If the run stopped after step 3**, the close-out's athlete and
+household sentences still merge: they became true at step 3.
+
+### Step 9 — the household rebuilds
+
+The household signs in, adds its athletes and builds its program.
+
+### Never after step 7
+
+**Production is never restored to any point before step 3** once step 7 has run — not from the step-2
+branch, not by point-in-time restore. If it ever is, steps 3 to 8 run again. Never attach compute to
+the step-2 branch during steps 3 to 8: it passes every gate the erasure has (same name, same rows).
+
+**Never restore an extract taken before the fresh start**, into any database after it: the global
+movements its rows name are gone (step 5), and the erased household's ledger entry, the only record of
+what was removed, expires with its branch.
 
 ## Rotate a secret (Clerk key / Neon password / GitHub Actions secret)
 
@@ -1323,8 +1521,19 @@ throttled. Until then this alert is the consumer.
 
 ## Cut a Neon RESTORE branch before a destructive/backfill migration (rollback prep)
 
-_TODO — document creating a pre-migration Neon restore point/branch (AGENTS.md "Rollback"), and how to
-swap to it if a backfill goes wrong._
+Before a destructive step (a backfill, a household deletion, the fresh start): in the Neon console,
+**production project → Branches → New branch**, from the default branch at **now**, with **no compute
+attached**. Readable by the project's members only. Record its name and the expiry its procedure sets in
+the ledger (7 days after the apply for a household or an athlete; 3 for a program, workout or item),
+**never in git**.
+
+- **Never attach compute to it while the destructive step's sitting is open**: it holds the same
+  database name and rows as production, so it passes every gate a correction has.
+- **Delete it on its expiry date**, and record the deleted date. Delete the ledger entry once Neon's
+  point-in-time window has also passed the apply date (§ "The deletion ledger").
+
+⚠️ _Unverified against Neon's current docs:_ that a branch with no compute can be restored from, and
+the console's exact labels. R1's PR cites the page it relied on before merge.
 
 ## Promote `e2e` to a required check (branch protection)
 
@@ -1333,7 +1542,24 @@ the `ci-skip-e2e` label + auto-skip already keep it green for irrelevant/docs PR
 
 ## Recover prod after a bad migration / restore from a Neon branch
 
-_TODO — restore-from-branch procedure + how to reconcile the migration journal afterward._
+**Restore** with Neon's operation that resets the default branch onto the restore branch (it keeps the
+connection strings). **Everything written after the cut is lost.** While merges are frozen, no
+migration journal reconcile is needed: the branch's `drizzle.__drizzle_migrations` is the same as
+production's was at the cut, and nothing has migrated since. Check it after the restore:
+`SELECT count(*), max(created_at) FROM drizzle.__drizzle_migrations;` equals the number of entries in
+`packages/db/migrations/meta/_journal.json` on the frozen `main`.
+
+🔴 **Before re-enabling the app, re-apply every removal made after the cut.** A restore brings back
+any household, athlete, program or item removed after the branch was cut, which a family was told
+had gone. List the ledger entries whose apply date is after the cut, and run each removal again from
+its dry run. ⚠️ **Not yet possible for every entry:** the ledger holds no target for a fresh-start
+erasure (it takes none) and the general `erase-household` (`PRIV-3` 2b) is not built. If any entry
+after the cut cannot be re-applied, **stop**: leave the app disabled and decide with the maintainer.
+
+🔴 **After the fresh start's step 7, never restore to a point before its step 3** (§ "The fresh start").
+
+⚠️ _Unverified against Neon's current docs:_ the reset operation's name and what it keeps. R1's PR
+cites the page before merge.
 
 ## First-time environment setup (Neon + Vercel + secrets)
 
@@ -1476,7 +1702,8 @@ it since FAM-1 14b), no per-athlete prescribed targets
 ([data-inventory.md](./privacy/data-inventory.md) §6). The notice promises a full copy on request, so
 **ask whether they want one**, and if they do, produce it by hand **before step 4**, **including
 hidden rows** (`deleted_at IS NOT NULL`: a cleared weigh-in is one, and it is in no export). Handing
-over a partial copy immediately before irreversible destruction is not keeping that promise.
+over a partial copy immediately before irreversible destruction is not keeping that promise. Once
+it is delivered, delete your local copy and record the date in the ledger.
 
 **Deliver it through the channel that verified the request in step 0 — never to whatever address
 asked.** That is the rule: the prohibition is on sending a minor's training history to an
@@ -1912,14 +2139,16 @@ credentials. It must not go in `docs/`, in the corrections **Applied** table, or
 repository: _"household X asked to be deleted on date Y"_ is personal data about an identifiable
 household, and this repo is public and permanent.
 
-| Field                            | Why                                              |
-| -------------------------------- | ------------------------------------------------ |
-| Request date                     | The clock for the 7-day window                   |
-| Household `public_id`            | The target, never a name                         |
-| **The channel that verified it** | Precondition 1's audit trail                     |
-| Clerk user ids (step 0b)         | Recovery if step 6 fails after the rows are gone |
-| Apply date                       | What `OPS-3` replays against                     |
-| Restore-branch-deleted date      | Proof the held copy is gone                      |
+| Field                            | Why                                                                    |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| Request date                     | The clock for the 7-day window                                         |
+| Household `public_id`            | The target, never a name                                               |
+| **The channel that verified it** | Precondition 1's audit trail                                           |
+| Clerk user ids (step 0b)         | Recovery if step 6 fails after the rows are gone                       |
+| Apply date                       | What `OPS-3` replays against                                           |
+| Restore-branch-deleted date      | Proof the held copy is gone                                            |
+| Export outcome (fresh start)     | K15: the in-app export and full copy, each taken or declined at the go |
+| Branch name and expiry           | Which held copy exists, and until when                                 |
 
 **No names, no email bodies, no counts of a child's rows.** The invariant `OPS-3` must honour: a
 per-household restore **replays this ledger before the data is served.**

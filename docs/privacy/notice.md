@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-19. This is a beta.**
+**Last updated: 2026-11-20. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -36,13 +36,14 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **Earlier check-ins and wake-up times** — whether a habit was done or a count, and the day, and
   the clock time a wake-up was tapped. These are still stored from before November 2026; the day page
   no longer records new ones.
-- **How a session felt** — a free-text box.
+- **How a session felt** — a note typed in a free-text box. Notes typed before November 2026 are
+  still stored; the app no longer asks for one.
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
 - **Programs you build yourself** (the **Programs** screen, opened from the home screen): anyone
   signed in to your household can create and rename a program, write and change its workouts, add
-  a movement of your own, set its week and copy a workout, and put an athlete on a program or take
-  them off it. What is
+  a movement of your own, set its week and copy a workout, put an athlete on a program or take
+  them off it, and, from an athlete's page, change the order their programs show in. What is
   stored: a program's name, its
   workouts' names and descriptions, the label you give a workout on a day of the week, and, when you
   copy a workout from another of your programs, that program's name as it was when you copied it.
@@ -62,11 +63,8 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   When an athlete logs a workout, its name as it was that day, and the name you gave a group of
   exercises done together, are kept with the session, so renaming or deleting the workout later
   does not change what was logged.
-  _(Nothing in the live app logs a workout yet: the day page that does is being built. This line is
-  here because the schema is public and you would otherwise find these tables.)_
 
-**The text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
-an **athlete's name**; and, in the program builder, a program's name, a workout's name and
+**The text boxes have no filter.** An **athlete's name**; and, in the program builder, a program's name, a workout's name and
 description, each exercise's instructions and rest note, the name of a group of exercises, the label
 of a workout on a day (in the week and when copying), and the name of a movement you add with
 "+ New item". Whatever goes in is stored exactly as typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
@@ -226,7 +224,7 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | The public source code                                       | Permanently, including its history                                                                                                                                     |
 
 ⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. You can **clear a
-weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap Clear): that
+weigh-in or a wrestling practice** on today or yesterday (tap Change, empty the field, tap its Clear button): that
 hides it, and the app **does not offer to put a cleared one back**, so re-enter the right number
 instead. Anyone signed in to your household can clear any athlete's weigh-in or practice, and the app
 does not record who did. A cleared one is not removed from the database, and it is **not in the
@@ -234,21 +232,27 @@ export** (ask for a full copy, below, and it is included). The only ways anythin
 or household, and asking for one program, workout or typed item to be removed. **Nothing automatically removes a hidden row.** You should know that before you log
 something you might regret.
 
-**What is being built, so you know what to expect.** A **Clear this day** control, which hides
-everything logged on one day at once. Unlike a cleared weigh-in or practice, a cleared day can be **put back**:
-a banner offers **Restore all** while that day is today or yesterday (after that, the day stays
-hidden), and the offer survives a reload because nothing about it is held on your phone. Occasionally a restore will not be possible, because something has since been
-logged in that day's place — when that happens the app will say so rather than fail quietly. There
-will be no per-item Delete button for now: a single weigh-in or practice is cleared by emptying its
-field, as above. Two things are worth saying plainly about every clear:
+**Clear this day.** On **today's** page, **Clear this day** hides every entry logged for that
+athlete on that day, at once, after you type a word to confirm. Nothing is erased. Unlike a cleared
+weigh-in or practice, a cleared day can be **put back**: a banner offers **Restore all** while that
+day is today or yesterday, so a day cleared today can be put back until the end of tomorrow. After
+that the entries stay hidden and out of the export; a full copy on request includes them, and
+nothing short of deleting the athlete or the household removes them (though a cleared workout row
+ticked again is written over, below). The offer survives a reload,
+because nothing about it is held on your phone. Things worth saying plainly:
 
-- **It hides from everyone in your household, not just from the person who cleared it.** The app does
-  not record who cleared what, and anyone signed in to your household can open any athlete. So a child
-  can clear a weigh-in or a practice and a parent will not see it either. ⚠️ That is still the honest shape of it:
-  per-person sign-in is now the only way in, but the app records no author on an entry, so sign-in
-  alone did not fix this one.
-- **Nothing is erased yet.** A cleared item stays in the database, out of sight and out of the export,
-  until a removal that runs a set number of days later is built.
+- **It hides from everyone in your household, not just from the person who cleared it.** Anyone
+  signed in to your household can clear any athlete's day, and restore it, unless that athlete is
+  archived. The app does not record who did either. ⚠️ Per-person sign-in is now the only way in,
+  but the app records no author on an entry, so sign-in alone did not fix this.
+- **A restore sometimes cannot bring an entry back**, when something has since been logged in its
+  place; the app says so rather than failing quietly. And ticking a cleared workout row again writes
+  the new numbers over the cleared ones.
+- **Workout names, and any notes written with them, stay.** Clearing hides the day's entries, an
+  entry's own note included. The workout's name, its group names and any "how it felt" note stay
+  with the day until the athlete or household is deleted.
+- **Nothing is erased yet.** A cleared entry stays in the database, out of sight and out of the
+  export, until a removal that runs a set number of days later is built.
 
 There is still **no way to permanently remove one single logged item on demand**: the finest grain for
 removing logs is an athlete. Ask, and that is done. (One program, workout or typed item can be removed
@@ -265,7 +269,7 @@ applies once people can be invited as members. Then an adult who is not an owner
 **their own** data (below); a child's copy goes only to an owner. Anyone signed in to the household
 still sees weigh-ins and every other entry in the app. You get a zip of spreadsheet files, one per month: the
 strength log, the bodyweight log and the check-ins: each practice's minutes, and the older check-ins
-(habits, counts and any wake-up time, written as a time of day). Once the day page that logs a workout ships, a workout an
+(habits, counts and any wake-up time, written as a time of day). A workout an
 athlete logs from a program has one row per exercise in the strength log, with the **workout's name as
 it was that day** and its targets. **The athlete's name field is never written into the files**, and
 the folders are named by an internal identifier, not by a person. A workout's name goes out exactly as
@@ -364,7 +368,23 @@ Because this cannot be undone, both of the steps below stay in place:
   current code does not remove it from the history**. That is being worked on, and it is a permanent
   limitation of having built this in the open.
 
+## What changed on 20 November 2026
+
+**"How it felt" and the box for typing a movement's name are no longer listed as text boxes.** No
+page shows either any more. A note or a movement name typed there before is still kept with its
+workout, as "How long we keep it" says. A movement you add in the program builder is still named by
+what you type, and is still in that list.
+
 ## What changed on 19 November 2026
+
+**Clear this day is in the app.** On today's page, it hides every entry logged for an athlete that
+day, after you type a word to confirm, and **Restore all** puts them back while the day is today or
+yesterday. Anyone signed in to the household can do either. Nothing is erased; see "How long we
+keep it" above.
+
+**Removed two notes that said no page logged a workout yet.** The day page has logged workouts since
+an athlete could be put on a program, so a workout logged there is kept and exported as this notice
+describes.
 
 **Only a household owner can download an athlete's export.** Any other sign-in is refused the
 download, and the export link is not shown to it. Everyone signed in to the household still sees
@@ -447,8 +467,9 @@ one.**
 **Reviewed in full against the code and signed off by the maintainer (the household operator),
 2026-10-26. Re-reviewed 2026-11-05** against the retirement of the shared access code, which changed
 who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
-2026-11-19** against the export becoming the household owners' and its rate limit _(pending the
-maintainer's re-read)_.
+2026-11-19** against the export becoming the household owners' and its rate limit, and against
+Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
+the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name. The Clear this day bullet's heading now says "workout names, and any notes written with them" _(the maintainer approved it)_.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out

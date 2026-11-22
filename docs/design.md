@@ -43,8 +43,8 @@ Every authenticated **app screen** is rendered inside **`apps/web/components/lay
   fails a page that declares its own.
 - **The rail is a column, not a page.** It wraps names (never truncates — PROF-1 D11), shows each
   athlete's kind as the picker tile does, and scrolls itself when a large household outgrows the
-  viewport. The **open row is outlined, not filled**: a muted line on `--accent` measures 4.34:1 in
-  the light palette, under AA.
+  viewport. The **open row is outlined, not filled**, a choice since muted text on `--accent` passes AA
+  (4.64:1 light, since `--muted-foreground` moved to L 0.54).
 - **Tailwind v4 breakpoints are `rem`-based**, so `lg` is 64rem — not 1024 device pixels for a reader
   at enlarged browser text. Design the switch as "when there is room", not "on a laptop".
 
@@ -58,22 +58,22 @@ Tailwind via `@theme inline`. Colors are **OKLCH**.
 
 ### Semantic colors (use the Tailwind classes, e.g. `bg-background`, `text-muted-foreground`)
 
-| Token                                | Role                                                                          |
-| ------------------------------------ | ----------------------------------------------------------------------------- |
-| `background` / `foreground`          | page surface / default text                                                   |
-| `card` / `card-foreground`           | card surface / text on card                                                   |
-| `popover` / `popover-foreground`     | overlays                                                                      |
-| `primary` / `primary-foreground`     | primary actions/emphasis                                                      |
-| `secondary` / `secondary-foreground` | secondary actions                                                             |
-| `muted` / `muted-foreground`         | subdued surfaces / secondary text                                             |
-| `accent` / `accent-foreground`       | hover/selected accents                                                        |
-| `destructive`                        | destructive actions/errors                                                    |
-| `done` / `done-foreground`           | a ticked ✓'s fill and a done card's edge / the glyph on the fill              |
-| `done-surface`                       | a logged row's tint; text on it is `card-foreground`, never `done-foreground` |
-| `done-muted-foreground`              | secondary text on `done-surface` (hints, PREVIOUS, "Last time")               |
-| `border` · `input` · `ring`          | hairlines · field borders · focus ring                                        |
-| `chart-1..5`                         | data-viz series (grayscale ramp for now)                                      |
-| `brand`                              | the mark's orange — **the mark ONLY**                                         |
+| Token                                    | Role                                                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| `background` / `foreground`              | page surface / default text                                                   |
+| `card` / `card-foreground`               | card surface / text on card                                                   |
+| `popover` / `popover-foreground`         | overlays                                                                      |
+| `primary` / `primary-foreground`         | primary actions/emphasis                                                      |
+| `secondary` / `secondary-foreground`     | secondary actions                                                             |
+| `muted` / `muted-foreground`             | subdued surfaces / secondary text                                             |
+| `accent` / `accent-foreground`           | hover/selected accents                                                        |
+| `destructive` / `destructive-foreground` | destructive actions/errors / the label on a solid destructive button          |
+| `done` / `done-foreground`               | a ticked ✓'s fill and a done card's edge / the glyph on the fill              |
+| `done-surface`                           | a logged row's tint; text on it is `card-foreground`, never `done-foreground` |
+| `done-muted-foreground`                  | secondary text on `done-surface` (hints, PREVIOUS, "Last time")               |
+| `border` · `input` · `ring`              | hairlines · field borders · focus ring                                        |
+| `chart-1..5`                             | data-viz series (grayscale ramp for now)                                      |
+| `brand`                                  | the mark's orange — **the mark ONLY**                                         |
 
 `brand` (OSS-2) is 3.5:1 on white: enough for a graphic, not for text. Never use it as a text or button
 colour; a brand-coloured control would need its own, darker token. It needs no `.dark` value (about 6:1
@@ -90,8 +90,8 @@ in both themes:
   disappears, so a ticked ✓ needs a second cue there (a thicker border or a different glyph).
 - **The tint is decoration.** `done-surface` is about 1.1:1 against a card in light and 1.3:1 in
   dark. A done card keeps a `border-done` edge, which is what shows the row's boundary.
-- **Text on the tint** is `card-foreground`, or `done-muted-foreground` for secondary text:
-  `muted-foreground` is 4.27:1 there in light, under AA. `done` is never text on its own; a word or
+- **Text on the tint** is `card-foreground`, or `done-muted-foreground` for secondary text, for its
+  green hue and its margin (`muted-foreground` would measure 4.57:1 there, just over AA). `done` is never text on its own; a word or
   the ✓ goes with it ("Done ✓").
 - **Focus on a ✓ is a full-opacity `ring-foreground` ring OUTSIDE the ✓**, offset onto the tint or
   the card, where it is at least 3:1 in both themes. Never inset it on the fill: there it is 2.0:1
@@ -152,17 +152,23 @@ A set is a scoped block of CSS variables — `@theme inline` resolves every colo
 utility at its use site, so re-declaring the variables on an ancestor re-themes the subtree and no
 component changes. Two constraints that came out of building it:
 
+- **Two red treatments, one rule.** The solid `destructive` button (`bg-destructive
+text-destructive-foreground`, 4.76:1 light / 6.19:1 dark) is for the one button that commits a
+  removal after a confirmation, such as Clear this day's "Clear day". An outline button with red text
+  is for an inline choice beside a safe default (the workout editor's Discard). Its focus is the
+  ✓'s offset outline, since `foreground` inside the dark fill is under 3:1. Inactive (`aria-disabled`, `PENDING_CLASS` at 60%) it is
+  only about 1.55:1 from its live fill in light, and its label about 3:1, so a screen that keeps it
+  inactive says why in words; the state alone does not carry it.
 - **Density only goes up.** Tailwind derives the spacing scale from `--spacing`, and `min-h-11` — the
   44px tap-target bar — is `calc(var(--spacing) * 11)`. Below `0.25rem` every control drops under the
   bar.
-- **Three pairs in the current palette are already under AA** (`muted-foreground` on `muted` 4.34:1,
-  the `destructive` button variant 4.39:1 light / 3.04:1 dark) and the hairlines miss SC
-  1.4.11 (1.26:1 light, 2.69:1 dark). None is rendered by a route today, which is why CI is green:
-  the variant's one call site, the bodyweight Clear (V1-24 3b-bw), overrides its fill to
-  `bg-transparent` so its red text sits on the page background, and its 5% hover tint is not measured.
-  They are pinned with their measured values in `app/design/tokens/token-sets.test.ts` and are inputs
-  to the reskin, not background noise.
+- **One pair in the current palette is under AA** (red text on a red tint, the `destructive` button's
+  old look), and the hairlines miss SC 1.4.11. Neither the red tint nor the hairlines is rendered by
+  a route today, which is why CI is green. Both are pinned in `app/design/tokens/token-sets.test.ts`
+  as inputs to the reskin, not background noise, measured as a browser composites them
+  (gamma-encoded sRGB); they are not restated here. Muted text clears AA on every ground since
+  `--muted-foreground` moved to L 0.54 (2026-11-20), pinned in the same file.
 
 ⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`, **except
-`contrast.ts` and `css-block.ts`**, which `app/done-tokens.test.ts` imports; that PR moves them to
-`lib/` rather than deleting the pins with them.
+`contrast.ts` (with its `contrast.test.ts`) and `css-block.ts`**, which `app/done-tokens.test.ts`
+imports; that PR moves them to `lib/` rather than deleting the pins with them.

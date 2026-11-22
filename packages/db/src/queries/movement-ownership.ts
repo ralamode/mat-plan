@@ -1,7 +1,8 @@
-import { type SQL, sql } from 'drizzle-orm';
+import { getTableName, type SQL, sql } from 'drizzle-orm';
 
+import * as schema from '../schema';
 import type { IdIn } from '../erasure/graph';
-import type { Executor, Reads } from '../writers/executor';
+import { rowsOf, type Executor, type Reads } from '../writers/executor';
 
 /**
  * ## ONE definition of "a movement is REFERENCED", and one census of who references it
@@ -29,6 +30,13 @@ import type { Executor, Reads } from '../writers/executor';
  * erasure's pre-flight (d). It still takes no scope: the caller passes the set of movements
  * (`IdIn`, built by the erasure graph from its own predicate), so the census joins stay unscoped.
  *
+ * ⚠️ **Amended at `CAT-3` R1:** the fresh start's step 5 deletes global movements, and a census
+ * written by hand cannot promise it has seen every table that would hold one. So the deletion reads
+ * every foreign key into `movements` from the catalog (`foreignKeysIntoMovements`) and counts each
+ * (`movementReferenceCounts`). `db:verify` asserts that the catalog's set is exactly
+ * `CENSUS_REFERENCE_TABLES` plus `MOVEMENT_JOIN_TABLES`, so a new FK turns this module's hand list
+ * and the deletion's reader red together.
+ *
  * ## Why these are UNSCOPED, stated so the next reader does not "fix" it
  *
  * A **cross-tenant census cannot ride a `HouseholdScope`** — the question is precisely _"does any
@@ -47,6 +55,24 @@ import type { Executor, Reads } from '../writers/executor';
  * procedure that aborts. The same reasoning as `movements`' own indexes, which carry no
  * `deleted_at IS NULL` either (see `schema.ts` → the `movements` docblock).
  */
+
+/**
+ * The two tables this module's census joins by hand (`entryMovementRefs`, `prescriptionMovementRefs`):
+ * a household's USE of a movement. Named so `db:verify` can compare them with the catalog.
+ */
+export const CENSUS_REFERENCE_TABLES: readonly string[] = [
+  getTableName(schema.entries),
+  getTableName(schema.prescriptions),
+];
+
+/**
+ * The two tables whose FK into `movements` describes the movement itself (`CAT-3` A1). Not a
+ * reference in the census's sense: a consumer deleting a movement deletes these rows first.
+ */
+export const MOVEMENT_JOIN_TABLES: readonly string[] = [
+  getTableName(schema.movementEquipment),
+  getTableName(schema.movementMuscles),
+];
 
 /** The number of rows that cross a household boundary, per referencing table. */
 export type CrossHouseholdMovementRefs = {
@@ -134,10 +160,12 @@ export type SharedMovementRow = {
  *   references at all, which can simply go.
  *
  * Seeded catalog rows come back too and are **not** a defect — they are reference data, shared by
- * design. Discriminating them is exact membership in `MOVEMENT_SEED_PUBLIC_IDS`, which lives in
- * `@mat-plan/shared` and is the **caller's** filter: this query must not grow a second, weaker
- * discriminator (a slug test, or a `public_id` prefix test — both were tried and both were wrong;
- * `db:verify` → the authorship discriminator records why).
+ * design. Discriminating them is the **caller's** filter, and an exact one: a legacy seed row is a
+ * member of `MOVEMENT_SEED_PUBLIC_IDS` (`@mat-plan/shared`); since CAT-3 A2-ii a library row is a
+ * global row with a modality AND a slug of the library in effect (its `public_id` is generated, so
+ * there is no id set to test). This query must not grow a second, weaker discriminator: a slug test
+ * alone, a modality test alone, or a `public_id` prefix test (`db:verify` → the authorship
+ * discriminator records why).
  */
 export async function sharedMovementRows(exec: Executor): Promise<SharedMovementRow[]> {
   return (
@@ -157,4 +185,104 @@ export async function sharedMovementRows(exec: Executor): Promise<SharedMovement
        order by m.id
     `)) as unknown as { rows: { movement_id: number; household_refs: number }[] }
   ).rows.map((r) => ({ movementId: r.movement_id, householdRefs: r.household_refs }));
+}
+
+/** A foreign key into `movements`, as the catalog has it. Names only: no row is read. */
+export type MovementForeignKey = {
+  /** `pg_constraint.conname`. */
+  readonly name: string;
+  readonly schemaName: string;
+  readonly table: string;
+  /** The referencing columns, in key order. One, for every key a count can be built for. */
+  readonly columns: readonly string[];
+  /** The `movements` columns the key points at, in key order. `['id']` for every key today. */
+  readonly referencedColumns: readonly string[];
+  /** `confdeltype`: `a` NO ACTION, `r` RESTRICT, `c` CASCADE, `n` SET NULL, `d` SET DEFAULT. */
+  readonly deleteRule: string;
+};
+
+/**
+ * Every foreign key into `public.movements`, read from `pg_constraint` (`CAT-3` R1, plan D2), the
+ * join tables included. The caller decides what a key it cannot count means: the fresh start's
+ * deletion refuses a multi-column key, a key onto another column and one that does not abort.
+ */
+export async function foreignKeysIntoMovements(exec: Reads): Promise<MovementForeignKey[]> {
+  const rows = rowsOf<{
+    name: string;
+    nsp: string;
+    rel: string;
+    cols: string[] | string;
+    refcols: string[] | string;
+    rule: string;
+  }>(
+    await exec.execute(sql`
+      SELECT c.conname::text AS name, n.nspname::text AS nsp, r.relname::text AS rel,
+             c.confdeltype::text AS rule,
+             (SELECT coalesce(json_agg(a.attname::text ORDER BY k.ord), '[]'::json)
+                FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum) AS cols,
+             (SELECT coalesce(json_agg(a.attname::text ORDER BY k.ord), '[]'::json)
+                FROM unnest(c.confkey) WITH ORDINALITY AS k(attnum, ord)
+                JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.attnum) AS refcols
+        FROM pg_constraint c
+        JOIN pg_class r ON r.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = r.relnamespace
+       WHERE c.contype = 'f' AND c.confrelid = 'public.movements'::regclass
+       ORDER BY n.nspname, r.relname, c.conname`),
+  );
+  const list = (v: string[] | string): string[] => (typeof v === 'string' ? JSON.parse(v) : v);
+  return rows.map((r) => ({
+    name: r.name,
+    schemaName: r.nsp,
+    table: r.rel,
+    columns: list(r.cols),
+    referencedColumns: list(r.refcols),
+    deleteRule: r.rule,
+  }));
+}
+
+/** A key a count can be built for: one column, onto `movements.id`. */
+export function isCountableMovementFk(fk: MovementForeignKey): boolean {
+  return (
+    fk.columns.length === 1 && fk.referencedColumns.length === 1 && fk.referencedColumns[0] === 'id'
+  );
+}
+
+/** How a key's table is named in a line: bare in `public`, qualified elsewhere. */
+export function movementFkTable(fk: MovementForeignKey): string {
+  return fk.schemaName === 'public' ? fk.table : `${fk.schemaName}.${fk.table}`;
+}
+
+/** The rows of one referencing column that point at a selected movement. */
+export type MovementReferenceCount = {
+  readonly table: string;
+  readonly column: string;
+  readonly rows: number;
+};
+
+/**
+ * For each countable key outside `MOVEMENT_JOIN_TABLES`, the rows pointing at a movement `movements`
+ * selects. Built with `sql.identifier`, never `sql.raw`: the names come from the catalog.
+ *
+ * 🔴 **No `deleted_at` conjunct**, as this module's census: a hidden row still holds its FK, so it
+ * still aborts the delete. A key this cannot count is not counted here; the caller refuses it.
+ */
+export async function movementReferenceCounts(
+  exec: Reads,
+  fks: readonly MovementForeignKey[],
+  movements: IdIn,
+): Promise<MovementReferenceCount[]> {
+  const out: MovementReferenceCount[] = [];
+  for (const fk of fks) {
+    if (fk.schemaName === 'public' && MOVEMENT_JOIN_TABLES.includes(fk.table)) continue;
+    if (!isCountableMovementFk(fk)) continue;
+    const column = fk.columns[0]!;
+    const [row] = rowsOf<{ n: number }>(
+      await exec.execute(sql`
+        SELECT count(*)::int AS n FROM ${sql.identifier(fk.schemaName)}.${sql.identifier(fk.table)}
+         WHERE ${movements(sql`${sql.identifier(column)}`)}`),
+    );
+    out.push({ table: movementFkTable(fk), column, rows: row?.n ?? 0 });
+  }
+  return out;
 }

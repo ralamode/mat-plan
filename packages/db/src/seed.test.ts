@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 
 import {
   assertFixturesTargetAllowed,
+  seedLibraryOf,
   FIXTURES_TARGET_REFUSED,
   resolveSeedOptions,
   SEED_FIXTURES_ENV,
   seedFixturesRequested,
+  type SeedCounts,
 } from './seed';
 
 /**
@@ -126,5 +130,47 @@ describe('scripts/seed.ts decides through resolveSeedOptions', () => {
     expect(script).toContain(
       "options.fixtures ? '✓ seed complete (fixtures)' : '✓ seed complete (reference data only)'",
     );
+  });
+});
+
+/**
+ * CAT-3 A2-ii (E4): `seed()` names the movement library once, from its flag, through `seedLibraryOf`,
+ * and with fixtures checks ownership before any write. Pinned by source, as the fixtures call site is
+ * above; `db:verify`'s Proof A, A2 and A3 pin the effect.
+ */
+describe('seed() picks the movement library by its flag (CAT-3 A2-ii, E4)', () => {
+  const source = readFileSync(new URL('./seed.ts', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('export async function seed('));
+  const seedBody = body.slice(0, body.indexOf('\n}\n'));
+
+  it('the real library alone without the flag; the test library and the legacy rows with it', () => {
+    expect(seedLibraryOf('catalog')).toEqual({
+      entries: CATALOG_MOVEMENTS,
+      legacyMovements: false,
+    });
+    expect(seedLibraryOf('fixture')).toEqual({ entries: CATALOG_FIXTURE, legacyMovements: true });
+  });
+
+  it('seed() names the library once, from the flag, and only through seedLibraryOf', () => {
+    expect(seedBody.match(/seedLibraryOf\(fixtures \? 'fixture' : 'catalog'\)/g)).toHaveLength(1);
+    expect(source.match(/seedReference\(db,/g)).toHaveLength(1);
+    expect(seedBody).toContain('seedReference(db, { library })');
+  });
+
+  it('with fixtures, ownership is checked before seedReference writes anything (plan D2)', () => {
+    const check = seedBody.indexOf('if (fixtures) await assertSeedOwnsDatabase(db);');
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(seedBody.indexOf('seedReference(db,'));
+  });
+});
+
+/**
+ * CAT-3 A2-i (spec rule 7): the seed's report is COUNTS ONLY. Every field of `SeedCounts` is a number,
+ * so printing a slug needs a type change first, which review sees. A typecheck pin (`pnpm typecheck`;
+ * `expectTypeOf` does nothing at runtime).
+ */
+describe('SeedCounts holds numbers only (CAT-3 A2-i)', () => {
+  it('every field is a number (a type-level pin: a string field fails typecheck)', () => {
+    expectTypeOf<SeedCounts>().toEqualTypeOf<Readonly<Record<keyof SeedCounts, number>>>();
   });
 });

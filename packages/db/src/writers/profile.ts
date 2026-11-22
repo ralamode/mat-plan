@@ -1,4 +1,4 @@
-import { and, sql, type SQL } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 
 import { foldName, MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
 
@@ -53,13 +53,17 @@ type ArchivedRow = { publicId: string; archivedAt: Date | null };
 export type RenameProfileResult =
   | { ok: true; publicId: string }
   | { ok: false; reason: 'refused' }
-  | { ok: false; reason: 'duplicate'; match: NameMatch };
+  | { ok: false; reason: 'duplicate'; match: NameMatch }
+  /** The name changed since the form showed it; `current` is the stored name (in-household only). */
+  | { ok: false; reason: 'stale'; current: string };
 
 /**
  * The stored name of ONE live profile in `scope`, for the fold guard in `renameProfile`.
  *
  * ⚠️ **Scoped, and narrow on purpose.** It returns the name and nothing else: a caller handed a
- * fuller row would be tempted to render it, and this value exists only to be folded. `scope` reaches
+ * fuller row would be tempted to render it. The value is folded, and since the stale-rename fix it is
+ * also returned as `stale.current`, which is why its scope is leak-bearing: `db:verify` proves another
+ * household gets `refused`, never a name. `scope` reaches
  * the query through `isLiveProfile`, so `scope.householdId` keeps leaving only `ownership.ts`
  * (`scope.test.ts`'s `UNWRAPS_SCOPE`).
  */
@@ -67,9 +71,9 @@ async function profileNameFor(
   exec: Executor,
   scope: HouseholdScope,
   publicId: string,
-): Promise<{ name: string } | null> {
+): Promise<{ name: string; publicId: string } | null> {
   const rows = await exec
-    .select({ name: schema.profiles.name })
+    .select({ name: schema.profiles.name, publicId: schema.profiles.publicId })
     .from(schema.profiles)
     .where(isLiveProfile(publicId, scope))
     .limit(1);
@@ -103,12 +107,18 @@ export async function renameProfile(
   scope: HouseholdScope,
   publicId: string,
   name: string,
+  seenName: string,
   options: { acknowledgedDuplicate?: string } = {},
 ): Promise<RenameProfileResult> {
   // The CURRENT row, read first — the fold guard below needs the stored name, and `refused` must
   // stay distinguishable from `duplicate`. One answer for unknown / soft-deleted / other household.
   const current = await profileNameFor(exec, scope, publicId);
-  if (!current) return { ok: false, reason: 'refused' };
+  // 🔴 **Stale before duplicate** (the stale-rename fix): a form showing an out-of-date name is
+  // refused before the duplicate warning, so the parent is not asked to consent to a collision on
+  // a rename that would not apply. Mutation 428 skips this call (`db:verify`'s stale-and-duplicate
+  // case goes RED).
+  const before = classifyRename(current, name, seenName);
+  if (before) return before;
 
   // 🔴 **A rename that does not change the FOLD creates no new collision, so there is nothing to
   // warn about.** `ada` → `Ada`, `Jose` → `José`, a stray double space, or Save with nothing edited
@@ -125,27 +135,60 @@ export async function renameProfile(
   // ⚠️ **Under CONCURRENCY the match can be self, and an earlier version of this comment claimed
   // otherwise.** Two renames of the SAME row to the same new name: the first commits, and the
   // second's lookup then finds that row — now stored under the new name, folding to the new value,
-  // and self. The parent is told "another athlete looks like they're already called Bea" about
+  // and self. ⚠️ **Narrowed by the stale-rename fix, not retired:** a rival that commits BEFORE the
+  // pre-read is now answered `ok` by `classifyRename` (stored = name); one landing between the
+  // pre-read and this lookup still self-matches. The parent is told "another athlete looks like they're already called Bea" about
   // themselves, while the save has in fact landed. The stored name is correct either way (the
   // rename is idempotent on the fold), so this is advisory copy being wrong, not corruption — and
   // `excludeProfileId` would not have helped, since the write had already happened. `createProfile`
   // states its analogous race the same way rather than claiming an absolute.
   const folded = foldName(name);
-  if (folded !== foldName(current.name) && options.acknowledgedDuplicate !== folded) {
+  if (folded !== foldName(current!.name) && options.acknowledgedDuplicate !== folded) {
     const match = await findNameMatch(exec, scope, folded);
     // ⚠️ **No `atCap` here, unlike `createProfile`.** A rename creates nothing, so the quota is
     // never consulted and a field that is always `false` would read as meaningful.
     if (match) return { ok: false, reason: 'duplicate', match };
   }
 
+  // The precondition, again in the UPDATE itself: a rename committed between the pre-read and here
+  // matches 0 rows (READ COMMITTED re-evaluates a blocked UPDATE's WHERE on the committed row).
+  // Mutation 430 drops this conjunct (`db:verify`'s interleave rig goes RED).
   const rows = await exec
     .update(schema.profiles)
     .set({ name, updatedAt: sql`now()` })
-    .where(isLiveProfile(publicId, scope))
+    .where(and(isLiveProfile(publicId, scope), eq(schema.profiles.name, seenName)))
     .returning({ publicId: schema.profiles.publicId });
 
   const row = rows[0];
-  return row ? { ok: true, publicId: row.publicId } : { ok: false, reason: 'refused' };
+  if (row) return { ok: true, publicId: row.publicId };
+  // 0 rows: the row moved under us. Classify what it holds now; "proceed" here (stored = seen ≠
+  // name, an A→B→A flip around the UPDATE) answers `stale` rather than trying again.
+  const after = await profileNameFor(exec, scope, publicId);
+  return (
+    classifyRename(after, name, seenName) ?? { ok: false, reason: 'stale', current: after!.name }
+  );
+}
+
+/**
+ * **The rename's answer from what the row holds**, or `null` to proceed: the one rule both the
+ * pre-read and the 0-row re-read apply (the stale-rename fix; the `seenValue` idiom of
+ * `updateBodyweightEntryById`, compared by VALUE for the precision trap `writers/bodyweight.ts`
+ * records).
+ *
+ * - **No row** → `refused`: unknown, soft-deleted or another household's, one answer (ADR 0006).
+ * - **Stored = the new name** → `ok` with no write: the replay of a Save that landed, or two devices
+ *   choosing the same name. Mutation 429 drops this arm.
+ * - **Stored ≠ the name the form showed** → `stale`, with the stored name.
+ */
+function classifyRename(
+  row: { name: string; publicId: string } | null,
+  name: string,
+  seenName: string,
+): RenameProfileResult | null {
+  if (!row) return { ok: false, reason: 'refused' };
+  if (row.name === name) return { ok: true, publicId: row.publicId };
+  if (row.name !== seenName) return { ok: false, reason: 'stale', current: row.name };
+  return null;
 }
 
 /**
@@ -372,10 +415,10 @@ async function addProfile(
  *
  * `addProfile` reads the count and then inserts. Unlocked, N adds at once from one household all read
  * `count < MAX_HOUSEHOLD_ATHLETES` and all insert (the limiter fails open, so it never bounded that).
- * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, exactly as `newItem`
- * does for its items (#605), so a second add at the same moment waits, then counts the first add's
- * committed row; a same-key twin finds its twin's row at the replay step. That is why the replay lookup
- * runs AFTER the lock, not before it.
+ * This takes `pg_advisory_xact_lock(ADVISORY_LOCK.householdAthletes, …)` first, as `newItem` does for
+ * its items (#605), through a household row read `FOR KEY SHARE` (#714 and this fix), so a second
+ * add at the same moment waits, then counts the first add's committed row; a same-key twin finds its
+ * twin's row at the replay step. That is why the replay lookup runs AFTER the lock, not before it.
  *
  * ⚠️ **No `isolationLevel` option.** The default READ COMMITTED gives each read after the lock a fresh
  * snapshot that includes the waited-on add. Under REPEATABLE READ the snapshot would predate the wait
@@ -397,14 +440,26 @@ async function lockedCreate(
   // The wait below is bounded: a stuck holder cannot keep this request queued (`setLocalLockTimeout`).
   await setLocalLockTimeout(exec);
   // Held until the transaction ends. Reached through the household row, so the tenant id is never
-  // unwrapped here. No row means the household is gone (an erasure mid-call): `refused`, so the
-  // count never runs without the lock.
+  // unwrapped here. No row means the household is gone: `refused`, so the count never runs without
+  // the lock.
+  //
+  // 🔴 **`FOR KEY SHARE` on the household row: an erasure mid-call answers `refused`, never a 23503**
+  // (as `newItem` does, #714). The erasure core holds the household `FOR UPDATE` before it deletes it;
+  // a plain read would see the row, and the profile insert would then fail its foreign key once the
+  // erasure commits. With the row lock this read waits, re-checks under READ COMMITTED and finds no
+  // row. No deadlock: the core never takes this advisory lock, and `profiles` references only
+  // `households`, which this transaction already holds compatibly, so the insert waits on nothing the
+  // core holds. The `client_id` arbiter does not wait on it either: the core's row locks are
+  // lock-only (a dirty-snapshot check ignores them), and the core deletes nothing until it holds the
+  // household row this read keeps in KEY SHARE. The wait is bounded by the `lock_timeout` above
+  // (past it, 55P03).
   const locked = await exec
     .select({
       locked: sql`pg_advisory_xact_lock(${ADVISORY_LOCK.householdAthletes}, hashint8(${schema.households.id}))`,
     })
     .from(schema.households)
-    .where(householdRowIs(scope));
+    .where(householdRowIs(scope))
+    .for('key share');
   if (locked.length !== 1) return { ok: false, reason: 'refused' };
   return addProfile(exec, scope, input);
 }

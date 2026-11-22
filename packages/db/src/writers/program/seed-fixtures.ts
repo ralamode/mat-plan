@@ -19,6 +19,7 @@ import {
 
 import { and, isNull } from 'drizzle-orm';
 
+import type { CatalogMovement } from '@mat-plan/shared';
 import { schema } from '../../client';
 import type { HouseholdScope } from '../../scope';
 import type { Executor } from '../executor';
@@ -135,7 +136,15 @@ function skip(what: string, why: string): void {
  * household already has under another type is not written; each is a warning, not a failure. A run
  * that fails writes nothing: it is one transaction.
  */
-export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): Promise<void> {
+export async function seedProgramFixtures(
+  db: Executor,
+  scope: HouseholdScope,
+  /**
+   * The library the world's items resolve over (CAT-3 K29): the one this seed run wrote, which is the
+   * one the app reads on this database (`CATALOG_FIXTURE` with the flag). Required, as `newItem`'s is.
+   */
+  library: readonly CatalogMovement[],
+): Promise<void> {
   await db.transaction(async (tx) => {
     const items = new Map<string, { itemPublicId: string; name: string }>();
     await seedWorld(
@@ -145,6 +154,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
       FIXTURE_WORLD,
       SEED_FIXTURE_ATHLETES,
       seedFixtureProgramClientId,
+      library,
     );
     // The e2e program (`seed-e2e.ts`, not a contract fixture) only with its athlete live and
     // active: a run before the profile exists never leaves the program with nobody on it.
@@ -156,6 +166,7 @@ export async function seedProgramFixtures(db: Executor, scope: HouseholdScope): 
         SEED_E2E_WORLD,
         SEED_E2E_ATHLETES,
         () => SEED_E2E_PROGRAM_CLIENT_ID,
+        library,
       );
     } else {
       skip('the e2e program', 'its athlete is not a live, active athlete of the household');
@@ -183,12 +194,13 @@ async function seedWorld(
   world: World,
   athletes: Readonly<Record<string, string>>,
   clientIdOf: (programId: string) => string,
+  library: readonly CatalogMovement[],
 ): Promise<void> {
   const itemFor = async (key: keyof World['catalog']) => {
     const known = items.get(key);
     if (known) return known;
     const { name, type } = world.catalog[key];
-    const result = await newItem(tx, scope, { name, trackingType: type });
+    const result = await newItem(tx, scope, { name, trackingType: type }, library);
     // The household's item cap is state a person can make: skipped, never thrown.
     if (!result.ok && result.reason === PROGRAM_REFUSAL.limit_reached) return null;
     const made = must(result, `item ${key}`);

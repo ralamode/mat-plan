@@ -1,14 +1,15 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 457659db..9ae9e979 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -221,9 +221,8 @@ export async function seed(
-     const household = await seedFixtures(db);
+@@ -241,9 +241,8 @@ export async function seed(
      await seedProgram(db, PROGRAM_SEED);
-     await seedProgramFixtures(db, householdScopeForScript(household.id));
-+    reportShadowedMovements(shadowedSlugs);
+     // K29: the world's items resolve over the library this run wrote, the one the app reads here.
+     await seedProgramFixtures(db, householdScopeForScript(household.id), library.entries);
++    reportSeed(counts);
    }
 -
--  reportShadowedMovements(shadowedSlugs);
+-  reportSeed(counts);
  }
  
  /**

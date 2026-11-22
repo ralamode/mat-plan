@@ -1,18 +1,15 @@
 import { ACTIVITY_TYPE_KEYS } from '@mat-plan/shared';
 
 /**
- * V1-7 life activities: the routine catalog's source (`wake`, `wrestling_practice`) and their labels.
- * Deliberately NOT a registry (the activities are hard-coded; a `checkin-fields.ts`-style derived source
- * earns nothing for N=2).
+ * V1-7 life activities: the routine catalog's Life source and their labels. Since FAM-1 12f PR 5 (D28)
+ * it holds Wrestling practice alone: Wake left, so the routine catalog no longer offers it and a stored
+ * `life:wake` is dropped at read. The `wake` activity type itself stays known (`catalog-activity-types.ts`),
+ * so an old Wake entry still exports as a clock time.
  *
- * ⚠️ **This is not what the day page can LOG.** Since V1-24 3b-life-b only wrestling practice is
- * loggable, in typed minutes, and the trust boundary is `logPracticeSchema`'s `activityKey` literal
- * (`packages/shared/src/practice-shapes.ts`). Wake stays HERE because the routine catalog derives from
- * this list, and taking it out would strip a stored `life:wake` from routines (FAM-1 12f owns that,
- * D28); the day page does not show it, and the action refuses it.
+ * The trust boundary for what the day page can LOG is `logPracticeSchema`'s `activityKey` literal
+ * (`packages/shared/src/practice-shapes.ts`), not this list.
  */
 export const LIFE_ACTIVITIES = [
-  { key: ACTIVITY_TYPE_KEYS.wake, label: 'Wake' },
   { key: ACTIVITY_TYPE_KEYS.wrestling_practice, label: 'Wrestling practice' },
 ] as const;
 

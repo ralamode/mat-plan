@@ -1,0 +1,1 @@
+CAT-3 R0: the erasure reads the direct string only, never a DATABASE_URL fallback

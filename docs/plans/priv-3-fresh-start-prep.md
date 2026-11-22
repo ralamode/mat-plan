@@ -100,8 +100,10 @@ as not production:
     treat it as local or preview, or a no-path URL would let a seed-household claim bind remotely.
   - it carries a host override: `hasHostOverride`, exported here from `db-environment.ts`.
 - **The database, inside the transaction.** It reads `current_database()` on the connection that writes.
-  It refuses unless that equals the URL's name and does not name the preview. This also closes the
-  socket and no-path cases.
+  It refuses unless that equals the URL's name and does not name the preview. ⚠️ _As built (#708):_
+  that does NOT close the socket and empty-host cases on its own, since a local database named
+  `mat_plan` matches. So the pre-connect gate also refuses an empty host, a socket host, a scheme
+  other than `postgres:` and loopback however it is spelled (security and correctness lenses).
 - **Pure, with a unit test.** The gate, `seededHouseholdErasureIssue(target, observed)`, takes those
   two values. Its colocated test drives every branch.
 - **The same gap in RC.** `create-household`'s preview refusal (#546, `registry.ts:886`) accepts a
@@ -118,10 +120,14 @@ as not production:
   as an integer ≥ 0, refuses before the core is called. 2a's signature needs no change. If 2a's core
   turns out to commit on its own, this becomes a delta to 2a (an `expectedTotal` checked before its first
   `DELETE`), raised before R0 is cut.
-- `db:verify` asserts that after a mismatched `--apply` **every graph table's rows are unchanged**, so a
-  compare that ran after a commit would also go red.
-- So a bare `--apply`, or one run with an earlier sitting's number, refuses. This is the interlock D2
-  already had, on the more harmful of the two.
+- `db:verify` asserts that after a mismatched `--apply` **every graph table's rows are unchanged**.
+  ⚠️ _As built (#708):_ under PGlite that alone cannot tell a core that ran in the entry's
+  transaction from one that opened its own, so the proof also counts transaction opens (one, with the
+  core's savepoint nested in it), and mutation 542 hands the core the outer handle.
+- So a bare `--apply` refuses, and so does a number that no longer equals the count. ⚠️ _As built:_
+  a stale number that still equals the count passes, so this is a restatement of the current total,
+  not a binding to one dry run (security lens, #708). This is the interlock D2 already had, on the
+  more harmful of the two.
 
 **Once the target is gone:**
 
@@ -245,6 +251,13 @@ which must be 0:
 A hand `UPDATE` that gave an old row a `modality` shows in (2). The report prints counts only. F1, which
 retires `MOVEMENT_SEED_PUBLIC_IDS`, lands after R4's second run or keeps (2) working; the spec's F1 row
 is told.
+
+**As built (2026-11-20):** R4's counts are four separate lines, `R4 (1)` to `R4 (4)`, and A2-ii's line
+"global rows with a modality but no CATALOG_MOVEMENTS slug" is the fifth must-be-0. Step 5 keeps the
+spec's one predicate (`movementIsCatalog() IS NOT TRUE`, or a legacy seed id): a global row with a
+modality but a non-library slug is not deleted, and is a stop at step 8 instead _(lane P, 2026-11-20:
+a destructive predicate stays the spec's; A2-ii's exact test keeps the census honest, not the delete
+set)_.
 
 ### D4. R1: the runbook
 
@@ -433,7 +446,8 @@ Each path exists from its own merge.
 
 This lane's block is 260–289, then 330–339, taken in PR order (`priv-3-guarded-deletion.md:478`). 260–278
 are used. Before R2 come 2a (seven), R0 (five) and R1 (seven), which is 19 against the 21 left. 2b, 3 and
-3b need about six more, so the board is asked for a further block now.
+3b need about six more, so the board is asked for a further block now. _As built (2026-11-20):_ R1 took `545`–`561` from the board's block
+`540`–`569` (R0 took `336`–`339` and `540`–`544`).
 
 ## Test plan
 

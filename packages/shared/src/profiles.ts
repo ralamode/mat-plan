@@ -32,11 +32,25 @@ import { collapseWhitespace, foldName, hasControlChar } from './text';
 export const PROFILE_NAME_MAX = 40;
 
 /**
+ * The bound on a name a form ECHOES back rather than one a person types: the duplicate warning's
+ * folded acknowledgement (NFKD can expand 40 characters into several hundred) and the rename's
+ * `seenName`. Compared, never stored, and bounded because a crafted body can send anything.
+ */
+export const PROFILE_ECHO_MAX = PROFILE_NAME_MAX * 20;
+
+/**
  * The message a blank or unrenderable name gets. Here rather than inline in the schema because the
  * e2e asserts it — and it re-typed the literal until a reuse lens pointed out that a test must use
  * the same const as the app.
  */
 export const NAME_REQUIRED_MESSAGE = 'Enter a name.';
+
+/**
+ * The error a write throws when the athlete it names is not a live profile in the caller's household.
+ * Not shown to anyone: it reaches `error.tsx` and Sentry. Named because the DAL (`lib/dal/entries.ts`),
+ * the strength writer and their tests all spelled it out, and a test must use the app's const.
+ */
+export const PROFILE_NOT_FOUND = 'Profile not found';
 
 /**
  * An athlete's name, as the app accepts it.
@@ -115,10 +129,15 @@ export const renameAthleteSchema = z.object({
    *
    * ⚠️ **Not a protection.** A crafted body can forge it. Duplicates are advisory on rename too.
    */
-  acknowledgedDuplicate: z
-    .string()
-    .max(PROFILE_NAME_MAX * 20)
-    .optional(),
+  acknowledgedDuplicate: z.string().max(PROFILE_ECHO_MAX).optional(),
+  /**
+   * The stale-rename fix: the name the form SHOWED, echoed back so `renameProfile` applies the
+   * rename only if it is still stored (the `seenValue` idiom). Not `athleteNameSchema`: it is the
+   * stored value, compared and never stored. **Required**, so a form regression cannot quietly bring
+   * back last-write-wins. A crafted value (a NUL) never reaches SQL: the writer's JS comparison
+   * answers `stale` first, and its conjunct only binds a value equal to the stored name.
+   */
+  seenName: z.string().max(PROFILE_ECHO_MAX),
 });
 
 export type RenameAthleteInput = z.infer<typeof renameAthleteSchema>;
@@ -225,10 +244,7 @@ export const addAthleteSchema = z.object({
    * ⚠️ **Not a protection.** A crafted body can always forge it; duplicates are advisory, not a
    * boundary. Nothing should describe this field as a security control.
    */
-  acknowledgedDuplicate: z
-    .string()
-    .max(PROFILE_NAME_MAX * 20)
-    .optional(),
+  acknowledgedDuplicate: z.string().max(PROFILE_ECHO_MAX).optional(),
 });
 
 export type AddAthleteInput = z.infer<typeof addAthleteSchema>;

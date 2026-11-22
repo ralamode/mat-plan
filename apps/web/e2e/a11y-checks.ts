@@ -2,7 +2,38 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 // Relative imports only, as `contexts.ts` keeps them.
-import { MIN_TAP_TARGET_PX } from '../lib/constants';
+import { MIN_TAP_TARGET_PX, THEME_STORAGE_KEY } from '../lib/constants';
+
+/**
+ * Seed the stored theme choice before any page script runs, the way a returning viewer's browser
+ * holds it; `null` clears it, so the device's `colorScheme` decides (Auto). Lifted once from
+ * `theme.spec.ts` and `a11y.spec.ts` (V1-9b B2-prep). A private window throws on storage; the app
+ * must still render, so the seed swallows that.
+ */
+export async function seedStoredTheme(page: Page, value: 'light' | 'dark' | null): Promise<void> {
+  await page.addInitScript(
+    ([key, v]) => {
+      try {
+        if (v) window.localStorage.setItem(key!, v);
+        else window.localStorage.removeItem(key!);
+      } catch {
+        /* a private window would throw; the app must still render */
+      }
+    },
+    [THEME_STORAGE_KEY, value] as const,
+  );
+}
+
+/**
+ * The guard a dark scan needs first: a stored `mp_theme` beats `colorScheme` emulation, so a scan can
+ * audit the LIGHT palette while reporting green on "dark" (a11y.spec.ts has shipped that failure).
+ */
+export async function expectActuallyDark(page: Page, context: string): Promise<void> {
+  await expect(
+    page.locator('html'),
+    `${context}: not actually rendering dark — this scan would have audited the LIGHT palette`,
+  ).toHaveClass(/\bdark\b/);
+}
 
 /**
  * The two checks of the a11y bar (V1-12), exported so every spec runs the same rules: the axe scan,
@@ -118,20 +149,36 @@ export async function expectTapTargets(
 }
 
 /**
- * Every link inside `<main>` is a 44px target too (FAM-1: the program screens, moved here from
- * `program-builder.a11y.spec.ts` at 7b-i). `expectTapTargets` leaves links out (WCAG's exception for
- * a link inline in a sentence); on these screens a link is a row or a way back, which a thumb aims
- * at, so here they are all measured. Every spec that walks the program screens imports this one,
- * `program-preview-a11y.spec.ts` included.
+ * **Every link inside `root` is a 44px target**, the one link check in the suite. `expectTapTargets`
+ * leaves links out (WCAG's exception for a link inline in a sentence); where a link is a row, a tile
+ * or a way back, a thumb aims at it, so these are measured. Pass `page.getByRole('main')` for a
+ * page's content, or another root (the nav rail sits outside `<main>`).
+ *
+ * - **`expected` unset:** at least one link, or it fails with "found no links, so the selector is
+ *   wrong": the guard against a root that renders nothing, which would pass vacuously.
+ * - **`expected` set:** exactly that many, so a page that lost a link (or gained one) cannot pass.
+ * - Every undersized link is collected and named (`describeControl`), with `context` in each
+ *   message, so one run lists them all and says which page or fixture state broke.
+ *
+ * It replaced two copies (this one, `page`-scoped, and `a11y.spec.ts`'s `expectLinkTapTargets`,
+ * fail-fast) and `athletes.spec.ts`'s own loop (2026-11-19).
  */
-export async function expectLinkTargets(page: Page, context: string): Promise<void> {
-  const links = await page.getByRole('main').getByRole('link').all();
-  expect(links.length, `${context}: found no links, so the selector is wrong`).toBeGreaterThan(0);
+export async function expectLinkTargets(
+  root: Locator,
+  context: string,
+  expected?: number,
+): Promise<void> {
+  const links = await root.getByRole('link').all();
+  if (expected === undefined) {
+    expect(links.length, `${context}: found no links, so the selector is wrong`).toBeGreaterThan(0);
+  } else {
+    expect(links.length, `${context}: link count`).toBe(expected);
+  }
   const undersized: string[] = [];
   for (const link of links) {
     const height = (await link.boundingBox())?.height ?? 0;
     if (height < MIN_TAP_TARGET_PX) {
-      undersized.push(`"${(await link.innerText()).trim()}" → ${Math.round(height)}px`);
+      undersized.push(`${await describeControl(link)} → ${Math.round(height)}px`);
     }
   }
   expect(undersized, `${context}: links under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);

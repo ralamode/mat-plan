@@ -1,5 +1,5 @@
 import { SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   BODYWEIGHT_BOUNDS,
@@ -19,7 +19,6 @@ import {
   SETTINGS_PATH,
   SIGN_IN_COPY,
   SIGN_IN_PATH,
-  THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
   athleteEditPath,
   athleteRoutinePath,
@@ -41,10 +40,12 @@ import {
   navRail,
 } from './contexts';
 import {
-  describeControl,
+  expectActuallyDark,
+  expectLinkTargets,
   expectNoAxeViolations,
   expectNoOverflowWithin,
   expectTapTargets,
+  seedStoredTheme,
 } from './a11y-checks';
 
 /**
@@ -136,18 +137,9 @@ test.describe('dark theme', () => {
 
   for (const route of ROUTES) {
     test(`${route.name} has no WCAG A/AA violations in dark mode`, async ({ page }) => {
-      await page.addInitScript((key) => {
-        try {
-          window.localStorage.removeItem(key as string);
-        } catch {
-          /* ignore */
-        }
-      }, THEME_STORAGE_KEY);
+      await seedStoredTheme(page, null);
       await page.goto(route.path, { waitUntil: 'networkidle' });
-      await expect(
-        page.locator('html'),
-        `${route.name}: not actually rendering dark — this scan would have audited the LIGHT palette`,
-      ).toHaveClass(/\bdark\b/);
+      await expectActuallyDark(page, route.name);
       await expectNoAxeViolations(page, `${route.name} (dark)`);
     });
   }
@@ -318,42 +310,12 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   }
 });
 
-/**
- * Links that act as buttons (link CARDS, the landing's CTAs, the gate's way back) — opted back into the
- * tap-target bar one by one, since `INTERACTIVE` excludes links under SC 2.5.8's inline-link exception.
- * `expected` pins how many there are, so a page that lost one (or rendered none) cannot pass.
- *
- * ⚠️ **`root`, not `page`, since `UI-5`.** It read `page.getByRole('main')` internally, which is
- * exactly the scope the nav rail is outside of — `site-footer.tsx`'s docblock records that staying
- * outside `main` is what keeps these counts stable. A second copy differing only in its root would
- * have been the third version of this loop in the file.
- */
-async function expectLinkTapTargets(
-  root: Locator,
-  context: string,
-  expected?: number,
-): Promise<void> {
-  const links = await root.getByRole('link').all();
-  if (expected === undefined) {
-    expect(links.length, `${context}: found no links — selector is wrong`).toBeGreaterThan(0);
-  } else {
-    expect(links.length, `${context}: link count`).toBe(expected);
-  }
-  for (const link of links) {
-    const box = await link.boundingBox();
-    expect(
-      box?.height ?? 0,
-      `${context} link "${await describeControl(link)}"`,
-    ).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
-  }
-}
-
 test('profile tiles are large touch targets (the link-card exception to the inline-link rule)', async ({
   page,
 }) => {
   // A profile tile is a CARD acting as a button, so it is opted back in explicitly.
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
-  await expectLinkTapTargets(page.getByRole('main'), 'profile picker');
+  await expectLinkTargets(page.getByRole('main'), 'profile picker');
 });
 
 /**
@@ -381,7 +343,7 @@ test('the profile picker does not overflow at 360px', async ({ page }) => {
  * OSS-2 — the public routes. ⚠️ This said "scanned with NO gate cookie (with one, `/` and `/gate`
  * both redirect to the picker)"; `1c-3b` deleted that forward and `1d` the cookie, so there is no
  * cookie to withhold and `/` renders the landing for everyone. The landing's CTAs are LINKS, which `expectTapTargets` cannot see (`Button asChild` adds
- * no role), so they are counted and measured by `expectLinkTapTargets`.
+ * no role), so they are counted and measured by `expectLinkTargets`.
  */
 test.describe('public routes', () => {
   for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
@@ -392,7 +354,7 @@ test.describe('public routes', () => {
       await page.goto('/', { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `landing (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `landing (${viewport.width}px)`);
-      await expectLinkTapTargets(page.getByRole('main'), `landing (${viewport.width}px)`, 2);
+      await expectLinkTargets(page.getByRole('main'), `landing (${viewport.width}px)`, 2);
     });
 
     /**
@@ -401,7 +363,7 @@ test.describe('public routes', () => {
      *
      * ⚠️ Neither tap-target helper is called here, deliberately. `expectTapTargets` would match
      * NOTHING (the page has no button, select, textarea or input at all) and fail its own
-     * "selector is wrong" guard; `expectLinkTapTargets` measures every link in `<main>`, and the
+     * "selector is wrong" guard; `expectLinkTargets` measures every link in `<main>`, and the
      * notice's two prose links legitimately sit under WCAG 2.2 SC 2.5.8's inline-link exception —
      * the same exception `INTERACTIVE` above already encodes by excluding `<a>`. The FOOTER's two
      * links are measured directly in `privacy.spec.ts`, where they are also the subject.
@@ -434,7 +396,7 @@ test.describe('public routes', () => {
      * ⚠️ `expectTapTargets` is NOT called, for the reason the notice above records: the fallback has
      * no button, select, textarea or input — its links are the mark (home) and the privacy notice —
      * so the selector would match nothing and fail its own "selector is wrong" guard.
-     * `expectLinkTapTargets` is the right helper, and the count is exact: **TWO** links in `<main>`.
+     * `expectLinkTargets` is the right helper, and the count is exact: **TWO** links in `<main>`.
      *
      * 🔴 **It was ONE, and both halves of that comment are now false** _(AUTH-1 1d PR 0)_. The one
      * link used to be the way out to the gate, with `/` and `PRIVACY_PATH` "deliberately absent
@@ -453,7 +415,7 @@ test.describe('public routes', () => {
       await page.goto(SIGN_IN_PATH, { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `sign-in, dark state (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `sign-in, dark state (${viewport.width}px)`);
-      await expectLinkTapTargets(
+      await expectLinkTargets(
         page.getByRole('main'),
         `sign-in, dark state (${viewport.width}px)`,
         2,
@@ -774,7 +736,7 @@ test.describe('UI-5 · the app shell at 1280px', () => {
     // `expected` is deliberately absent: the seed's athlete count is not this test's subject, and
     // pinning it would make a seed change look like a layout regression. The non-vacuity floor
     // inside the helper ("found no links") is what this call needs from it.
-    await expectLinkTapTargets(rail(page), 'the nav rail at 1280px');
+    await expectLinkTargets(rail(page), 'the nav rail at 1280px');
     await expect(rail(page).getByRole('link', { name: NAV_RAIL_COPY.settings })).toBeVisible();
 
     await expectNoAxeViolations(page, 'Today with the rail (1280px)');

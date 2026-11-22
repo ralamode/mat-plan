@@ -1,9 +1,10 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 457659db..97073167 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -360,6 +360,17 @@ export async function seedReference(db: NodePgDatabase<typeof schema>): Promise<
-     .values([...MOVEMENT_SEED_ROWS])
-     .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+@@ -444,6 +444,17 @@ export async function seedReference(
+       .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+   }
  
 +  const [anyLive] = await db
 +    .select({ id: schema.households.id })
@@ -16,6 +17,6 @@ diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
 +      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: HOUSEHOLD_DEFAULT_NAME })
 +      .onConflictDoNothing({ target: schema.households.publicId });
 +  }
-   return shadowedSlugs;
+   return { ...written, householdRowsOnCatalogSlugs, householdRowsOnSeedSlugs };
  }
  

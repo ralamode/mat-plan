@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { APP_HOME_PATH, SIGN_IN_PATH, THEME_COPY, THEME_STORAGE_KEY } from '../lib/constants';
-import { cspViolations, headerNonce, recordCspViolations } from './csp';
+import { seedStoredTheme } from './a11y-checks';
+import { blockedInlineScripts, cspViolations, headerNonce, recordCspViolations } from './csp';
 
 /**
  * UI-4 — the theme switch, proven at the only level that can prove it.
@@ -43,20 +44,6 @@ const tapTheme = (page: Page, choice: 'system' | 'light' | 'dark') =>
     .locator('label')
     .filter({ has: themeRadio(page, choice) })
     .click();
-
-/** Pre-seed the stored choice the way a returning viewer's browser would have it. */
-async function seedStoredTheme(page: Page, value: 'light' | 'dark'): Promise<void> {
-  await page.addInitScript(
-    ([key, v]) => {
-      try {
-        window.localStorage.setItem(key!, v!);
-      } catch {
-        /* a private window would throw; the app must still render */
-      }
-    },
-    [THEME_STORAGE_KEY, value],
-  );
-}
 
 /** Record the earliest observable state of `<html>`'s class, from before any page script runs. */
 async function recordFirstClassMutation(page: Page): Promise<void> {
@@ -113,10 +100,10 @@ test('the theme script is nonced with the response’s own nonce, and nothing is
 
   const violations = await cspViolations(page);
   // INLINE only: the app already raises zod's `script-src eval` probe on every page (`e2e/csp.ts`).
-  // An un-nonced inline script reports `blockedURI: 'inline'`, which is the failure this assertion
-  // exists to catch, and the full list is printed either way.
+  // An un-nonced inline script reports `blockedURI: 'inline'` under `script-src-elem`, which is the
+  // failure this assertion exists to catch (`blockedInlineScripts`), and the full list is printed.
   expect(
-    violations.filter((v) => v.startsWith('script-src inline')),
+    blockedInlineScripts(violations),
     `inline script blocked by CSP — the theme script is not nonced. All violations: ${violations.join(' | ')}`,
   ).toEqual([]);
 });
@@ -165,13 +152,7 @@ test('the choice survives a reload, and the control shows it', async ({ page }) 
 test('with no stored choice, Auto follows the device', async ({ page }) => {
   // The default, and the reason `system` is the default: a viewer whose phone is dark gets dark
   // without touching anything.
-  await page.addInitScript((key) => {
-    try {
-      window.localStorage.removeItem(key as string);
-    } catch {
-      /* ignore */
-    }
-  }, THEME_STORAGE_KEY);
+  await seedStoredTheme(page, null);
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
   await expect(page.locator('html')).toHaveClass(/\bdark\b/);
@@ -219,9 +200,9 @@ test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egre
 
     const violations = await cspViolations(page);
     // Same narrowing as above: zod's JIT feature probe raises one pre-existing `script-src eval`
-    // report on every page in this app. An un-nonced inline script reports `inline`.
+    // report on every page in this app. An un-nonced inline script is `blockedInlineScripts`.
     expect(
-      violations.filter((v) => v.startsWith('script-src inline')),
+      blockedInlineScripts(violations),
       `${path}: inline script blocked by CSP. All violations: ${violations.join(' | ')}`,
     ).toEqual([]);
   }
@@ -230,4 +211,38 @@ test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egre
     clerkRequests,
     `a Clerk host was contacted with no publishable key set — "1a ships dark" is false: ${clerkRequests.join(' | ')}`,
   ).toEqual([]);
+});
+
+test('the inline-script check catches a script with its nonce stripped (it can fail)', async ({
+  page,
+}) => {
+  await recordCspViolations(page);
+  let stripped = false;
+  await page.route(`**${APP_HOME_PATH}`, async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    // The THEME script, found as the test above finds it (its body names THEME_STORAGE_KEY): drop
+    // its nonce, as a regression in the theme script would. Every other script keeps its own.
+    const body = html.replace(
+      /<script\b([^>]*)>([\s\S]*?)<\/script>/g,
+      (tag, attrs: string, js: string) =>
+        js.includes(THEME_STORAGE_KEY)
+          ? `<script${attrs.replace(/\snonce="[^"]*"/, '')}>${js}</script>`
+          : tag,
+    );
+    stripped = body !== html;
+    await route.fulfill({ response, body });
+  });
+  // The same wait as the first test, so this proves the check sees a violation at ITS timing.
+  const response = await page.goto(APP_HOME_PATH, { waitUntil: 'domcontentloaded' });
+  await response?.text();
+  expect(
+    stripped,
+    'no nonced theme script on the page to strip; this proof has nothing to test',
+  ).toBe(true);
+  const violations = await cspViolations(page);
+  expect(
+    blockedInlineScripts(violations),
+    `a stripped nonce was not seen as a blocked inline script. All violations: ${violations.join(' | ')}`,
+  ).not.toEqual([]);
 });

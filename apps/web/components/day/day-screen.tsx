@@ -10,6 +10,7 @@ import { NAME_WRAP_CLASS, NOTICE_CLASS } from '@/lib/constants';
 import { deviceToday } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
+import { type Announcement, nextAnnouncements } from './announcements';
 import { DayContext, type DayContextValue } from './day-context';
 import { DAY_COPY } from './day-copy';
 import { nothingLoggedNotice, restNotice } from './day-notices';
@@ -26,7 +27,7 @@ import { WorkoutCard } from './workout-card';
  * read by a screen reader and not shown, as v12 shows none.
  *
  * A member of `actions` that is `undefined` is an action the route has not wired yet: the screen
- * hides its control (plan §6). `amendRow` arrived at step 12d; `reorderPrograms` arrives at 15c.
+ * hides its control (plan §6). `amendRow` arrived at step 12d, `reorderPrograms` at 15c.
  *
  * **Everything a row remembers is keyed by athlete and day** (`DayBody`'s key): typed text, a
  * failure, an un-tick token. The page moves between days on one mount, and a workout has the same
@@ -82,9 +83,9 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const headingId = useId();
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const [closed, setClosed] = useState(false);
-  // `n` counts announcements: each one is a new node in the live region, so the same sentence twice
-  // in a row is read twice (`Announcer`'s `messageKey`).
-  const [message, setMessage] = useState({ text: '', n: 0 });
+  // One keyed node per sentence (`announcements.ts`): a new key each call, so the same sentence
+  // twice in a row is a new node and is read twice.
+  const [said, setSaid] = useState<{ held: Announcement[]; n: number }>({ held: [], n: 0 });
   const closedRef = useRef<HTMLDivElement>(null);
 
   // A row's effect depends on these, so each keeps one identity for the life of the day.
@@ -95,6 +96,12 @@ function DayBody({ plan, actions }: DayScreenProps) {
   const [inFlight, setInFlight] = useState<ReadonlySet<string>>(() => new Set());
   const setRowPending = useCallback(
     (rowKey: string, isPending: boolean) => setInFlight((was) => toggled(was, rowKey, isPending)),
+    [],
+  );
+  // 12c-iii: work typed or added but not saved, which "Collapse" must never hide.
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
+  const setRowBusy = useCallback(
+    (rowKey: string, isBusy: boolean) => setBusy((was) => toggled(was, rowKey, isBusy)),
     [],
   );
 
@@ -130,9 +137,16 @@ function DayBody({ plan, actions }: DayScreenProps) {
       day: viewedDay,
       actions: pinned(actions, { day: viewedDay, today }),
       readOnly,
-      announce: (text) => setMessage((was) => ({ text, n: was.n + 1 })),
+      announce: (text, kind = 'local') => {
+        const now = performance.now();
+        setSaid((was) => ({
+          held: nextAnnouncements(was.held, text, kind, was.n + 1, now),
+          n: was.n + 1,
+        }));
+      },
       setRowFailed,
       setRowPending,
+      setRowBusy,
       // The notice takes focus, which reads it; the live region would say it a second time.
       closeDay: () => setClosed(true),
       // A reload after midnight would show the new today: the day is pinned first (a `closed_day`
@@ -150,6 +164,7 @@ function DayBody({ plan, actions }: DayScreenProps) {
       readOnly,
       setRowFailed,
       setRowPending,
+      setRowBusy,
       router,
     ],
   );
@@ -161,6 +176,9 @@ function DayBody({ plan, actions }: DayScreenProps) {
     (many && plan.programs.find((p) => p.programPublicId === id)?.name) || null;
   const notSavedIn = (workoutKey: string) =>
     [...failed].filter((key) => rowIsIn(workoutKey, key)).length;
+  // A write in flight, a Change typed and not saved, or an added set not ticked (12c-iii §4).
+  const busyIn = (workoutKey: string) =>
+    [...inFlight, ...busy].some((key) => rowIsIn(workoutKey, key));
 
   return (
     <DayContext value={day}>
@@ -194,10 +212,11 @@ function DayBody({ plan, actions }: DayScreenProps) {
               headingId={`${headingId}-w${index}`}
               programName={programName(workout.programPublicId)}
               notSaved={notSavedIn(key)}
+              busy={busyIn(key)}
             />
           );
         })}
-        <Announcer message={message.text} messageKey={message.n} />
+        <Announcer messages={said.held} />
       </section>
     </DayContext>
   );

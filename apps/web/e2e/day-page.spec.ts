@@ -1,20 +1,47 @@
-import { expect, test, type Page } from '@playwright/test';
-import { addDays, localWeekday } from '@mat-plan/shared';
-import { todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { addDays, DEFAULT_BODYWEIGHT_UNIT, localWeekday, PROFILE_KIND } from '@mat-plan/shared';
+import { familyProgram, todayTwoPrograms } from '@mat-plan/shared/program/fixtures';
 
 import { DAY_COPY, PROGRAM_COPY } from '../components/day/day-copy';
-import { CLOSED_DAY_NOTICE, LOOK_AHEAD_DAYS } from '../lib/constants';
+import {
+  AMEND_COPY,
+  athleteRoutinePath,
+  BODYWEIGHT_COPY,
+  CLOSED_DAY_NOTICE,
+  LIFE_COPY,
+  LOOK_AHEAD_DAYS,
+  MIN_TAP_TARGET_PX,
+  ROUTINE_COPY,
+} from '../lib/constants';
+import { LIFE_ACTIVITIES } from '../lib/life/life-activities';
 
-import { expectNoAxeViolations, expectTapTargets } from './a11y-checks';
+import { expectNoAxeViolations, expectNoOverflowWithin, expectTapTargets } from './a11y-checks';
 import { expectNoHorizontalOverflow, NARROW_VIEWPORT } from './contexts';
 
 import {
+  addAthlete,
+  archiveAdded,
   bodyweightSection,
+  changeWeight,
+  copyOntoEveryWeekday,
+  createProgram,
+  escapeRegExp,
   isoDaysAgo,
+  lifeSection,
+  logBodyweight,
+  loggedWeight,
+  logPractice,
+  openCollapsed,
+  openPrograms,
+  PRACTICE_SHOWN,
   programRowTick,
+  putOnFromToday,
   SEED_PROFILE_2_ROUTE,
   SEED_PROFILE_ROUTE,
   settled,
+  shownWeight,
+  dayLineText,
+  dayNav,
 } from './steps';
 
 /**
@@ -52,8 +79,9 @@ const routeFor = (day: string) =>
 const tick = (page: Page, item: string) => programRowTick(page, morning.name, item);
 const ticks = (page: Page) => page.getByRole('button', { name: new RegExp(`^${LOG_PREFIX}`) });
 /** Stretching (the fixture's second program) runs every day, so its workout has a row on any day. */
+const stretching = todayTwoPrograms.currentPrograms[1]!;
 const daily = todayTwoPrograms.workouts.find(
-  (w) => w.programPublicId === todayTwoPrograms.currentPrograms[1]!.programPublicId,
+  (w) => w.programPublicId === stretching.programPublicId,
 )!;
 /**
  * A program row's ✓ on any day. Scoped to the workout: Bodyweight's and Life's ✓ are named
@@ -136,12 +164,12 @@ test.describe('the daily stretch row', () => {
     // The server's day is still today; the device's has moved on (`pinDayBeforeWrite`).
     await page.clock.setFixedTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
     await page.goto(SEED_PROFILE_ROUTE);
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/)).toBeVisible();
     const row = anyTick(page);
     const pressed = (await row.getAttribute('aria-pressed')) === 'true';
     await row.click();
     await expect(page).toHaveURL((u) => u.searchParams.get('d') === today());
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/)).toBeVisible();
     await settled(anyTick(page), !pressed);
   });
 
@@ -151,7 +179,7 @@ test.describe('the daily stretch row', () => {
     // Not a midnight run. Replace the URL by hand with another day, as the pin would, then write:
     // the render the action brings back must be the replaced URL's day, not the one loaded.
     await page.goto(SEED_PROFILE_ROUTE);
-    await expect(page.getByText(/^Today ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/)).toBeVisible();
     const yesterday = isoDaysAgo(1);
     // `null`, exactly as `pinDayBeforeWrite` passes: Next's patched `replaceState` syncs its router
     // only for a call that does not carry its own `__NA` state (next/dist/client/components/app-router.js).
@@ -159,7 +187,7 @@ test.describe('the daily stretch row', () => {
     await anyTick(page).click();
     await expect(page).toHaveURL((u) => u.searchParams.get('d') === yesterday);
     await expect(
-      page.getByText(/^Yesterday ·/),
+      dayLineText(page, /^Yesterday ·/),
       'the revalidated render is the replaced ?d=; if it shows Today, the midnight pin cannot work',
     ).toBeVisible();
   });
@@ -168,10 +196,19 @@ test.describe('the daily stretch row', () => {
 test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }) => {
   const tomorrow = addDays(today(), 1);
   await page.goto(SEED_PROFILE_ROUTE);
-  const nav = page.getByRole('navigation', { name: 'Change day' });
+  const nav = dayNav(page);
   await nav.getByRole('link', { name: /^Next day/ }).click();
   await page.waitForURL((u) => u.searchParams.get('d') === tomorrow);
-  await expect(page.getByText(/^Tomorrow ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Tomorrow ·/)).toBeVisible();
+  // The tab's title is the day, never the athlete's name (D8), and it follows a page back and forth.
+  // ⚠️ What Next's route announcer SAYS is not asserted: it reads `document.title` when the tree
+  // commits, and a title still streaming in leaves it the page's <h1> instead (the athlete's name;
+  // seen on CI, tech-debt "The route announcer sometimes says the athlete").
+  await expect(page).toHaveTitle(/^Tomorrow · \w{3}, \w{3} \d{1,2}$/);
+  await nav.getByRole('link', { name: /^Previous day/ }).click();
+  await expect(page).toHaveTitle(/^Today ·/);
+  await nav.getByRole('link', { name: /^Next day/ }).click();
+  await page.waitForURL((u) => u.searchParams.get('d') === tomorrow);
   await expect(page.getByText(COMING_UP)).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
   await expect(ticks(page)).toHaveCount(0);
@@ -180,7 +217,9 @@ test('tomorrow is look-ahead: Coming up, no ✓, no Bodyweight', async ({ page }
 
 test('more than the look-ahead ahead renders today', async ({ page }) => {
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${addDays(today(), LOOK_AHEAD_DAYS + 1)}`);
-  await expect(page.getByText(/^Today ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Today ·/)).toBeVisible();
+  // The title names the day shown, after the fallback, not the one asked for.
+  await expect(page).toHaveTitle(/^Today ·/);
   // The last day it does show is still Coming up.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${addDays(today(), LOOK_AHEAD_DAYS)}`);
   await expect(page.getByText(COMING_UP)).toBeVisible();
@@ -189,11 +228,10 @@ test('more than the look-ahead ahead renders today', async ({ page }) => {
 // ── Change (FAM-1 12d) ─────────────────────────────────────────────────────────────────────────
 //
 // On Athlete Two, whose program rows no other spec writes. The workout is found by its superset
-// list ("Superset A"), not by name: the page shows the movement library's names ("Inverted Rows"), not the
-// fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
+// list ("Superset A"), not by name: the page shows the movement names ("Inverted Rows", the old
+// built-in), not the fixture's, and the superset workout (Heavy A or Heavy B) runs Monday, Wednesday, Friday and
 // Saturday, so today or yesterday always has one.
 
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** The superset itself: its own list, named "Superset A" (`workout-card.tsx`), holding its two items. */
 const supersetWorkout = (page: Page) =>
   page.getByRole('list', { name: DAY_COPY.superset('A'), exact: true }).first();
@@ -201,10 +239,10 @@ const supersetWorkout = (page: Page) =>
 /** Today, or yesterday when today has no superset workout. */
 async function openSupersetDay(page: Page): Promise<void> {
   await page.goto(SEED_PROFILE_2_ROUTE);
-  await expect(page.getByText(/^Today ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Today ·/)).toBeVisible();
   if ((await supersetWorkout(page).count()) === 0) {
     await page.goto(`${SEED_PROFILE_2_ROUTE}?d=${isoDaysAgo(1)}`);
-    await expect(page.getByText(/^Yesterday ·/)).toBeVisible();
+    await expect(dayLineText(page, /^Yesterday ·/)).toBeVisible();
   }
   await expect(supersetWorkout(page)).toBeVisible();
 }
@@ -221,7 +259,7 @@ const setOne = (item: string) => DAY_COPY.setLabel(item, 1);
 const setTick = (page: Page, item: string) =>
   page.getByRole('button', { name: DAY_COPY.logLabel(setOne(item)), exact: true });
 const loadField = (page: Page, item: string) =>
-  page.getByRole('textbox', { name: new RegExp(`^${escape(setOne(item))}, in (?!reps$)`) });
+  page.getByRole('textbox', { name: new RegExp(`^${escapeRegExp(setOne(item))}, in (?!reps$)`) });
 const repsField = (page: Page, item: string) =>
   page.getByRole('textbox', { name: `${setOne(item)}, in reps`, exact: true });
 
@@ -306,5 +344,309 @@ test.describe('Change on real data', () => {
     // What was stored, not only what the field shows: nothing was sent.
     await page.reload();
     await expect(repsField(page, partner), `${partner}: a blank changed nothing`).toHaveValue(reps);
+  });
+});
+
+// ── Program order (FAM-1 15c) ────────────────────────────────────────────────────────────────────
+//
+// 🔴 **On this run's own athlete and programs, never a seeded athlete or a fixture program**, so a
+// reorder never changes the order another spec reads (`fullyParallel`, one shared database). The
+// names carry the run's stamp, so a retry builds its own world rather than finding the last one's
+// (nothing can be deleted). Each program holds one fixture workout copied onto every day of the
+// week, so the run passes whatever day it is. Spends one of the household's athlete slots a run, as
+// the builder's own journey does (`program-builder.spec.ts`).
+
+/** The workout headings in the order the day page lists them. */
+const workoutHeadings = (page: Page) =>
+  page
+    .getByRole('region', { name: DAY_COPY.heading, exact: true })
+    .getByRole('heading', { level: 3 });
+/**
+ * The programs line ("Programs:" then "A ›", "B ›"), whose names are links to their program pages
+ * (D49): the label's container, which holds the list of links.
+ */
+const programsLine = (page: Page) =>
+  page.getByText(PROGRAM_COPY.lineLabel(2), { exact: true }).locator('..');
+
+test.describe('Program order on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  /** This run's athlete, archived after the test so the picker does not fill with them. */
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('an athlete on two programs moves one down, and the day page follows, after a reload too', async ({
+    page,
+  }, info) => {
+    test.setTimeout(180_000);
+    const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
+    const athlete = `E2E order athlete ${stamp}`;
+    const programs = [
+      { name: `E2E order one ${stamp}`, from: familyProgram.name, workout: morning.name, path: '' },
+      { name: `E2E order two ${stamp}`, from: stretching.name, workout: daily.name, path: '' },
+    ];
+
+    // 1. Two programs, each with a fixture workout on all seven weekdays.
+    for (const program of programs) {
+      await openPrograms(page);
+      await createProgram(page, program.name);
+      program.path = new URL(page.url()).pathname;
+      await copyOntoEveryWeekday(page, {
+        from: program.from,
+        workout: program.workout,
+        to: program.name,
+      });
+    }
+
+    // 2. A new athlete, put on both from today.
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    for (const program of programs) {
+      await page.goto(program.path);
+      await putOnFromToday(page, program.name, athlete);
+    }
+
+    // 3. Program order, from their day page, holds the a11y bar at 360px.
+    await page.goto(dayPage);
+    await page.getByRole('button', { name: PROGRAM_COPY.order, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: PROGRAM_COPY.orderTitle(athlete) });
+    await expect(dialog).toBeVisible();
+    await expectNoAxeViolations(page, 'Program order, 360px');
+    await expectTapTargets(page, 'Program order, 360px');
+    await expectNoOverflowWithin(dialog, 'Program order dialog');
+
+    // The starting order is the dialog's, never assumed: Put on places a program where it sits in
+    // the Programs list, which this spec does not control.
+    const listed = await dialog.getByRole('listitem').allTextContents();
+    const [first, second] = listed.map((text) => programs.find((p) => text.includes(p.name)));
+    expect(first && second && first !== second, `two programs listed, got ${listed}`).toBe(true);
+    const moved = [second!, first!];
+
+    // 4. ↓ on the first. Focus stays on the arrow, and the move is announced once it has saved.
+    const down = dialog.getByRole('button', {
+      name: PROGRAM_COPY.moveDown(first!.name),
+      exact: true,
+    });
+    await down.click();
+    await expect(
+      dialog.getByRole('status').filter({ hasText: PROGRAM_COPY.moved(first!.name, 2, 2) }),
+    ).toHaveCount(1);
+    await expect(down).toBeFocused();
+    await expect(dialog.getByRole('listitem')).toHaveText(
+      moved.map((p) => new RegExp(escapeRegExp(p.name))),
+    );
+    await dialog.getByRole('button', { name: PROGRAM_COPY.done, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    // 5. The programs line and the workouts follow, before a reload and after one. Each name on the
+    //    line links to its program's page; the journey reads the links and does not follow them.
+    const expectOrder = async (when: string) => {
+      const links = programsLine(page).getByRole('link');
+      // By accessible name: each link's text ends in an aria-hidden " ›" (15c PR 1), which the
+      // name leaves out and `toHaveText` would not.
+      await expect(links, `${when}: the programs line`).toHaveCount(moved.length);
+      for (const [index, program] of moved.entries()) {
+        await expect(links.nth(index), `${when}: link ${index + 1}`).toHaveAccessibleName(
+          program.name,
+        );
+        await expect(links.nth(index)).toHaveAttribute('href', program.path);
+      }
+      await expect(workoutHeadings(page), `${when}: the workouts`).toHaveText(
+        moved.map((p) => p.workout),
+      );
+    };
+    await expectOrder('after the move');
+    // At 360px nothing on the line runs past the screen. Only the ordinary wrap: this run's names
+    // are short, so the long-unbroken-name case is the unit tests' (`wrap-anywhere`, `min-w-11`).
+    await expectNoOverflowWithin(programsLine(page), 'the programs line');
+    await expectTapTargets(page, 'the day page with its programs line, 360px');
+    // The links themselves: `expectTapTargets` leaves links out, so each name is measured here.
+    for (const link of await programsLine(page).getByRole('link').all()) {
+      const box = await link.boundingBox();
+      expect(box?.height ?? 0, 'a program link is 44px tall').toBeGreaterThanOrEqual(
+        MIN_TAP_TARGET_PX,
+      );
+      expect(box?.width ?? 0, 'a program link is 44px wide').toBeGreaterThanOrEqual(
+        MIN_TAP_TARGET_PX,
+      );
+    }
+    await page.reload();
+    await expectOrder('after a reload');
+  });
+});
+
+// ── A finished workout folds to one line (FAM-1 12c-iii) ─────────────────────────────────────────
+//
+// On this run's own athlete and program, as Program order's journey is: finishing a workout changes
+// what every later visit to that day shows, so it never touches a seeded athlete.
+
+test.describe('A finished workout on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('finished during a visit it stays open; coming back it is one line; it opens and folds, at 360px', async ({
+    page,
+  }, info) => {
+    test.setTimeout(180_000);
+    const stamp = `${Date.now().toString(36)}${info.workerIndex}`;
+    const athlete = `E2E fold athlete ${stamp}`;
+    const program = `E2E fold ${stamp}`;
+
+    // 1. A program with the daily stretch on every weekday; a new athlete on it from today.
+    await openPrograms(page);
+    await createProgram(page, program);
+    const programPage = new URL(page.url()).pathname;
+    await copyOntoEveryWeekday(page, { from: stretching.name, workout: daily.name, to: program });
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    // The add has landed on their day page before its URL is read, or Put on finds no such athlete.
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    await page.goto(programPage);
+    await putOnFromToday(page, program, athlete);
+    await page.goto(dayPage);
+
+    // 2. Every row ticked during this visit: the workout stays open, now offering Collapse.
+    const region = page.getByRole('region', { name: daily.name, exact: true });
+    const collapse = region.getByRole('button', { name: DAY_COPY.collapseLabel(daily.name) });
+    // The first ✓ not yet pressed, each time: the query's matches shrink as rows are ticked.
+    // `count()` does not wait: the day page may still be streaming in behind its skeleton.
+    await expect(region).toBeVisible();
+    const open = region.getByRole('button', { pressed: false });
+    await expect(open.first()).toBeVisible();
+    const rows = await open.count();
+    expect(rows, 'the daily stretch has rows to tick').toBeGreaterThan(0);
+    for (let left = rows; left > 0; left--) {
+      await open.first().click();
+      await expect(open).toHaveCount(left - 1);
+    }
+    await expect(collapse).toBeVisible();
+    await expect(region.getByRole('heading').getByRole('button', { expanded: false })).toHaveCount(
+      0,
+    );
+
+    // 3. Coming back (a reload): one line, the region still named for the workout, at 360px.
+    await page.reload();
+    const line = region.getByRole('heading').getByRole('button', { expanded: false });
+    // Named "name, label, count" in a real browser too; and the folded body's ✓s are not reachable.
+    // The slot's label (if the copy has one) sits between; the parts are joined by ", " exactly.
+    await expect(line).toHaveAccessibleName(
+      new RegExp(
+        `^${escapeRegExp(daily.name)}(, [^,]+)?, ${escapeRegExp(DAY_COPY.progress(rows, rows))}$`,
+      ),
+    );
+    await expect(region.getByRole('button', { pressed: true })).toHaveCount(0);
+    await openCollapsed(region, daily.name);
+    await expectNoAxeViolations(page, 'a finished workout, opened, 360px');
+    await expectTapTargets(page, 'a finished workout, opened, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, opened, 360px');
+    await collapse.click();
+    await expect(line).toBeFocused();
+    await expectNoAxeViolations(page, 'a finished workout, folded, 360px');
+    await expectTapTargets(page, 'a finished workout, folded, 360px');
+    await expectNoHorizontalOverflow(page, 'a finished workout, folded, 360px');
+  });
+});
+
+// ── Bodyweight and Life fold to one line (FAM-1 12c-iii PR 2) ───────────────────────────────────
+//
+// On this run's own athlete: a logged weight and practice change every later visit to that day. A
+// new athlete's routine is strength only (`NEUTRAL_DEFAULT_KEYS`), so it adds Wrestling practice
+// first, or the page has no Life section.
+
+test.describe('Bodyweight and Life on real data', () => {
+  test.use({ viewport: NARROW_VIEWPORT });
+
+  const added: string[] = [];
+  test.afterEach(async ({ page }) => {
+    test.setTimeout(60_000);
+    await archiveAdded(page, added.splice(0));
+  });
+
+  test('logged during a visit they stay open; coming back each is one line; Bodyweight opens, holds Collapse while changing, and folds, at 360px', async ({
+    page,
+  }, info) => {
+    test.setTimeout(120_000);
+    const athlete = `E2E fold sections ${Date.now().toString(36)}${info.workerIndex}-${info.retry}`;
+    const practice = LIFE_ACTIVITIES[0].label;
+
+    // 1. A new athlete, with Wrestling practice in the routine.
+    await addAthlete(page, athlete, PROFILE_KIND.kid, added);
+    await expect(page.getByRole('heading', { name: athlete, level: 1 })).toBeVisible();
+    const dayPage = page.url();
+    const athleteId = new URL(dayPage).pathname.split('/')[2]!;
+    await page.goto(athleteRoutinePath(athleteId), { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: `+ ${practice}`, exact: true }).click();
+    await page.getByRole('button', { name: ROUTINE_COPY.save, exact: true }).click();
+    await expect(page.locator('form').getByRole('status')).toHaveText(ROUTINE_COPY.saved);
+
+    // 2. Both logged during this visit: both stay open, each now offering Collapse.
+    await page.goto(dayPage, { waitUntil: 'networkidle' });
+    const bodyweight = bodyweightSection(page);
+    const life = lifeSection(page);
+    const WEIGHT = '64.5';
+    await logBodyweight(page, WEIGHT);
+    await logPractice(page);
+    const collapseOf = (region: Locator, name: string) =>
+      region.getByRole('button', { name: DAY_COPY.collapseLabel(name), exact: true });
+    const lineOf = (region: Locator) =>
+      region.getByRole('heading').getByRole('button', { expanded: false });
+    await expect(collapseOf(bodyweight, BODYWEIGHT_COPY.heading)).toBeVisible();
+    await expect(collapseOf(life, LIFE_COPY.heading)).toBeVisible();
+    await expect(lineOf(bodyweight)).toHaveCount(0);
+    await expect(lineOf(life)).toHaveCount(0);
+
+    // 3. Coming back: a day away and back with DayNav (a client-side change of day, where the page
+    // itself does not remount), then a reload. Two lines each time, each region still named by its
+    // heading alone. A new athlete can view yesterday (`day-navigation.spec.ts`).
+    const nav = dayNav(page);
+    await nav.getByRole('link', { name: /^Previous day/ }).click();
+    await page.waitForURL((u) => u.searchParams.has('d'));
+    await nav.getByRole('link', { name: /^Next day/ }).click();
+    await page.waitForURL((u) => !u.searchParams.has('d'));
+    await expect(lineOf(bodyweight)).toBeVisible();
+    await expect(lineOf(life)).toBeVisible();
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(lineOf(bodyweight)).toHaveAccessibleName(
+      `${BODYWEIGHT_COPY.heading}, ${shownWeight(WEIGHT)}`,
+    );
+    await expect(lineOf(life)).toHaveAccessibleName(
+      `${LIFE_COPY.heading}, ${practice} ${PRACTICE_SHOWN}`,
+    );
+    await expectNoAxeViolations(page, 'Bodyweight and Life folded, 360px');
+    await expectTapTargets(page, 'Bodyweight and Life folded, 360px');
+    await expectNoHorizontalOverflow(page, 'Bodyweight and Life folded, 360px');
+
+    // 4. Open Bodyweight; while its Change is open, no Collapse; the change saves; it returns.
+    await openCollapsed(bodyweight, BODYWEIGHT_COPY.heading);
+    await expectNoAxeViolations(page, 'Bodyweight opened, 360px');
+    await expectTapTargets(page, 'Bodyweight opened, 360px');
+    await expectNoHorizontalOverflow(page, 'Bodyweight opened, 360px');
+    await changeWeight(page, WEIGHT).click();
+    const editor = bodyweight.getByLabel(AMEND_COPY.valueLabel(DEFAULT_BODYWEIGHT_UNIT), {
+      exact: true,
+    });
+    await expect(editor).toBeFocused();
+    await expect(collapseOf(bodyweight, BODYWEIGHT_COPY.heading)).toHaveCount(0);
+    const CORRECTED = '65';
+    await editor.fill(CORRECTED);
+    await bodyweight.getByRole('button', { name: BODYWEIGHT_COPY.saveLabel, exact: true }).click();
+    await expect(changeWeight(page, CORRECTED)).toBeFocused({ timeout: 15_000 });
+    await expect(loggedWeight(page, CORRECTED)).toBeVisible();
+
+    // 5. Collapse: one line again, showing the new weight, with focus on it.
+    await collapseOf(bodyweight, BODYWEIGHT_COPY.heading).click();
+    await expect(lineOf(bodyweight)).toBeFocused();
+    await expect(lineOf(bodyweight)).toHaveAccessibleName(
+      `${BODYWEIGHT_COPY.heading}, ${shownWeight(CORRECTED)}`,
+    );
   });
 });

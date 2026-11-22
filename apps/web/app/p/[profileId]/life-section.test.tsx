@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
-import { ACTIVITY_TYPE_KEYS, PRACTICE_AMEND_REFUSAL, PRACTICE_UNIT } from '@mat-plan/shared';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  ACTIVITY_TYPE_KEYS,
+  ACTIVITY_TYPE_SEED_ROWS,
+  PRACTICE_AMEND_REFUSAL,
+  PRACTICE_UNIT,
+} from '@mat-plan/shared';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./actions', () => ({
@@ -12,12 +18,16 @@ import {
   AMEND_ERROR_COPY,
   changeLabel,
   LIFE_COPY,
+  NAME_WRAP_CLASS,
   PRACTICE_COPY,
   RATE_LIMITED,
 } from '@/lib/constants';
 import type { LoggedLifeActivity } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
+
+import { DAY_COPY } from '@/components/day/day-copy';
+import { openFolded } from '@/components/day/day-test-utils';
 
 import { editPracticeAction, logLifeActivitiesAction } from './actions';
 import { LifeSection } from './life-section';
@@ -32,7 +42,8 @@ const DAY = '2026-09-30';
 const PRACTICE = ACTIVITY_TYPE_KEYS.wrestling_practice;
 const WAKE = ACTIVITY_TYPE_KEYS.wake;
 const practiceLabel = LIFE_ACTIVITIES.find((a) => a.key === PRACTICE)!.label;
-const wakeLabel = LIFE_ACTIVITIES.find((a) => a.key === WAKE)!.label;
+// Wake left the routine catalog (FAM-1 12f PR 5), so its label is read from the activity type it still is.
+const wakeLabel = ACTIVITY_TYPE_SEED_ROWS.find((a) => a.key === WAKE)!.label;
 
 const practice = (value: number, entryId = `019826b4-0000-7000-8000-00000000c${value}`) =>
   ({ entryId, activityKey: PRACTICE, value, unit: PRACTICE_UNIT }) satisfies LoggedLifeActivity;
@@ -53,7 +64,11 @@ const section = (overrides: Partial<Props> = {}) => (
 const changeButton = (value: number) =>
   screen.getByRole('button', { name: changeLabel(PRACTICE_COPY.changeSubject, minutes(value)) });
 const field = () => screen.getByLabelText(PRACTICE_COPY.fieldLabel) as HTMLInputElement;
-const open = (value: number) => fireEvent.click(changeButton(value));
+/** Change, after opening the section: a logged Life on a writable day arrives as one line. */
+const open = (value: number) => {
+  openFolded();
+  fireEvent.click(changeButton(value));
+};
 const submit = async (name: string) => {
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name }));
@@ -65,12 +80,11 @@ const PRACTICE_SAVE = PRACTICE_COPY.saveLabel;
 const PRACTICE_CANCEL = PRACTICE_COPY.cancelLabel;
 
 describe('LifeSection — its states', () => {
-  it('writable and nothing logged: the practice button, and no Wake', () => {
+  it('writable and nothing logged: the practice button', () => {
     render(section());
     expect(screen.getByRole('heading', { name: LIFE_COPY.heading })).toBeTruthy();
     expect(screen.getByRole('button', { name: PRACTICE_COPY.logLabel })).toBeTruthy();
     expect(screen.getByLabelText(PRACTICE_COPY.fieldLabel)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: wakeLabel })).toBeNull();
     expect(screen.queryByText(LIFE_COPY.noneOnClosedDay)).toBeNull();
   });
 
@@ -87,6 +101,7 @@ describe('LifeSection — its states', () => {
 
   it('Change shows on a day that can be changed, and never on a read-only one', () => {
     render(section({ logged: [practice(90)] }));
+    openFolded();
     expect(changeButton(90)).toBeTruthy();
     cleanup();
     render(section({ writable: false, amendable: false, logged: [practice(90)] }));
@@ -112,7 +127,7 @@ describe('LifeSection — its states', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('a logged Wake is not shown', () => {
+  it('Wake is not in the catalog: a logged Wake is not shown', () => {
     const wake: LoggedLifeActivity = {
       entryId: 'w',
       activityKey: WAKE,
@@ -124,7 +139,7 @@ describe('LifeSection — its states', () => {
     expect(screen.getByText(LIFE_COPY.noneOnClosedDay)).toBeTruthy();
   });
 
-  it('renders nothing when the routine has no life activity to show', () => {
+  it('Wake is not in the catalog: a routine of Wake alone renders nothing', () => {
     for (const activityKeys of [[], [WAKE]]) {
       const { container } = render(section({ activityKeys }));
       expect(container.innerHTML).toBe('');
@@ -136,7 +151,8 @@ describe('LifeSection — its states', () => {
 describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
   it('opening a day that already has a practice announces nothing', () => {
     render(section({ logged: [practice(90)] }));
-    expect(screen.getByRole('status').textContent).toBe('');
+    // It arrives folded: the island's region is behind the line, and silent.
+    expect(screen.getByRole('status', { hidden: true }).textContent).toBe('');
   });
 
   it("a log is announced from the action's result and hands focus to the row's Change", async () => {
@@ -152,7 +168,7 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
   it('paging to a logged day is not a log', () => {
     const { rerender } = render(section());
     rerender(section({ day: '2026-09-29', logged: [practice(60)] }));
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('status', { hidden: true }).textContent).toBe('');
   });
 
   it('the editor: a numeric keypad, named for practice, the value selected, and the total hint', () => {
@@ -307,6 +323,122 @@ describe('LifeSection — the log, Change and clear (plan A3, A4)', () => {
         ],
       }),
     );
+    openFolded();
     expect(screen.queryByRole('button', { name: /^Change/ })).toBeNull();
+  });
+});
+
+describe('LifeSection — every item logged folds it to one line (FAM-1 12c-iii)', () => {
+  const line = () => screen.queryByRole('button', { expanded: false });
+  const collapse = () =>
+    screen.queryByRole('button', { name: DAY_COPY.collapseLabel(LIFE_COPY.heading) });
+  const changeOf = (value: number) =>
+    screen.queryByRole('button', {
+      name: changeLabel(PRACTICE_COPY.changeSubject, minutes(value)),
+    });
+
+  it('a practice logged when the day opens arrives as "Life, Wrestling practice 90 min"', () => {
+    render(section({ logged: [practice(90)] }));
+    expect(line()!.getAttribute('aria-label')).toBe(
+      `${LIFE_COPY.heading}, ${practiceLabel} ${minutes(90)}`,
+    );
+    expect(changeOf(90)).toBeNull();
+    expect(screen.getByRole('region', { name: LIFE_COPY.heading })).toBeTruthy();
+  });
+
+  it('the summary is the line’s detail, which wraps, never its count, which does not', () => {
+    render(section({ logged: [practice(90)] }));
+    const summary = within(line()!).getByText(`${practiceLabel} ${minutes(90)}`);
+    expect(summary.className).toContain(NAME_WRAP_CLASS);
+    expect(summary.className).not.toContain('whitespace-nowrap');
+  });
+
+  it('the summary names an item with no value by its label alone, items joined with ", "', () => {
+    // ⚠️ A LEGACY shape: one live practice per day is a database rule since 3b-0, so two rows (one
+    // with no value) exist only from before it. Kept because the join and the label-alone branch are
+    // the prototype's rule for more than one Life item; the summary is the line's wrapping detail.
+    render(
+      section({
+        logged: [
+          { entryId: 'n', activityKey: PRACTICE, value: null, unit: PRACTICE_UNIT },
+          practice(45, 'b'),
+        ],
+      }),
+    );
+    expect(line()!.getAttribute('aria-label')).toBe(
+      `${LIFE_COPY.heading}, ${practiceLabel}, ${practiceLabel} ${minutes(45)}`,
+    );
+  });
+
+  it('never folds: nothing logged, a read-only day or an archived athlete with a practice', () => {
+    for (const props of [
+      { logged: [] },
+      { logged: [practice(90)], writable: false, amendable: false },
+      { logged: [practice(90)], writable: false, amendable: true },
+    ]) {
+      render(section(props));
+      expect(line()).toBeNull();
+      expect(collapse()).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('logged during the visit it stays open, with Collapse; a new day and back folds it', async () => {
+    const { rerender } = render(section());
+    fireEvent.change(field(), { target: { value: '90' } });
+    await submit(PRACTICE_COPY.logLabel);
+    rerender(section({ logged: [practice(90)] }));
+    expect(line()).toBeNull();
+    expect(collapse()).not.toBeNull();
+    rerender(section({ day: '2026-09-29' }));
+    rerender(section({ logged: [practice(90)] }));
+    expect(line()).not.toBeNull();
+  });
+
+  it('a tap opens it with focus on Collapse; Collapse folds it with focus on the line', () => {
+    render(section({ logged: [practice(90)] }));
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
+    expect(changeOf(90)).not.toBeNull();
+    fireEvent.click(collapse()!);
+    expect(document.activeElement).toBe(line());
+  });
+
+  it('no Collapse while the editor is open or a refusal shows; it returns once both go', async () => {
+    render(section({ logged: [practice(90)] }));
+    open(90);
+    expect(collapse()).toBeNull();
+    vi.mocked(editPracticeAction).mockResolvedValueOnce({
+      ok: false,
+      reason: PRACTICE_AMEND_REFUSAL.stale,
+    });
+    fireEvent.change(field(), { target: { value: '60' } });
+    await submit(PRACTICE_SAVE);
+    expect(screen.getByRole('alert').textContent).toBe(AMEND_ERROR_COPY.staleWrite);
+    expect(collapse()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: PRACTICE_CANCEL }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(collapse()).not.toBeNull();
+  });
+
+  it('an alert alone holds Collapse (a log refused because the day was taken)', async () => {
+    vi.mocked(logLifeActivitiesAction).mockResolvedValueOnce({
+      ok: false,
+      error: PRACTICE_COPY.dayTaken(60),
+      dayTaken: true,
+    });
+    const { rerender } = render(section());
+    fireEvent.change(field(), { target: { value: '60' } });
+    await submit(PRACTICE_COPY.logLabel);
+    rerender(section({ logged: [practice(90)] }));
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(collapse()).toBeNull();
+  });
+
+  it('under StrictMode a mount moves no focus, and a tap still focuses Collapse', () => {
+    render(<StrictMode>{section({ logged: [practice(90)] })}</StrictMode>);
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
   });
 });

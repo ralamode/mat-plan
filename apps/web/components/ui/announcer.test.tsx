@@ -70,4 +70,32 @@ describe('Announcer', () => {
     const visible = render(<Announcer message="x" className="text-muted-foreground text-sm" />);
     expect(visible.container.querySelector('[role="status"]')?.className).not.toContain('sr-only');
   });
+
+  it('messages: one node per sentence; an added sentence leaves the earlier node in place', () => {
+    const { rerender } = render(<Announcer messages={[{ key: 1, text: 'Squat set 2 logged' }]} />);
+    const region = screen.getByRole('status');
+    expect(region.getAttribute('aria-atomic')).toBe('false');
+    const first = region.firstElementChild;
+    rerender(
+      <Announcer
+        messages={[
+          { key: 1, text: 'Squat set 2 logged' },
+          { key: 2, text: 'Bench press set 1 is saved as 35 pounds.' },
+        ]}
+      />,
+    );
+    expect(region.children).toHaveLength(2);
+    // The same node, not a copy: only the new one is an addition to read.
+    expect(region.firstElementChild).toBe(first);
+    // A space between sentences, inside the new node, so they never run together.
+    expect(region.textContent).toBe('Squat set 2 logged Bench press set 1 is saved as 35 pounds.');
+    rerender(<Announcer messages={[{ key: 3, text: 'Squat set 2 logged' }]} />);
+    expect(region.children).toHaveLength(1);
+    expect(region.firstElementChild).not.toBe(first);
+  });
+
+  it('messages: [] is the mounted-and-silent state', () => {
+    render(<Announcer messages={[]} />);
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
 });

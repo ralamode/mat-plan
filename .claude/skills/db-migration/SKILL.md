@@ -59,10 +59,12 @@ ALTER TABLE "x" ADD COLUMN IF NOT EXISTS "y" text;--> statement-breakpoint
   that writes both and reads the new one, backfill, and drop the old column in a later PR. Only
   collapse the steps with evidence (0011 had 0 prod rows) written in the header.
 - **Indexes:** `CONCURRENTLY` can't run inside drizzle's migration transaction (one for all pending
-  files), and the
-  transaction-stripping runner AGENTS.md describes **doesn't exist** (tech-debt.md). A plain
-  `CREATE INDEX` on a small or new table is accepted with a comment saying why. On a large hot table,
-  stop and plan the runner first.
+  files), and no runner applies a file outside it. So Squawk's `require-concurrent-index-creation`
+  is on, and each plain `CREATE INDEX` on a table that **already exists** needs
+  `-- squawk-ignore require-concurrent-index-creation` directly above it, with the reason above
+  that: the table's size and why a `SHARE` lock for the build is harmless. The written reason is the
+  gate. An index on a table the same file creates needs nothing. On a large hot table, stop and
+  plan the runner first.
 - **Squawk exceptions:** `-- squawk-ignore <rule>` on the line **directly** above the statement, with
   the justification above that. Any comment in between silently voids it.
 

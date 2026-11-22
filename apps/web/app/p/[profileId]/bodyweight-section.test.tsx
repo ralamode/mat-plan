@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { DEFAULT_BODYWEIGHT_UNIT, IMPLAUSIBLE_BODYWEIGHT_MESSAGE } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The form imports the Server Action module ('use server'), which cannot be evaluated under jsdom
-// (the strength-form.test.tsx precedent). This file is about what the SECTION renders.
+// (the precedent every component test that imports it follows). This file is about what the
+// SECTION renders.
 vi.mock('./actions', () => ({
   logBodyweightAction: vi.fn(async () => ({ ok: true, error: null })),
   editBodyweightAction: vi.fn(async () => ({ ok: true, error: null })),
@@ -20,6 +22,9 @@ import {
 } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
+
+import { DAY_COPY } from '@/components/day/day-copy';
+import { openFolded } from '@/components/day/day-test-utils';
 
 import { editBodyweightAction, logBodyweightAction } from './actions';
 import { BodyweightSection } from './bodyweight-section';
@@ -61,17 +66,24 @@ const logButton = () => screen.getByRole('button', { name: BODYWEIGHT_COPY.logLa
 const field = () => screen.getByLabelText('Weight') as HTMLInputElement;
 
 describe('BodyweightSection — its states', () => {
-  it('is headed "Bodyweight" in EVERY state', () => {
+  it('is headed "Bodyweight", and named so, in EVERY state (folded too)', () => {
     for (const props of [
       { logged: [] },
-      { logged: [weight(84.5)] },
       { logged: [], writable: false },
       { logged: [weight(84.5)], writable: false },
     ]) {
       render(section(props));
       expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(BODYWEIGHT_COPY.heading);
+      expect(screen.getByRole('region', { name: BODYWEIGHT_COPY.heading })).toBeTruthy();
       cleanup();
     }
+    // Folded (one weight on a writable day): the heading holds the line, named by its parts; the
+    // region keeps its bare name (12c-iii §3), which the e2e finds it by.
+    render(section({ logged: [weight(84.5)] }));
+    expect(
+      screen.getByRole('heading', { level: 2 }).querySelector('button')!.getAttribute('aria-label'),
+    ).toBe(`${BODYWEIGHT_COPY.heading}, ${shown(weight(84.5))}`);
+    expect(screen.getByRole('region', { name: BODYWEIGHT_COPY.heading })).toBeTruthy();
   });
 
   it('writable + nothing logged → the ✓ row: a text field with a decimal keypad, and an outline ✓', () => {
@@ -116,6 +128,7 @@ describe('BodyweightSection — its states', () => {
   it('one weight → ✓ 84.5 lb, read as "Logged 84.5 lb", and a Change control', () => {
     const w = weight(84.5);
     render(section({ logged: [w] }));
+    openFolded();
     expect(screen.getByText(BODYWEIGHT_COPY.logged).className).toContain('sr-only');
     expect(screen.getByText(shown(w), { exact: false })).toBeTruthy();
     // THE half that stops the second submit: no create form.
@@ -221,7 +234,8 @@ describe('BodyweightSection — the ✓ (plan W3, W6)', () => {
   it('does NOT announce when paging from an empty day to a logged one (not a save)', () => {
     const { rerender } = render(section());
     rerender(section({ day: NEXT_DAY, logged: [weight(84.5)] }));
-    expect(statusText()).toBe('');
+    // The logged day arrives folded, so its region is behind the line.
+    expect(screen.getByRole('status', { hidden: true }).textContent).toBe('');
     expect(document.activeElement).toBe(document.body);
   });
 
@@ -246,7 +260,11 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     screen.queryByLabelText(AMEND_COPY.valueLabel(W.unit)) as HTMLInputElement | null;
   const changeButton = (w: LoggedBodyweight = W) =>
     screen.getByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) });
-  const open = (w: LoggedBodyweight = W) => fireEvent.click(changeButton(w));
+  /** Change, after opening the section: a logged weight on a writable day arrives as one line. */
+  const open = (w: LoggedBodyweight = W) => {
+    openFolded();
+    fireEvent.click(changeButton(w));
+  };
   const SAVE = BODYWEIGHT_COPY.saveLabel;
   const CANCEL = BODYWEIGHT_COPY.cancelLabel;
 
@@ -370,6 +388,8 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     const b = weight(70, 'entry-b');
     rerender(section({ day: NEXT_DAY, logged: [b] }));
     expect(amendInput()).toBeNull();
+    // A new day is a new visit: it arrives folded (12c-iii §1).
+    openFolded();
     expect(changeButton(b)).toBeTruthy();
   });
 
@@ -497,6 +517,127 @@ describe('BodyweightSection — Change, Save and Clear (plan W5, W6)', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       AMEND_ERROR_COPY.notFound(BODYWEIGHT_COPY.noun),
     );
+  });
+});
+
+describe('BodyweightSection — one weight folds to one line (FAM-1 12c-iii)', () => {
+  const W = weight(84.5, 'entry-a');
+  const line = () => screen.queryByRole('button', { expanded: false });
+  const collapse = () =>
+    screen.queryByRole('button', { name: DAY_COPY.collapseLabel(BODYWEIGHT_COPY.heading) });
+  const change = (w: LoggedBodyweight = W) =>
+    screen.queryByRole('button', { name: changeLabel(BODYWEIGHT_COPY.changeSubject, shown(w)) });
+  const SAVE = BODYWEIGHT_COPY.saveLabel;
+
+  it('a weight logged when the day opens arrives as "Bodyweight, 84.5 lb", its Change behind it', () => {
+    render(section({ logged: [W] }));
+    expect(line()!.getAttribute('aria-label')).toBe(`${BODYWEIGHT_COPY.heading}, ${shown(W)}`);
+    expect(change()).toBeNull();
+    expect(screen.getByRole('region', { name: BODYWEIGHT_COPY.heading })).toBeTruthy();
+  });
+
+  it('never folds: nothing logged, two weights, a read-only day or an archived athlete with one weight', () => {
+    for (const props of [
+      { logged: [] },
+      { logged: [weight(84.5, 'a'), weight(845, 'b')] },
+      { logged: [W], writable: false, amendable: false },
+      { logged: [W], writable: false, amendable: true },
+    ]) {
+      render(section(props));
+      expect(line()).toBeNull();
+      expect(collapse()).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('a weight logged during the visit stays open, with Collapse; a new day, an athlete, or back again folds', async () => {
+    const { rerender } = render(section());
+    fireEvent.change(field(), { target: { value: '84.5' } });
+    await act(async () => {
+      fireEvent.click(logButton());
+    });
+    rerender(section({ logged: [W] }));
+    expect(line()).toBeNull();
+    expect(collapse()).not.toBeNull();
+    // Coming back is a new mount: the section is keyed on athlete and day.
+    rerender(section({ day: NEXT_DAY, logged: [] }));
+    rerender(section({ logged: [W] }));
+    expect(line()).not.toBeNull();
+    openFolded();
+    rerender(section({ profileId: 'p2', logged: [W] }));
+    expect(line()).not.toBeNull();
+  });
+
+  it('a tap opens it with focus on Collapse, Collapse folds it with focus on the line, and nothing is announced', () => {
+    render(section({ logged: [W] }));
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
+    expect(change()).not.toBeNull();
+    fireEvent.click(collapse()!);
+    expect(document.activeElement).toBe(line());
+    expect(screen.getByRole('status', { hidden: true }).textContent).toBe('');
+  });
+
+  it('no Collapse while the editor is open; it returns on Cancel', () => {
+    render(section({ logged: [W] }));
+    openFolded();
+    fireEvent.click(change()!);
+    expect(collapse()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: BODYWEIGHT_COPY.cancelLabel }));
+    expect(collapse()).not.toBeNull();
+  });
+
+  // `editing || pending` in the editor: a save is only ever in flight while the editor is open, so
+  // `|| pending` is a safety net no test can isolate. This proves the two together.
+  it('no Collapse while the editor is open and saving; it returns once the save lands', async () => {
+    let resolve!: (r: { ok: true; error: null }) => void;
+    vi.mocked(editBodyweightAction).mockImplementationOnce(
+      () => new Promise((r) => (resolve = r as typeof resolve)),
+    );
+    const { rerender } = render(section({ logged: [W] }));
+    openFolded();
+    fireEvent.click(change()!);
+    fireEvent.change(screen.getByLabelText(AMEND_COPY.valueLabel(W.unit)), {
+      target: { value: '85' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SAVE }));
+    });
+    expect(screen.getByRole('button', { name: SAVE }).getAttribute('aria-busy')).toBe('true');
+    expect(collapse()).toBeNull();
+    await act(async () => resolve({ ok: true, error: null }));
+    rerender(section({ logged: [weight(85, 'entry-a')] }));
+    expect(collapse()).not.toBeNull();
+  });
+
+  it('no Collapse while an alert shows; it returns once the alert goes', async () => {
+    vi.mocked(logBodyweightAction).mockResolvedValueOnce({
+      ok: false,
+      error: BODYWEIGHT_COPY.dayTaken,
+    });
+    const { rerender } = render(section());
+    fireEvent.change(field(), { target: { value: '84.5' } });
+    await act(async () => {
+      fireEvent.click(logButton());
+    });
+    const other = weight(85);
+    rerender(section({ logged: [other] }));
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(collapse()).toBeNull();
+    // Change drops it; Cancel closes the editor: nothing is left behind the line.
+    fireEvent.click(change(other)!);
+    fireEvent.click(screen.getByRole('button', { name: BODYWEIGHT_COPY.cancelLabel }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(collapse()).not.toBeNull();
+  });
+
+  it('under StrictMode a mount moves no focus, and a tap still focuses Collapse', () => {
+    render(<StrictMode>{section({ logged: [W] })}</StrictMode>);
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.click(line()!);
+    expect(document.activeElement).toBe(collapse());
+    fireEvent.click(collapse()!);
+    expect(document.activeElement).toBe(line());
   });
 });
 

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  programIdsIn,
   programIn,
   programWorkoutIds,
   workoutInHousehold,
@@ -18,8 +19,8 @@ import { listHouseholdAthletes } from '../profiles';
  *
  * - **One id at a time, in the writer's order, and only the first miss is reported**: a workout of
  *   a program that is not the household's would otherwise be reported twice.
- * - **With no scope**, the first id (always a program's) is reported, and `reportScopeMiss` records
- *   it as `no_scope`.
+ * - **With no scope**, the first id (a program's; for Program order, the athlete's) is reported, and
+ *   `reportScopeMiss` records it as `no_scope`.
  * - **All found** means the miss was something else (an item, a stale workout list): nothing is
  *   reported, since no id named something outside the household.
  * - The ids have already parsed as uuids (the contract's schemas, or the read's own check).
@@ -135,27 +136,72 @@ const profileMiss = (profilePublicId: string): ScopeMiss => ({
 });
 
 /**
+ * The athlete ids, in the input's order, sharing **one read for every id and no new query**: the
+ * household's athletes, archived ones included (`listHouseholdAthletes`, the request's cached read).
+ * An archived athlete of this household is found, so it is not reported: the writer's `not_found`
+ * for them names nothing outside the household. Read once, on the first athlete probe; with no
+ * scope, `found` is never called.
+ */
+function athleteProbes(scope: HouseholdScope | null, profilePublicIds: readonly string[]): Probe[] {
+  let known: Promise<ReadonlySet<string>> | undefined;
+  const athletes = () =>
+    (known ??= listHouseholdAthletes().then((rows) => new Set(rows.map((row) => row.id))));
+  return profilePublicIds.map((id): Probe => ({
+    found: async () => !!scope && (await athletes()).has(id),
+    miss: profileMiss(id),
+  }));
+}
+
+/**
  * A Put on or a Take off (FAM-1 step 15), in the writers' order: the program (`lockProgram`), then
- * each athlete id in the input's order, until the first the household does not have.
- *
- * **One read for every athlete id, and no new query**: the household's athletes, archived ones
- * included (`listHouseholdAthletes`, the request's cached read). An archived athlete of this
- * household is found, so it is not reported: the writer's `not_found` for them names nothing outside
- * the household. Nor is an athlete who is simply not on the program, for Take off.
+ * each athlete id in the input's order, until the first the household does not have
+ * (`athleteProbes`). Nor is an athlete who is simply not on the program reported, for Take off.
  */
 export async function reportAssignMiss(
   scope: HouseholdScope | null,
   assign: { programPublicId: string; profilePublicIds: readonly string[] },
 ): Promise<void> {
-  let known: Promise<ReadonlySet<string>> | undefined;
-  // Read once, on the first athlete probe; with no scope, `found` is never called.
-  const athletes = () =>
-    (known ??= listHouseholdAthletes().then((rows) => new Set(rows.map((row) => row.id))));
   await reportFirstMiss(scope, [
     programProbe(scope, assign.programPublicId),
-    ...assign.profilePublicIds.map((id): Probe => ({
-      found: async () => !!scope && (await athletes()).has(id),
-      miss: profileMiss(id),
-    })),
+    ...athleteProbes(scope, assign.profilePublicIds),
   ]);
+}
+
+/**
+ * A Program order (FAM-1 step 15c): the athlete alone, the one id `reorderPrograms` answers
+ * `not_found` for (`lockAthletes`). A program id the household does not have is the writer's
+ * `invalid`, not a miss, so no program is probed. The same probe as Put on's (`athleteProbes`): an
+ * archived athlete of this household is found, so the writer's `not_found` for them reports nothing.
+ */
+export async function reportAthleteMiss(
+  scope: HouseholdScope | null,
+  profilePublicId: string,
+): Promise<void> {
+  await reportFirstMiss(scope, athleteProbes(scope, [profilePublicId]));
+}
+
+/**
+ * A Program order the writer refused as `invalid` (FAM-1 15c): each program id it names, distinct, in
+ * the order's order, until the first that is not one of this household's live programs. `invalid`
+ * is also the writer's answer for a stale list (a put on, a take off, midnight), so an id that is
+ * one of the household's live programs reports nothing: only one that names something outside it is a scope miss.
+ *
+ * **One query, however many ids the order names** (at most `MAX_ORDER_PROGRAMS`): `programIdsIn`,
+ * which answers which of them are this household's live programs by the same scope `programIn` uses.
+ * Read once on the first probe, each id looked up in its set. The caller has a scope here: with none,
+ * the DAL answers `not_found` and reports the athlete before the writer runs.
+ */
+export async function reportOrderProgramMiss(
+  scope: HouseholdScope,
+  programPublicIds: readonly string[],
+): Promise<void> {
+  let known: Promise<ReadonlySet<string>> | undefined;
+  const programs = () => (known ??= programIdsIn(db, scope, programPublicIds));
+  await reportFirstMiss(
+    scope,
+    [...new Set(programPublicIds)].map((id): Probe => ({
+      found: async () => (await programs()).has(id),
+      miss: programMiss(id),
+    })),
+  );
 }

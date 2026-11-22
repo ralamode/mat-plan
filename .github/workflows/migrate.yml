@@ -16,14 +16,20 @@ name: Migrate + seed (production)
 # `paths` allowlist would silently miss seed-only PRs (which is exactly how prod
 # drifted after V1-2/V1-3 shipped no migration).
 #
+# CAT-3 A2-ii: the reference data includes the movement library (`CATALOG_MOVEMENTS`), written in one
+# transaction. The first push after A2-ii inserts it; every later push inserts nothing, but still
+# sends the insert, and each absorbed row uses up a `movements` identity value (harmless on a bigint;
+# docs/lessons.md -> Database). A library entry the database refuses turns this job red until a
+# fix-forward PR: docs/runbooks.md -> "The seed fails on the movement library".
+#
 # TEN-2c: "safe to always run" is unqualified again. `db:seed` used to REFUSE — and so
 # turn this job red on every subsequent push — if a household already owned a `movements`
 # row whose slug the seed adds globally, because while the non-partial `movements_slug_unique`
 # lived, `ON CONFLICT DO NOTHING` absorbed that collision and the catalog row was silently
 # never inserted. Migration 0017 dropped that constraint, so the two rows now coexist legally
 # and the global insert lands. The guard REPORTS instead: it seeds the curated row and logs a
-# warning naming the seed slug only — never the colliding row's `name`, which is household free
-# text and this log is world-readable. Background: docs/runbooks.md -> "the seed's shadow
+# warning with COUNTS ONLY (CAT-3 A2-i) — never a slug a household also holds, never a row's
+# `name`, because this log is world-readable. Background: docs/runbooks.md -> "the seed's shadow
 # guard fired".
 #
 # The PREVIEW estate has its own migrator, `migrate-preview.yml` — a separate FILE, not a second job

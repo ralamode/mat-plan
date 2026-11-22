@@ -3,8 +3,9 @@ import type { RoutineItem } from '@mat-plan/shared';
 /**
  * Pure transforms for the coach routine builder (V1-18 PR 2). The client `<RoutineEditor>` holds the
  * in-routine activities as an ordered list of `RoutineItem`s (`{ key, conditional? }`); these compute the
- * next array immutably (never mutate the argument). Extracted + colocated-tested per the
- * `strength-form-supersets` idiom, since the async client form itself is only reachable via Playwright.
+ * next array immutably (never mutate the argument). Extracted and colocated-tested, since the async
+ * client form itself is only reachable via Playwright. The day page's program-order dialog and the
+ * program builder import them too, so this module must not come to depend on the routine catalog.
  *
  * The opaque `conditional` marker is PRESERVED through every transform — it's the V1-10 down-payment
  * (`resolveRoutine`/the seed carry it), so silently stripping it on an unrelated edit would defeat it.

@@ -1498,6 +1498,8 @@ describe('search (CAT-3 B1: short forms and similar names)', () => {
       '@/lib/movements/movement-picker-copy',
       // The browse tree's view model (CAT-3 B3): pure, no DOM.
       '@/lib/movements/browse-view',
+      // The coarse-pointer check (V1-9b B2-prep): reads `matchMedia`, sends nothing.
+      '@/lib/a11y/pointer',
       // The disclosure's chevron (CAT-3 B3): an icon, no I/O.
       'lucide-react',
     ]);

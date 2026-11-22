@@ -1,0 +1,31 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 097b6576..0e93a389 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -469,15 +469,24 @@ export async function seedCatalog(
+       )
+       .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() })
+       .returning({ id: schema.movements.id, slug: schema.movements.slug });
++    const linked = await tx
++      .select({ id: schema.movements.id, slug: schema.movements.slug })
++      .from(schema.movements)
++      .where(
++        and(
++          inArray(schema.movements.slug, unique.map((e) => e.slug)),
++          movementIsGlobal(),
++        ),
++      );
+ 
+-    const equipmentRows = inserted.flatMap(({ id, slug }) =>
++    const equipmentRows = linked.flatMap(({ id, slug }) =>
+       bySlug.get(slug)!.equipment.map((equipmentCode) => ({ movementId: id, equipmentCode })),
+     );
+     if (equipmentRows.length > 0) {
+       await tx.insert(schema.movementEquipment).values(equipmentRows);
+     }
+ 
+-    const muscleRows = inserted.flatMap(({ id, slug }) => {
++    const muscleRows = linked.flatMap(({ id, slug }) => {
+       const entry = bySlug.get(slug)!;
+       return [
+         ...(entry.primaryMuscle

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dayLine, dayNavBounds } from './day-nav';
+import { dayLine, dayNavBounds, dayTitle } from './day-nav';
 
 /** The day navigation's reach and its date line (FAM-1 12c: look-ahead, v12's day label). */
 
@@ -70,5 +70,14 @@ describe('dayLine', () => {
     expect(dayLine('2026-11-17', TODAY)).toBe('Yesterday · Tue, Nov 17');
     expect(dayLine('2026-11-19', TODAY)).toBe('Tomorrow · Thu, Nov 19');
     expect(dayLine('2026-11-10', TODAY)).toBe('Tue, Nov 10');
+  });
+});
+
+describe('dayTitle', () => {
+  it('is the date line, short on every day: a phone tab and the arrival alert carry no year', () => {
+    expect(dayTitle(TODAY, TODAY)).toBe('Today · Wed, Nov 18');
+    expect(dayTitle('2026-11-17', TODAY)).toBe(dayLine('2026-11-17', TODAY));
+    expect(dayTitle('2026-11-19', TODAY)).toBe(dayLine('2026-11-19', TODAY));
+    expect(dayTitle('2026-11-10', TODAY)).toBe('Tue, Nov 10');
   });
 });

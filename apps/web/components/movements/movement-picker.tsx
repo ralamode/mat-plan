@@ -60,6 +60,7 @@ import {
   type FilterChange,
 } from '@/components/movements/movement-filter-panel';
 import { SHEET_COPY, Sheet, sheetStatusId } from '@/components/ui/sheet';
+import { prefersFineFocus } from '@/lib/a11y/pointer';
 import { INPUT_CLASS, movementCount } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
@@ -484,12 +485,8 @@ export function MovementPicker({
   }
 
   // 🔴 **The search box takes focus only when there is no on-screen keyboard to raise** (criterion
-  // 18): focusing a field on touch covers the list the sheet exists to show. `matchMedia` is absent
-  // in jsdom, so the guard is a capability check and the default (the sheet's title) applies there.
-  const prefersKeyboardFocus =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    !window.matchMedia('(pointer: coarse)').matches;
+  // 18): focusing a field on touch covers the list the sheet exists to show. Where `matchMedia` is
+  // absent (jsdom) the default (the sheet's title) applies (`lib/a11y/pointer.ts`).
 
   // 🔴 **ONE query drives everything below: the deferred one.** `query` itself reaches only the
   // `<input>`'s own `value`. Filtering ~110 rows on the deferred value keeps typing responsive
@@ -816,7 +813,7 @@ export function MovementPicker({
       title={title}
       returnFocusTo={returnFocusTo}
       onReturned={onReturned}
-      initialFocus={prefersKeyboardFocus && !multiple?.takeover ? searchRef : undefined}
+      initialFocus={prefersFineFocus() && !multiple?.takeover ? searchRef : undefined}
       status={
         panelOpen
           ? panelNote && panelCounts
@@ -868,7 +865,7 @@ export function MovementPicker({
                 if (!enterTarget) {
                   // Nothing to pick. On a phone the Search key still puts the keyboard away, so
                   // the rows it is covering show: several matches, near misses, some-words.
-                  if (!prefersKeyboardFocus && shown > 0) {
+                  if (!prefersFineFocus() && shown > 0) {
                     e.currentTarget.blur();
                   }
                   return;
@@ -878,7 +875,7 @@ export function MovementPicker({
                 if (!selectedSet.has(enterTarget.publicId)) multiple.onToggle(enterTarget, 'enter');
                 setQuery('');
                 setHow(null);
-                if (!prefersKeyboardFocus) e.currentTarget.blur();
+                if (!prefersFineFocus()) e.currentTarget.blur();
               }}
               maxLength={MOVEMENT_NAME_MAX}
               autoComplete="off"
@@ -1305,9 +1302,11 @@ function OptionList({
  *
  * - **Multi:** a `button role="checkbox"` with the box on the LEFT (the accepted prototype's), so
  *   ticks line up whether or not a row has "How to", and no thumb aimed at the box lands on it
- *   (UX panel, B2). A ticked row is outlined, never filled: muted text on the accent fill is under AA.
- * - **Single:** a button, `aria-current` on the card's movement. Hover outlines it too, for the same
- *   contrast reason, now that the row has a muted second line.
+ *   (UX panel, B2). A ticked row is outlined, never filled: muted text on the accent fill was under AA
+ *   when this was written (4.34:1, 4.64:1 since `--muted-foreground` moved to L 0.54); the outline
+ *   stays as a choice.
+ * - **Single:** a button, `aria-current` on the card's movement. Hover outlines it too, as the ticked
+ *   row is, now that the row has a muted second line.
  * - The tag joins the second line: three lines and a tag line left under two rows on a phone with
  *   the keyboard up (UX panel, B2).
  * - With a loader, a row without steps keeps the "How to" column empty (the prototype's spacer), so
@@ -1451,8 +1450,8 @@ function OptionRow({
 /**
  * The open "How to" (CAT-3 P16, K17): a named region with the name as its heading, **the
  * supervision label first** whenever the movement has one (from the option, so a loader that leaves
- * it out cannot drop it), then the steps. All text at full contrast: the box is `bg-muted`, where
- * muted text is under AA.
+ * it out cannot drop it), then the steps. All text at full contrast on the `bg-muted` box: steps are
+ * must-read, though muted text there passes AA since L 0.54 (4.64:1).
  */
 function HowToSteps({
   id,

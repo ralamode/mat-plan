@@ -143,6 +143,64 @@ describe('logStrengthSessionSchema — superset validation (V1-8-3c)', () => {
   });
 });
 
+// Postgres compares a uuid without regard to case, so `X` and `X.toUpperCase()` are ONE client_id to
+// the writer's ON CONFLICT. The session refine's distinct-id and membership checks run in JS, so they
+// must see one spelling too: `uuidSchema` folds case at the root (`id.ts`).
+describe('logStrengthSessionSchema — an id in upper case is the same id', () => {
+  const issueMessages = (res: ReturnType<typeof logStrengthSessionSchema.safeParse>) =>
+    res.success ? [] : res.error.issues.map((i) => i.message);
+  /** A fresh id whose two spellings differ (a uuid with no a–f letter would make every case vacuous). */
+  const lettered = () => {
+    const id = newId();
+    expect(id.toUpperCase(), 'the id must hold a letter').not.toBe(id);
+    return id;
+  };
+
+  it('refuses two movements whose ids differ only in case (the second would be dropped)', () => {
+    const id = lettered();
+    const res = logStrengthSessionSchema.safeParse(
+      base({ movements: [move({ clientId: id }), move({ clientId: id.toUpperCase() })] }),
+    );
+    expect(issueMessages(res)).toContain('Each movement needs its own id.');
+  });
+
+  it('refuses two supersets whose ids differ only in case (the groups would merge)', () => {
+    const ss = lettered();
+    const res = logStrengthSessionSchema.safeParse(
+      base({
+        supersets: [{ clientId: ss }, { clientId: ss.toUpperCase() }],
+        movements: [
+          move({ clientId: newId(), supersetClientId: ss, supersetOrder: 1 }),
+          move({ clientId: newId(), supersetClientId: ss, supersetOrder: 2 }),
+          move({ clientId: newId(), supersetClientId: ss.toUpperCase(), supersetOrder: 1 }),
+          move({ clientId: newId(), supersetClientId: ss.toUpperCase(), supersetOrder: 2 }),
+        ],
+      }),
+    );
+    expect(issueMessages(res)).toContain('Each superset needs its own id.');
+  });
+
+  it('matches a member tagged in upper case to its superset, and hands back lower case', () => {
+    const ss = lettered();
+    const id = lettered();
+    const res = logStrengthSessionSchema.safeParse(
+      base({
+        supersets: [{ clientId: ss }],
+        movements: [
+          move({
+            clientId: id.toUpperCase(),
+            supersetClientId: ss.toUpperCase(),
+            supersetOrder: 1,
+          }),
+          move({ clientId: newId(), supersetClientId: ss, supersetOrder: 2 }),
+        ],
+      }),
+    );
+    expect(issueMessages(res)).toEqual([]);
+    expect(res.data?.movements[0]).toMatchObject({ clientId: id, supersetClientId: ss });
+  });
+});
+
 // GAP-1 P2-2 / P2-3 — guarded at the write boundary, the same call `parseLoad` already makes for the
 // load field. The rules were set when the CSV joined fields raw; since FAM-1 14a it quotes a comma (RFC
 // 4180), so the comma rule is an input rule now. A CR/LF would still split the record (`csvRow` refuses).

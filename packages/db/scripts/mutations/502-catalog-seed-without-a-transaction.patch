@@ -1,0 +1,23 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 457659db..6d923f2b 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -499,7 +499,8 @@ export async function seedCatalog(
+   }
+   const unique = [...bySlug.values()];
+ 
+-  return db.transaction(async (tx) => {
++  const tx = db;
++  return (async () => {
+     const inserted = await tx
+       .insert(schema.movements)
+       .values(
+@@ -566,7 +567,7 @@ export async function seedCatalog(
+       catalogHeldByLegacy: held - catalogPresent,
+       catalogDuplicates,
+     };
+-  });
++  })();
+ }
+ 
+ /** `seedFixtures`' refusal, and `assertSeedOwnsDatabase`'s: one message, asserted by `db:verify`. */

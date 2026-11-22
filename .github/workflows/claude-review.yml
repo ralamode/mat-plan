@@ -61,8 +61,9 @@ jobs:
         run: .github/scripts/review-prefetch.sh "$PR" "$REVIEW_DIR"
 
       # The panel read v1.0.237 (fd1c128). Any other SHA here must be re-read per docs/runbooks.md →
-      # CLAUDE_CODE_OAUTH_TOKEN, step 6, before merge.
-      - uses: anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1.0.268
+      # CLAUDE_CODE_OAUTH_TOKEN, step 6: before merge while the workflow is active, and at activation
+      # while it is dormant (the runbook's carve-out). v1.0.275 merged dormant, unread (#638).
+      - uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
         with:
           # zizmor: ignore[secrets-outside-env] — issue_comment always runs main's workflow and only writers
           # can push branches, so an Environment adds deployment noise to every PR for no new boundary.

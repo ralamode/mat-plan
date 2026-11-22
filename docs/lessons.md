@@ -176,6 +176,10 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   smoke; the next push skipped it. Every label check in `ci.yml` reads the payload. → **After adding a
   label, push** (an empty commit is fine). Found by DX-5(b)'s panel before its own label shipped
   ([plan](./plans/dx-5b-local-gates-in-ci.md)).
+  ⚠️ **Labelling at creation is the same trap.** `gh pr create --label` applies the label AFTER the
+  `opened` event, so the first run never sees it (#747 and #750, 2026-11-20, both red on the
+  feature-guide guard while carrying `docs-skip-feature-map`). Push once more after creating, or
+  prefer a one-line guide touch over the skip.
 
 - **A stacked PR reports `MERGED` and its code is nowhere on `main`.** → GitHub merges a PR into
   whatever its **base** is, and a stacked PR's base is the parent's branch. Merge the parent first and
@@ -264,6 +268,33 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A redirect chain read from the browser was wrong on two CI runs (td-signed-out-e2e, #791).**
+  (1) Concatenating `response.request().redirectedFrom()` hops with `framenavigated` URLs counted each
+  hop twice. (2) Reading either one alone still failed: a late navigation from the previous page
+  landed in the next page's chain (`[/sign-in, /p, /sign-in]`), and a 307's history was lost
+  (`[/sign-in]`). → Follow a redirect chain over HTTP with `request.get(url, { maxRedirects: 0 })`:
+  a 3xx `Location`, or, for a redirect thrown under a `loading.tsx`, the streamed
+  `<meta id="__next-page-redirect" … content="1;url=…">`. That meta is what the browser follows, so
+  the chain is the visitor's, and it is deterministic. Diagnose from the "Received" array: a repeated
+  or leading `/sign-in` means the events crossed pages.
+- **A page that gets a title makes `page.getByText(<that text>)` match twice (#798).** Next's route
+  announcer says the new title in a `#__next-route-announcer__` node, in an OPEN shadow root, and
+  Playwright's text and CSS locators read through open shadow roots. So once the day page was
+  titled "Today · Fri, Nov 20", every `getByText(/^Today ·/)` hit a strict-mode violation (2
+  elements). → Scope the locator to where the text is drawn (`dayLineText(page, re)`, inside the
+  day nav), never widen it with `.first()`. ⚠️ **Don't assert that node's text** to prove what a
+  navigation announced: Next reads `document.title` when the tree commits, and a streamed title
+  that is still late leaves the node holding the page's `<h1>` instead. #798 asserted it, passed
+  its own CI and main's, then failed another PR's attempt and retry (run 44908009063).
+- **A journey that builds its own athlete and program failed twice before it reached what it tested
+  (FAM-1 12c-iii, #761).** (1) Put on timed out finding the new athlete's checkbox: `addAthlete` had
+  not landed when the spec read `page.url()` and moved on. (2) Then "no rows to tick": `locator.count()`
+  read zero because the day page was still behind its loading skeleton. → `count()` (and `all()`)
+  never wait; assert something visible first (`await expect(region).toBeVisible()`, then
+  `await expect(rows.first()).toBeVisible()`) before counting. After `addAthlete`, wait for the new
+  athlete's `<h1>` before reading the URL, as the Program order journey does. Diagnose from the
+  failure screenshot (`test-results/…/test-failed-1.png`): a skeleton there means "too early", not
+  "wrong selector".
 - **A Server Action form submitted before hydration answered `Invalid Server Actions request.` and
   nothing showed: the cause was our own `Referrer-Policy: no-referrer`.** → Under it every browser
   (Fetch, "append a request `Origin` header") sends a native form POST with `Origin: null`, even
@@ -336,6 +367,29 @@ same-origin` (`REFERRER_POLICY`); never `serverActions.allowedOrigins: ['null']`
   is fixed** (2026-11-19, `Referrer-Policy`; the entry below), so that render CAN happen now, and the
   narrowed [tech-debt.md](./tech-debt.md) entry owes the fix back. **The general shape: a cheap probe that could falsify your
   own fix is worth running BEFORE you defend the fix in a docblock, not after.**
+- **"Playwright hangs on `/p/new` after an archive" was not a property of the app, and the test it
+  blocked for ten days passed on its first instrumented run.** → Filed 2026-11-10 (`PROF-1 a-1d`):
+  after `archiveAthleteNamed`, `/p/new`'s radios resolved but every call that evaluated page JS hung
+  until timeout, so the archived-match → Restore e2e was not shipped. **How it was settled
+  (2026-11-20):** the same flow written as a probe, with `pageerror`, `console`, `requestfailed`,
+  POST-`response` and `framenavigated` listeners attached before the first `goto` and `--trace on`,
+  run as `pnpm --filter web e2e:local e2e/athletes.spec.ts -g "<title>" --project=chromium`. On
+  `main` it passed in 5.3s: archive POST 200 at +0.8s, `/p/new` loaded at +1.8s, the radio checked
+  50ms later, the duplicate POST and the Restore POST both 200, and the client landed on the athlete
+  at +2.1s; no `pageerror`, and the only console line was Chromium's `Permissions-Policy`
+  `browsing-topics` warning. **Then at the commit that filed the row** (`c65b9535`, a detached
+  throwaway worktree, the run wrapped in `heavy-slot.mjs` because that commit's `e2e:local`
+  predates the slot): it passed there too. So nothing between then and now fixed it (not AUTH-1, not
+  the `Referrer-Policy` fix, not a Next upgrade), and the cause is **not recoverable**: the attempt
+  that hung was never committed. `#361`'s branch history holds the docblock about it but not the
+  test. **The rules it leaves:** (1) before writing "X hangs" as a finding, keep the failing attempt
+  somewhere a later session can run it again (a commit on the branch, or the test text in the
+  tech-debt row), because a symptom without its reproducer cannot be checked by anyone else; (2) a
+  "cannot be tested" claim gets re-run at the commit that made it before anyone looks for a fix.
+  Running it there is one `git worktree add --detach <sha>` and one `e2e:local` run, and it turns
+  "what fixed it?" into "it was never the app" in about two minutes. ⚠️ `next build` at an old
+  commit can stop once with `SecurityFatalError` (its Next version has a published advisory); the
+  same command run again builds. That is the historical version, not the branch under test.
 - **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
   OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
   `.next/BUILD_ID` is **absent**; `--build` forces it. The symptom is the worst kind: the script
@@ -690,6 +744,16 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Next.js 16
 
+- **One Back press does nothing after a sheet closes, but only when a Server Action ran while it was
+  open.** → Next's router rewrites the current history entry after the action's revalidation with
+  `preserveCustomHistoryState: false` (next@16.4.5 `app-router-state.js:438`, `app-router.js:96`), so
+  any custom `history.state` key (the Sheet's `sheet`/`doc`) is dropped at the same URL. Code that
+  pops "its" entry by key then skips the pop. Found 2026-11-19 (the item picker's "+ New item", then
+  Close); Put on was not observed failing. **Fix:** remember the URL the
+  entry was pushed at and pop when the entry is ours by key OR still at that URL
+  (`components/ui/sheet.tsx`). **Diagnose:** log `history.state` before and after the action in a
+  browser; jsdom has no router, so only an e2e step shows it.
+
 - **A CSP "Applying inline style violates … style-src" on a page that looks fine, intermittent, and
   matching nothing in our bundle, is Next's built-in 404 fallback.** → Its `HTTPAccessErrorFallback`
   styles itself with an un-nonced `<style>` (hash **`sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY=`**)
@@ -765,7 +829,31 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   wrongly anyway. When a convention keeps failing, the next version of it is a script with a
   self-test, not a better-worded paragraph.
 
+  ⚠️ **`pnpm probe` cannot restore an UNTRACKED file** (FAM-1 15c follow-up, 2026-11-20). Its
+  snapshot, `git stash create`, holds tracked paths only, so a probe aimed at a new file never
+  `git add`ed mutates it and has nothing to read it back from: five mutations stayed in a new
+  component, and the probes after them reported red baselines and missing literals. → **Commit a new
+  file (or at least `git add` it) before probing it**, and after a probe batch check `git status`
+  for the probed file before trusting the next result.
+
 ## Guards that pass while guarding nothing
+
+- **A CSP assertion filtered on `'script-src inline'` never matched: Chromium reports a blocked
+  inline script under `script-src-elem`.** Two `theme.spec.ts` checks had stayed green on every run.
+  A probe that stripped one script's nonce printed `script-src-elem inline` (2026-11-20). Filter
+  through `blockedInlineScripts` in `e2e/csp.ts`, and keep its proof (a stripped nonce must be
+  caught). **The general rule: an assertion that a list is empty needs a sibling that makes the list
+  non-empty**, or a wrong filter reads as a pass.
+- 🔴 **An import guard written as a regex meets a new spelling with each fix.** The program-tables
+  pins (#552) matched specifier text, and each hardening met another form that reached the same
+  module: a comment inside the braces, a backtick, `require (`, a `../node_modules` path, an `@/`
+  walking out of `apps/web`, a dot segment (`@mat-plan/./db`) that also gets past `exports`. The
+  cause: the guard matched TEXT, while the bundler follows the module GRAPH.
+  → Resolve every specifier the way the compiler does (`ts.resolveModuleName` with the project's
+  tsconfig, from an explicit directory, never `process.cwd()`), compare the **resolved file**, and
+  fail closed on a first-party specifier that does not resolve. Pin the premises the resolver rests
+  on (the alias, `exports`, the bundler config) as assertions. `importsOf` in
+  `apps/web/test/import-graph.ts`; the guard is `apps/web/test/program-imports.test.ts`.
 
 - 🔴 **Another lane's `db:verify` proof fails "at random" on your branch, and passes on `main`: a
   mutation patch is still applied in your worktree.** `pnpm verify` runs `db:mutations`, which
@@ -992,6 +1080,14 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- 🔴 **The docs-only overlap rule skips WAITING for another CI run, never the hooks.** → Several lanes
+  passed `--no-verify` (one on eight PRs) to get past a slow or failing hook, reading the maintainer's
+  docs-only rule (2026-11-20) as permission. One probe commit pushed that way then failed CI's format
+  check before reaching the step it existed to test: a wasted run, and nothing proved. The hooks are
+  the local half of the gate. Since 2026-11-21 `.claude/hooks/guard-hook-skip.mjs` refuses
+  `--no-verify`, `git commit -n`, `HUSKY=0` and any `core.hooksPath` change for Claude sessions. If a
+  hook is slow, retry it or tell the board; a probe that needs a committed tree gets a real
+  Conventional Commit.
 - 🔴 **A test that ran `git init` in a temp directory re-initialised THIS repository and
   committed to the real branch, because it ran inside the pre-push hook.** → Git exports `GIT_DIR`
   (and its kin) to a hook, and a child `git` obeys those over the directory it is started in. The
