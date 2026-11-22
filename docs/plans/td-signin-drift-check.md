@@ -195,6 +195,18 @@ Estimated at about 300 lines, plus this plan.
   - **No URL:** the config throws; checked locally. ✅
 - **Every section is a soft assertion**, so one red run lists every kind of drift.
 
+### The protect probe, decided (the maintainer, 2026-11-21)
+
+- **The maintainer checked the Clerk dashboard:** every relevant protection is INACTIVE, yet the
+  bootstrap still loads.
+- **The decision:** the probe's `connect-src` refusals are a **known, expected finding**
+  (`isKnownProtectProbe`). They are matched exactly, by directive, probe host, the five recorded
+  ports and the bootstrap script, so any other violation still fails, and they are printed rather
+  than silenced.
+- **What it does not cover:** the sign-UP consent step, which cannot be reached without creating an
+  account. That is a manual check the maintainer owes before the first invite, in `runbooks.md`
+  ("The sign-up consent step under Clerk's protect script"), with its decision table.
+
 ## Alternatives considered
 
 - **Pin clerk-js:** rejected by the maintainer. It rolled production back five releases and ends

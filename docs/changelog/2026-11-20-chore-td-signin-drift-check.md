@@ -12,3 +12,7 @@ it", after the maintainer chose not to pin it (2026-11-19).
   fixed text in the body. Its self-test is in `guards:test`.
 - AGENTS.md names the check as the one exception to "never tests against production", and lists it
   beside CodeQL as NOT a PR check.
+- Clerk's bot-protection probe, refused by the CSP on most runs although every protection is off on
+  the production instance, is a known, expected finding matched exactly; anything else still fails.
+  The sign-up consent step it may affect is a manual check, owed before the first invite, in
+  `runbooks.md`.

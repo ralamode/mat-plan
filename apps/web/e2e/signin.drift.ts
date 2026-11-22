@@ -49,6 +49,19 @@ const VENDOR_LINK_EXCEPTIONS: readonly LinkTargetException[] = [
 /** The one known violation on every page: zod's JIT probe, from our own bundle (`e2e/csp.ts`). */
 const isZodEvalProbe = (v: string) => /^script-src(-elem)? eval @[^ ]*\/_next\/static\//.test(v);
 
+/**
+ * 🟡 **A KNOWN, EXPECTED finding** _(maintainer, 2026-11-21)_: Clerk's bot-protection bootstrap loads
+ * even with every protection INACTIVE on the production instance, and its probes are refused by
+ * `connect-src`. Sign-in works regardless; whether the SIGN-UP consent step does is the maintainer's
+ * one-off manual check owed before the first invite (`runbooks.md` → "The sign-up consent step under
+ * Clerk's protect script"). Matched EXACTLY, by directive, probe host, the five recorded ports and
+ * the bootstrap script, so any other violation still fails. Printed, never silent.
+ */
+const isKnownProtectProbe = (v: string) =>
+  /^connect-src https:\/\/[a-z0-9-]+\.client\.protect\.clerk\.com(:(8443|18443|2082|992))?\/ins_[A-Za-z0-9]+\/probe @https:\/\/cdn\.protect\.clerk\.com\/ins_[A-Za-z0-9]+\/c\/[a-z0-9-]+\/bootstrap\.js:\d+ /.test(
+    v,
+  );
+
 const googleButton = (page: Page) => page.getByRole('button', { name: /google/i });
 
 /** Open `/sign-in` and wait for Clerk's card, saying which of our fallbacks shows if it never comes. */
@@ -79,7 +92,14 @@ test('the lit card renders, keeps its styles, and meets the a11y bar under the p
 
   // 1 · The CSP refuses nothing but the one known probe. No host filter: a refused injected
   //     <style> records as "style-src-elem inline", with no host in it.
-  const violations = (await cspViolations(page)).filter((v) => !isZodEvalProbe(v));
+  const all = await cspViolations(page);
+  const known = all.filter(isKnownProtectProbe);
+  if (known.length > 0) {
+    console.log(
+      `known finding: ${known.length} protect-probe refusal(s), expected (isKnownProtectProbe)`,
+    );
+  }
+  const violations = all.filter((v) => !isZodEvalProbe(v) && !isKnownProtectProbe(v));
   expect
     .soft(
       violations.map((v) => JSON.stringify(v)),
