@@ -5,10 +5,10 @@
 > rules 4, 6 and 7, decisions **K22 to K24**, and the rows **A3**, **Post-R2 cleanup** and **F1** of
 > "Chunks, in order". Branch for this plan: `docs/cat-3-after-the-fresh-start-plan`.
 >
-> **Draft 5, not yet approved.** Drafted by the plan owner on 2026-11-20 from the code on `main`
-> (`b6ef8287`) and #770's branch. Two panel rounds (two lenses each) and the feasibility checks of lane B,
-> lane P and the Native Scaling thread are applied; the log is at the end. The maintainer approves
-> it before any of its PRs is built. Draft 5 adds two things to PR 1 and changes no question: how its
+> **Approved by the maintainer on 2026-11-21** (draft 5; each answer is under "The maintainer's
+> answers"). Drafted by the plan owner on 2026-11-20 from the code on `main` (`b6ef8287`) and #770's
+> branch; #770 has since merged, and the names this plan uses were checked against it as built. Two panel rounds (two lenses each) and the feasibility checks of lane B,
+> lane P and the Native Scaling thread are applied; the log is at the end. Draft 5 adds two things to PR 1 and changes no question: how its
 > mutation patches are kept, and how it sits beside `LEGACY-1`'s plan (#802).
 
 ## Where this sits
@@ -109,7 +109,7 @@ seed and `verify/catalog.ts`; whichever lands second rebases.
     touch. That pass is a hint and not the list.
   - **The line numbers above are hints** at `b6ef8287`; `verify/program.ts` has since moved by 40
     lines on `main`. The assertion's message is the key.
-- **Beside `LEGACY-1`** (the plan in #802, the Tech Debt lane's, not yet approved). Both plans edit
+- **Beside `LEGACY-1`** (the Tech Debt lane's plan, #802, approved on 2026-11-20). Both plans edit
   the same two files. In `verify.ts` this PR re-cuts TEN-1 1d, TEN-2a, TEN-2b and TEN-2c;
   `LEGACY-1` keeps TEN-1 1d's `db:correct` registry and the TEN-2b write proof, and deletes the
   resolver's sections after it (TEN-2b-1 ordering, PICK-1 PR 2). In `verify/schema.ts` this PR renames the fixture that FAM-1 5b's legacy block comes from;
@@ -357,29 +357,40 @@ a would-fail change are each skipped and counted.
   two sit together.
 - Retiring a library slug, and any in-app editing of the library (`CAT-4`).
 
-## Open questions for the maintainer
+## The maintainer's answers
+
+Answered on 2026-11-21 and relayed by the board. Every answer is the recommended option, so the
+plan above stands as written. The questions are kept as they were asked.
 
 - **Q1. The order.** F1's first half before the clean-up, and P12 inside the clean-up.
   Recommended. The spec's order would delete code that CI still exercises.
+  **Answer:** test databases first, then the clean-up.
 - **Q2. Who builds.** PR 1's seed and proofs: lane P, which built the seed's two PRs and wrote the
   proofs it re-cuts (recommended). A3: lane A when it restarts, as the board reports is intended.
+  **Answer:** lane P builds PR 1; lane A builds A3.
 - **Q3. The specs' names.** Change the two specs to test-library names (recommended), or add the old
   names to the test library. The first keeps the test library generic.
+  **Answer:** the specs use test-library names.
 - **Q4. "BSS".** Add it as an alias of Bulgarian split squat (recommended), through the usual batch
   review, so typing it still finds the movement after the old list goes.
+  **Answer:** add the alias, through the usual batch review.
 - **Q5. Timing.** PR 1 to 3 run during the trial week. PR 4 merges after the week, or sooner on the
   maintainer's go after its rehearsal (recommended: after the week).
+  **Answer:** A3 merges after the trial week.
 - **Q6. A shape change.** `newItem`'s success answer gains `owner`, `unitDefault` and `isBodyweight`
   (recommended; lane B's finding). The alternative is a new action that re-reads one option.
+  **Answer:** add the three fields.
 - **Q7. A rule change.** `corrections/README.md` rule 6 says a correction is kept after it runs.
   Recommended (Native Scaling's): the two fresh-start corrections' code is deleted once their
   Applied rows are dated, the rows stay as the record, and rule 6 names that one exception. The
   alternative keeps both, with a frozen copy of the 35 old ids inside one of them.
+  **Answer:** delete the code and keep the dated rows; rule 6 names the one exception.
 - **Q8. One alarm.** The report's count of movements with a seed id reads the list PR 3 deletes. It
   is the only check that sees an old built-in on a shared slug that was hand-given a kind of
   training. Recommended: keep it as a count of `movements` rows whose id has the seed's prefix
   (`SEED_PUBLIC_ID_PREFIX`, which every seeded movement's id carries), so it no longer needs the list. It is an alarm that must read 0, and is never used to select rows for a write or a delete. That is why the prefix is sound here, while `catalog-movements.ts:391-396` and `registry.ts:674-677` forbid it as a selector; PR 3 rewrites those comments to say so. Gate 4 removes the restore path; a hand `UPDATE` remains, and the corrections rules are its
   control.
+  **Answer:** keep it, as a count by prefix that must read 0.
 
 ## Review-response log
 
@@ -437,3 +448,8 @@ mutation block.
 kept mutation patches had their `.expect` inside sections the plan cut. The same check on PR 1 here
 found patches beyond the seven it named, so PR 1 now derives its list from the `.expect` files. PR 1
 also says how it sits beside `LEGACY-1`. No question for the maintainer changed.
+
+**Approval, 2026-11-21.** The maintainer answered all eight questions with the recommended option
+(relayed by the board). Before it merged, `main` was merged in (#770 and #771 had landed) and the
+plan's names were checked against #770 as built: `seedLibraryOf`, `legacyMovements`, and mutations
+45, 326, 327, 329, 517, 598 and 602 are on `main` under those names.
