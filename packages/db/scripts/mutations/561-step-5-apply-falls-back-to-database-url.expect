@@ -1,0 +1,1 @@
+CAT-3 R1: --apply refuses without DATABASE_URL_UNPOOLED, never falling back to DATABASE_URL

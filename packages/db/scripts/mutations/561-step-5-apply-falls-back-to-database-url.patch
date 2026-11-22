@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 5ae24dd7..f3793b6a 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1411,7 +1411,7 @@ const deleteLegacyMovements: Correction = {
+         ];
+       }
+ 
+-      const target = legacyMovementTargetIssue(correctionTargetUrl({ kind: 'erasure' }));
++      const target = legacyMovementTargetIssue(correctionTargetUrl());
+       if (target) throw new CorrectionRefusal(target);
+       const expected = parseExpectedLegacyCounts((name) => process.env[name]);
+       return await db.transaction(async (tx) => {

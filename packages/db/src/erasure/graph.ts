@@ -219,6 +219,11 @@ export const HOUSEHOLD_GRAPH: readonly HouseholdGraphTable[] = [
  * hold before `OPS-3` re-inserts a household into it (with every `household_id IS NULL` movement the
  * household references, and those movements' equipment and muscle rows, which no household's
  * `householdRows` match and an extract therefore never carries).
+ *
+ * ⚠️ **The fresh start's one exception (`CAT-3` R1):** step 5, `delete-legacy-movements-2026-11-20`,
+ * deletes the OLD global movements (not catalog rows) and their join rows, while nothing references
+ * them. No erasure does; it is the only path that removes reference data. So an extract taken before
+ * the fresh start may name global movements that no longer exist: never restore one after it.
  */
 export const REFERENCE_TABLES: readonly PgTable[] = [
   schema.units,
