@@ -132,7 +132,7 @@ still works.
   none of the three reads your data. ⚠️ The sign-in screen also links OUT to Clerk's waitlist page,
   which is not ours and is covered above.
 
-**Three honest limitations during the beta:**
+**Honest limitations during the beta:**
 
 1. ✅ **The shared access code is gone** (new in this version). Until now getting in took a code that
    everyone in the household typed, with no way to withdraw it from one person — rotating it meant
@@ -145,10 +145,10 @@ still works.
    **who** did what. See the limitation below.
 2. **Separating one family's data from another's is done in the parts that read your log** (new in
    this version): who you are signed in as decides which household's data the app will show you, and
-   that is checked on every read and every write. ✅ **The list of exercise names is separated too**
-   (new in this version): every name in the app's own list is written by the project, and a name your
-   household types is your household's own (see "Movement names" below). **The beta still starts with
-   a single invited family.**
+   that is checked on every read and every write. ✅ **The list of exercise names is separated too**:
+   every name the app supplies is written by the project, and the only other names in your list are
+   ones your own household typed, which no other household sees (see "Movement names" below). **The
+   beta still starts with a single invited family.**
 3. **Anyone signed in to your household can see any athlete's full history in the app** — including
    a child tapping a sibling's tile — **and only a household owner can download it.** Today every
    adult given a sign-in to a household is its owner, so anyone signed in can still download; the
@@ -353,9 +353,9 @@ Because this cannot be undone, both of the steps below stay in place:
 - **Server logs** at Vercel, and **error reports** at Sentry, for their retention periods. Neither
   should contain your data, but logs record that requests happened, and Vercel's request logs keep the
   address of an athlete's page (it carries their internal identifier, not a name) for 24 hours.
-- **Movement names.** Every name in the app's own list is written by the project. A name your
-  household types that is not already in the list is stored as your household's own, and is deleted
-  with your household. Please type only the name of an exercise there, **never a person's name or
+- **Movement names.** Every name the app supplies is written by the project. The only other names in
+  your list are ones your own household typed: a name that is not already in the list is stored as
+  your household's own, no other household sees it, and it is deleted with your household. Please type only the name of an exercise there, **never a person's name or
   anything personal.**
 - **Any export you downloaded.** That copy is yours and outside our reach.
 - **The public source code.** The project is open source. Some early test data — including two
@@ -368,12 +368,17 @@ Because this cannot be undone, both of the steps below stay in place:
 **The app was started fresh.** On the maintainer's decision, the household the app started with, and
 everything logged in it, was erased; the adults' sign-in accounts were kept and joined to a new, empty
 household, so nobody had to sign up again. Before that, each athlete's data was offered as an export.
-The app was not paused. A restore point from just before is held for 7 days and then deleted.
-The old list of movement names went with it: every name in the app's list is now written by the
-project, and a name a household typed is that household's own. So the two limitations about shared
+The app was not paused, so anything logged after that export and before the erasure was erased too,
+and for that time a signed-in adult had no household to open; the restore point holds it. That restore
+point, from just before, is held for 7 days and then deleted. The old list of movement names went
+with it: every name the app supplies is now written by the project, and the only other names in a
+household's list are ones it typed itself. So the two limitations about shared
 names are gone, and the athletes the app started with are no longer an exception to erasure.
 
 ## What changed on 20 November 2026
+
+_(This section describes what was true on 20 November 2026. The notes and names it mentions were
+erased with the starting household on [R2 date].)_
 
 **"How it felt" and the box for typing a movement's name are no longer listed as text boxes.** No
 page shows either any more. A note or a movement name typed there before is still kept with its

@@ -776,7 +776,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Three honest limitations during the beta:"
+            "text": "Honest limitations during the beta:"
           }
         ]
       }
@@ -889,14 +889,14 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": "\n(new in this version): every name in the app's own list is written by the project, and a name your\nhousehold types is your household's own (see \"Movement names\" below). "
+              "text": ":\nevery name the app supplies is written by the project, and the only other names in your list are\nones your own household typed, which no other household sees (see \"Movement names\" below). "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "The beta still starts with\na single invited family."
+                  "text": "The\nbeta still starts with a single invited family."
                 }
               ]
             }
@@ -2375,7 +2375,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " Every name in the app's own list is written by the project. A name your\nhousehold types that is not already in the list is stored as your household's own, and is deleted\nwith your household. Please type only the name of an exercise there, "
+              "text": " Every name the app supplies is written by the project. The only other names in\nyour list are ones your own household typed: a name that is not already in the list is stored as\nyour household's own, no other household sees it, and it is deleted with your household. Please type only the name of an exercise there, "
             },
             {
               "k": "strong",
@@ -2467,7 +2467,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " On the maintainer's decision, the household the app started with, and\neverything logged in it, was erased; the adults' sign-in accounts were kept and joined to a new, empty\nhousehold, so nobody had to sign up again. Before that, each athlete's data was offered as an export.\nThe app was not paused. A restore point from just before is held for 7 days and then deleted.\nThe old list of movement names went with it: every name in the app's list is now written by the\nproject, and a name a household typed is that household's own. So the two limitations about shared\nnames are gone, and the athletes the app started with are no longer an exception to erasure."
+        "text": " On the maintainer's decision, the household the app started with, and\neverything logged in it, was erased; the adults' sign-in accounts were kept and joined to a new, empty\nhousehold, so nobody had to sign up again. Before that, each athlete's data was offered as an export.\nThe app was not paused, so anything logged after that export and before the erasure was erased too,\nand for that time a signed-in adult had no household to open; the restore point holds it. That restore\npoint, from just before, is held for 7 days and then deleted. The old list of movement names went\nwith it: every name the app supplies is now written by the project, and the only other names in a\nhousehold's list are ones it typed itself. So the two limitations about shared\nnames are gone, and the athletes the app started with are no longer an exception to erasure."
       }
     ]
   },
@@ -2477,6 +2477,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "k": "text",
         "text": "What changed on 20 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(This section describes what was true on 20 November 2026. The notes and names it mentions were\nerased with the starting household on [R2 date].)"
+          }
+        ]
       }
     ]
   },

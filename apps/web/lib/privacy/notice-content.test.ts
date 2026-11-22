@@ -323,7 +323,7 @@ describe('the route reads nothing at request time', () => {
 });
 
 describe('the renderer undoes the preflight rules the notice depends on', () => {
-  it('numbers the ordered list — `notice.md` cross-references "(1) and (2)"', () => {
+  it('numbers the ordered list — `notice.md` cross-references "(limitation 1)"', () => {
     // Preflight sets `list-style: none` on `ol`. Without `list-decimal` the paragraph that tells a
     // parent the worst-case exposure points at numbers that are not on the page.
     // 🔴 **Repointed at AUTH-1 1d, and NOT just to stay green.** The old probe was
