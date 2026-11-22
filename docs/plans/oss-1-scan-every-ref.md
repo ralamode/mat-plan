@@ -4,9 +4,9 @@
 > [beta-1.md](../milestones/beta-1.md), "The remaining path to Beta 0", row 10, and the first Beta 0
 > exit criterion. Branch for this plan: `docs/oss-1-scan-every-ref-plan`.
 >
-> **Draft 3, not yet approved.** Drafted by the plan owner on 2026-11-20 from the docs and the refs
-> on the remote that day. Three panel rounds (the privacy lens) are applied; the log is at the end. The
-> maintainer approves it before its PR is built.
+> **Approved by the maintainer on 2026-11-21** (draft 3; each answer is under "The maintainer's
+> answers"). Drafted by the plan owner on 2026-11-20 from the docs and the refs on the remote that
+> day. Three panel rounds (the privacy lens) are applied; the log is at the end.
 
 ## Where this sits
 
@@ -167,7 +167,10 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
   nothing.
 - A scan in CI.
 
-## Open questions for the maintainer
+## The maintainer's answers
+
+Answered on 2026-11-21 and relayed by the board. Every answer is the recommended option. The
+questions are kept as they were asked.
 
 - **Q1. The household's own data.** Recommended for Beta 0: **accept it, in writing, signed and
   dated by the maintainer as the accountable role.** The criterion is reworded to: "no third
@@ -180,13 +183,17 @@ One small PR. It ships a scan that the holder of the term list can run, and the 
   to rewrite history before Beta 0 ends. A rewrite is the only way to make that rule true without
   an exception, and the quietest time for one is before the first outside invite, when few pull
   requests are open.
+  **Answer:** accept it in writing, signed and dated. This answer chooses the option; the acceptance itself is
+  written, signed and dated by the maintainer when the scan's PR lands.
 - **Q2. The `screenshots` branch.** Recommended: **accept its old images under Q1 for now, once
   step 3's look finds no third party in them.**
   Deleting the branch breaks the images on every open pull request, and its old commits stay served
   by id until Support clears them, so deleting alone removes nothing. If it is deleted later, its
   last commit id is recorded first and goes into a Support request, with the same proof.
+  **Answer:** accept the old images once the check has been made. The check is the maintainer's step 3.
 - **Q3. Who builds it.** Recommended: the Native Scaling thread, which owns `PRIV-3` and already
   works to the rule that nothing privileged is pasted into a pull request.
+  **Answer:** the Native Scaling thread builds it.
 
 ## Review-response log
 
@@ -221,3 +228,6 @@ accepted.
 **Round 3, 2026-11-20.** A final check: SHIP, with three non-blocking points, all applied: a household
 match dated after the 2026-10-08 rename is fixed and not accepted; the `screenshots` branch's images
 are accepted only once checked; and what the push hook does not cover.
+
+**Approval, 2026-11-21.** The maintainer answered all three questions with the recommended option
+(relayed by the board). The plan is unchanged apart from recording them.
