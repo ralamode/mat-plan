@@ -14,14 +14,13 @@ import { describe, it } from 'vitest';
  * review tab carries the maintainer's `lgtm` (spec K21).
  */
 
-// Chunk A1 (the tables, #577) holds S2 to S5, the proven part of S1 and the tables half of S6:
-// `packages/db/scripts/verify/catalog.ts`, `verify/erasure.ts` for the delete order, and
-// `apps/web/test/program-tables-stay-dark.test.ts` for the four tables. What it leaves owed:
+// Chunk A1 (the tables, #577) holds S2 to S5 and the proven part of S1:
+// `packages/db/scripts/verify/catalog.ts`, and `verify/erasure.ts` for the delete order. S6 (no
+// module in `apps/` reads the tables or `movements.modality`) ended with P11-ii-b (#767), the first
+// read of them on a request path: its scan in `apps/web/test/program-tables-stay-dark.test.ts` is
+// retired, and that read's `db:verify` proofs hold the tables instead (spec S6). What A1 leaves owed:
 describe('owed by lane A: what the tables chunk (A1) left', () => {
   it.todo('S1: equipment and muscles hold a code and no label, and sit among REFERENCE_TABLES');
-  it.todo(
-    'S6: no module in apps/ reads movements.modality before P11-ii (the scan holds the tables only)',
-  );
 });
 
 describe('owed by lane A: the seed (chunk A2, then A3)', () => {
