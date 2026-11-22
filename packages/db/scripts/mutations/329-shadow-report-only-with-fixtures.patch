@@ -1,15 +1,15 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
-index 097b6576..555a1e5f 100644
+index 457659db..9ae9e979 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -225,9 +225,8 @@ export async function seed(
-     const household = await seedFixtures(db);
+@@ -241,9 +241,8 @@ export async function seed(
      await seedProgram(db, PROGRAM_SEED);
-     await seedProgramFixtures(db, householdScopeForScript(household.id));
+     // K29: the world's items resolve over the library this run wrote, the one the app reads here.
+     await seedProgramFixtures(db, householdScopeForScript(household.id), library.entries);
 +    reportSeed(counts);
    }
 -
 -  reportSeed(counts);
  }
  
- /** `seedReference`'s required options: the library list the catalog writer is given (CAT-3 A2-i). */
+ /**

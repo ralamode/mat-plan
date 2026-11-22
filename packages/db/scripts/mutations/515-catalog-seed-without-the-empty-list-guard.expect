@@ -1,1 +1,1 @@
-OPS-2 A: seed({ fixtures: false }) on a fresh database resolves
+CAT-3 A2-ii: seedReference resolves on an empty library list
