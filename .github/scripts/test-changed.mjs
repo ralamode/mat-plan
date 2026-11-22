@@ -12,9 +12,10 @@
  *   2. **`vitest run --changed <base>`,** when anything under `apps/web/` or `packages/` changed. Vitest
  *      resolves the changed files through git itself and traces importers. ⚠️ Never hand it
  *      repo-relative paths: they resolve against `apps/web` and silently match nothing.
- *   3. **The filesystem scanners, always** (unless the change is Markdown only). These tests find their
- *      targets with `globSync` / `readFileSync` (a page that lacks a session check, a workflow that
- *      names a bypass), so import tracing would never select them. The list is DERIVED by grepping
+ *   3. **The filesystem scanners, always** (unless the change is Markdown only; the import-pins guard
+ *      only when `runImportPins` says so). These tests find their targets with `globSync` /
+ *      `readFileSync` (a page that lacks a session check, a workflow that names a bypass), so import
+ *      tracing would never select them. The list is DERIVED by grepping
  *      test files, and the script fails if one of the scanners named in REQUIRED_SCANNERS stops
  *      matching: that would mean the derivation went blind, not that the scanner is gone.
  *
@@ -30,6 +31,7 @@ import { realpathSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { runImportPins } from './changed-scopes.mjs';
 import { defaultBase } from './default-base.mjs';
 
 /**
@@ -51,6 +53,12 @@ export const FORCE_RERUN = [
 const SCANNER_PATTERN = 'globSync|readFileSync';
 
 /**
+ * The import-pins guard: a scanner, run only when `runImportPins` (changed-scopes.mjs, the predicate
+ * CI's `run_import_pins` is) says so (docs/plans/td-program-tables-import-graph.md D7).
+ */
+export const IMPORT_PINS_GUARD = 'apps/web/test/program-imports.test.ts';
+
+/**
  * Scanners the derivation must keep finding. If one goes missing, the grep went blind (a scanner
  * switched to another fs call), and the hook would silently stop running it.
  */
@@ -60,6 +68,7 @@ export const REQUIRED_SCANNERS = [
   'apps/web/test/bypass-is-contained.test.ts',
   'packages/db/src/writers/no-bare-unhide.test.ts',
   'apps/web/lib/privacy/notice-content.test.ts',
+  IMPORT_PINS_GUARD,
 ];
 
 /** Where vitest's tests and their imports live; a change outside these reaches no import graph. */
@@ -128,7 +137,9 @@ export function scanners(root) {
 export function select(changed, scannerFiles) {
   const trigger = changed.find((f) => FORCE_RERUN.some((re) => re.test(basename(f))));
   const traced = changed.filter((f) => TRACED.test(f));
-  const scan = changed.every(inert) ? [] : scannerFiles;
+  const scan = changed.every(inert)
+    ? []
+    : scannerFiles.filter((f) => f !== IMPORT_PINS_GUARD || runImportPins(changed));
   // A full run still carries the related tests and the scanners: outside CI they are what runs.
   if (trigger)
     return { mode: 'full', reason: `${trigger} forces a full run`, traced, scanners: scan };

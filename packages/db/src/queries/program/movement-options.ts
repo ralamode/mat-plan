@@ -66,7 +66,7 @@ export async function movementOptions(
   scope: HouseholdScope,
   /**
    * The library a catalog row's aliases, supervision label and "How to" come from (CAT-3 P11-ii-a).
-   * Required: only the DAL chooses it (the K29 PR derives it from the database), so `newItem` and the
+   * Required: only the DAL chooses it (the library in effect, K29: `lib/env.ts`), so `newItem` and the
    * picker always match over the same library (K23).
    */
   library: readonly CatalogMovement[],

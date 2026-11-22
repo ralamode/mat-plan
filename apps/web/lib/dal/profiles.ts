@@ -306,6 +306,8 @@ export type RenameAthleteResult = RenameProfileResult;
 export async function renameAthlete(
   publicId: string,
   name: string,
+  /** The name the form showed; required, so no caller can skip the stale check (`renameProfile`). */
+  seenName: string,
   options: { acknowledgedDuplicate?: string } = {},
 ): Promise<RenameAthleteResult> {
   const scope = await getHouseholdScope();
@@ -314,7 +316,7 @@ export async function renameAthlete(
   // The writer's own result, passed through unflattened: `duplicate` carries a match the form
   // renders, and collapsing it into `null` here is exactly what would make the warning unreachable.
   return await quietDbErrors('renameAthlete', () =>
-    renameProfile(db, scope, publicId, name, options),
+    renameProfile(db, scope, publicId, name, seenName, options),
   );
 }
 

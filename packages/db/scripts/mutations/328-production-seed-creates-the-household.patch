@@ -1,10 +1,10 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
-index 097b6576..0acbfe71 100644
+index 457659db..97073167 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -399,6 +399,17 @@ export async function seedReference(
-     .values([...MOVEMENT_SEED_ROWS])
-     .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+@@ -444,6 +444,17 @@ export async function seedReference(
+       .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+   }
  
 +  const [anyLive] = await db
 +    .select({ id: schema.households.id })

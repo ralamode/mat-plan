@@ -2,8 +2,10 @@
 /**
  * Which heavy CI steps a pull request needs (DX-18 D7; plan: docs/plans/dx-18-heavy-runs-to-ci.md).
  *
- * Prints three flags, `run_mutations`, `run_build` and `run_e2e`, as `key=value` lines, and appends
- * them to `$GITHUB_OUTPUT` when that is set.
+ * Prints four flags, `run_mutations`, `run_build`, `run_e2e` and `run_import_pins`, as `key=value`
+ * lines, and appends them to `$GITHUB_OUTPUT` when that is set. `run_import_pins` is not a step: the
+ * quality job's Test step passes it to vitest as `RUN_IMPORT_PINS`, and only
+ * `apps/web/test/program-imports.test.ts` reads it (docs/plans/td-program-tables-import-graph.md D7).
  *
  * - **Polarity:** every flag says RUN, and a workflow skips a step only on a literal `'false'`
  *   (`if: steps.scopes.outputs.run_e2e != 'false'`). A missing, empty or mistyped output runs.
@@ -25,7 +27,8 @@
  *   every patch on the merge, so the proof is moved to after the merge, not dropped.
  *
  * What never skips (format, lint, typecheck, tests, db:verify, gitleaks, the guards, the audit, the
- * status check) is not decided here: those steps take no flag.
+ * status check) is not decided here: those steps take no flag. The one exception inside a step is
+ * `run_import_pins`, which scopes a single test file of the suite, never the Test step.
  */
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -58,7 +61,40 @@ const MUTATION_TRIGGERS = [
   /^\.github\//,
 ];
 
-const ALL_RUN = { run_mutations: true, run_build: true, run_e2e: true };
+const ALL_RUN = { run_mutations: true, run_build: true, run_e2e: true, run_import_pins: true };
+
+/**
+ * What `apps/web/test/program-imports.test.ts` reads (D7): a change to none of these cannot change
+ * its answer. Each entry has a case in `changed-scopes.test.sh`.
+ */
+export const IMPORT_PINS_SCOPE = [
+  /^apps\/web\//, // wholesale: every scanned file, the guard, import-graph.ts, configs, assets
+  /^packages\/db\/src\//, // the entry, the barrels, the closure walk (D3)
+  /^packages\/(?:shared|engine)\/src\//, // the shared/engine row (D3)
+  /(^|\/)package\.json$/, // any depth: `exports`, `imports`, workspace links
+  /(^|\/)tsconfig[^/]*\.json$/, // any depth
+  /^\.npmrc$/, // linking and hoisting
+  /^pnpm-(?:lock|workspace)\.yaml$/, // the workspace link and the TypeScript version
+  /^\.github\/scripts\/(?:changed-scopes|test-changed)\.mjs$/,
+];
+
+/**
+ * Whether a changed file is one the import pins read. An empty list proves nothing, so it runs.
+ */
+export const importPinsInScope = (files) =>
+  files.length === 0 || files.some((f) => IMPORT_PINS_SCOPE.some((re) => re.test(f)));
+
+/** A change under `.github/` that is not inert: a workflow or a script, which runs every flag. */
+const touchesWorkflowsOrScriptsIn = (files) =>
+  files.some((f) => f.startsWith('.github/') && !INERT.some((re) => re.test(f)));
+
+/**
+ * Whether the import pins run: `run_import_pins` on a PR, and the pre-push hook's choice
+ * (`test-changed.mjs`), so CI and the hook decide by the same predicate. In scope, or a workflow or
+ * script changed.
+ */
+export const runImportPins = (files) =>
+  touchesWorkflowsOrScriptsIn(files) || importPinsInScope(files);
 
 /**
  * The catalog's data. Pinned to `check-catalog-append-only.mjs`'s `DIR` by `changed-scopes.test.sh`:
@@ -174,9 +210,7 @@ export function catalogReachable(io) {
 export function scopesFor(files, patchPaths, catalogReaches = () => true) {
   if (files.length === 0) return { ...ALL_RUN };
   const inert = files.every((f) => INERT.some((re) => re.test(f)));
-  const touchesWorkflowsOrScripts = files.some(
-    (f) => f.startsWith('.github/') && !INERT.some((re) => re.test(f)),
-  );
+  const touchesWorkflowsOrScripts = touchesWorkflowsOrScriptsIn(files);
   const trigger = (f) => MUTATION_TRIGGERS.some((re) => re.test(f));
   const triggered =
     touchesWorkflowsOrScripts ||
@@ -192,6 +226,7 @@ export function scopesFor(files, patchPaths, catalogReaches = () => true) {
     run_mutations: mutations,
     run_build: touchesWorkflowsOrScripts || !inert,
     run_e2e: touchesWorkflowsOrScripts || !inert,
+    run_import_pins: runImportPins(files),
   };
 }
 

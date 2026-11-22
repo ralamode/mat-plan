@@ -372,7 +372,7 @@ guard "kill guard: runs through a symlinked path (the lexer still resolves)" "$w
 # Both PreToolUse Bash hooks are registered, and each loads and decides when run as settings.json runs it.
 settings="$here/../settings.json"
 cmds="$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$settings")"
-for f in guard-main-checkout.mjs guard-process-kill.mjs; do
+for f in guard-main-checkout.mjs guard-process-kill.mjs guard-hook-skip.mjs; do
   grep -qF ".claude/hooks/$f" <<<"$cmds" && ok "settings.json registers $f as a PreToolUse Bash hook" || bad "settings.json does not register $f" "$cmds"
 done
 root="$(cd "$here/../.." && pwd)"
@@ -380,10 +380,81 @@ denied=0
 while IFS= read -r c; do
   # The hook path from THIS tree; CLAUDE_PROJECT_DIR is the throwaway repo, so its main checkout is guarded.
   c="${c//\$CLAUDE_PROJECT_DIR/$root}"
-  out="$(hook_input "$repo" "git checkout -b y; pkill -f x" | env -u CI -u GITHUB_ACTIONS CLAUDE_PROJECT_DIR="$repo" bash -c "$c")" || bad "a registered hook exited non-zero: $c"
+  # Each hook gets a command only IT denies, so a count of 3 means each decided its own part.
+  case "$c" in
+    *guard-main-checkout*) cmd="git checkout -b y" ;;
+    *guard-process-kill*) cmd="pkill -f x" ;;
+    *guard-hook-skip*) cmd="git push --no-verify" ;;
+    *) cmd="true" ;;
+  esac
+  out="$(hook_input "$repo" "$cmd" | env -u CI -u GITHUB_ACTIONS CLAUDE_PROJECT_DIR="$repo" bash -c "$c")" || bad "a registered hook exited non-zero: $c"
   grep -q '"permissionDecision":"deny"' <<<"$out" && denied=$((denied + 1))
 done <<<"$cmds"
-[ "$denied" -eq 2 ] && ok "both registered hooks load and decide (each denies its own half)" || bad "registered hooks: $denied of 2 denied"
+[ "$denied" -eq 3 ] && ok "all three registered hooks load and decide (each denies its own part)" || bad "registered hooks: $denied of 3 denied"
+
+echo "── hook-skip guard: skipping git's hooks is denied, in any directory"
+hg="$here/guard-hook-skip.mjs"
+hook_guard() { guard "hook-skip guard: $1" "$wt" "$2" "$3" "$hg"; }
+hook_guard "git commit --no-verify" "git commit --no-verify -m 'x'" deny
+hook_guard "git push --no-verify" "git push --no-verify origin x" deny
+hook_guard "the shortest abbreviation git accepts (--no-veri)" "git commit --no-veri -m x" deny
+hook_guard "git merge --no-verify" "git merge --no-verify origin/main" deny
+hook_guard "git commit -n" "git commit -n -m x" deny
+hook_guard "-n in a short-flag cluster (-anm)" "git commit -anm x" deny
+hook_guard "-n after -m's value" "git commit -m x -n" deny
+hook_guard "HUSKY=0 as a prefix" "HUSKY=0 git commit -m x" deny
+hook_guard "HUSKY=false through env" "env HUSKY=false git push" deny
+hook_guard "export HUSKY=0" "export HUSKY=0 && git commit -m x" deny
+hook_guard "git -c core.hooksPath=" "git -c core.hooksPath=/dev/null commit -m x" deny
+hook_guard "git -c with the key in another case" "git -c CORE.HOOKSPATH=x push" deny
+hook_guard "--config-env=core.hooksPath" "git --config-env=core.hooksPath=X commit -m x" deny
+hook_guard "git config core.hooksPath (set)" "git config core.hooksPath /tmp/none" deny
+hook_guard "git config --unset core.hooksPath" "git config --unset core.hooksPath" deny
+hook_guard "GIT_CONFIG_KEY_0=core.hooksPath" "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=x git commit -m x" deny
+hook_guard "after cd && in a later segment" "cd /tmp && git commit --no-verify -m x" deny
+hook_guard "through sh -c" "sh -c 'git commit --no-verify -m x'" deny
+hook_guard "through git -C" "git -C /tmp commit --no-verify -m x" deny
+hook_guard "inside \$(…)" 'echo "$(git push --no-verify)"' deny
+hook_guard "HUSKY_SKIP_HOOKS=1" "HUSKY_SKIP_HOOKS=1 git commit -m x" deny
+hook_guard "GIT_CONFIG_PARAMETERS with core.hooksPath" "GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='/x'\" git push" deny
+hook_guard "declare -x HUSKY=0" "declare -x HUSKY=0" deny
+hook_guard "--config-env with its value as the next word" "git --config-env core.hooksPath=X commit -m x" deny
+hook_guard "--config-env FOO=X, then commit -n" "git --config-env FOO=X commit -n -m x" deny
+hook_guard "sudo HUSKY=0 git commit" "sudo HUSKY=0 git commit -m x" deny
+hook_guard "-m's value is --, then --no-verify" "git commit -m '--' --no-verify" deny
+hook_guard "through a heredoc fed to bash" "$(printf 'bash <<EOF\ngit commit --no-verify -m x\nEOF')" deny
+hook_guard "through env -S" "env -S 'git push --no-verify'" deny
+hook_guard "through xargs" "echo x | xargs git commit --no-verify -m" deny
+
+echo "── hook-skip guard: what stays allowed"
+hook_guard "a plain commit" "git commit -m 'fix: x'" allow
+hook_guard "git push -n (a dry run)" "git push -n origin x" allow
+hook_guard "a message that mentions --no-verify" "git commit -m 'docs: never use --no-verify'" allow
+hook_guard "an echo of the flag" "echo 'git commit --no-verify'" allow
+hook_guard "git config --get core.hooksPath (a read)" "git config --get core.hooksPath" allow
+hook_guard "git config core.hooksPath, no value (a read)" "git config core.hooksPath" allow
+hook_guard "git config --global core.hooksPath (a read)" "git config --global core.hooksPath" allow
+hook_guard "git config --show-origin core.hooksPath (a read)" "git config --show-origin core.hooksPath" allow
+hook_guard "\$(git config core.hooksPath)" 'echo "$(git config core.hooksPath)"' allow
+hook_guard "restoring husky's own path" "git config core.hooksPath .husky/_" allow
+hook_guard "git log -S --no-verify (a search)" "git log -S '--no-verify' --oneline" allow
+hook_guard "git grep -e --no-verify (a search)" "git grep -n -e '--no-verify'" allow
+hook_guard "the hardened worktree add (-c core.hooksPath=/dev/null)" "git -c core.hooksPath=/dev/null worktree add /tmp/w abc123" allow
+hook_guard "a --message value starting with -n" "git commit --message '-n is a flag'" allow
+hook_guard "HUSKY=0 on a command that is not git" "HUSKY=0 pnpm install" allow
+hook_guard "HUSKY=1" "HUSKY=1 git commit -m x" allow
+hook_guard "a commit -m value that is -n" "git commit -m -n" allow
+hook_guard "after --, a path named --no-verify" "git commit -m x -- --no-verify" allow
+hook_guard "the escape hatch, leading" "MAT_PLAN_ALLOW_HOOK_SKIP=1 git commit --no-verify -m x" allow
+hook_guard "the escape hatch elsewhere does not count" "git commit --no-verify -m 'MAT_PLAN_ALLOW_HOOK_SKIP=1'" deny
+out="$(hook_input "$wt" "git commit --no-verify" 2>/dev/null | CI=true node "$hg")"
+[ -z "$out" ] && ok "hook-skip guard: CI=true: no output at all" || bad "hook-skip guard: CI=true: produced output" "$out"
+out="$(hook_input "$wt" "git commit --no-verify" 2>/dev/null | env -u CI GITHUB_ACTIONS=true node "$hg")"
+[ -z "$out" ] && ok "hook-skip guard: GITHUB_ACTIONS=true: no output at all" || bad "hook-skip guard: GITHUB_ACTIONS=true: produced output" "$out"
+guard "hook-skip guard: importing the lexer does not run the sibling's main" "$repo" "git checkout -b y; git status" allow "$hg"
+out="$(printf 'not json' | env -u CI -u GITHUB_ACTIONS node "$hg")"
+code=$?
+[ "$code" -eq 0 ] && [ -z "$out" ] && ok "hook-skip guard: malformed input fails open" || bad "hook-skip guard: malformed input: exit $code" "$out"
 
 echo "── session briefing"
 # A fake `gh`: one same-repo PR (with a control character in its title), one fork PR whose title is

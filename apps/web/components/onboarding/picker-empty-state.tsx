@@ -11,17 +11,17 @@ import { PICKER_EMPTY_COPY } from '@/lib/constants';
  * Decisions that look like style and are not:
  *
  *  - **No box.** The only token that draws a container edge is `border`, which measures **1.26:1** on the
- *    light page (2.69:1 dark) and is pinned as failing SC 1.4.11 in `app/design/tokens/token-sets.test.ts`.
+ *    light page (1.32:1 dark) and is pinned as failing SC 1.4.11 in `app/design/tokens/token-sets.test.ts`.
  *    A container nobody can see is not a container, so grouping comes from the `<h2>` + `gap-3`, the way
  *    the landing does it.
  *  - **No `id`, so no `aria-labelledby`.** The section is a plain grouping, which lets this component be
  *    rendered more than once in a document — it is also a cell in `app/design/tokens/inventory.tsx`, which
  *    is the only route that axe-scans it in BOTH themes and measures it for overflow at 360px (the empty
  *    picker is unreachable from Playwright: `fullyParallel: true` + one shared DB).
- *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (4.74:1 — AA by
- *    0.24). Three paragraphs read once, cold, on a gym floor should not sit on the AA floor; only the
- *    short follow-up line is muted. ⚠️ Never put `text-muted-foreground` on `bg-muted`/`bg-accent`/
- *    `bg-secondary` here: that pair measures 4.34:1, and `token-sets.test.ts` asserts no screen does it.
+ *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (5.06:1 — AA by
+ *    0.56). Three paragraphs read once, cold, on a gym floor should not sit on the AA floor; only the
+ *    short follow-up line is muted. Muted text on `bg-muted`/`bg-accent`/`bg-secondary` measures
+ *    4.64:1, and `token-sets.test.ts` pins muted text at AA on every ground in both themes.
  *  - 🔴 **ONE paragraph, as of PROF-1 a-1u — `next` is dropped.** The plan said "`<h2>` → tile →
  *    one paragraph" and the first implementation kept both paragraphs, which a UX lens then measured:
  *    at 360px the header, `<h2>` and two paragraphs (~8 lines) put the add tile at roughly y=420-516

@@ -113,11 +113,6 @@ describe('pinned, so a reskin cannot separate them', () => {
  */
 describe('pairs that miss AA on the done tint (light), so a row uses something else', () => {
   const t = tokensOf(':root');
-  it('muted-foreground on done-surface is 4.27:1: use done-muted-foreground', () => {
-    const r = ratioOf(t['muted-foreground']!, t['done-surface']!)!;
-    expect(r).toBeCloseTo(4.27, 1);
-    expect(r).toBeLessThan(AA_NORMAL);
-  });
   it('destructive on done-surface is 4.30:1: a failed ✓ un-ticks first (D24), so it never sits there', () => {
     const r = ratioOf(t['destructive']!, t['done-surface']!)!;
     expect(r).toBeCloseTo(4.3, 1);

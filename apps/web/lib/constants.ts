@@ -517,6 +517,10 @@ export const NO_HOUSEHOLD_COPY = {
 
 /** The routine editor's copy — the e2e replays its Save, so the label has one home. */
 export const ROUTINE_COPY = {
+  /** The routine page's `<h1>` and its title. */
+  heading: 'Edit routine',
+  /** Said, and shown, after a save (`routine-editor.tsx`'s `Announcer`). */
+  saved: 'Routine saved.',
   orderHeading: 'Routine order',
   save: 'Save routine',
 } as const;
@@ -1004,11 +1008,23 @@ export const itemCountText = (n: number) => plural(n, { one: `${n} item`, other:
 export const LOOK_AHEAD_DAYS = 6;
 
 /**
- * The notice on a day before yesterday (V1-15). Since V1-24 3b-page such a day is read-only: nothing
- * on it can be logged or changed, so the sentence says that and names the two days that can.
+ * A write that cannot say what happened and needs the page's fresh data: a row or entry that is gone,
+ * or a request whose day is malformed or not open yet. Its own constant because three places say it.
  */
-export const CLOSED_DAY_NOTICE =
-  'This day is read-only. Only today and yesterday can be logged or changed.';
+export const NOT_SAVED_RELOAD = 'Not saved. Reload the page.';
+
+/** The day page's day arrows and date line: `day-nav.tsx`'s `<nav>`, and how a test finds it. */
+export const DAY_NAV_LABEL = 'Change day';
+
+/**
+ * The notice on a day before yesterday (V1-15). Since V1-24 3b-page nothing on such a day can be
+ * logged or changed, so the sentence says that and names the two days that can. Shown only on a PAST
+ * closed day (`dayPageFlags`' `showClosedNotice`: never a future day, never an archived athlete), so
+ * "Past days" is always true where it appears. Wording chosen by the maintainer (2026-11-21) over
+ * "This day is read-only. Only today and yesterday can be logged or changed.", which read as too
+ * technical; keep it plain.
+ */
+export const CLOSED_DAY_NOTICE = 'Past days are locked. Today and yesterday stay open.';
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';
@@ -1278,6 +1294,14 @@ export const ATHLETE_FORM_COPY = {
     alreadyAdvised
       ? `Or go back — ${stored} keeps their name.`
       : `Change the name, or go back — ${stored} keeps their name.`,
+  /**
+   * The stale-rename fix (maintainer, 2026-11-20, option c): the form showed an out-of-date name, so
+   * nothing was saved. It names the stored name, both routes out, and the button that overwrites
+   * ("Save anyway", `saveAnyway`, the duplicate warning's own label), so the overwrite is a deliberate,
+   * differently labelled tap. "Go back" is the page's Back link, which keeps the stored name.
+   */
+  renameStale: (stored: string) =>
+    `Not saved. This name was changed to “${stored}” on another device. Save anyway to replace it, or go back to keep it.`,
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,
@@ -1459,9 +1483,13 @@ export const CLEAR_DAY_COPY = {
       parts,
     )}. You can put them back with Restore all until ${deadline}, unless something new is logged ` +
     `in their place first.`,
-  /** When the day holds a workout or an older session: its record outlives a clear (PRIV-3 req. 2). */
+  /**
+   * When the day holds a workout or an older session: its record outlives a clear (PRIV-3 req. 2).
+   * "Any note" covers a "How did it feel?" note on an older session without naming a box no page
+   * shows any more (the strength form went in #725).
+   */
   sessionStays:
-    'A workout’s name and its “How did it feel?” note stay with the day; only the entries are hidden.',
+    'Workout names, and any notes written with them, stay with the day; only the entries are hidden.',
   summaryWorkout: (name: string, count: number) => `${name} (${entriesText(count)})`,
   summaryWeighIns: (n: number) => plural(n, { one: 'bodyweight', other: `${n} weigh-ins` }),
   summaryPractices: (n: number) =>
@@ -1517,15 +1545,15 @@ export const CLEAR_DAY_COPY = {
   /** The closed day's cleared sentence, inside the page's one notice box. */
   closedCleared: (n: number) =>
     plural(n, {
-      one: 'This day was also cleared: 1 entry is hidden. It is kept, not erased.',
-      other: `This day was also cleared: ${n} entries are hidden. They are kept, not erased.`,
+      one: 'This day was cleared: 1 entry is hidden. It is kept, not erased.',
+      other: `This day was cleared: ${n} entries are hidden. They are kept, not erased.`,
     }),
   /**
    * An archived athlete on a day still open for Restore all: the control is "Restore {name}" in
    * Household settings (`SETTINGS_COPY.restoreFor`), then Restore all here.
    */
   archivedCleared: (name: string, n: number, deadline: string) =>
-    `This day was also cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
+    `This day was cleared: ${entriesText(n)} hidden, not erased. ${SETTINGS_COPY.restoreFor(
       name,
     )} in ${SETTINGS_COPY.heading}, then tap Restore all here before ${deadline} to bring ${
       n === 1 ? 'it' : 'them'
@@ -1537,15 +1565,16 @@ export const CLEAR_DAY_COPY = {
    */
   refused: {
     bad_value: 'That didn’t go through. Try again.',
-    not_found: 'Not saved. Reload the page.',
-    closed_day: 'This day can no longer be changed.',
+    not_found: NOT_SAVED_RELOAD,
+    closed_day: 'This day is locked now, so nothing was restored.',
     retry: 'Too many changes at once. Wait a moment and try again.',
   } satisfies Record<DayClearRefusal, string>,
   /**
-   * Clear this day's own `closed_day` line. Not `refused.closed_day`: a clear refused just after
-   * midnight is of a day that is now yesterday, still open to every other write and to Restore all, so
-   * "can no longer be changed" would be false. Names both causes, since the answer cannot tell them
-   * apart: past midnight, or the athlete archived (the writer's own check, since the archive-race fix).
+   * Clear this day's own `closed_day` line. Not `refused.closed_day` (Restore all's: "This day is
+   * locked now, so nothing was restored."): a clear refused just after midnight is of a day that is
+   * now yesterday, still open to every other write and to Restore all, so "locked" would be false.
+   * Names both causes, since the answer cannot tell them apart: past midnight, or the athlete
+   * archived (the writer's own check, since the archive-race fix).
    */
   clearClosed: 'This day can’t be cleared now: only today can, and not for an archived athlete.',
   /** The action threw (a dropped connection, a server error): no cause is claimed. */
@@ -1572,8 +1601,8 @@ export const AMEND_ERROR_COPY = {
   staleWrite: 'That was changed on another device — the latest is showing now.',
   /**
    * A change or a clear of a value on a day the page no longer offers (V1-24 3b-bw, plan W8). Not
-   * the logging copy ("no longer open for logging. Reload the page."): nothing was being logged, and
-   * the action has already revalidated the page, whose read-only notice gives the reason.
+   * the logging copy ("That day is locked now. Reload the page."): nothing was being logged, and the
+   * action has already revalidated the page, whose notice (closed-day or archived) gives the reason.
    */
-  dayReadOnly: (subject: string) => `That day is read-only now, so the ${subject} wasn't changed.`,
+  dayReadOnly: (subject: string) => `That day is locked now, so the ${subject} wasn't changed.`,
 } as const;

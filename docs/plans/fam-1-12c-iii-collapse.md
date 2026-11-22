@@ -9,7 +9,7 @@
 > PR 2's edits in lane S's files passes to lane B.
 >
 > ✅ **Both PRs are merged** (2026-11-20): PR 1 as #761 and PR 2 as #765. They were the last of FAM-1's 72. Owed after them: the by-hand screen-reader pass in the test plan (the maintainer's, after merge by their
-> choice), and a small follow-up from #761's review.
+> choice). The follow-up from #761's review merged the same day (#769, with #773).
 >
 > **Approved** _(maintainer, 2026-11-19: "Approve (Recommended)")_. Drafted by the plan owner on 2026-11-19 at
 > the maintainer's request, from lane C's notes. Panel round 1 is applied; its log is at the end.

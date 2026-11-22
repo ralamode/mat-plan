@@ -10,20 +10,21 @@ import {
 import { NOTICE_TITLE } from '../lib/privacy/notice-content';
 
 import { MOBILE_VIEWPORT } from './contexts';
+import { SIGNED_OUT_ORIGIN } from '../playwright.config';
 
 /**
  * PRIV-2 — `/privacy`, the URL the Clerk and Google consent screens point at.
  *
- * ⚠️ **The empty-cookie-jar context is gone (AUTH-1 1d).** It existed because the project's gate
- * cookie made a "public" page indistinguishable from a gated page the cookie let through. There is
- * no such cookie, and the harness session is an environment variable no context can drop — so these
- * cases assert what the PAGE renders, not what a stranger sees. See `e2e/contexts.ts`.
+ * 🔴 **The `public` cases run on the SIGNED-OUT server** (`SIGNED_OUT_ORIGIN`, `playwright.config.ts`;
+ * `docs/plans/td-signed-out-e2e.md`), so they assert what a stranger sees. Before that server existed
+ * the harness armed a principal process-wide, and these cases could only assert what the page
+ * rendered.
  */
 
 const noticeHeading = { level: 1 as const, name: NOTICE_TITLE, exact: true };
 
 test.describe('public', () => {
-  test.use({ viewport: MOBILE_VIEWPORT });
+  test.use({ viewport: MOBILE_VIEWPORT, baseURL: SIGNED_OUT_ORIGIN });
 
   test('a stranger can read the notice, with no code and no redirect', async ({ page }) => {
     await page.goto(PRIVACY_PATH);

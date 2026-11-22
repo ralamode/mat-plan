@@ -11,7 +11,7 @@ import { NAV_RAIL_COPY, PICKER_COPY } from '../lib/constants';
  * authenticated state to opt out of any more: the harness session comes from the process env
  * (`E2E_SESSION_BYPASS_USER_ID`), which a cookie jar cannot override. 🔴 Renaming it
  * `NO_SESSION_STATE` would have asserted exactly that false property, which is why it is gone
- * instead. A spec that needs an unauthenticated server needs a SECOND SERVER — see `tech-debt.md`.
+ * instead. A spec that needs a stranger uses the SECOND SERVER, `SIGNED_OUT_ORIGIN` (`playwright.config.ts`).
  */
 
 /** ~iPhone 14, the primary device — the a11y spec, the landing's above-the-fold check. */

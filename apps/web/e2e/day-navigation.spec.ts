@@ -17,6 +17,8 @@ import {
   isoDaysAgo,
   openIfCollapsed,
   SEED_PROFILE_ROUTE,
+  dayLineText,
+  dayNav,
 } from './steps';
 
 /**
@@ -31,7 +33,7 @@ test('yesterday is reachable even on a profile created today', async ({ page }) 
   // the server still ACCEPTS a write for it. So the floor is never later than the earliest writable
   // day, and `‹` is a live link here rather than a dead control.
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
-  const nav = page.getByRole('navigation', { name: 'Change day' });
+  const nav = dayNav(page);
   await expect(nav.getByRole('link', { name: /^Previous day/ })).toBeVisible();
 });
 
@@ -42,12 +44,12 @@ test('a dated URL renders that day, and paging forward from it returns toward to
   // by looking rather than by reasoning about when the tab was opened.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
 
-  const nav = page.getByRole('navigation', { name: 'Change day' });
+  const nav = dayNav(page);
   await nav.getByRole('link', { name: /^Next day/ }).click();
   await page.waitForURL((u) => !u.searchParams.has('d'));
 
   // Back on today, the canonical URL carries no `?d=` at all.
-  await expect(page.getByText(/^Today ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Today ·/)).toBeVisible();
 });
 
 test('yesterday KEEPS its forms — the UI must not be stricter than the server', async ({
@@ -59,7 +61,7 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
   // The date line names it (FAM-1 12c, v12's day label), so a pinned tab opened the next morning
   // says it is yesterday.
-  await expect(page.getByText(/^Yesterday ·/)).toBeVisible();
+  await expect(dayLineText(page, /^Yesterday ·/)).toBeVisible();
   // A writable day offers the weigh-in: the field, or once logged, Change. A read-only day shows
   // neither, so this is the assertion that can fail.
   const section = bodyweightSection(page);
@@ -96,7 +98,7 @@ test('on no program, forward stops at today, the future renders today, and a mal
   const route = new URL(page.url()).pathname;
 
   // A disabled button rather than a missing control, so the bound is visible.
-  const nav = page.getByRole('navigation', { name: 'Change day' });
+  const nav = dayNav(page);
   await expect(nav.getByRole('button', { name: /^Next day/ })).toBeDisabled();
 
   for (const bad of [
@@ -106,7 +108,7 @@ test('on no program, forward stops at today, the future renders today, and a mal
     '?d=09292026',
   ]) {
     await page.goto(`${route}${bad}`, { waitUntil: 'networkidle' });
-    await expect(page.getByText(/^Today ·/), bad).toBeVisible();
+    await expect(dayLineText(page, /^Today ·/), bad).toBeVisible();
   }
 
   // Archived again, so later specs' pickers, rail and switcher do not list it.
@@ -120,7 +122,7 @@ test('the week strip reaches a day in two taps, and marks the one being viewed',
   page,
 }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
-  const nav = page.getByRole('navigation', { name: 'Change day' });
+  const nav = dayNav(page);
 
   // aria-current is how a screen reader user knows which day they are on (`true`, since FAM-1 12c:
   // "date" read as "the current date" beside today's own ", today").
