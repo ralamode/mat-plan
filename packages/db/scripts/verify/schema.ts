@@ -1081,17 +1081,23 @@ async function verifyStep1(): Promise<void> {
           .where(eq(schema.movements.householdId, household.id))
       ).length;
     const itemsBefore = await householdItems();
-    await seed(seedDb, { fixtures: false });
-    assert.deepEqual(
-      await program(),
-      { blocks: [], prescriptions: 0, targets: 0, ...none },
-      'FAM-1 1: seed({ fixtures: false }) writes no program, which is how production seeds',
-    );
-    assert.equal(
-      await householdItems(),
-      itemsBefore,
-      'FAM-1 1: seed({ fixtures: false }) writes no household item either',
-    );
+    // CAT-3 A2-ii (plan D3): its own savepoint, rolled back. Production's seed now writes the real
+    // library, and the fixtures seed below must resolve the world over the test library alone, as
+    // every fixtures database does; the real one's "Split squat" and "Hamstring stretch" log another
+    // way and would skip their programs.
+    await rolledBack(async (sp) => {
+      await seed(asDb(sp), { fixtures: false });
+      assert.deepEqual(
+        await program(),
+        { blocks: [], prescriptions: 0, targets: 0, ...none },
+        'FAM-1 1: seed({ fixtures: false }) writes no program, which is how production seeds',
+      );
+      assert.equal(
+        await householdItems(),
+        itemsBefore,
+        'FAM-1 1: seed({ fixtures: false }) writes no household item either',
+      );
+    }, tx);
 
     await seed(seedDb, { fixtures: true });
     assert.deepEqual(

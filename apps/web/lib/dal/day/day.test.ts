@@ -1,11 +1,24 @@
 import { ACTIVITY_TYPE_KEYS, PROFILE_KIND, ROW_REFUSAL } from '@mat-plan/shared';
 import { CATALOG_MOVEMENTS } from '@mat-plan/shared/catalog/data';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { DAY_PLAN_FIXTURES } from '@mat-plan/shared/program/fixtures';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('../db', () => ({ db: { the: 'db' } }));
+// CAT-3 K29: the library in effect, set per test (under vitest the real `lib/env.ts` would pick the
+// test library, since DATABASE_URL is local). The name-to-list map has its own test.
+const library = vi.hoisted(() => ({ entries: undefined as unknown }));
+vi.mock('../catalog-library', async () => {
+  const { CATALOG_MOVEMENTS: real } = await import('@mat-plan/shared/catalog/data');
+  library.entries = real;
+  return {
+    get CATALOG_LIBRARY() {
+      return library.entries;
+    },
+  };
+});
 vi.mock('../household', () => ({ getHouseholdScope: vi.fn() }));
 vi.mock('../catalog', () => ({ getActivityTypeIdByKey: vi.fn(async () => ACTIVITY_TYPE_ID) }));
 vi.mock('../profiles', () => ({ listProfiles: vi.fn(async () => ATHLETES) }));
@@ -78,9 +91,18 @@ const amend = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getHouseholdScope).mockResolvedValue(SCOPE);
+  library.entries = CATALOG_MOVEMENTS;
 });
 
 describe('getDayPlan (FAM-1 12b)', () => {
+  it('CAT-3 K29: on a fixtures database the day reads its labels from the test library', async () => {
+    library.entries = CATALOG_FIXTURE;
+    await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: TODAY });
+    expect(vi.mocked(resolveDayPlan).mock.calls[0]?.[1]).toMatchObject({
+      catalog: CATALOG_FIXTURE,
+    });
+  });
+
   it('resolves through the caller’s scope with the day and today handed in, and adds athletes', async () => {
     const plan = await getDayPlan({ profilePublicId: PROFILE_ID, day: YESTERDAY, today: TODAY });
     expect(resolveDayPlan).toHaveBeenCalledWith(db, {

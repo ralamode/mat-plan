@@ -33,6 +33,22 @@ client is already executing a query is deprecated and will be removed in pg@9.0`
   Re-check `migrate.ts` for the same pattern at the same time.
 - **Severity:** P3; act before any pg 9 bump (Dependabot's PR is the reminder).
 
+### A fixtures seed cannot tell production from a fixtures database before the fresh start (added 2026-11-20, CAT-3 A2-ii)
+
+- **What & why it's debt:** `assertSeedOwnsDatabase` (`packages/db/src/seed.ts`) refuses a fixtures seed
+  only on a database where a live household exists and none carries `SEED_HOUSEHOLD_PUBLIC_ID`.
+  Migration 0001 wrote that id into every database, and production's family household still carries
+  it until CAT-3's fresh start (R2). So a `SEED_FIXTURES=1` run that passed the URL allowlist through
+  one of its accepted limits (a production database named `*preview*`, a localhost tunnel) would write
+  the global test library and the fixture athletes into production.
+- **Impact:** needs an operator mistake past the allowlist; nothing automated sets the flag against
+  production (`seed-fixtures-is-contained.test.ts`). `db:verify` pins the gap: the check resolves on a
+  freshly migrated database.
+- **The fix:** a real marker that only a fixtures database carries (for example, refuse when a live
+  `household_members` principal is not the committed fixture principal, after checking the preview
+  database passes), or the fresh start itself, which erases the seed-id household.
+- **Severity:** low today; it closes at R2.
+
 ### The builder's copy is split into its own chunk in four route groups, so moving between them downloads it again (added 2026-11-20, from #805's diagnosis)
 
 - **What & why it's debt:** Turbopack now puts the program builder's copy into its own chunk of

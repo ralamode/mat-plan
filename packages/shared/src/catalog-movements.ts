@@ -31,8 +31,9 @@ export const movementSeedRowSchema = z.object({
   unitDefault: unitSchema.nullable(),
   isBodyweight: z.boolean(),
   /**
-   * How the item is logged (FAM-1 plan D1, §2). ⚠️ **Set once, never by editing this line.** A fresh
-   * database takes it from here; production took it from migration 0022's one-time typing, which
+   * How the item is logged (FAM-1 plan D1, §2). ⚠️ **Set once, never by editing this line.** A fixtures
+   * database takes it from here (since CAT-3 A2-ii only the fixtures seed writes these rows; production's
+   * seed writes the movement library instead); production took it from migration 0022's one-time typing, which
    * lists the same slugs (db:verify proves the two agree). The seed's `ON CONFLICT DO NOTHING` never
    * retypes an existing row, so changing a type here later changes nothing in production: a retype
    * needs its own migration (D25).

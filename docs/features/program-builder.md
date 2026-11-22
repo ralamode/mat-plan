@@ -449,6 +449,9 @@ flowchart LR
 
 ## Traps
 
+- **The DAL tests set the movement library explicitly** (`CAT-3` K29). Under vitest `DATABASE_URL` is
+  local, so the real `lib/env.ts` would pick the test library: `picker.test.ts` and
+  `program-dal.test.ts` mock `catalog-library` and have one case for each library.
 - **Links on the builder's screens are measured by the suite's one link check**,
   `expectLinkTargets(page.getByRole('main'), context)` in `e2e/a11y-checks.ts`, which
   `program-builder.a11y.spec.ts` calls; there is no builder-local copy.
