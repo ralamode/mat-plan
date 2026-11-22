@@ -27,6 +27,9 @@ console.log(`sign-in drift check target: ${target}`);
 export default defineConfig({
   testDir: './e2e',
   testMatch: /\.drift\.ts$/,
+  // One read of a third party: allow a slow CDN to reach the card wait's own report (20s) after the
+  // page loads, rather than ending in a bare test timeout.
+  timeout: 60_000,
   fullyParallel: false,
   forbidOnly: true,
   retries: 1,

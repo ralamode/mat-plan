@@ -23,10 +23,11 @@ name: sign-in drift
 # Least privilege: nothing at the top; the check job reads; only the report job writes issues, and
 # it runs the DEFAULT BRANCH's script, never a branch's.
 #
-# 🔴 No dependency cache, on purpose. This is the one job that runs live third-party JavaScript in
-# a browser, and a scheduled run on main can WRITE cache entries that other main jobs restore,
-# migrate.yml (which holds the production database string) among them. A slower install is the
-# cheap side of that trade.
+# 🔴 The boundary is Chromium's SANDBOX (on: the drift config's `chromiumSandbox`, plus the sysctl
+# step below). This is the one job that runs live third-party JavaScript in a browser. No dependency
+# cache is defence in depth, not the boundary: a scheduled run on main could otherwise write cache
+# entries other main jobs restore (migrate.yml, which holds the production database string, among
+# them), but code that escaped the sandbox could write them with the job's own token regardless.
 on:
   schedule:
     - cron: '43 7 * * 2'
@@ -39,6 +40,11 @@ on:
   pull_request:
     paths:
       - apps/web/e2e/signin.drift.ts
+      - apps/web/e2e/a11y-checks.ts
+      - apps/web/e2e/csp.ts
+      - apps/web/e2e/contexts.ts
+      - apps/web/lib/constants.ts
+      - apps/web/package.json
       - apps/web/playwright.drift.config.ts
       - .github/workflows/signin-drift.yml
       - .github/scripts/open-or-comment-issue.sh
@@ -112,8 +118,7 @@ jobs:
     name: report
     needs: [check]
     if: >-
-      always() && needs.check.result != 'success' && needs.check.result != 'skipped' &&
-      github.event_name != 'pull_request'
+      !cancelled() && needs.check.result == 'failure' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -133,12 +138,13 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RESULT: ${{ needs.check.result }}
+          TARGET: ${{ inputs.url || env.PRODUCTION_URL }}
         run: |
           body="$RUNNER_TEMP/issue.md"
           {
-            echo "The sign-in drift check ended \`$RESULT\`: $RUN_URL"
+            echo "The sign-in drift check ended \`$RESULT\` against $TARGET: $RUN_URL"
             echo
-            echo "- **Clerk drift or our change?** The run log prints the full CSP violation list and the failing assertion. Check whether a production deploy landed since the last green run; if none did, it is Clerk's CDN build."
+            echo "- **Clerk drift or our change?** The run log prints the full CSP violation list (the line starting \"csp violations\") and the failing assertion. Check whether a production deploy landed since the last green run; if none did, it is Clerk's CDN build."
             echo "- **A dashboard change** (access mode, the application name in the heading, bot protection) also reads as drift."
             echo
             echo "Plan and assertions: docs/plans/td-signin-drift-check.md."

@@ -4,8 +4,9 @@
 #   open-or-comment-issue.sh <title> <body-file>      (env: GH_TOKEN, REPO)
 #
 # - Only an OPEN issue AUTHORED BY the Actions bot counts: this repo is public, so anyone can open an
-#   issue with the same title, and a title-only match would post under their body (or be pushed past
-#   the listing by junk ones).
+#   issue with the same title, and a title-only match would post under their body. The author is
+#   filtered ON THE SERVER (`--author`, GraphQL `createdBy`, not search, so no indexing lag), so junk
+#   issues cannot push the bot's past the listing; jq checks it again.
 # - The title reaches jq as data (`--arg`), never inside the filter, so a quote in it cannot rewrite
 #   the program.
 # - The body is posted from a file (`--body-file`), never as an argument. Callers write fixed text:
@@ -20,7 +21,8 @@ body_file="${2:?usage: open-or-comment-issue.sh <title> <body-file>}"
 [ -f "$body_file" ] || { echo "body file not found: $body_file" >&2; exit 2; }
 
 BOT='app/github-actions'
-number="$(gh issue list --repo "$REPO" --state open --limit 200 --json number,title,author \
+number="$(gh issue list --repo "$REPO" --state open --author 'github-actions[bot]' --limit 200 \
+  --json number,title,author \
   | jq -r --arg t "$title" --arg bot "$BOT" \
     'map(select(.title == $t and .author.login == $bot)) | .[0].number // empty')"
 

@@ -193,7 +193,9 @@ Estimated at about 300 lines, plus this plan.
     chunk, so this run does not show 44px staying green on an unstyled card. That claim rests on the
     reasoning in § Acceptance 2.
   - **No URL:** the config throws; checked locally. ✅
-- **Every section is a soft assertion**, so one red run lists every kind of drift.
+- **The card, its styles, our 44px key, the `<h1>` and the CSP list are soft assertions, and the
+  three shared a11y helpers are hard and run last**, so one red run lists every kind of drift above
+  them. The CSP list is read last of the soft checks (after the page settles) and printed in full.
 
 ### The protect probe, decided (the maintainer, 2026-11-21)
 

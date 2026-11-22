@@ -2944,23 +2944,32 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       known, expected finding, so sign-in is covered. **Sign-up cannot be checked automatically:**
       the consent step appears only after a Google sign-in returns a NEW address that may sign up, and
       reaching it creates an account. So the maintainer does it once, by hand.
-      **Steps:** 1. Pick a spare Google address of your own that has never signed in to `mat-plan.dev`. 2. Clerk dashboard (production) → **Users → Invitations**: invite that address. 3. In a private window, open `https://mat-plan.dev/sign-in`, choose Google, and sign in with it. 4. On Clerk's consent step, before ticking anything, screenshot it at phone width. 5. Check **with the keyboard**: Tab reaches the checkbox, it shows a focus ring, and Space
-      ticks it. Then check with a tap. 6. Open DevTools → **Issues** (not Console, which hides these) and note any CSP refusals. 7. Finish or abandon the sign-up, then delete the test user (**Users →** that user **→
-      Delete**) and revoke the invitation if it is still pending.
 
-      **Record here,** with the date:
-      - is the card styled (its fonts, padding and button look like `/sign-in`'s)?
-      - does the checkbox tick by tap and by keyboard, and is focus visible?
-      - which CSP refusals appeared, by directive and host?
-      - did sign-up complete?
+  **Steps:**
 
-      **Decide:**
+  1. Pick a spare Google address of your own that has never signed in to `mat-plan.dev`.
+  2. Clerk dashboard (production) → **Users → Invitations**: invite that address.
+  3. In a private window, open `https://mat-plan.dev/sign-in`, choose Google, and sign in with it.
+  4. On Clerk's consent step, before ticking anything, screenshot it at phone width.
+  5. Check **with the keyboard**: Tab reaches the checkbox, it shows a focus ring, and Space ticks
+     it. Then check with a tap.
+  6. Open DevTools → **Issues** (not Console, which hides these) and note any CSP refusals.
+  7. Finish or abandon the sign-up, then delete the test user (**Users →** that user **→ Delete**)
+     and revoke the invitation if it is still pending.
 
-      | What you saw | Decision |
-      | --- | --- |
-      | Styled, and the box ticks and focuses | **Accept.** Record it; the probe stays a known finding. |
-      | Unstyled or misaligned, but the box ticks and the sign-up completes | **Cosmetic: accept**, with a note. It may be revisited if the vendor's styling matters. |
-      | The box cannot be ticked or focused, or sign-up cannot complete | **Broken: a narrow CSP change** before the first real invite, the bot-protection box's option 2 scoped to the `SIGN_IN_PATH` subtree and pinned in `proxy.test.ts`. It needs the maintainer's approval as its own PR. |
+  **Record here,** with the date:
+  - is the card styled (its fonts, padding and button look like `/sign-in`'s)?
+  - does the checkbox tick by tap and by keyboard, and is focus visible?
+  - which CSP refusals appeared, by directive and host?
+  - did sign-up complete?
+
+  **Decide:**
+
+  | What you saw                                                        | Decision                                                                                                                                                                                                              |
+  | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Styled, and the box ticks and focuses                               | **Accept.** Record it; the probe stays a known finding.                                                                                                                                                               |
+  | Unstyled or misaligned, but the box ticks and the sign-up completes | **Cosmetic: accept**, with a note. It may be revisited if the vendor's styling matters.                                                                                                                               |
+  | The box cannot be ticked or focused, or sign-up cannot complete     | **Broken: a narrow CSP change** before the first real invite, the bot-protection box's option 2 scoped to the `SIGN_IN_PATH` subtree and pinned in `proxy.test.ts`. It needs the maintainer's approval as its own PR. |
 
 - [ ] 🔴 **The lit sign-in screen owes its own UX panel, and 1a could not give it one.** With no keys,
       Clerk renders nothing: every screenshot and every a11y assertion on the 1a PR measured the dark
