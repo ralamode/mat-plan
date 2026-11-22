@@ -532,10 +532,12 @@ The shapes those lanes agree on, the fakes and the preview route are
    row was hidden is now a **refusal** rather than a duplicate. Each answers differently, and that
    is worth knowing before B1-2 unifies them:
    - **strength** → `reselectLiveByClientId` throws `no live row for client_id`, which reaches
-     `error.tsx` and loses the form. `db:verify`'s B0 case asserts it.
+     `error.tsx` and loses the form. Nothing calls it, and its `db:verify` case was deleted by
+     LEGACY-1 C2a (the writer goes in C2b).
      The same throw answers a row held by **someone else** (another athlete's session, another
      session's entry or superset): the re-select carries an owner conjunct, same message on purpose
-     ([strength-logging.md](./strength-logging.md) invariant 6; mutations `440`–`443`).
+     ([strength-logging.md](./strength-logging.md) invariant 6; mutations `440`–`443`, retired by
+     LEGACY-1 C2a).
    - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
      branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
      now names this case. Asserted first in the B0 block, and the case mutation `39` reddens (since

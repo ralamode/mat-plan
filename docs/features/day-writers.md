@@ -182,9 +182,9 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
       `rowWorkout` BEFORE the schedule, so a foreign block's week is never read.
     - `program_changed`: a hidden workout or block (355); a purged prescription (363). A hidden
       prescription is `rowItem`'s refusal, proved by 11b.
-    - It is the ONLY writer of a program row's numbers: the old V1-9 fix-a-set path
-      (`updateStrengthSetById`) refuses a program row (`db:verify`'s "TD fix-a-set" block, last in
-      `verifyDay`; mutations 449 and 450).
+    - It is the ONLY writer of a program row's numbers. The old V1-9 fix-a-set path
+      (`updateStrengthSetById`) is uncalled; its proof and mutations 449 and 450 were deleted by
+      LEGACY-1 C2a, and the function goes in C2b.
     - `bad_value`: a number not in the unit the row was LOGGED in, or a blank (353; C28). The
       prescription's own fit (`fitsItsType`) is NOT checked: Change judges the row as logged.
     - The write is `updateEntrySetRows` (`session-rows.ts`): the one LIVE set (356) and its

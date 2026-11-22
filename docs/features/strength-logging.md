@@ -39,8 +39,8 @@ falls back to the live program only where it `IS NULL`.
 for.** The insert spreads on `!== undefined`, and the export resolves with `??`, never `||`. An
 `open()` prescription renders `''` — 11 of the 13 seeded — so either truthiness check silently
 collapses the dominant shape and sends those rows back to today's program, where chunk 4's first
-edit rewrites them. `db:verify` stores `''` through the real writer and reads it back, and committed
-mutation `34` proves that proof can fail.
+edit rewrites them. That writer's `db:verify` proof and mutation `34` were deleted by LEGACY-1 C2a,
+ahead of the writer itself (C2b); the live writer's freeze is `verify/day.ts` "9" (mutation `129`).
 
 ⚠️ **A session logged as "Not a programmed day" takes no snapshot at all**, because the legacy
 fallback keys on `sessions.day_role` and emits `''` for the whole session — snapshotting it would
@@ -119,7 +119,8 @@ regresses.
    say its WHERE is the boundary.
    🔴 **It also refuses a PROGRAM row** (`programRow()`, which a purge leaves set). A program row's
    numbers belong to the day page's Change (`amendRow`), which holds the writable window and the
-   program checks. `db:verify`'s "TD fix-a-set" block, mutations `449` and `450`.
+   program checks. Its proof (the "TD fix-a-set" block, mutations `449` and `450`) was deleted by
+   LEGACY-1 C2a; the function goes in C2b.
 
 4. **Every magnitude lives in `entry_set_quantities`, never on the set.** Since GAP-3 (#139) there is
    no `weight_num`, no `weight_label`, no `seconds`. The two MODES (`is_bodyweight`, `is_band`) are
@@ -171,16 +172,16 @@ Two rules follow the unit:
    the index and the replay inserted a twin; they are now non-partial, so the hidden row still
    **holds** the id, the insert no-ops on conflict, and `reselectLiveByClientId` throws
    `no live row for client_id`. ⚠️ **Today that throw reaches `error.tsx`** —
-   `V1-9b` B1-2 is the chunk that turns it into a typed envelope. `db:verify`'s B0 case asserts the
-   refusal, and mutation `39` breaks it (it reports on the weigh-in case, which runs first since
-   LEGACY-1 PR B). Why an identity and not a slot:
+   `V1-9b` B1-2 is the chunk that turns it into a typed envelope. The strength case's `db:verify`
+   proof was deleted by LEGACY-1 C2a; B0's weigh-in case (mutation `39`) is what remains. Why an
+   identity and not a slot:
    `write-path.md` invariant 6.
    🔴 **A replay is answered only by a row the request owns.** `client_id` is unique per table, not
    per athlete, so the conflict can be with another athlete's row. `reselectLiveByClientId` takes a
    required `owner` conjunct: the session by the profile resolved in the transaction and the day, a superset
    and an entry by that session. Any other holder gets the same `no live row for client_id` refusal
-   as a hidden row, and the transaction rolls back. `db:verify`'s replay-owner block; mutations
-   `440`–`443` ([plan](../plans/td-strength-replay-scope.md)).
+   as a hidden row, and the transaction rolls back ([plan](../plans/td-strength-replay-scope.md)).
+   Its proof (the replay-owner block, mutations `440`–`443`) was deleted by LEGACY-1 C2a.
 
 7. **The profile is resolved by `public_id` INSIDE the transaction.** Never a raw internal id from the
    request. That is the BOLA seam.
@@ -322,7 +323,7 @@ Real ones, each with the file to look at.
 | adding a field to a set     | `strengthSetSchema` → `writeStrengthSession` → `insertEntrySetRows`               |
 | changing what a load can be | `shared/strength.ts`, then the writer, then `updateStrengthSetById`'s WHERE       |
 | adding a measurement role   | `shared/quantity-slots.ts` (const + dimensions) → seed → `db:verify` parity proof |
-| touching the edit path      | `updateStrengthSetById`'s WHERE and its `db:verify` fix-a-set proofs, together    |
+| touching the edit path      | nothing: `updateStrengthSetById` is uncalled and deleted in LEGACY-1 C2b          |
 
 Then: `pnpm verify` (includes `db:verify` on PGlite, no Docker).
 

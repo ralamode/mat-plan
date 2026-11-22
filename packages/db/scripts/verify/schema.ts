@@ -24,6 +24,7 @@ import {
   WEEKDAYS,
   WORKOUT_NAME_MAX,
   PROGRAM_SEED,
+  SEED_ACTIVITY_TYPE_KEYS,
   SEED_HOUSEHOLD_PUBLIC_ID,
   QUANTITY_SLOT,
   SESSION_TYPE,
@@ -67,7 +68,6 @@ import {
   assignmentOnDay,
 } from '../../src/queries/program-assignments';
 import { programDayRows } from '../../src/queries/program-day';
-import { prescribedSnapshotsFor } from '../../src/writers/prescribed-snapshot';
 import {
   ASSIGNMENT_OPEN_UNIQUE_INDEX,
   ASSIGNMENT_ORDER_UNIQUE_INDEX,
@@ -86,6 +86,7 @@ import {
   insertMovementOwnedBy,
   insertProgramBlockOwnedBy,
   insertWorkoutOwnedBy,
+  inHousehold,
   movementInHousehold,
   movementIsGlobal,
   programBlockByClientId,
@@ -105,6 +106,7 @@ import {
   type VerifyContext,
   type VerifyTx,
 } from './harness';
+import { legacyStrengthFixture } from './legacy-strength-fixture';
 
 /**
  * `db:verify` proofs for the FAM-1 SCHEMA chain.
@@ -311,21 +313,58 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
 
   // ── (e) a Count of a plain number is storable: (primary, count) is a slot pair ───────────────────
   await rolledBack(async (tx) => {
-    // A set with no primary quantity yet, so the slot's own UNIQUE cannot be what answers.
+    // A set with no primary quantity yet, so the slot's own UNIQUE cannot be what answers. Planted
+    // here, a bodyweight set with no quantity (LEGACY-1): it used to be found among the rows the old
+    // strength writer's proofs left in the shared database, and those proofs are deleted.
+    const [owner] = await tx
+      .select({ publicId: schema.profiles.publicId })
+      .from(schema.profiles)
+      .where(and(inHousehold(A_SCOPE), isNull(schema.profiles.deletedAt)))
+      .orderBy(schema.profiles.id)
+      .limit(1);
+    const [movement] = await tx
+      .select({ id: schema.movements.id, name: schema.movements.name })
+      .from(schema.movements)
+      .where(movementIsGlobal())
+      .orderBy(schema.movements.id)
+      .limit(1);
+    const [liftType] = await tx
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift));
+    const {
+      entries: [planted],
+    } = await legacyStrengthFixture(asTx(tx), {
+      profilePublicId: owner.publicId,
+      scope: A_SCOPE,
+      day: '2026-01-07',
+      activityTypeId: liftType.id,
+      movements: [
+        {
+          movementId: movement.id,
+          movementName: movement.name,
+          unit: 'lb',
+          sets: [{ reps: 5, isBodyweight: true }],
+        },
+      ],
+    });
     const [set] = await tx
       .select({ id: schema.entrySets.id })
       .from(schema.entrySets)
       .where(
-        notExists(
-          tx
-            .select({ one: sql`1` })
-            .from(schema.entrySetQuantities)
-            .where(
-              and(
-                eq(schema.entrySetQuantities.entrySetId, schema.entrySets.id),
-                eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.primary),
+        and(
+          eq(schema.entrySets.entryId, planted.id),
+          notExists(
+            tx
+              .select({ one: sql`1` })
+              .from(schema.entrySetQuantities)
+              .where(
+                and(
+                  eq(schema.entrySetQuantities.entrySetId, schema.entrySets.id),
+                  eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.primary),
+                ),
               ),
-            ),
+          ),
         ),
       )
       .limit(1);
@@ -1125,8 +1164,8 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
     const exec = asTx(tx);
     const pg = asDb(tx);
 
-    // A day role A's legacy block programs WITH a rendered target (sets set), so a snapshot is
-    // non-empty, and a kid of that household to read it for.
+    // A day role A's legacy block programs WITH a rendered target (sets set), and a kid of that
+    // household to read it for.
     const [legacy] = await tx
       .select({
         dayRole: schema.prescriptions.dayRole,
@@ -1193,7 +1232,6 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
       sets: 3,
       targetReps: '5',
     });
-    const movementIds = [...legacyMovements, otherMovement.id];
     // Control: unfiltered, the template block IS the newest block programming this day role.
     const [newest] = await tx
       .select({ id: schema.programBlocks.id })
@@ -1216,21 +1254,9 @@ async function verifyStep5b({ A_SCOPE }: VerifyContext): Promise<void> {
       rowsBefore,
       'FAM-1 5b: programDayRows is byte-identical with a template block present',
     );
-    // The snapshot writer reads programDayRows too; recorded on the same movements, it must not see
-    // the template prescription. (Recording the "before" map now is equivalent: the legacy rows did not change.)
-    const snapshots = await prescribedSnapshotsFor(pg, { ...read, movementIds });
-    assert.ok(
-      [...snapshots.values()].some((v) => v !== ''),
-      'FAM-1 5b: control — a legacy snapshot renders non-empty',
-    );
-    assert.equal(
-      snapshots.get(otherMovement.id) ?? '',
-      '',
-      "FAM-1 5b: the template's movement has no snapshot",
-    );
   });
   console.log(
-    '✓ FAM-1 5b: programDayRows and the snapshot writer read the legacy block only, byte-identical with a newer template block on the same day',
+    '✓ FAM-1 5b: programDayRows reads the legacy block only, byte-identical with a newer template block on the same day',
   );
 }
 

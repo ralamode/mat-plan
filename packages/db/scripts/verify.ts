@@ -28,7 +28,6 @@ import {
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
   PROFILE_KIND,
-  PROFILE_NOT_FOUND,
   PROFILE_NAME_MAX,
   PROGRAM_BLOCK_KIND,
   PROGRAM_SEED,
@@ -80,7 +79,6 @@ import {
   loggedMonths,
   strengthMonthRows,
 } from '../src/queries/export-month';
-import { prescribedSnapshotsFor } from '../src/writers/prescribed-snapshot';
 import { householdProfileRows } from '../src/queries/household-profiles';
 import { liveHouseholdIds } from '../src/queries/household-scope';
 // TEN-2c: the ONE definition of "a movement is referenced", shared with `runbooks.md` pre-flight (d),
@@ -89,7 +87,6 @@ import { liveHouseholdIds } from '../src/queries/household-scope';
 import { crossHouseholdMovementRefs, sharedMovementRows } from '../src/queries/movement-ownership';
 import { programDayRows } from '../src/queries/program-day';
 import { ownerScope, type HouseholdScope, type OwnerScope } from '../src/scope';
-import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import {
   findAmendableBodyweight,
   insertBodyweightEntry,
@@ -102,12 +99,7 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // TEN-1 1d: the REAL find-or-create the app DAL delegates to. `apps/web/lib/dal/catalog.ts` is
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
-import {
-  findOrCreateMovement,
-  MOVEMENT_NOT_AVAILABLE,
-  MovementNotAvailableError,
-  resolveSessionMovements,
-} from '../src/writers/movement-catalog';
+import { findOrCreateMovement } from '../src/writers/movement-catalog';
 import {
   findNameMatch,
   insertHouseholdMember,
@@ -125,7 +117,6 @@ import {
   restoreProfile,
 } from '../src/writers/profile';
 import { membershipHousehold } from '../src/queries/household-membership';
-import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
 // the correction's own dry run rather than a lookalike of its SQL.
 import { CREATE_HOUSEHOLD_ACCOUNTS_ENV } from './corrections/accounts';
@@ -1560,73 +1551,11 @@ assert.equal(
 );
 console.log('✓ V1-6b-1: ramp_target ⋈ entries join returns actual (50) alongside target (45)');
 
-// ── V1-6b-2: the read DAL's EXACT query (weeklyAdherenceRows), proven here ────────────────────
-// The app DAL and this proof call the SAME function (single-sourced in src/queries), so the
-// LEFT-JOIN + profile/label joins + zero-bout NULL-actual paths the DAL ships are covered on real
-// SQL — not the different (INNER, sum-only) shape the b-1 block above pins.
+// ── V1-6b-2: the ramp fixture's other profile, kept as fixture (LEGACY-1) ─────────────────────────
+// `weeklyAdherenceRows`, the read this section proved, was deleted by LEGACY-1 with the old Today
+// card. Its fixture stays: the ramp-test profile's public id is read below (the TEN-1 matrix, the
+// B1-1b reader audit), and the second profile's target and bout are rows later counts include.
 const RAMP_TEST_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000f0'; // rampTestProfile above
-const dalRows = await weeklyAdherenceRows(asPg, {
-  profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
-  weekStart: RAMP_TEST_WEEK_START,
-  activityTypeId: calisthenicsId,
-  metricKeys: CALISTHENICS_METRIC_KEYS,
-  scope: A_SCOPE,
-});
-const dalByMetric = new Map(dalRows.map((r) => [r.metricKey, r]));
-// Targets DRIVE the rows: all four calisthenics metrics have a target this week → four rows.
-assert.equal(dalRows.length, 4, 'V1-6b-2: one row per calisthenics target for the week');
-
-const dalPush = dalByMetric.get(METRIC_KEYS.pushups);
-assert.ok(dalPush, 'V1-6b-2: pushups row present');
-assert.equal(assertRollupAggregation(dalPush.aggregation as MetricAggregation), 'sum');
-assert.equal(
-  Number(dalPush.actualSum),
-  50,
-  'V1-6b-2: pushups actualSum = 50 (LEFT JOIN, decoys excluded)',
-);
-assert.equal(Number(dalPush.target), 45, 'V1-6b-2: pushups target = 45');
-assert.equal(dalPush.label, 'Push-ups', 'V1-6b-2: label comes from the metric_definitions join');
-
-// DAL-1: a soft-deleted profile owns no adherence rows (the same `isLiveProfile` scope as the day
-// read). Restored straight after.
-await db
-  .update(schema.profiles)
-  .set({ deletedAt: new Date() })
-  .where(eq(schema.profiles.id, rampTestProfile.id));
-const deadProfileAdherence = await weeklyAdherenceRows(asPg, {
-  profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
-  weekStart: RAMP_TEST_WEEK_START,
-  activityTypeId: calisthenicsId,
-  metricKeys: CALISTHENICS_METRIC_KEYS,
-  scope: A_SCOPE,
-});
-await db
-  .update(schema.profiles)
-  .set({ deletedAt: null })
-  .where(eq(schema.profiles.id, rampTestProfile.id));
-assert.equal(deadProfileAdherence.length, 0, 'DAL-1: a soft-deleted profile has no adherence rows');
-
-const dalVsit = dalByMetric.get(METRIC_KEYS.vsit_skill_step);
-assert.ok(dalVsit, 'V1-6b-2: vsit_skill_step row present');
-assert.equal(assertRollupAggregation(dalVsit.aggregation as MetricAggregation), 'max');
-assert.equal(Number(dalVsit.actualMax), 5, 'V1-6b-2: vsit_skill_step actualMax = 5');
-
-// THE zero-bout path: pullups has a target (12) but NO in-week bouts → LEFT JOIN yields NULL
-// actuals, which the DAL's `Number(actual ?? 0)` coerces to 0. This is the graceful-empty-metric
-// case the INNER-join b-1 pin could never exercise.
-const dalPull = dalByMetric.get(METRIC_KEYS.pullups);
-assert.ok(dalPull, 'V1-6b-2: a target with zero logged bouts STILL returns a row (LEFT JOIN)');
-assert.equal(
-  dalPull.actualSum,
-  null,
-  'V1-6b-2: zero-bout target has NULL actualSum (DAL coerces → 0)',
-);
-assert.equal(Number(dalPull.actualSum ?? 0), 0, 'V1-6b-2: NULL actual coerces to 0');
-console.log(
-  '✓ V1-6b-2: weeklyAdherenceRows (the DAL query) — LEFT-JOIN target+actual, zero-bout → 0',
-);
-
-// Profile scoping: a SECOND profile's target + bout the same week must NEVER leak into profile 1's rows.
 const [otherRampProfile] = await db
   .insert(schema.profiles)
   .values({
@@ -1654,25 +1583,6 @@ await db.insert(schema.entries).values({
   valueNum: '500',
   status: ENTRY_STATUS.done,
 });
-const scoped = await weeklyAdherenceRows(asPg, {
-  profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
-  weekStart: RAMP_TEST_WEEK_START,
-  activityTypeId: calisthenicsId,
-  metricKeys: CALISTHENICS_METRIC_KEYS,
-  scope: A_SCOPE,
-});
-assert.equal(
-  scoped.length,
-  4,
-  'V1-6b-2: profile scoping — profile 2 target does not appear in profile 1',
-);
-assert.equal(
-  Number(scoped.find((r) => r.metricKey === METRIC_KEYS.pushups)!.actualSum),
-  50,
-  'V1-6b-2: profile scoping — profile 1 pushups stays 50, not 500 from profile 2',
-);
-console.log('✓ V1-6b-2: weeklyAdherenceRows is profile-scoped (no cross-profile leak)');
-
 // ── V1-7: life activities (wake timing event + wrestling practice) — the generality proof ──────
 // The APP write shape: kind NULL for both; wake is a NEITHER-source timing event (metric/movement
 // NULL → unit resolves to 'timing') carrying value_num = local minutes-since-midnight (forced
@@ -1806,15 +1716,12 @@ async function upsertReturningId(
     .onConflictDoNothing({ target: table.clientId, where: isNull(table.deletedAt) })
     .returning({ id: table.id });
   if (row) return row.id;
-  // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the production writer's
-  // `reselectLiveByClientId` guard, not a shortcut.** (Only that half: the writer's re-select also
-  // carries an owner conjunct, which this raw-SQL fixture has no foreign holders to need; the
-  // replay-owner block proves the writer's.) Before V1-9b B0 the partial UNIQUE kept a
-  // hidden row out of the index, so a conflict implied a LIVE row and an unguarded re-select was
-  // merely sloppy. B0 puts hidden rows back in the index, so a conflict can now be WITH a hidden
-  // row — and this re-select would hand its id back and attach children to a dead parent. The
-  // writer's own docblock names this helper as the place that dropped the guard; B0 is where that
-  // stops being true.
+  // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the guard the old strength writer's
+  // `reselectLiveByClientId` carried (deleted with that writer by LEGACY-1), not a shortcut.**
+  // Before V1-9b B0 the partial UNIQUE kept a hidden row out of the index, so a conflict implied a
+  // LIVE row and an unguarded re-select was merely sloppy. B0 puts hidden rows back in the index, so
+  // a conflict can now be WITH a hidden row — and this re-select would hand its id back and attach
+  // children to a dead parent.
   const [live] = await db
     .select({ id: table.id })
     .from(table)
@@ -2152,448 +2059,6 @@ await expectRejectedBy('uq_supersets_client_id', () =>
 console.log(
   '✓ V1-8-1: superset rejections (order pairing, dup slot, member-is-movement, 2 FKs, client_id UNIQUE)',
 );
-
-// ── V1-8-2: the FLAT session write path — through the SHARED writer core (single-sourced) ──────────
-// The app DAL's `logStrengthSession` and THIS proof both call `writeStrengthSession`, so this exercises
-// the ACTUAL insert path the app ships (not a bespoke re-implementation) — the `weeklyAdherenceRows`
-// "one unit, two consumers" pattern applied to a writer (panel B2/N5, the sole behavior pin for the core
-// now that `logStrengthEntry` is retired). A 3-movement flat session round-trips; a replay dedupes.
-const flatSessionCid = '019826b4-0000-7000-8000-000000001200';
-const flatArgs = {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
-  scope: A_SCOPE,
-  day: '2026-02-03',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: flatSessionCid,
-  activityTypeId: scLiftActivityId,
-  feel: 'strong', // V1-8-3b: the session feel persists on the first (non-conflict) insert path
-  movements: [
-    {
-      movementName: movY.name,
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: '019826b4-0000-7000-8000-000000001201',
-      sets: [
-        { reps: 5, weight: 135 },
-        { reps: 5, weight: 155 },
-      ],
-    },
-    {
-      movementName: 'Bench Press',
-      unit: 'lb',
-      movementId: movY.id,
-      clientId: '019826b4-0000-7000-8000-000000001202',
-      sets: [{ reps: 8, weight: 95 }],
-    },
-    {
-      movementName: 'Barbell Row',
-      unit: 'lb',
-      movementId: movZ.id,
-      clientId: '019826b4-0000-7000-8000-000000001203',
-      sets: [{ reps: 10, weight: 75 }],
-    },
-  ],
-} as const;
-
-const flat = await writeStrengthSession(asPg, flatArgs);
-const [flatSession] = await db
-  .select({
-    id: schema.sessions.id,
-    profileId: schema.sessions.profileId,
-    feel: schema.sessions.feel,
-  })
-  .from(schema.sessions)
-  .where(eq(schema.sessions.publicId, flat.sessionId));
-assert.ok(flatSession, 'V1-8-2: writeStrengthSession returns the session public_id');
-assert.equal(
-  flatSession.profileId,
-  sessionProfileA.id,
-  'V1-8-2: the session is written under the resolved profile (F7 seam, profile-scoped)',
-);
-assert.equal(flatSession.feel, 'strong', 'V1-8-3b: the session feel persists');
-
-const flatEntries = await db
-  .select({
-    id: schema.entries.id,
-    kind: schema.entries.kind,
-    movementId: schema.entries.movementId,
-    movementName: schema.entries.movementName,
-    sessionId: schema.entries.sessionId,
-    supersetId: schema.entries.supersetId,
-  })
-  .from(schema.entries)
-  .where(and(eq(schema.entries.sessionId, flatSession.id), isNull(schema.entries.deletedAt)))
-  .orderBy(schema.entries.id);
-assert.equal(flatEntries.length, 3, 'V1-8-2: the flat session groups its 3 movement entries');
-for (const e of flatEntries) {
-  assert.equal(e.kind, null, 'V1-8-2: session member is kind=NULL (decoupled forward shape)');
-  assert.ok(
-    e.movementId != null,
-    'V1-8-2: member carries movement_id (read set-fetch discriminant)',
-  );
-  assert.ok(
-    e.movementName != null,
-    'V1-8-2: member carries movement_name (passes entries_shape_check)',
-  );
-  assert.equal(
-    e.sessionId,
-    flatSession.id,
-    'V1-8-2: member session_id == the session (writer invariant)',
-  );
-  assert.equal(e.supersetId, null, 'V1-8-2: a flat-session member has no superset');
-}
-const flatSets = await db
-  .select({ entryId: schema.entrySets.entryId, idx: schema.entrySets.idx })
-  .from(schema.entrySets)
-  .where(
-    inArray(
-      schema.entrySets.entryId,
-      flatEntries.map((e) => e.id),
-    ),
-  )
-  .orderBy(schema.entrySets.entryId, schema.entrySets.idx);
-assert.equal(flatSets.length, 4, 'V1-8-2: 2+1+1 sets round-trip across the 3 movements');
-assert.deepEqual(
-  flatSets.filter((s) => s.entryId === flatEntries[0].id).map((s) => s.idx),
-  [1, 2],
-  'V1-8-2: the first movement’s sets are 1-based and ordered',
-);
-
-// Idempotent whole-graph replay: re-run the SAME graph (same client_ids) → still one graph, same id.
-const flatReplay = await writeStrengthSession(asPg, flatArgs);
-assert.equal(flatReplay.sessionId, flat.sessionId, 'V1-8-2: replay returns the same session id');
-const flatEntriesAfter = await db
-  .select({ id: schema.entries.id })
-  .from(schema.entries)
-  .where(and(eq(schema.entries.sessionId, flatSession.id), isNull(schema.entries.deletedAt)));
-const flatSetsAfter = await db
-  .select({ id: schema.entrySets.id })
-  .from(schema.entrySets)
-  .where(
-    inArray(
-      schema.entrySets.entryId,
-      flatEntriesAfter.map((e) => e.id),
-    ),
-  );
-assert.equal(
-  flatEntriesAfter.length,
-  3,
-  'V1-8-2: replay inserts no duplicate entries (per-row dedupe)',
-);
-assert.equal(flatSetsAfter.length, 4, 'V1-8-2: replay does not double the sets');
-console.log(
-  '✓ V1-8-2: flat multi-movement session round-trips via the shared writer core; idempotent replay; profile-scoped',
-);
-
-// ── V1-8-3c: the SUPERSET write branch via the REAL writer ─────────────────────────────────────────
-// Prove `writeStrengthSession` creates supersets rows + stamps members (superset_id + superset_order),
-// for a 2- AND a 3-movement superset (no arity cap — the PPL property), idempotent on replay. The
-// V1-8-1 raw-SQL block above still proves the rejections the writer structurally can't emit; this only
-// asserts the DELTA the writer adds.
-const ssArgs = {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
-  scope: A_SCOPE,
-  day: '2026-02-04',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: '019826b4-0000-7000-8000-000000001300',
-  activityTypeId: scLiftActivityId,
-  supersets: [
-    { clientId: '019826b4-0000-7000-8000-000000001310', label: 'DB Bench + Overhead Press' },
-    { clientId: '019826b4-0000-7000-8000-000000001320' }, // 3-movement giant set, no label
-  ],
-  movements: [
-    {
-      movementName: 'DB Bench',
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: '019826b4-0000-7000-8000-000000001301',
-      sets: [{ reps: 8, weight: 40 }],
-      supersetClientId: '019826b4-0000-7000-8000-000000001310',
-      supersetOrder: 1,
-    },
-    {
-      movementName: 'Overhead Press',
-      unit: 'lb',
-      movementId: movY.id,
-      clientId: '019826b4-0000-7000-8000-000000001302',
-      sets: [{ reps: 8, weight: 30 }],
-      supersetClientId: '019826b4-0000-7000-8000-000000001310',
-      supersetOrder: 2,
-    },
-    {
-      movementName: 'Dip',
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: '019826b4-0000-7000-8000-000000001303',
-      sets: [{ reps: 10, weight: 0 }],
-      supersetClientId: '019826b4-0000-7000-8000-000000001320',
-      supersetOrder: 1,
-    },
-    {
-      movementName: 'Lateral Raise',
-      unit: 'lb',
-      movementId: movY.id,
-      clientId: '019826b4-0000-7000-8000-000000001304',
-      sets: [{ reps: 12, weight: 10 }],
-      supersetClientId: '019826b4-0000-7000-8000-000000001320',
-      supersetOrder: 2,
-    },
-    {
-      movementName: 'Push-up',
-      unit: 'lb',
-      movementId: movZ.id,
-      clientId: '019826b4-0000-7000-8000-000000001305',
-      sets: [{ reps: 15, weight: 0 }],
-      supersetClientId: '019826b4-0000-7000-8000-000000001320',
-      supersetOrder: 3,
-    },
-  ],
-} as const;
-
-const ss = await writeStrengthSession(asPg, ssArgs);
-const [ssSession] = await db
-  .select({ id: schema.sessions.id })
-  .from(schema.sessions)
-  .where(eq(schema.sessions.publicId, ss.sessionId));
-const ssSupersetRows = await db
-  .select({ id: schema.supersets.id })
-  .from(schema.supersets)
-  .where(and(eq(schema.supersets.sessionId, ssSession.id), isNull(schema.supersets.deletedAt)))
-  .orderBy(schema.supersets.id);
-assert.equal(ssSupersetRows.length, 2, 'V1-8-3c: the writer created 2 supersets');
-for (const [i, expectedOrders] of [
-  [1, 2],
-  [1, 2, 3],
-].entries()) {
-  const members = await db
-    .select({ order: schema.entries.supersetOrder })
-    .from(schema.entries)
-    .where(
-      and(eq(schema.entries.supersetId, ssSupersetRows[i].id), isNull(schema.entries.deletedAt)),
-    )
-    .orderBy(schema.entries.supersetOrder);
-  assert.deepEqual(
-    members.map((m) => m.order),
-    expectedOrders,
-    `V1-8-3c: superset ${i + 1} members carry superset_order ${expectedOrders.join(',')}`,
-  );
-}
-
-// Idempotent replay → still 2 supersets + 5 members (per-row ON CONFLICT at every level).
-await writeStrengthSession(asPg, ssArgs);
-const ssSupersetsAfter = await db
-  .select({ id: schema.supersets.id })
-  .from(schema.supersets)
-  .where(and(eq(schema.supersets.sessionId, ssSession.id), isNull(schema.supersets.deletedAt)));
-assert.equal(ssSupersetsAfter.length, 2, 'V1-8-3c: replay creates no duplicate supersets');
-const ssMembersAfter = await db
-  .select({ id: schema.entries.id })
-  .from(schema.entries)
-  .where(and(eq(schema.entries.sessionId, ssSession.id), isNull(schema.entries.deletedAt)));
-assert.equal(ssMembersAfter.length, 5, 'V1-8-3c: replay creates no duplicate members');
-console.log(
-  '✓ V1-8-3c: superset write branch (2- and 3-movement) via the real writer; ordered; idempotent replay',
-);
-
-// ── GAP-3 (was GAP-1 P0-2): NON-NUMERIC loads via the shipped writer ───────────────────────────────
-// GAP-1 P0-2 made `BW`/`30s` loggable by storing them as TEXT. GAP-3 keeps the capability and changes
-// the destination — deliberately, and the backlog says so ("Partially reverses GAP-1 P0-2 on
-// purpose"). `BW` is now a BOOLEAN on the set and `30s` a typed ('primary','time') quantity, so the
-// same three shapes still round-trip and none of them is a string any more.
-const LABELED_SESSION_CLIENT_ID = newId();
-const LABELED_MOVEMENT_CLIENT_ID = newId();
-await writeStrengthSession(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
-  scope: A_SCOPE,
-  day: '2026-02-10',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: LABELED_SESSION_CLIENT_ID,
-  activityTypeId: scLiftActivityId,
-  movements: [
-    {
-      movementName: movX.name,
-      // GAP-3 PR 4a: the unit is a property of the MOVEMENT, and its dimension follows from it. This
-      // one is a HOLD, so it is logged in seconds — which is what makes the third set's `30` a
-      // duration rather than a weight, with no per-set unit anywhere.
-      unit: 'sec',
-      movementId: movX.id,
-      clientId: LABELED_MOVEMENT_CLIENT_ID,
-      // The three shapes that matter: a bodyweight MODE, a second one, and a DURATION — which used to
-      // need `entry_sets.seconds` and now rides the same mechanism as every other magnitude.
-      sets: [
-        { reps: 5, weight: null, isBodyweight: true },
-        { reps: 3, weight: null, isBodyweight: true }, // the vest itself is a slot the NEXT PR's form writes
-        {
-          reps: 1,
-          weight: 30, // a HOLD: the movement's unit is `sec`, so this is 30 seconds
-        },
-      ],
-    },
-  ],
-});
-const labeledSets = (
-  await db.execute(sql`
-    select es.idx, es.reps, es.is_bodyweight, es.is_band,
-           q.slot, q.dimension, q.unit, q.value_num
-    from entry_sets es
-    join entries e on e.id = es.entry_id
-    left join entry_set_quantities q on q.entry_set_id = es.id and q.deleted_at is null
-    where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID}
-    order by es.idx`)
-).rows as unknown as {
-  idx: number;
-  reps: number;
-  is_bodyweight: boolean;
-  is_band: boolean;
-  slot: string | null;
-  dimension: string | null;
-  unit: string | null;
-  value_num: string | null;
-}[];
-assert.equal(labeledSets.length, 3, 'GAP-3: all three non-numeric sets persisted');
-assert.deepEqual(
-  labeledSets.map((r) => r.is_bodyweight),
-  [true, true, false],
-  'GAP-3: BW is a BOOLEAN on the set, not a string',
-);
-// The duration: what used to be the string `30s` is now a typed quantity carrying its own unit.
-const durationSet = labeledSets[2];
-assert.equal(durationSet.slot, QUANTITY_SLOT.primary, "GAP-3: a hold's duration is its PRIMARY");
-assert.equal(durationSet.dimension, UNIT_DIMENSION.time, 'GAP-3: …at dimension time');
-assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW (ADR 0004 §6)');
-assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
-
-// V1-30: a non-mass set is UNEDITABLE by design. The edit guard keys on a live primary MASS quantity
-// (writers/strength-session.ts). The old strength form, whose `isEditableSet` mirrored it, was retired
-// at FAM-1 12f, so this guard is the whole rule now.
-// This set has no mode flag and one quantity, so the dimension is the ONLY thing refusing it. Since
-// V1-30 the form can save time and distance sets, so this is the population the refusal now covers;
-// recovering a typo in one means writing a correction (docs/features/strength-logging.md).
-const [durationSetRow] = (
-  await db.execute(sql`
-    select es.public_id from entry_sets es join entries e on e.id = es.entry_id
-    where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} and es.idx = ${durationSet.idx}`)
-).rows as unknown as { public_id: string }[];
-const timedEdit = await updateStrengthSetById(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA, the set's owner
-  setId: durationSetRow.public_id,
-  reps: 1,
-  weight: 45,
-  scope: A_SCOPE,
-});
-assert.equal(timedEdit, null, 'V1-30: a time set is not editable (the edit path is mass-only)');
-// The two bodyweight sets carry no quantity at all — a MODE is not a magnitude.
-assert.ok(
-  labeledSets.slice(0, 2).every((r) => r.value_num === null),
-  'GAP-3: a pure bodyweight set stores NO quantity row',
-);
-
-// A labeled set on a SUPERSET member — that path had no other coverage.
-const LABELED_SS_SESSION = newId();
-const LABELED_SS_GROUP = newId();
-const LABELED_SS_A = newId();
-const LABELED_SS_B = newId();
-await writeStrengthSession(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
-  scope: A_SCOPE,
-  day: '2026-02-11',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: LABELED_SS_SESSION,
-  activityTypeId: scLiftActivityId,
-  supersets: [{ clientId: LABELED_SS_GROUP }],
-  movements: [
-    {
-      movementName: movX.name,
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: LABELED_SS_A,
-      sets: [{ reps: 5, weight: null, isBodyweight: true }],
-      supersetClientId: LABELED_SS_GROUP,
-      supersetOrder: 1,
-    },
-    {
-      movementName: movY.name,
-      unit: 'lb',
-      movementId: movY.id,
-      clientId: LABELED_SS_B,
-      sets: [{ reps: 5, weight: 60 }], // the numeric path must be unaffected alongside a labeled one
-      supersetClientId: LABELED_SS_GROUP,
-      supersetOrder: 2,
-    },
-  ],
-});
-const ssSets = (
-  await db.execute(sql`
-    select e.client_id, es.is_bodyweight, q.value_num, q.unit
-    from entry_sets es
-    join entries e on e.id = es.entry_id
-    left join entry_set_quantities q on q.entry_set_id = es.id and q.deleted_at is null
-    where e.client_id in (${LABELED_SS_A}, ${LABELED_SS_B})`)
-).rows as unknown as {
-  client_id: string;
-  is_bodyweight: boolean;
-  value_num: string | null;
-  unit: string | null;
-}[];
-const ssLabeled = ssSets.find((r) => r.client_id === LABELED_SS_A);
-const ssNumeric = ssSets.find((r) => r.client_id === LABELED_SS_B);
-assert.equal(ssLabeled?.is_bodyweight, true, 'GAP-3: a superset MEMBER can be bodyweight');
-assert.equal(ssLabeled?.value_num, null, 'GAP-3: …and carries no quantity');
-assert.equal(ssNumeric?.is_bodyweight, false, 'GAP-3: the numeric sibling is unaffected');
-assert.equal(ssNumeric?.value_num, '60.000', 'GAP-3: …and still stores its number');
-assert.equal(ssNumeric?.unit, 'lb', 'GAP-3: …with the unit that came off the ENTRY');
-console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superset member');
-
-// ── GAP-3 PR 4a: a MODE and a MAGNITUDE on the same set, through the real writer ───────────────────
-// The pairing the old string wire made structurally impossible — the chip OVERWROTE the weight field,
-// so `BW` and a number could never coexist. #139 proved the TABLE could hold it; this proves the
-// WRITER does, which is the half PR 4a adds. (The worn-load SLOT itself is 4b; here the magnitude
-// still lands in `primary`.)
-{
-  const MODE_PLUS_MAGNITUDE = newId();
-  await writeStrengthSession(asPg, {
-    profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-    scope: A_SCOPE,
-    day: '2026-02-12',
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: newId(),
-    activityTypeId: scLiftActivityId,
-    movements: [
-      {
-        movementName: movY.name,
-        unit: 'lb',
-        movementId: movY.id,
-        clientId: MODE_PLUS_MAGNITUDE,
-        sets: [{ reps: 8, weight: 8, isBodyweight: true }],
-      },
-    ],
-  });
-  const [row] = (
-    await db.execute(sql`
-      select es.is_bodyweight, q.slot, q.dimension, q.unit, q.value_num
-      from entry_sets es
-      join entries e on e.id = es.entry_id
-      left join entry_set_quantities q on q.entry_set_id = es.id and q.deleted_at is null
-      where e.client_id = ${MODE_PLUS_MAGNITUDE}`)
-  ).rows as unknown as {
-    is_bodyweight: boolean;
-    slot: string | null;
-    dimension: string | null;
-    unit: string | null;
-    value_num: string | null;
-  }[];
-  assert.equal(row.is_bodyweight, true, 'PR 4a: the MODE persisted');
-  assert.equal(row.value_num, '8.000', 'PR 4a: …and the MAGNITUDE persisted alongside it');
-  assert.equal(row.slot, QUANTITY_SLOT.primary, 'PR 4a: the magnitude is the primary quantity');
-  assert.equal(
-    row.dimension,
-    UNIT_DIMENSION.mass,
-    'PR 4a: dimension derived from the movement unit',
-  );
-  console.log(
-    '✓ GAP-3 PR 4a: a mode and a magnitude coexist on one set (was structurally impossible)',
-  );
-}
 
 // ── V1-13b: the month-scoped export reads, against rows the legacy writer left ──────────────────────
 // The formatters have golden vectors; these prove the READS — ordering, the soft-delete filters, the
@@ -2940,67 +2405,9 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 
 // ── GAP-1 P0-1: `sessions.day_role` — WHICH programmed day a session was ───────────────────────────
 // The CHECK's frozen literals can't silently drift from the shared const (the prescriptions precedent).
+// (The old strength writer's day_role round-trips were deleted with it by LEGACY-1; no writer sets
+// the column now. The CHECK still holds for the rows production carries.)
 await assertCheckCoversConst('sessions_day_role_check', DAY_ROLES);
-
-// Round-trips through the SHIPPED writer, not a raw insert — the writer's pass-through is precisely the
-// thing most likely to be forgotten, so a raw insert would prove nothing about the code that ships.
-const DAY_ROLE_SESSION_CLIENT_ID = newId();
-await writeStrengthSession(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
-  scope: A_SCOPE,
-  day: '2026-03-02',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: DAY_ROLE_SESSION_CLIENT_ID,
-  activityTypeId: scLiftActivityId,
-  dayRole: 'strength_b',
-  movements: [
-    {
-      movementName: movX.name,
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: newId(),
-      sets: [{ reps: 5, weight: 60 }],
-    },
-  ],
-});
-const [withRole] = (
-  await db.execute(sql`
-    select day_role, session_type from sessions where client_id = ${DAY_ROLE_SESSION_CLIENT_ID}`)
-).rows as unknown as { day_role: string | null; session_type: string | null }[];
-assert.equal(withRole.day_role, 'strength_b', 'GAP-1: the asserted day_role round-trips');
-assert.equal(
-  withRole.session_type,
-  'strength',
-  'GAP-1: session_type is UNCHANGED — day_role is a second column, not a replacement',
-);
-
-// NULL is a first-class value: a session on a non-programmed day is normal, and every pre-existing row
-// is NULL. `NULL in (...)` is NULL, and a CHECK fails only on FALSE, so the constraint permits it.
-const NO_ROLE_SESSION_CLIENT_ID = newId();
-await writeStrengthSession(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-  scope: A_SCOPE,
-  day: '2026-03-03',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: NO_ROLE_SESSION_CLIENT_ID,
-  activityTypeId: scLiftActivityId,
-  // dayRole deliberately omitted
-  movements: [
-    {
-      movementName: movX.name,
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: newId(),
-      sets: [{ reps: 5, weight: 60 }],
-    },
-  ],
-});
-const [noRole] = (
-  await db.execute(
-    sql`select day_role from sessions where client_id = ${NO_ROLE_SESSION_CLIENT_ID}`,
-  )
-).rows as unknown as { day_role: string | null }[];
-assert.equal(noRole.day_role, null, 'GAP-1: an omitted day_role stores NULL, not a guess');
 
 // A garbage literal is refused by the CHECK.
 await expectRejectedBy('sessions_day_role_check', () =>
@@ -3013,173 +2420,35 @@ await expectRejectedBy('sessions_day_role_check', () =>
     dayRole: 'not_a_day_role',
   }),
 );
-console.log(
-  '✓ GAP-1: sessions.day_role — CHECK parity, asserted round-trip, NULL, bad-literal reject',
-);
+console.log('✓ GAP-1: sessions.day_role — CHECK parity, bad-literal reject');
 
-// ── GAP-1 P1-1a: a movement logged as SKIPPED, carrying ZERO entry_sets ───────────────────────────
-// Through the SHIPPED writer (not a hand-rolled insert), so this proves the path the app runs. The
-// point of the fixture is the MIX: one skipped movement and one done sibling in the SAME session, so
-// "zero sets" is demonstrably scoped to the skipped entry rather than a session that wrote no sets.
-const SKIP_SESSION_CLIENT_ID = newId();
-const SKIPPED_MOVEMENT_CLIENT_ID = newId();
-const DONE_MOVEMENT_CLIENT_ID = newId();
-await writeStrengthSession(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-  scope: A_SCOPE,
-  day: '2026-03-05',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: SKIP_SESSION_CLIENT_ID,
-  activityTypeId: scLiftActivityId,
-  movements: [
-    {
-      movementName: movX.name,
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: SKIPPED_MOVEMENT_CLIENT_ID,
-      status: ENTRY_STATUS.skipped,
-      sets: [], // the whole point — unrepresentable before P1-1a
-    },
-    {
-      movementName: movY.name,
-      unit: 'lb',
-      movementId: movY.id,
-      clientId: DONE_MOVEMENT_CLIENT_ID,
-      // status omitted → the writer omits the column → the DB default. The `done` path is untouched.
-      sets: [
-        { reps: 5, weight: 60 },
-        { reps: 5, weight: 65 },
-      ],
-    },
-  ],
-});
-
-const skipRows = await db
-  .select({
-    id: schema.entries.id,
-    clientId: schema.entries.clientId,
-    status: schema.entries.status,
-  })
-  .from(schema.entries)
-  .where(inArray(schema.entries.clientId, [SKIPPED_MOVEMENT_CLIENT_ID, DONE_MOVEMENT_CLIENT_ID]));
-const skippedEntry = skipRows.find((r) => r.clientId === SKIPPED_MOVEMENT_CLIENT_ID);
-const doneEntry = skipRows.find((r) => r.clientId === DONE_MOVEMENT_CLIENT_ID);
-assert.ok(skippedEntry && doneEntry, 'GAP-1 P1-1a: both movements were written');
-assert.equal(
-  skippedEntry.status,
-  ENTRY_STATUS.skipped,
-  'GAP-1 P1-1a: the skipped movement persists entries.status = skipped',
-);
-assert.equal(
-  doneEntry.status,
-  ENTRY_STATUS.done,
-  'GAP-1 P1-1a: an omitted status still takes the DB default `done` (the existing path is byte-identical)',
-);
-
-const skippedSets = await db
-  .select({ id: schema.entrySets.id })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.entryId, skippedEntry.id));
-assert.equal(
-  skippedSets.length,
-  0,
-  'GAP-1 P1-1a: a skipped movement stores ZERO entry_sets (the CSV 0,0,SKIPPED triple is a RENDER, never stored)',
-);
-const doneSets = await db
-  .select({ id: schema.entrySets.id, idx: schema.entrySets.idx })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.entryId, doneEntry.id))
-  .orderBy(schema.entrySets.idx);
-assert.deepEqual(
-  doneSets.map((r) => r.idx),
-  [1, 2],
-  'GAP-1 P1-1a: the done sibling in the same session keeps its sets, 1-based',
-);
-
-// The parent session is NOT marked skipped — one skipped movement does not skip the session, and
-// writing it there would give the export a third source of truth for "did this happen" (plan D3).
-const [skipSession] = (
-  await db.execute(sql`select status from sessions where client_id = ${SKIP_SESSION_CLIENT_ID}`)
-).rows as unknown as { status: string }[];
-assert.equal(
-  skipSession.status,
-  ENTRY_STATUS.done,
-  'GAP-1 P1-1a: sessions.status stays `done` — a session is not skipped because one movement was',
-);
-
-// Idempotent replay: the same payload re-run yields ONE entry and STILL zero sets (a retry must not
-// resurrect set rows onto a skipped movement).
-await writeStrengthSession(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-  scope: A_SCOPE,
-  day: '2026-03-05',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: SKIP_SESSION_CLIENT_ID,
-  activityTypeId: scLiftActivityId,
-  movements: [
-    {
-      movementName: movX.name,
-      unit: 'lb',
-      movementId: movX.id,
-      clientId: SKIPPED_MOVEMENT_CLIENT_ID,
-      status: ENTRY_STATUS.skipped,
-      sets: [],
-    },
-  ],
-});
-const replayedSkipped = await db
-  .select({ id: schema.entries.id })
-  .from(schema.entries)
-  .where(eq(schema.entries.clientId, SKIPPED_MOVEMENT_CLIENT_ID));
-assert.equal(replayedSkipped.length, 1, 'GAP-1 P1-1a: replay does not duplicate the skipped entry');
-const replayedSets = await db
-  .select({ id: schema.entrySets.id })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.entryId, skippedEntry.id));
-assert.equal(replayedSets.length, 0, 'GAP-1 P1-1a: replay leaves the skipped movement set-less');
-console.log(
-  '✓ GAP-1 P1-1a: skipped movement — status persisted, ZERO sets, done sibling intact, session unmarked, replay-safe',
-);
-
-// ── GAP-1 P1-1b: a SET can be marked sub_failure, and a sub-failure set is NOT editable ───────────
-// Through the SHIPPED writer. The mix matters again: one `done` set and one `sub_failure` set on the
-// SAME movement, which is the realistic shape ("3 sets, the last one failed") and the one entry-level
-// storage could never express.
-const SF_SESSION_CLIENT_ID = newId();
-const SF_MOVEMENT_CLIENT_ID = newId();
-await writeStrengthSession(asPg, {
+// ── GAP-1 P1-1b: a SET can be marked sub_failure ──────────────────────────────────────────────────
+// The mix matters: one `done` set and one `sub_failure` set on the SAME movement, which is the
+// realistic shape ("3 sets, the last one failed") and the one entry-level storage could never
+// express. The rows are `legacyStrengthFixture`'s (LEGACY-1), whose sets go through the live
+// `insertEntrySetRows`; the old writer's edit refusal was deleted with that writer.
+const {
+  entries: [sfEntry],
+} = await legacyStrengthFixture(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
   scope: A_SCOPE,
   day: '2026-03-06',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: SF_SESSION_CLIENT_ID,
   activityTypeId: scLiftActivityId,
   movements: [
     {
       movementName: movX.name,
       unit: 'lb',
       movementId: movX.id,
-      clientId: SF_MOVEMENT_CLIENT_ID,
       sets: [
         { reps: 5, weight: 60 }, // status omitted → DB default
-        {
-          reps: 3,
-          weight: 60,
-          status: ENTRY_STATUS.sub_failure,
-        },
+        { reps: 3, weight: 60, status: ENTRY_STATUS.sub_failure },
       ],
     },
   ],
 });
-
-const [sfEntry] = await db
-  .select({ id: schema.entries.id })
-  .from(schema.entries)
-  .where(eq(schema.entries.clientId, SF_MOVEMENT_CLIENT_ID));
 assert.ok(sfEntry, 'GAP-1 P1-1b: the movement was written');
 const sfSets = await db
   .select({
-    publicId: schema.entrySets.publicId,
     idx: schema.entrySets.idx,
     reps: schema.entrySets.reps,
     status: schema.entrySets.status,
@@ -3201,160 +2470,11 @@ assert.deepEqual(
 // The count is the export's `sets` value — it must stay 2, which is why a `skipped` SET is refused
 // at the boundary rather than stored (it would silently over-count here).
 assert.equal(sfSets.length, 2, 'GAP-1 P1-1b: COUNT(entry_sets) is unaffected by a sub-failure set');
-
-// BUG-2(a), the SERVER half: the V1-9 edit must refuse a sub-failure set. It is NUMERIC, so every
-// other guard in updateStrengthSetById passes it — without the status clause this would succeed and
-// silently leave `status = 'sub_failure'` on a row now claiming reps it never achieved.
-const subFailureSet = sfSets.find((r) => r.status === ENTRY_STATUS.sub_failure)!;
-const doneSet = sfSets.find((r) => r.status === ENTRY_STATUS.done)!;
-const refused = await updateStrengthSetById(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-  setId: subFailureSet.publicId,
-  reps: 99,
-  weight: 999,
-  scope: A_SCOPE,
-});
-assert.equal(
-  refused,
-  null,
-  'GAP-1 P1-1b (BUG-2a): editing a sub_failure set matches no row → null',
-);
-const [unchanged] = await db
-  .select({ reps: schema.entrySets.reps, status: schema.entrySets.status })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.publicId, subFailureSet.publicId));
-assert.equal(unchanged.reps, 3, 'GAP-1 P1-1b (BUG-2a): the refused edit changed NOTHING');
-assert.equal(
-  unchanged.status,
-  ENTRY_STATUS.sub_failure,
-  'GAP-1 P1-1b (BUG-2a): the status survives the refused edit',
-);
-
-// …and the `done` sibling is still editable, so the guard is scoped to status, not a blanket freeze.
-const stillEditable = await updateStrengthSetById(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
-  setId: doneSet.publicId,
-  reps: 6,
-  weight: 65,
-  scope: A_SCOPE,
-});
-assert.ok(
-  stillEditable,
-  'GAP-1 P1-1b: a done set in the same movement is STILL editable (V1-9 intact)',
-);
-console.log(
-  '✓ GAP-1 P1-1b: per-set sub_failure — status + reps persisted, count intact, edit refused server-side, done sibling still editable',
-);
-
-// ── V1-9: edit a logged set's reps/weight via the single-sourced `updateStrengthSetById` ──────────
-// Proves the ownership-scoped UPDATE (the same guard the DAL runs): the owner's edit persists + advances
-// updated_at (LWW server-now), while a cross-profile or soft-deleted-set edit matches no row → null.
-const [editTarget] = await db
-  .select({ publicId: schema.entrySets.publicId, updatedAt: schema.entrySets.updatedAt })
-  .from(schema.entrySets)
-  .innerJoin(schema.entries, eq(schema.entrySets.entryId, schema.entries.id))
-  .where(and(eq(schema.entries.sessionId, ssSession.id), isNull(schema.entrySets.deletedAt)))
-  .orderBy(schema.entrySets.id)
-  .limit(1);
-
-// (a) happy path — the owner corrects reps/weight.
-const edited = await updateStrengthSetById(asPg, {
-  profilePublicId: ssArgs.profilePublicId,
-  setId: editTarget.publicId,
-  reps: 7,
-  weight: 142.5,
-  scope: A_SCOPE,
-});
-assert.ok(edited, 'V1-9: an owner edit returns the set public id');
-const [afterEdit] = await db
-  .select({
-    reps: schema.entrySets.reps,
-    updatedAt: schema.entrySets.updatedAt,
-    valueNum: schema.entrySetQuantities.valueNum,
-  })
-  .from(schema.entrySets)
-  .innerJoin(
-    schema.entrySetQuantities,
-    eq(schema.entrySetQuantities.entrySetId, schema.entrySets.id),
-  )
-  .where(eq(schema.entrySets.publicId, editTarget.publicId));
-assert.equal(afterEdit.reps, 7, 'V1-9: reps updated');
-// GAP-3: reps and weight are now two statements in ONE transaction. This asserts they moved TOGETHER
-// — the whole reason updateStrengthSetById stopped being a single atomic UPDATE.
-assert.equal(
-  Number(afterEdit.valueNum),
-  142.5,
-  'V1-9/GAP-3: the PRIMARY quantity updated in the same tx (precision-safe string)',
-);
-assert.ok(
-  afterEdit.updatedAt >= editTarget.updatedAt,
-  'V1-9: updated_at advanced (LWW server-now)',
-);
-
-// (b) ownership scope — a DIFFERENT profile editing the SAME setId matches nothing (BOLA guard).
-const foreignEdit = await updateStrengthSetById(asPg, {
-  profilePublicId: '019826b4-0000-7000-8000-0000000009b0', // sessionProfileB — not the owner
-  setId: editTarget.publicId,
-  reps: 999,
-  weight: 999,
-  scope: A_SCOPE,
-});
-assert.equal(foreignEdit, null, 'V1-9: a cross-profile edit matches no row');
-const [afterForeign] = await db
-  .select({ reps: schema.entrySets.reps })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.publicId, editTarget.publicId));
-assert.equal(afterForeign.reps, 7, 'V1-9: the cross-profile edit left the set unchanged');
-
-// (c) numeric-set-only guard — GAP-3 restated it. It used to key on `weight_label IS NULL`; it now
-// keys on the set being a plain single MASS quantity with no mode flag. Without this restatement the
-// column drop would have made every previously-labeled set silently editable.
-await db
-  .update(schema.entrySets)
-  .set({ isBodyweight: true })
-  .where(eq(schema.entrySets.publicId, editTarget.publicId));
-const labeledEdit = await updateStrengthSetById(asPg, {
-  profilePublicId: ssArgs.profilePublicId,
-  setId: editTarget.publicId,
-  reps: 4,
-  weight: 4,
-  scope: A_SCOPE,
-});
-assert.equal(
-  labeledEdit,
-  null,
-  'V1-9/GAP-3: a bodyweight set is not editable (numeric-only guard)',
-);
-const [afterLabeled] = await db
-  .select({ reps: schema.entrySets.reps })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.publicId, editTarget.publicId));
-assert.equal(afterLabeled.reps, 7, 'V1-9: the rejected edit left the set unchanged');
-await db
-  .update(schema.entrySets)
-  .set({ isBodyweight: false })
-  .where(eq(schema.entrySets.publicId, editTarget.publicId)); // restore for the soft-delete case
-
-// (d) soft-deleted set — an edit never writes it (guards V1-9b, when deleted sets exist).
-await db
-  .update(schema.entrySets)
-  .set({ deletedAt: sql`now()` })
-  .where(eq(schema.entrySets.publicId, editTarget.publicId));
-const deletedEdit = await updateStrengthSetById(asPg, {
-  profilePublicId: ssArgs.profilePublicId,
-  setId: editTarget.publicId,
-  reps: 3,
-  weight: 3,
-  scope: A_SCOPE,
-});
-assert.equal(deletedEdit, null, 'V1-9: a soft-deleted set is not editable');
-console.log(
-  '✓ V1-9: edit-set writer — owner edit persists (LWW); cross-profile, labeled, + soft-deleted rejected',
-);
+console.log('✓ GAP-1 P1-1b: per-set sub_failure — status + reps persisted, count intact');
 
 // ── V1-24 PR 1b: the bodyweight amend writer, and every pin in its guard ────────────────────────
 // The app DAL and this proof call the SAME `updateBodyweightEntryById`, so the shipped WHERE is what
-// gets exercised. It reuses the V1-9 block's already-seeded profiles rather than minting a third.
+// gets exercised. It reuses the V1-8-1 block's already-seeded profiles rather than minting a third.
 
 /** Seed one metric entry for the amend proofs. Ids are allocated from a local counter so adding a
  *  case never collides with the hand-assigned ids elsewhere in this file. */
@@ -3395,7 +2515,7 @@ async function insertBodyweightProbe(args: {
   return { publicId };
 }
 
-const bwOwner = ssArgs.profilePublicId;
+const bwOwner = sessionProfileA.publicId;
 const [bwOwnerRow] = await db
   .select({ id: schema.profiles.id })
   .from(schema.profiles)
@@ -3575,8 +2695,8 @@ for (const [entryId, profilePublicId, why] of [
   );
 }
 
-// (j) THE profile half of `isLiveProfile`, for BOTH writers that share it: a soft-deleted profile owns
-// nothing. Neither V1-9's proof nor (a)–(i) covered this. Restored straight after.
+// (j) THE profile half of `isLiveProfile`: a soft-deleted profile owns nothing. (a)–(i) did not
+// cover this. Restored straight after.
 await db
   .update(schema.profiles)
   .set({ deletedAt: new Date() })
@@ -3589,19 +2709,11 @@ const deadProfileAmend = await updateBodyweightEntryById(asPg, {
   seenValue: 85.2,
   scope: A_SCOPE,
 });
-const deadProfileEdit = await updateStrengthSetById(asPg, {
-  profilePublicId: bwOwner,
-  setId: editTarget.publicId,
-  reps: 99,
-  weight: 99,
-  scope: A_SCOPE,
-});
 await db
   .update(schema.profiles)
   .set({ deletedAt: null })
   .where(eq(schema.profiles.id, bwOwnerRow.id));
 assert.equal(deadProfileAmend, null, 'V1-24 1b: a soft-deleted profile cannot amend a bodyweight');
-assert.equal(deadProfileEdit, null, 'V1-9/V1-24: a soft-deleted profile cannot edit a set');
 
 console.log(
   '✓ V1-24 1b: bodyweight amend — persists; cross-profile, wrong metric, stale value, wrong unit, soft-deleted, non-done, text-valued and dead-profile all refused; the re-read shares the guard',
@@ -4198,7 +3310,7 @@ console.log(
 
 // ── V1-10 (slice 2): the read DAL's EXACT query (programDayRows), proven here ──────────────────
 // `getProgramDay` and THIS proof both call `programDayRows`, so the shipped join shape — including its
-// BOLA scoping and the per-kid LEFT JOIN — is what gets exercised (the `weeklyAdherenceRows` precedent).
+// BOLA scoping and the per-kid LEFT JOIN — is what gets exercised.
 
 // (a) The YOUTH DAILY PROGRAM: Day A is 7 movements, in the coach's authored `idx` order.
 const athleteOneDayA = await programDayRows(asPg, {
@@ -4842,23 +3954,10 @@ const emptyNotNull = (
 assert.equal(emptyNotNull, 0, "V1-22 chunk 1: an '' snapshot must not satisfy IS NULL");
 console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
 
-// ── V1-22 chunk 2: the WRITER freezes the prescription, through writeStrengthSession ───────────────
-// 🔴 Chunk 1 proved `''` round-trips through a DIRECT insert. That left the thing acceptance 10
-// actually depends on unproven: that the WRITER stores `''` as `''`. Three one-word mutants —
-// `if (!rendered)`, `if (snapshot) map.set(…)`, `...(snapshot ? {…} : {})` — each store NULL for
-// every `open()` prescription, which is 11 of the 13 seeded, and every other gate stays green:
-// the renderer test proves `''` in isolation, and by acceptance 11 the export's fallback emits the
-// same bytes, so even the browser cannot see it. This block is the only thing that can.
-//
-// ⚠️ **A DEDICATED block, and it is the NEWEST one programming `skill` — not the only one.**
-// `verify_newest_other_role_block` already programs `skill` in this household, so this fixture wins
-// by seed order plus `programDayRows`' newest-block rule, which is the very hazard described below
-// reproduced inside the fixture written to avoid it. Asserted rather than assumed, just below.
-// The obvious fixture, `verify_test_block`,
-// is unreachable through the writer: `verify_newer_block` supersedes it for the same
-// (profile, role, scope) triple and `programDayRows` takes the newest. Chasing that by switching the
-// expectation to the newer block's values would silently drop the only writer-path proof of the
-// per-kid reps precedence AND of a comma inside a rendered string.
+// ── V1-22 chunk 2: the EXPORT reads the frozen prescription as it was stored ──────────────────────
+// The writer half of this section (the old strength writer freezing a snapshot) was deleted with
+// that writer by LEGACY-1. The live writer's freeze is `verify/day.ts` "9: the frozen prescription"
+// (mutation 129). What stays is the export's read of the column, over rows production holds.
 const SNAP2_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e5';
 await db.insert(schema.profiles).values({
   publicId: SNAP2_PROFILE_PUBLIC_ID,
@@ -4866,234 +3965,14 @@ await db.insert(schema.profiles).values({
   kind: 'kid',
   householdId: verifyHh.id,
 });
-const [snapMovA, snapMovB, snapMovC, snapMovD] = await db
-  .select({ id: schema.movements.id, slug: schema.movements.slug, name: schema.movements.name })
-  .from(schema.movements)
-  .orderBy(schema.movements.id)
-  .limit(4);
-await seedProgram(asPg, [
-  {
-    householdPublicId: VERIFY_HH_PUBLIC_ID,
-    slug: 'verify_snapshot_block',
-    name: 'Verify Snapshot Block',
-    notes: null,
-    prescriptions: [
-      // (a) an OPEN prescription — no sets, no target reps, no load. Renders `''`. The dominant shape.
-      {
-        dayRole: 'skill',
-        movementSlug: snapMovA.slug,
-        idx: 0,
-        sets: null,
-        targetReps: null,
-        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: null, reps: null }],
-      },
-      // (b) a FIXED prescription whose rendering carries a comma AND a per-kid reps override, so one
-      // case proves the precedence and the comma together.
-      {
-        dayRole: 'skill',
-        movementSlug: snapMovB.slug,
-        idx: 1,
-        sets: 3,
-        targetReps: 'ignored-by-the-override',
-        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: '65', reps: '4, last AMRAP' }],
-      },
-      // (c) the SAME movement twice in one day — warm-up + working. Ambiguous by design.
-      {
-        dayRole: 'skill',
-        movementSlug: snapMovC.slug,
-        idx: 2,
-        sets: 2,
-        targetReps: '5',
-        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: '45', reps: null }],
-      },
-      {
-        dayRole: 'skill',
-        movementSlug: snapMovC.slug,
-        idx: 3,
-        sets: 3,
-        targetReps: '8',
-        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: '95', reps: null }],
-      },
-    ],
-  },
-]);
-
-const snapCid = (n: number) => `019826b4-0000-7000-8000-0000000019${String(n).padStart(2, '0')}`;
-const snapArgs = {
-  profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
-  scope: B_SCOPE,
-  day: '2026-03-02',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: snapCid(1),
-  activityTypeId: scLiftActivityId,
-  dayRole: 'skill',
-  movements: [
-    {
-      movementName: snapMovA.name,
-      unit: 'lb',
-      movementId: snapMovA.id,
-      clientId: snapCid(2),
-      sets: [{ reps: 5, weight: 50 }],
-    },
-    {
-      movementName: snapMovB.name,
-      unit: 'lb',
-      movementId: snapMovB.id,
-      clientId: snapCid(3),
-      sets: [{ reps: 4, weight: 50 }],
-    },
-    {
-      movementName: snapMovC.name,
-      unit: 'lb',
-      movementId: snapMovC.id,
-      clientId: snapCid(4),
-      sets: [{ reps: 5, weight: 50 }],
-    },
-    // (d) logged but NOT in this day's program — a hand-typed movement, the commonest shape of all.
-    {
-      movementName: snapMovD.name,
-      unit: 'lb',
-      movementId: snapMovD.id,
-      clientId: snapCid(5),
-      sets: [{ reps: 6, weight: 50 }],
-    },
-  ],
-} as const;
-await writeStrengthSession(asPg, snapArgs);
-
-const snapByClientId = new Map(
-  (
-    await db
-      .select({ clientId: schema.entries.clientId, snap: schema.entries.prescribedSnapshot })
-      .from(schema.entries)
-      .where(inArray(schema.entries.clientId, [snapCid(2), snapCid(3), snapCid(4), snapCid(5)]))
-  ).map((r) => [r.clientId, r.snap] as const),
-);
-
-// 🔴 THE case the panel called blocking. An `open()` prescription must reach the column as `''`.
-assert.equal(
-  snapByClientId.get(snapCid(2)),
-  '',
-  "V1-22 chunk 2: the WRITER stores an open() prescription as '', not NULL",
-);
-const snapEmptyIsNotNull = (
-  (
-    await db.execute(
-      sql`select count(*)::int as count from entries
-           where client_id = ${snapCid(2)} and prescribed_snapshot is null`,
-    )
-  ).rows as unknown as { count: number }[]
-)[0].count;
-assert.equal(
-  snapEmptyIsNotNull,
-  0,
-  "V1-22 chunk 2: a writer-stored '' must not satisfy IS NULL — or the row re-reads the live program forever",
-);
-
-assert.equal(
-  snapByClientId.get(snapCid(3)),
-  '3x4, last AMRAP @ 65',
-  'V1-22 chunk 2: the per-kid reps override beats target_reps, and a comma survives the column',
-);
-assert.equal(
-  snapByClientId.get(snapCid(4)),
-  '',
-  "V1-22 chunk 2: a movement programmed TWICE in one day freezes '' — never an arbitrary pick",
-);
-// A2: freeze-always. Leaving NULL here would send this row back to the live program at every
-// export, so chunk 4's first edit would rewrite it — for every hand-typed movement there is.
-assert.equal(
-  snapByClientId.get(snapCid(5)),
-  '',
-  "V1-22 chunk 2: a movement this day does not program freezes '', not NULL",
-);
-
-// Rule 1: no asserted day role → no snapshot at all, because the legacy fallback emits '' for the
-// whole session and snapshotting it would make the two paths disagree on a one-tap shape.
-await writeStrengthSession(asPg, {
-  ...snapArgs,
-  day: '2026-03-03',
-  sessionClientId: snapCid(10),
-  dayRole: undefined,
-  movements: [
-    {
-      movementName: snapMovA.name,
-      unit: 'lb',
-      movementId: snapMovA.id,
-      clientId: snapCid(11),
-      sets: [{ reps: 5, weight: 50 }],
-    },
-  ],
-});
-const [snapNoRole] = await db
-  .select({ snap: schema.entries.prescribedSnapshot })
-  .from(schema.entries)
-  .where(eq(schema.entries.clientId, snapCid(11)));
-assert.equal(
-  snapNoRole.snap,
-  null,
-  'V1-22 chunk 2: a session with no asserted day role takes no snapshot (NULL, the live fallback)',
-);
-
-// Replay: `onConflictDoNothing` on client_id means the FIRST snapshot stands. A future "let a
-// corrected day_role through on replay" edit would rewrite frozen history with nothing going red.
-// ⚠️ Scoped to THIS block. Keyed on the movement alone it would rewrite every household's target
-// for that movement, and a later fixture would inherit the value with no clue why.
-await db
-  .update(schema.prescriptionTargets)
-  .set({ reps: 'rewritten-after-the-fact' })
-  .where(
-    inArray(
-      schema.prescriptionTargets.prescriptionId,
-      db
-        .select({ id: schema.prescriptions.id })
-        .from(schema.prescriptions)
-        .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
-        .where(
-          and(
-            eq(schema.prescriptions.movementId, snapMovB.id),
-            eq(schema.programBlocks.slug, 'verify_snapshot_block'),
-          ),
-        ),
-    ),
-  );
-// 🔴 **Prove the UPDATE actually bit**, or the replay assertion below holds for the wrong reason:
-// a fixture reshaped so the target row moves would make "the original stands" vacuously true. This
-// is the probe discipline (`docs/lessons.md`) applied to a fixture — red, green and DID-NOT-RUN are
-// three outcomes, not two.
-assert.equal(
-  (
-    await prescribedSnapshotsFor(asPg, {
-      profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
-      scope: B_SCOPE,
-      dayRole: 'skill',
-      movementIds: [snapMovB.id],
-    })
-  ).get(snapMovB.id),
-  '3xrewritten-after-the-fact @ 65',
-  'V1-22 chunk 2: the fixture UPDATE really changed what the program now says',
-);
-await writeStrengthSession(asPg, snapArgs);
-const [replayed] = await db
-  .select({ snap: schema.entries.prescribedSnapshot })
-  .from(schema.entries)
-  .where(eq(schema.entries.clientId, snapCid(3)));
-assert.equal(
-  replayed.snap,
-  '3x4, last AMRAP @ 65',
-  'V1-22 chunk 2: a replay keeps the ORIGINAL snapshot — the program changing underneath must not rewrite it',
-);
-
-// 🔴 **The READ side, through the query the export actually ships.** Everything above proves the
-// WRITE. Nothing read the column through `strengthMonthRows`, so `coalesce(…, '')` or
-// `nullif(…, '')` on that select — one word — would survive every gate: the pure tests run on
-// hand-built rows, `db:verify` read the column by direct `select`, and the e2e exports under an
-// unchanged program where frozen and live bytes coincide. This is the read-side twin of the write
-// mutant that mutation 34 catches.
+// 🔴 **The READ side, through the query the export actually ships.** `coalesce(…, '')` or
+// `nullif(…, '')` on that select — one word — would survive every other gate: the pure tests run on
+// hand-built rows, the writer proofs read the column by direct `select`, and the e2e exports under an
+// unchanged program where frozen and live bytes coincide.
 //
-// Its rows are the two shapes production holds, written by `legacyStrengthFixture` (LEGACY-1), not
-// by the writer above, so this read outlives that writer: a `day_role` session whose entry froze
-// `''`, and a session with no day role whose entry was never snapshotted (NULL).
+// Its rows are the two shapes production holds, written by `legacyStrengthFixture` (LEGACY-1): a
+// `day_role` session whose entry froze `''`, and a session with no day role whose entry was never
+// snapshotted (NULL).
 const snapReadMovement = { movementId: movX.id, movementName: movX.name, unit: 'lb' } as const;
 const {
   entries: [snapReadEmpty],
@@ -5134,7 +4013,7 @@ assert.equal(
   "V1-22 chunk 2: the EXPORT query returns NULL as NULL — a coalesce(…, '') here would make every never-snapshotted row look frozen",
 );
 
-console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');
+console.log('✓ V1-22 chunk 2: the export reads a frozen prescription as stored, NULL as NULL');
 
 // --- a comma survives the column (the CSV quotes it: csv/row.ts quotes any field, FAM-1 14a) -----
 await insertSnapshot('movement', SNAP_COMMA);
@@ -5297,8 +4176,6 @@ console.log(
 // its ids from `newId()` / those builders' own counters: a hand-assigned id that collided with
 // `uq_entries_client_id` would make an `onConflictDoNothing` builder silently hand back ANOTHER
 // profile's row, and the matrix would then be asserting about the wrong entry while staying green.
-const TEN1_WEEK_START = '2026-03-02'; // an ISO-week Monday, in no other fixture's week
-
 // (a) a weigh-in → the bodyweight amend + its re-read
 const bTarget = await insertBodyweightProbe({
   profileId: verifyProfileRow.id,
@@ -5306,39 +4183,8 @@ const bTarget = await insertBodyweightProbe({
   activityDate: '2026-03-03',
 });
 
-// (b) a ramp target + an in-week bout → weeklyAdherenceRows
-await db.insert(schema.rampTargets).values({
-  publicId: newId(),
-  profileId: verifyProfileRow.id,
-  metricKey: METRIC_KEYS.pushups,
-  weekStart: TEN1_WEEK_START,
-  targetValue: '30',
-});
-await insertCalisthenicsBout({
-  metricKey: METRIC_KEYS.pushups,
-  value: 25,
-  activityDate: TEN1_WEEK_START,
-  profileId: verifyProfileRow.id,
-});
-// …and the SAME week for household A's ramp-test kid, so the adherence row of each direction exists
-// and a leak would show up as the OTHER household's numbers rather than as zero rows.
-await db.insert(schema.rampTargets).values({
-  publicId: newId(),
-  profileId: rampTestProfile.id,
-  metricKey: METRIC_KEYS.pushups,
-  weekStart: TEN1_WEEK_START,
-  targetValue: '45',
-});
-await insertCalisthenicsBout({
-  metricKey: METRIC_KEYS.pushups,
-  value: 40,
-  activityDate: TEN1_WEEK_START,
-  profileId: rampTestProfile.id,
-});
-
-// (c) a strength session as production holds it (`legacyStrengthFixture`, LEGACY-1) → the export
-// read below, and updateStrengthSetById
-const bMovementClientId = newId();
+// (c) a strength session as production holds it (`legacyStrengthFixture`, LEGACY-1) → the export's
+// strength read below
 await legacyStrengthFixture(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
   scope: B_SCOPE,
@@ -5349,15 +4195,12 @@ await legacyStrengthFixture(asPg, {
       movementName: 'Verify Lift',
       unit: 'lb',
       movementId: movX.id,
-      clientId: bMovementClientId,
       sets: [{ reps: 5, weight: 95 }],
     },
   ],
 });
-// …and the mirror for household A, from the same builder, so the matrix's positive directions
-// both exercise a set this block created rather than reaching for one an earlier proof may have
-// soft-deleted or made un-editable on its way past.
-const aMovementClientId = newId();
+// …and the mirror for household A, from the same builder, so the read's positive directions both
+// find a row this block created.
 await legacyStrengthFixture(asPg, {
   profilePublicId: sessionProfileA.publicId,
   scope: A_SCOPE,
@@ -5368,25 +4211,10 @@ await legacyStrengthFixture(asPg, {
       movementName: 'Tenancy Lift',
       unit: 'lb',
       movementId: movX.id,
-      clientId: aMovementClientId,
       sets: [{ reps: 5, weight: 135 }],
     },
   ],
 });
-
-/** The one live, numerically-editable set of the session this block just wrote. */
-async function ten1SetOf(movementClientId: string): Promise<{ publicId: string } | undefined> {
-  const [row] = await db
-    .select({ publicId: schema.entrySets.publicId })
-    .from(schema.entrySets)
-    .innerJoin(schema.entries, eq(schema.entrySets.entryId, schema.entries.id))
-    .where(and(eq(schema.entries.clientId, movementClientId), isNull(schema.entrySets.deletedAt)));
-  return row;
-}
-const bSet = await ten1SetOf(bMovementClientId);
-const aSet = await ten1SetOf(aMovementClientId);
-assert.ok(bSet, 'TEN-1 fixture: household B has an editable strength set');
-assert.ok(aSet, 'TEN-1 fixture: household A has an editable strength set');
 
 // (d) TEN-1 1c: a weigh-in for household A in the SAME month as B's, so `bodyweightMonthRows` has a
 // row to wrongly find in both directions. B's is `bTarget` (2026-03-03); A's goes on a day no other
@@ -5478,10 +4306,10 @@ assert.equal(
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
 // `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
 // row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
-// adherence and programmed-day cards, and the four month reads behind the CSV export.
+// programmed-day card and the four month reads behind the CSV export.
 //
-// Each row names **its own pair of profiles**. The reads need different fixtures — adherence needs
-// ramp targets, the export reads need logged sessions, the program read needs a block — and one
+// Each row names **its own pair of profiles**. The reads need different fixtures — the export reads
+// need logged sessions, the program read needs a block — and one
 // shared pair would have forced a re-typed lookalike fixture per read, which is the vehicle the
 // panel rejected for the picker. The pair varies; the FOUR assertions do not.
 type Ten1Read = readonly [
@@ -5530,19 +4358,6 @@ const TEN1_READS_1B: readonly Ten1Read[] = [
     VERIFY_PROFILE_PUBLIC_ID,
     (profilePublicId, scope) => ownedEntryIds(asPg, profilePublicId, scope),
   ],
-  [
-    'weeklyAdherenceRows (the Today page’s adherence read)',
-    RAMP_TEST_PROFILE_PUBLIC_ID,
-    VERIFY_PROFILE_PUBLIC_ID,
-    (profilePublicId, scope) =>
-      weeklyAdherenceRows(asPg, {
-        profilePublicId,
-        weekStart: TEN1_WEEK_START,
-        activityTypeId: calisthenicsId,
-        metricKeys: CALISTHENICS_METRIC_KEYS,
-        scope,
-      }),
-  ],
 ];
 
 // ── TEN-1 1c's reads, asserted BELOW the 1b write matrix — see `ten1ReadMatrix` for why the order
@@ -5557,7 +4372,7 @@ const TEN1_READS_1C: readonly Ten1Read[] = [
   ],
   [
     'strengthMonthRows (the CSV export’s strength log)',
-    ssArgs.profilePublicId,
+    sessionProfileA.publicId,
     VERIFY_PROFILE_PUBLIC_ID,
     (profilePublicId, scope) =>
       strengthMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
@@ -5589,7 +4404,7 @@ const TEN1_READS_1C: readonly Ten1Read[] = [
 
 await ten1ReadMatrix(TEN1_READS_1B);
 console.log(
-  `✓ TEN-1 1b: the READ matrix — ${TEN1_READS_1B.length} scoped reads (ownedEntryIds, adherence), ` +
+  `✓ TEN-1 1b: the READ matrix — ${TEN1_READS_1B.length} scoped read (ownedEntryIds), ` +
     'each proved in BOTH directions',
 );
 
@@ -5714,62 +4529,8 @@ assert.equal(
   'TEN-1: …and household A cannot re-read it (reverse)',
 );
 
-// (c) the strength set-edit
-assert.ok(
-  await updateStrengthSetById(asPg, {
-    profilePublicId: ssArgs.profilePublicId,
-    setId: aSet.publicId,
-    reps: 9,
-    weight: 45,
-    scope: A_SCOPE,
-  }),
-  "TEN-1: the set-edit writes household A's own set",
-);
-assert.equal(
-  await updateStrengthSetById(asPg, {
-    profilePublicId: ssArgs.profilePublicId,
-    setId: aSet.publicId,
-    reps: 999,
-    weight: 999,
-    scope: B_SCOPE,
-  }),
-  null,
-  'TEN-1: …and household B cannot edit it',
-);
-assert.ok(
-  await updateStrengthSetById(asPg, {
-    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
-    setId: bSet.publicId,
-    reps: 6,
-    weight: 100,
-    scope: B_SCOPE,
-  }),
-  "TEN-1: the set-edit writes household B's own set",
-);
-assert.equal(
-  await updateStrengthSetById(asPg, {
-    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
-    setId: bSet.publicId,
-    reps: 999,
-    weight: 999,
-    scope: A_SCOPE,
-  }),
-  null,
-  'TEN-1: …and household A cannot edit it (reverse)',
-);
-const [aSetAfter] = await db
-  .select({ reps: schema.entrySets.reps })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.publicId, aSet.publicId));
-const [bSetAfter] = await db
-  .select({ reps: schema.entrySets.reps })
-  .from(schema.entrySets)
-  .where(eq(schema.entrySets.publicId, bSet.publicId));
-assert.equal(aSetAfter.reps, 9, "TEN-1: B's refused set-edit left A's set alone");
-assert.equal(bSetAfter.reps, 6, "TEN-1: A's refused set-edit left B's set alone");
-
 console.log(
-  '✓ TEN-1 1b: the WRITE matrix — bodyweight amend, amend re-read and set-edit, each refused across the household seam in BOTH directions, with no side effect',
+  '✓ TEN-1 1b: the WRITE matrix — bodyweight amend and amend re-read, each refused across the household seam in BOTH directions, with no side effect',
 );
 
 // ── (4b) TEN-1 1c's READS and its seed resolver — ordered AFTER every 1b proof above ────────────
@@ -5820,71 +4581,6 @@ assert.equal(
   ).length,
   0,
   'TEN-1 1c: …and wrote no block (refs resolve BEFORE the insert)',
-);
-
-// ── (5) TEN-1 1c: `writeStrengthSession` — the whole-session write core ───────────────────────────
-// Different refusal shape from the amends: the ownership check is a `SELECT … LIMIT 1` inside the
-// transaction, so a profile outside the scope resolves to nothing and the core THROWS
-// `Profile not found` — byte-identical to the shape an unknown or soft-deleted profile already got.
-// It is the one writer here whose refusal has to roll a multi-table graph back, so each refused
-// direction also asserts that no `sessions` row survived: a refusal that still wrote half a session
-// would be worse than a leak, because the athlete's next replay would attach to it.
-const TEN1_SESSION_MOVEMENT = {
-  movementName: 'Tenancy Session Lift',
-  unit: 'lb' as const,
-  movementId: movX.id,
-  sets: [{ reps: 5, weight: 115 }],
-};
-/** Did a session with this client_id reach the database at all? */
-async function ten1SessionExists(clientId: string): Promise<boolean> {
-  return (
-    (
-      await db
-        .select({ id: schema.sessions.id })
-        .from(schema.sessions)
-        .where(eq(schema.sessions.clientId, clientId))
-    ).length > 0
-  );
-}
-for (const [label, profilePublicId, ownScope, otherScope, day] of [
-  ["household A's own session", ssArgs.profilePublicId, A_SCOPE, B_SCOPE, '2026-03-07'],
-  ["household B's own session", VERIFY_PROFILE_PUBLIC_ID, B_SCOPE, A_SCOPE, '2026-03-08'],
-] as const) {
-  const okClientId = newId();
-  const written = await writeStrengthSession(asPg, {
-    profilePublicId,
-    scope: ownScope,
-    day,
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: okClientId,
-    activityTypeId: scLiftActivityId,
-    movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
-  });
-  assert.ok(written.sessionId, `TEN-1: writeStrengthSession writes ${label}`);
-  assert.ok(await ten1SessionExists(okClientId), `TEN-1: …and the session row is there (${label})`);
-
-  const refusedClientId = newId();
-  await assert.rejects(
-    writeStrengthSession(asPg, {
-      profilePublicId,
-      scope: otherScope,
-      day,
-      sessionType: SESSION_TYPES[0],
-      sessionClientId: refusedClientId,
-      activityTypeId: scLiftActivityId,
-      movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
-    }),
-    { message: PROFILE_NOT_FOUND },
-    `TEN-1: …and the other household cannot write it (${label})`,
-  );
-  assert.equal(
-    await ten1SessionExists(refusedClientId),
-    false,
-    `TEN-1: …with the whole transaction rolled back — no session row (${label})`,
-  );
-}
-console.log(
-  '✓ TEN-1 1c: writeStrengthSession — each household writes its OWN session and is refused the other’s, in BOTH directions, with the transaction rolled back',
 );
 
 // ── (6) TEN-1 1d: `db:correct`'s registry — the last hand-written predicates in the repo ──────────
@@ -5974,9 +4670,9 @@ console.log(
 // `docs/plans/ten-1-household-scope.md` → "1d as built — the catalog verdict", and the three PRs that
 // have moved it since: `ten-2a`, `ten-2b`, `ten-2c`.
 //
-// The function under test is `findOrCreateMovement`, the REAL core the app DAL's
-// `resolveSessionMovements` delegates to (single-sourced in 1d exactly so this proof can run it;
-// `apps/web/lib/dal/catalog.ts` is `server-only` and cannot execute here).
+// The function under test is `findOrCreateMovement`, the REAL core the app's find-or-create
+// delegates to (single-sourced in 1d exactly so this proof can run it; `apps/web/lib/dal/catalog.ts`
+// is `server-only` and cannot execute here).
 
 // (a) The structural fact everything below follows from.
 //
@@ -6255,63 +4951,17 @@ assert.equal(
   'TEN-2b WRITE: …with NOTHING written — `seedProgram` resolves every ref before the block insert, so a refusal leaves no partial block and household A’s pull card does not render another household’s string at all',
 );
 
-// (e) A REFUSED write leaves its caller-supplied catalog text behind. The strength DAL
-// (`apps/web/lib/dal/entries.ts` → `logStrengthSession`) resolves every movement through
-// find-or-create BEFORE `writeStrengthSession`, whose in-transaction re-resolve is the actual
-// household seam — so the seam's refusal rolls back the SESSION and leaves the globally-visible
-// movement row behind. Categorically different from a read leak: it is a cross-tenant WRITE primitive
-// surviving a refusal.
-//
-// ⚠️ **This is a FIXTURE reproducing the DAL's call order, not a proof of it.** It calls
-// `findOrCreateMovement` itself before the refused write, so the final assertion cannot fail — it
-// shows what that order does to the database, given the order. That the DAL really calls
-// find-or-create first, even for a write that is then refused, is asserted where the DAL can run:
-// `apps/web/lib/dal/entries.test.ts` → "find-or-create runs, and commits, before the refused write".
+// (e) A household-B row the resolver authored on B's behalf, kept as a fixture (LEGACY-1). It was the
+// catalog row a refused cross-household strength write left behind; that write path is deleted, so
+// the refusal is gone with it (the live writers' household refusals are `verify/day.ts` 6c and
+// `verify/program.ts` 6a-ii). The row stays because the dark gate below asserts over every row a
+// resolver authored, and an owned row in B's namespace is one of the shapes it must admit.
 const REFUSED_MOVEMENT_NAME = 'TEN-1 Refused Session Lift';
-// Resolved under B_SCOPE — the scope the refused write will ask from — so the surviving row's
-// ownership is the thing under test below.
 const refusedMovementId = await findOrCreateMovement(asPg, B_SCOPE, REFUSED_MOVEMENT_NAME);
-const refusedCatalogClientId = newId();
-await assert.rejects(
-  writeStrengthSession(asPg, {
-    profilePublicId: ssArgs.profilePublicId, // household A's athlete…
-    scope: B_SCOPE, // …asked for from household B's scope
-    day: '2026-03-09',
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: refusedCatalogClientId,
-    activityTypeId: scLiftActivityId,
-    movements: [
-      {
-        movementName: REFUSED_MOVEMENT_NAME,
-        unit: 'lb',
-        movementId: refusedMovementId,
-        sets: [{ reps: 5, weight: 100 }],
-        clientId: newId(),
-      },
-    ],
-  }),
-  { message: PROFILE_NOT_FOUND },
-  'TEN-1 1d: the household seam refuses the cross-household session write (as 1c proves)',
-);
 assert.equal(
-  await ten1SessionExists(refusedCatalogClientId),
-  false,
-  'TEN-1 1d: …with the whole session transaction rolled back',
-);
-// 🔴 TEN-2b CHANGED WHAT THIS MEANS, so the wording changed with it. The row still survives the
-// refusal — the ordering fix is `TEN-2b-1`, deferred — but it is no longer in the SHARED catalog
-// where every other household's resolver would serve it. It lands in the CALLER'S OWN namespace, so
-// it is unreferenced garbage inside one household, reachable by `runbooks.md` step 11's
-// `DELETE FROM movements WHERE household_id = H`. Garbage, not a cross-tenant write.
-const refusedRow = await movementRow(refusedMovementId);
-assert.ok(
-  refusedRow,
-  'TEN-1 1d WRITE: …and YET the movement row the refused caller named still exists — find-or-create runs before the session transaction, so the catalog write survives its own refusal (TEN-2b-1 moves it inside)',
-);
-assert.equal(
-  refusedRow.householdId,
+  (await movementRow(refusedMovementId))?.householdId,
   verifyHh.id,
-  'TEN-2b WRITE — DEFUSED: …but it is in the REFUSED CALLER’S OWN namespace, not the shared catalog. 1d’s cross-tenant write primitive is now unreferenced garbage in one household, which the deletion procedure removes — the leak half is gone even though the ordering wart is not',
+  "TEN-2b fixture: the resolver authors a name household B typed into B's OWN namespace",
 );
 
 // TEN-2b: the ids the REAL resolver returned in this run — one curated global resolve (box_jump),
@@ -6343,8 +4993,7 @@ console.log(
     '✅ CLOSED AT TEN-2d: the resolver’s 23505 fallback is DELETED — 0017 had already made it ' +
     'unreachable, and it outlived the drop by one PR only because nothing couples migrate.yml to the ' +
     'Vercel deploy. The global catalog is still SHARED on purpose: both households resolve the same ' +
-    'curated box_jump. ✅ ALREADY CLOSED at TEN-2b: the refused-session row lands in the caller’s OWN ' +
-    'namespace (garbage, not cross-tenant), and seedProgram REFUSES a prescription naming another ' +
+    'curated box_jump. ✅ ALREADY CLOSED at TEN-2b: seedProgram REFUSES a prescription naming another ' +
     'household’s movement. ⚠️ **NOT CLOSED: any PRE-TEN-2b app-authored row still sitting at ' +
     'household_id IS NULL is resolved by global-first for EVERY household — the read leak’s residual, ' +
     'which closes at TEN-2c-1 (the split backfill). 0017 stopped it GROWING via ' +
@@ -6355,303 +5004,6 @@ console.log(
     'Verdict: docs/plans/ten-1-household-scope.md → "1d as built"; ' +
     'docs/plans/ten-2b-scoped-movement-lookup.md; docs/plans/ten-2c-drop-global-slug-unique.md',
 );
-
-// ── PICK-1 PR 2: a movement id resolves ONLY in its own namespace ──────────────────────────────────
-//
-// The functions under test are the REAL ones the DAL calls — `resolveSessionMovements` (ids before
-// inserts) and `writeStrengthSession`'s in-transaction re-check. `apps/web/lib/dal/entries.ts` is
-// `server-only` and cannot execute here, which is why resolution lives in `packages/db` at all
-// (write-path invariant 3): a re-typed lookalike could not PROVE the cross-household refusal.
-//
-// ⚠️ **NOT ONE NEW `movements` ROW IS CREATED BELOW**, deliberately — and ASSERTED, twice, rather
-// than left as a property of how the fixtures happen to be written: case (a) counts the table across
-// its refusal, and a second count spans (c)–(e). The reason it matters is that the TEN-2a/2c section
-// further down reads the whole table; a fixture that found-or-created a GLOBAL row would redden its
-// seed-membership assertion, and one that created a household-owned row would slip past every
-// discriminator there, which is exactly why the count is taken here instead.
-{
-  /** A card the picker would submit: an id, plus a label the server must IGNORE in favour of the row. */
-  const picked = (movementPublicId: string, clientId: string) => ({
-    movementPublicId,
-    movementName: 'A LABEL THE ID MUST OVERRIDE',
-    unit: 'lb' as const,
-    clientId,
-    // `SessionMovementInput` carries `status` as a zod `.default()`, so the PARSED type has it
-    // required even though the wire field is optional — these fixtures stand in for parsed bodies.
-    status: ENTRY_STATUS.done,
-    sets: [{ reps: 5, weight: 100 }],
-  });
-  const typed = (movementName: string, clientId: string) => ({
-    movementName,
-    unit: 'lb' as const,
-    clientId,
-    status: ENTRY_STATUS.done,
-    sets: [{ reps: 5, weight: 100 }],
-  });
-  const pickCid = (n: number) => `019826b4-0000-7000-8000-0000000021${String(n).padStart(2, '0')}`;
-
-  const bOwnRow = await movementRow(bMovementId);
-  // `snapMovB` was selected as `{ id, slug, name }` for chunk 2, which needs no public id. The
-  // picker submits one, so read it from the same row rather than re-selecting the movement.
-  const snapMovBRow = await movementRow(snapMovB.id);
-  assert.equal(
-    bOwnRow.householdId,
-    verifyHh.id,
-    'PICK-1 fixture: the row case (a) tries to steal is household B’s OWN (TEN-2c made that possible)',
-  );
-
-  // One counter, three tables, via Drizzle's `$count` rather than a third copy of this file's
-  // inline `count(*)::int` cast — the second copy inside one block is the extract trigger
-  // (AGENTS.md → "Reuse small logic too").
-  const rowCounts = async () => ({
-    movements: await db.$count(schema.movements),
-    sessions: await db.$count(schema.sessions),
-    entries: await db.$count(schema.entries),
-  });
-
-  // (a) 🔴 **A's request names B's own movement id, alongside a typed sibling that WOULD insert.**
-  //
-  // ⚠️ The typed name is chosen to slug onto NO existing row in either namespace, so phase 2 would
-  // genuinely INSERT if it ran. That is what makes "zero new movements rows" an assertion rather
-  // than a tautology — and it is the assertion `36-availability-ignores-household.patch` reddens:
-  // widening `movementIsAvailableTo` to any owned row makes phase 1 succeed, phase 2 run, and this
-  // count move. ⚠️ That patch is aimed at the shared PREDICATE, not at the resolver alone, so the
-  // same one line also widens the in-transaction re-check case (d) checks; `db:verify` is fail-fast,
-  // so (a) is what reports.
-  const TYPED_SIBLING = 'PICK-1 Sibling That Must Not Land';
-  assert.equal(
-    (
-      await db
-        .select({ id: schema.movements.id })
-        .from(schema.movements)
-        .where(eq(schema.movements.slug, movementSlug(TYPED_SIBLING)))
-    ).length,
-    0,
-    'PICK-1 fixture: the typed sibling slugs onto no existing row, in any namespace — so phase 2 really would insert it',
-  );
-  const before = await rowCounts();
-  // ⚠️ Caught by hand rather than with `assert.rejects`, because (b) below COMPARES this message and
-  // `assert.rejects` resolves to `undefined`. An earlier draft assigned its return value and then
-  // compared (b)'s message against a `?? MOVEMENT_NOT_AVAILABLE` fallback — the constant compared
-  // with itself, which is the assertion-about-evidence failure this file exists to avoid.
-  const foreignIdError = await resolveSessionMovements(asPg, A_SCOPE, [
-    picked(bOwnRow.publicId, pickCid(1)),
-    typed(TYPED_SIBLING, pickCid(2)),
-  ]).then(
-    () => null,
-    (e: unknown) => e as Error,
-  );
-  assert.ok(
-    foreignIdError instanceof MovementNotAvailableError,
-    'PICK-1 (a): household A naming household B’s own movement id is REFUSED — the resolver matches global-or-own under the CALLER’S scope, never any owned row',
-  );
-  assert.equal(
-    foreignIdError.message,
-    MOVEMENT_NOT_AVAILABLE,
-    'PICK-1 (a): …with the named constant as its message, not a hand-typed string',
-  );
-  assert.deepEqual(
-    await rowCounts(),
-    before,
-    'PICK-1 (a): …and the refusal wrote NOTHING — no movements row for the typed sibling, no session, no entry. Ids resolve before any insert, so a refused body commits no typed sibling (`37-typed-before-ids.patch` swaps the phases and this is the assertion that goes red)',
-  );
-
-  // (b) An id that names no row at all. The message must be IDENTICAL to (a)'s, or the refusal is an
-  // oracle a caller can use to enumerate which movement public ids exist (security N2 — the same
-  // 404-never-403 rule ADR 0006 applies to profiles).
-  const UNKNOWN_ID = '019826b4-0000-7000-8000-0000000021ff';
-  assert.equal(
-    (
-      await db
-        .select({ id: schema.movements.id })
-        .from(schema.movements)
-        .where(eq(schema.movements.publicId, UNKNOWN_ID))
-    ).length,
-    0,
-    'PICK-1 fixture: the unknown id really names no row',
-  );
-  await assert.rejects(
-    async () => resolveSessionMovements(asPg, A_SCOPE, [picked(UNKNOWN_ID, pickCid(3))]),
-    (err: unknown) => err instanceof MovementNotAvailableError,
-    'PICK-1 (b): an unknown movement id is refused too',
-  );
-  const unknownIdError = await resolveSessionMovements(asPg, A_SCOPE, [
-    picked(UNKNOWN_ID, pickCid(4)),
-  ]).then(
-    () => null,
-    (e: unknown) => e as Error,
-  );
-  assert.equal(
-    unknownIdError?.message,
-    foreignIdError.message,
-    'PICK-1 (b): …and BYTE-IDENTICAL to (a)’s — an unknown id and another household’s id are indistinguishable from outside, so the refusal is not an enumeration oracle',
-  );
-  assert.ok(
-    !unknownIdError?.message.includes(UNKNOWN_ID),
-    'PICK-1 (b): …and the message interpolates neither the id nor a name — a thrown value reaches Sentry verbatim, and a movement name is free text the notice warns may hold a person’s name',
-  );
-
-  // The movements count from here to the end of (e). Cases (c)–(e) write SESSIONS, and the claim that
-  // "a resolver that minted something per call would show up" needed something to show up IN: (e)'s
-  // session-id and entry-count assertions cannot see a stray household-owned `movements` row, and
-  // neither can the TEN-2a/2c discriminators below (they admit an owned row with a NULL pattern).
-  const beforeHappyPath = await rowCounts();
-
-  // (c) 🔴 **The happy path, end to end through the real writer: the id decides, and the id path
-  // still FREEZES the V1-22 chunk-2 snapshot.**
-  //
-  // Two cards, both by public id, under household B's snapshot fixture (the same `verify_snapshot_block`
-  // / `skill` day chunk 2 proves against):
-  //   · `snapMovB` — a GLOBAL row the day DOES prescribe, with a comma and a per-kid reps override;
-  //   · `bOwnRow`  — household B's OWN row, which that day does NOT prescribe.
-  // So one proves the id path freezes a real rendered string and the other that it freezes `''` —
-  // which is what PICK-1's round-2 B1 asked for, restated against the mechanism chunk 2 shipped
-  // (the plan's § Amendment, 2026-11-11: there is no `prescriptionId` on the wire to carry).
-  const pickedResolved = await resolveSessionMovements(asPg, B_SCOPE, [
-    picked(snapMovBRow.publicId, pickCid(5)),
-    picked(bOwnRow.publicId, pickCid(6)),
-  ]);
-  assert.deepEqual(
-    pickedResolved.map((m) => m.movementId),
-    [snapMovB.id, bMovementId],
-    'PICK-1 (c): a global row and this household’s OWN row both resolve by public id, to exactly those rows',
-  );
-  assert.deepEqual(
-    pickedResolved.map((m) => m.movementName),
-    [snapMovB.name, bOwnRow.name],
-    'PICK-1 (c): …and each carries the DATABASE’S name, not the client’s label — "the id decides" is this assertion. A `{ ...m, movementId }` spread would have let the submitted label through',
-  );
-  const pickedWrite = await writeStrengthSession(asPg, {
-    profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
-    scope: B_SCOPE,
-    day: '2026-03-09',
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: pickCid(7),
-    activityTypeId: scLiftActivityId,
-    dayRole: 'skill',
-    movements: pickedResolved,
-  });
-  const pickedRows = new Map(
-    (
-      await db
-        .select({
-          clientId: schema.entries.clientId,
-          movementId: schema.entries.movementId,
-          movementName: schema.entries.movementName,
-          snap: schema.entries.prescribedSnapshot,
-        })
-        .from(schema.entries)
-        .where(inArray(schema.entries.clientId, [pickCid(5), pickCid(6)]))
-    ).map((r) => [r.clientId, r] as const),
-  );
-  assert.deepEqual(
-    [pickedRows.get(pickCid(5))?.movementId, pickedRows.get(pickCid(6))?.movementId],
-    [snapMovB.id, bMovementId],
-    'PICK-1 (c): the written entries reference the rows the IDS named (criterion 17)',
-  );
-  assert.deepEqual(
-    [pickedRows.get(pickCid(5))?.movementName, pickedRows.get(pickCid(6))?.movementName],
-    [snapMovB.name, bOwnRow.name],
-    'PICK-1 (c): …and `entries.movement_name` is the DATABASE’S label — the column the day page renders, which a `{ ...m, movementId }` spread would have let the client set while the id decided the row. (The CSV’s `movement` column reads `movements.slug` through `movement_id` and never this column, so it was never the stake here.)',
-  );
-  // ⚠️ The expected string is the REWRITTEN one. Chunk 2's replay proof updated this prescription's
-  // target reps to `rewritten-after-the-fact` earlier in this file, deliberately and scoped to this
-  // block — so by the time PICK-1's session is written the live program says that, and freezing it is
-  // the point-in-time behaviour acceptance 9 asks for. Expecting chunk 2's original `3x4, last AMRAP`
-  // here would be expecting the snapshot to be stale, which is the opposite of what the column is for.
-  assert.equal(
-    pickedRows.get(pickCid(5))?.snap,
-    '3xrewritten-after-the-fact @ 65',
-    'PICK-1 (c): 🔴 the ID PATH still freezes the V1-22 chunk-2 snapshot — the global card’s day prescribes it, so what the program says AT THIS MOMENT is written. Chunk 2 matches on `movement_id`, which the resolver supplied; nothing on the wire names a prescription',
-  );
-  assert.equal(
-    pickedRows.get(pickCid(6))?.snap,
-    '',
-    'PICK-1 (c): …and a picked movement the day does NOT prescribe freezes the EMPTY STRING, not NULL — chunk 2 rule 2, unchanged by the id path',
-  );
-
-  // (d) 🔴 **THE TOCTOU SEAM.** `writeStrengthSession` is called DIRECTLY with household B's internal
-  // movement id under household A's scope — bypassing phase 1 entirely, which is what a soft-delete
-  // or a `MOV-1`/`C4m` repoint between the pre-check and the write looks like from the writer's side.
-  // The in-transaction re-check must refuse and the whole graph must roll back.
-  // `38-drop-in-tx-recheck.patch` removes that check and this case goes red.
-  const beforeD = await rowCounts();
-  await assert.rejects(
-    async () =>
-      writeStrengthSession(asPg, {
-        profilePublicId: SEED_PROFILE_PUBLIC_ID,
-        scope: A_SCOPE,
-        day: '2026-03-09',
-        sessionType: SESSION_TYPES[0],
-        sessionClientId: pickCid(8),
-        activityTypeId: scLiftActivityId,
-        movements: [
-          {
-            movementName: bOwnRow.name,
-            unit: 'lb',
-            movementId: bMovementId,
-            clientId: pickCid(9),
-            sets: [{ reps: 5, weight: 100 }],
-          },
-        ],
-      }),
-    (err: unknown) => err instanceof MovementNotAvailableError,
-    'PICK-1 (d): the IN-TRANSACTION re-check refuses another household’s internal movement id even when phase 1 is bypassed — the pre-check is an optimisation, this is the seam',
-  );
-  assert.deepEqual(
-    await rowCounts(),
-    beforeD,
-    'PICK-1 (d): …and nothing committed — it throws inside the transaction, so the session and its entries roll back together',
-  );
-
-  // (e) **Replay.** The same session `clientId` twice, both times by id: one session, one entry per
-  // movement, the SAME `sessionId` back. Idempotency is unchanged by the id path — which is worth a
-  // case because the resolver is a new step BEFORE the idempotent write.
-  const pickedReplay = await writeStrengthSession(asPg, {
-    profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
-    scope: B_SCOPE,
-    day: '2026-03-09',
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: pickCid(7),
-    activityTypeId: scLiftActivityId,
-    dayRole: 'skill',
-    movements: await resolveSessionMovements(asPg, B_SCOPE, [
-      picked(snapMovBRow.publicId, pickCid(5)),
-      picked(bOwnRow.publicId, pickCid(6)),
-    ]),
-  });
-  assert.equal(
-    pickedReplay.sessionId,
-    pickedWrite.sessionId,
-    'PICK-1 (e): a replayed id-path session returns the SAME session public id',
-  );
-  assert.equal(
-    (
-      await db
-        .select({ id: schema.entries.id })
-        .from(schema.entries)
-        .where(inArray(schema.entries.clientId, [pickCid(5), pickCid(6)]))
-    ).length,
-    2,
-    'PICK-1 (e): …and exactly one entry per movement survives the replay',
-  );
-  // 🔴 **And the id path minted NO catalog row across (c), (d) and (e) together** — three writes, one
-  // of them replayed, none of them find-or-create. Without this the "not one new movements row" claim
-  // at the top of this block held only for case (a), which is the one that throws before phase 2.
-  assert.equal(
-    (await rowCounts()).movements,
-    beforeHappyPath.movements,
-    'PICK-1 (c)–(e): the id path created no `movements` row at all — three writes including a replay, and find-or-create was never reached',
-  );
-
-  console.log(
-    '✓ PICK-1 PR 2: a movement id resolves ONLY in its own namespace — another household’s own id ' +
-      'and an unknown id are byte-identical refusals that write nothing (not even the typed sibling ' +
-      'in the same body), a global row and this household’s own row both resolve and the DATABASE’S ' +
-      'name reaches the entry, the V1-22 chunk-2 snapshot still freezes on the id path, the ' +
-      'in-transaction re-check refuses a bypassed foreign id and rolls back, and replay is unchanged',
-  );
-}
 
 // ── TEN-2a/2c: the column, the FK, and the two indexes in their SOLE-ARBITER role ────────────────
 //
@@ -9645,13 +7997,6 @@ console.log(
   );
 }
 
-/**
- * The strength writer's refusal of a replay it may not answer: a hidden row (V1-9b B0) and a row
- * someone else owns (the replay-owner block) share this message ON PURPOSE, so a caller cannot tell
- * the two apart. One regex, so the two blocks cannot drift apart on it.
- */
-const REPLAY_REFUSED = /no live row for client_id/;
-
 // ── V1-9b B0 — a hide no longer frees a `client_id` ───────────────────────────────────────────────
 //
 // 🔴 **The behavioural case comes FIRST, deliberately.** `db:verify` is fail-fast and the mutation
@@ -9666,27 +8011,11 @@ const REPLAY_REFUSED = /no live row for client_id/;
 // action, which turns that from latent into live.
 //
 // ⚠️ **What a pass here proves, and the one thing it does not.** It proves the twin is impossible
-// and that the live-row re-select refuses rather than attaching children to a dead row. It does NOT
-// prove the app reports that refusal well — `B1-2` owns the envelope; today it is a throw.
+// for the weigh-in writer, whose refusal is a throw. It does NOT prove the app reports that refusal
+// well — `B1-2` owns the envelope. (The old strength writer's case, steps 1–4, was deleted with that
+// writer by LEGACY-1; the live row writer's hidden-replay answers are `verify/day.ts` 3–3i.)
 {
-  const B0_SESSION_CID = '019826b4-0000-7000-8000-00000000b000';
-  const b0Args = {
-    ...flatArgs,
-    day: '2026-02-11',
-    sessionClientId: B0_SESSION_CID,
-    movements: [
-      {
-        movementName: 'Bench Press',
-        unit: 'lb',
-        movementId: movY.id,
-        clientId: '019826b4-0000-7000-8000-00000000b001',
-        sets: [{ reps: 8, weight: 95 }],
-      },
-    ],
-  } as const;
-
-  // 0 · 🔴 **The OTHER writer B0 changes, which the strength case cannot reach.** First in this
-  //      block (LEGACY-1 PR B), because it is the behavioural case that outlives the strength writer.
+  // 0 · 🔴 **The weigh-in writer, the one B0 changes with no arbiter to re-predicate.**
   //      `insertBodyweightEntry` infers no target (`onConflictDoNothing()` — every unique
   //      arbitrates, V1-24 1e), so it has its own three-branch fallback. Post-B0 a replay of a
   //      HIDDEN weigh-in whose day slot has since been freed conflicts on the non-partial
@@ -9700,14 +8029,12 @@ const REPLAY_REFUSED = /no live row for client_id/;
   //      this case break an earlier one too: dropping (a)'s liveness guard reddens 1e's dead-row
   //      case; swallowing the (c) throw reddens 1e's foreign-metric case. The third is this case's
   //      own: restoring the index predicate (`39-client-id-partial-again.patch`) passes every 1e
-  //      route, and this assertion is the first it reddens. The strength case below breaks under it
-  //      too; it is ordered after this one so that 39 is aimed at a writer that stays.
+  //      route, and this assertion is the first it reddens.
   //
   //      What it does catch, and nothing else would: a future change that answers THIS route
   //      plausibly while leaving 1e's routes throwing — a fourth branch that looks up hidden rows
   //      and returns one's id, say, which is the exact "success reported, nothing saved" shape (a)'s
-  //      liveness guard exists to prevent. It also pins the no-twin count for a writer the strength
-  //      case never touches.
+  //      liveness guard exists to prevent. It also pins the no-twin count.
   // ⚠️ Ids in the `0000b9b0…` region because `…b0XX` is MINTED BY A GENERATOR elsewhere in this
   //    file: the first draft reused `…00000000b010`, which a pushups entry already held, and the
   //    target-less `DO NOTHING` swallowed that `public_id` conflict straight into the (c) throw —
@@ -9751,45 +8078,6 @@ const REPLAY_REFUSED = /no live row for client_id/;
       ),
     );
   assert.equal(b0BwRows.length, 1, 'V1-9b B0: …and the hidden weigh-in was not twinned');
-
-  // 1 · Log it, then HIDE the entry the way V1-9b will: `deleted_at` on the row, nothing else.
-  const b0 = await writeStrengthSession(asPg, b0Args);
-  const [b0Session] = await db
-    .select({ id: schema.sessions.id })
-    .from(schema.sessions)
-    .where(eq(schema.sessions.publicId, b0.sessionId));
-  await db
-    .update(schema.entries)
-    .set({ deletedAt: new Date() })
-    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
-
-  // 2 · Replay the SAME graph. The hidden entry is still in the (now non-partial) index, so the
-  //     insert no-ops on conflict and the live re-select finds nothing — a refusal, not a twin.
-  //     With the predicate back the insert succeeds and this `rejects` never fires; the weigh-in case
-  //     above is what `39-client-id-partial-again.patch` reports, since it runs first.
-  await assert.rejects(
-    () => writeStrengthSession(asPg, b0Args),
-    REPLAY_REFUSED,
-    'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
-      'frees the client_id',
-  );
-
-  // 3 · And the count is the direct evidence: ONE row carries that client_id, hidden or not.
-  const b0Rows = await db
-    .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
-    .from(schema.entries)
-    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
-  assert.equal(b0Rows.length, 1, 'V1-9b B0: the hidden entry was not twinned by the replay');
-  assert.ok(b0Rows[0].deletedAt !== null, 'V1-9b B0: …and it is still hidden');
-
-  // 4 · The session row itself: same client_id, still one row, and the replay reached it. (The
-  //     session was never hidden, so this is the ordinary replay path — it must keep working.)
-  const b0Sessions = await db
-    .select({ id: schema.sessions.id })
-    .from(schema.sessions)
-    .where(eq(schema.sessions.clientId, B0_SESSION_CID));
-  assert.equal(b0Sessions.length, 1, 'V1-9b B0: the session was not twinned either');
-  assert.equal(b0Sessions[0].id, b0Session.id, 'V1-9b B0: and it is the same session row');
 
   // 5 · The STRUCTURAL case, after the behaviour: none of the five indexes carries a predicate.
   //     Read from `pg_indexes`, so it measures the LIVE schema the migration produced rather than
@@ -9851,210 +8139,6 @@ const REPLAY_REFUSED = /no live row for client_id/;
     '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden entry is REFUSED rather ' +
       'than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
       'slot arbiters still do',
-  );
-}
-
-// ── TD: a strength replay is answered only by a row the request owns ───────────────────────────────
-//
-// `client_id` is UNIQUE across each graph table, not per athlete, so `writeStrengthSession`'s
-// ON CONFLICT can meet ANOTHER athlete's row. Its re-select used to match on `client_id` alone and
-// answer with that row: a borrowed session (this request's entries attached to someone else's), a
-// borrowed superset, or an entry reported as saved that never was. The re-select now carries an
-// owner conjunct (session → profile, superset and entry → session), and a foreign holder is refused
-// with the same message as V1-9b B0's hidden row (plan: docs/plans/td-strength-replay-scope.md).
-//
-// Fixtures: client ids under `…0000000e8xxx`, days in 2026-06, which nothing else in this file or
-// `verify/*.ts` uses. Each `rejects` pins the message AND names its case, because the mutation runner
-// matches the first AssertionError line and a bare `rejects` would give every patch the same one.
-{
-  const cid = (n: string) => `019826b4-0000-7000-8000-0000000e8${n}`;
-  const graphOf = async (sessionClientId: string) => {
-    const [session] = await db
-      .select({ id: schema.sessions.id })
-      .from(schema.sessions)
-      .where(eq(schema.sessions.clientId, sessionClientId));
-    if (!session) return null;
-    const members = await db
-      .select({ id: schema.entries.id, clientId: schema.entries.clientId })
-      .from(schema.entries)
-      .where(eq(schema.entries.sessionId, session.id));
-    return { id: session.id, members };
-  };
-  const entryExists = async (entryClientId: string) =>
-    (
-      await db
-        .select({ id: schema.entries.id })
-        .from(schema.entries)
-        .where(eq(schema.entries.clientId, entryClientId))
-    ).length > 0;
-  const one = (movementClientId: string, extra: object = {}) => ({
-    movementName: 'Bench Press',
-    unit: 'lb' as const,
-    movementId: movY.id,
-    clientId: movementClientId,
-    sets: [{ reps: 5, weight: 100 }],
-    ...extra,
-  });
-  const base = {
-    profilePublicId: sessionProfileA.publicId,
-    scope: A_SCOPE,
-    sessionType: SESSION_TYPES[0],
-    activityTypeId: scLiftActivityId,
-  };
-
-  // 1 · Control: athlete A logs S and replays it unchanged. Same session, one entry, one set. Without
-  //     this, every refusal below would also pass for a writer that throws on EVERY replay.
-  const sArgs = {
-    ...base,
-    day: '2026-06-01',
-    sessionClientId: cid('100'),
-    movements: [one(cid('101'))],
-  };
-  const s1 = await writeStrengthSession(asPg, sArgs);
-  const s2 = await writeStrengthSession(asPg, sArgs);
-  assert.equal(
-    s2.sessionId,
-    s1.sessionId,
-    'TD replay-owner: a same-athlete replay returns the same session',
-  );
-  const sGraph = await graphOf(cid('100'));
-  assert.deepEqual(
-    sGraph?.members.map((m) => m.clientId),
-    [cid('101')],
-    'TD replay-owner: a same-athlete replay writes no second entry',
-  );
-  const sSets = await db
-    .select({ id: schema.entrySets.id })
-    .from(schema.entrySets)
-    .where(eq(schema.entrySets.entryId, sGraph!.members[0].id));
-  assert.equal(sSets.length, 1, 'TD replay-owner: a same-athlete replay does not double the set');
-
-  // 2 · Same household, OTHER athlete, sending S's session id. 🔴 Mutation 440's assertion.
-  await assert.rejects(
-    () =>
-      writeStrengthSession(asPg, {
-        ...sArgs,
-        profilePublicId: sessionProfileB.publicId,
-        movements: [one(cid('201'))],
-      }),
-    REPLAY_REFUSED,
-    'TD replay-owner (2): another athlete of the same household cannot reuse a session client_id',
-  );
-  assert.equal(
-    await entryExists(cid('201')),
-    false,
-    'TD replay-owner (2): …and the refused entry was not written',
-  );
-  assert.deepEqual(
-    (await graphOf(cid('100')))?.members.map((m) => m.clientId),
-    [cid('101')],
-    'TD replay-owner (2): …and S still holds only its own entry',
-  );
-
-  // 3 · ANOTHER household. The positive control proves the profile and `movX` resolve under
-  //     B_SCOPE, so the refusal below is the replay's, reached past both pre-checks.
-  //     ⚠️ Not isolable: anything that reddens this reddens case 2 first.
-  const bBase = { ...base, profilePublicId: VERIFY_PROFILE_PUBLIC_ID, scope: B_SCOPE };
-  await writeStrengthSession(asPg, {
-    ...bBase,
-    day: '2026-06-02',
-    sessionClientId: cid('300'),
-    movements: [one(cid('301'), { movementId: movX.id })],
-  });
-  await assert.rejects(
-    () =>
-      writeStrengthSession(asPg, {
-        ...bBase,
-        day: '2026-06-01',
-        sessionClientId: cid('100'),
-        movements: [one(cid('302'), { movementId: movX.id })],
-      }),
-    REPLAY_REFUSED,
-    'TD replay-owner (3): another household cannot reuse a session client_id',
-  );
-  assert.equal(
-    await entryExists(cid('302')),
-    false,
-    'TD replay-owner (3): …and nothing was written',
-  );
-
-  // 4 · The SAME athlete's other session T carrying S's entry id: not a replay of this request, so
-  //     not a success. 🔴 Mutation 441's assertion (the entry's `session_id` conjunct).
-  await assert.rejects(
-    () =>
-      writeStrengthSession(asPg, {
-        ...base,
-        day: '2026-06-03',
-        sessionClientId: cid('400'),
-        movements: [one(cid('101'))],
-      }),
-    REPLAY_REFUSED,
-    'TD replay-owner (4): an entry client_id held by another session is refused, not reported as saved',
-  );
-  assert.equal(await graphOf(cid('400')), null, 'TD replay-owner (4): …and T was rolled back');
-
-  // 5 · Superset. W owns superset e8510 with members at orders 1 and 2. U reuses e8510 with its
-  //     member at order 3, so under 442 the mutated write SUCCEEDS silently instead of tripping
-  //     `uq_entries_superset_order`. 🔴 Mutation 442's assertion.
-  const SS = cid('510');
-  await writeStrengthSession(asPg, {
-    ...base,
-    day: '2026-06-04',
-    sessionClientId: cid('500'),
-    supersets: [{ clientId: SS }],
-    movements: [
-      one(cid('501'), { supersetClientId: SS, supersetOrder: 1 }),
-      one(cid('502'), { movementId: movX.id, supersetClientId: SS, supersetOrder: 2 }),
-    ],
-  });
-  await assert.rejects(
-    () =>
-      writeStrengthSession(asPg, {
-        ...base,
-        day: '2026-06-05',
-        sessionClientId: cid('600'),
-        supersets: [{ clientId: SS }],
-        movements: [one(cid('601'), { supersetClientId: SS, supersetOrder: 3 })],
-      }),
-    REPLAY_REFUSED,
-    'TD replay-owner (5): a superset client_id held by another session is refused',
-  );
-  assert.equal(await graphOf(cid('600')), null, 'TD replay-owner (5): …and U was rolled back');
-  const [ssRow] = await db
-    .select({ id: schema.supersets.id })
-    .from(schema.supersets)
-    .where(eq(schema.supersets.clientId, SS));
-  const ssMembers = await db
-    .select({ id: schema.entries.id })
-    .from(schema.entries)
-    .where(eq(schema.entries.supersetId, ssRow.id));
-  assert.equal(
-    ssMembers.length,
-    2,
-    "TD replay-owner (5): …and the superset still has only W's two members",
-  );
-
-  // 6 · The SAME athlete re-sending S's session id under ANOTHER day. Its entries would be dated
-  //     2026-06-06 inside a session dated 2026-06-01. 🔴 Mutation 443's assertion.
-  await assert.rejects(
-    () =>
-      writeStrengthSession(asPg, {
-        ...sArgs,
-        day: '2026-06-06',
-        movements: [one(cid('701'))],
-      }),
-    REPLAY_REFUSED,
-    "TD replay-owner (6): the athlete's own session id sent under another day is refused",
-  );
-  assert.equal(
-    await entryExists(cid('701')),
-    false,
-    'TD replay-owner (6): …and the refused entry was not written',
-  );
-
-  console.log(
-    '✓ TD replay-owner: a strength replay is answered only by a row the request owns — another ' +
-      "athlete's session, another household's, another day's, another session's entry or superset is refused",
   );
 }
 
@@ -10709,71 +8793,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
       '…and the live one it was swapped for IS present (so the filter is not just an empty read)',
     );
 
-    // (b) `weeklyAdherence` (Q7) — a hidden calisthenics bout leaves the week's sum, and a restore
-    //     brings it back. The week is the one the ramp fixture already seeds.
-    const adherenceArgs = {
-      profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
-      weekStart: RAMP_TEST_WEEK_START,
-      activityTypeId: calisthenicsId,
-      metricKeys: CALISTHENICS_METRIC_KEYS,
-      scope: A_SCOPE,
-    } as const;
-    const beforeAdherence = await weeklyAdherenceRows(asPg, adherenceArgs);
-    const sumFor = (rows: typeof beforeAdherence) =>
-      rows.find((r) => r.metricKey === METRIC_KEYS.pushups)?.actualSum ?? null;
-    const beforeDone = sumFor(beforeAdherence);
-    assert.ok(beforeDone !== null, 'V1-9b B1-1b: the adherence fixture has a push-up sum to lose');
-    const [rampEntry] = await db
-      .select({ publicId: schema.entries.publicId, day: schema.entries.activityDate })
-      .from(schema.entries)
-      .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-      .where(
-        and(
-          eq(schema.profiles.publicId, RAMP_TEST_PROFILE_PUBLIC_ID),
-          eq(schema.entries.metricKey, METRIC_KEYS.pushups),
-          isNull(schema.entries.deletedAt),
-          // ⚠️ The three predicates that make this DETERMINISTIC. The fixture holds decoys —
-          // a `skipped` bout and one outside the week — and `weeklyAdherenceRows` counts neither,
-          // so picking one by scan order would make the sum not move and fail for a reason that is
-          // not the writer's. A verification pass caught it as a latent flake.
-          eq(schema.entries.status, ENTRY_STATUS.done),
-          gte(schema.entries.activityDate, RAMP_TEST_WEEK_START),
-          sql`${schema.entries.activityDate} < (${RAMP_TEST_WEEK_START}::date + 7)`,
-        ),
-      )
-      .orderBy(schema.entries.activityDate)
-      .limit(1);
-    assert.ok(rampEntry, 'V1-9b B1-1b: the adherence fixture has a live push-up bout to hide');
-
-    const rampHide = await db.transaction((tx) =>
-      hideEntries(asTx(tx), {
-        profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
-        scope: A_SCOPE,
-        day: rampEntry.day,
-        entryPublicIds: [rampEntry.publicId],
-      }),
-    );
-    assert.ok('hiddenAt' in rampHide, 'V1-9b B1-1b: the bout hides');
-    const afterDone = sumFor(await weeklyAdherenceRows(asPg, adherenceArgs));
-    assert.ok(
-      afterDone === null || Number(afterDone) < Number(beforeDone),
-      "V1-9b B1-1b: Q7 — a hidden bout LEAVES the week's adherence sum",
-    );
-    await db.transaction((tx) =>
-      restoreHidden(asTx(tx), {
-        profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
-        scope: A_SCOPE,
-        day: rampEntry.day,
-        hiddenAt: rampHide.hiddenAt,
-        entryPublicIds: [rampEntry.publicId],
-      }),
-    );
-    assert.equal(
-      sumFor(await weeklyAdherenceRows(asPg, adherenceArgs)),
-      beforeDone,
-      '…and a restore brings it back',
-    );
-
+    // (b) was `weeklyAdherence` (Q7), the old Today card's read, deleted by LEGACY-1.
     // (c) The amends ride `ownedEntryIds`, which filters tombstones — so amending a HIDDEN weigh-in
     //     answers notFound, and leaves `deleted_at` alone.
     const amendHidden = await updateBodyweightEntryById(asPg, {
