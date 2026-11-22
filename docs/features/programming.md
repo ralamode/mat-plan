@@ -209,8 +209,8 @@ and complete; this is the one thing it cannot reach.
    [tech-debt.md](../tech-debt.md). Do not add a second without that conversation.
 
 8. 🔴 **Only a CHILD reads the household's program, and `kind` is read at QUERY time (`PROF-1` a-g,
-   Q15 stopgap).** `readsHouseholdProgram(kind)` and `PROGRAM_READ_KIND` live once in
-   `packages/shared/src/programming.ts`; the enforcement is a `profiles.kind` conjunct inside
+   Q15 stopgap).** `PROGRAM_READ_KIND` lives once in `packages/shared/src/programming.ts`, with no
+   predicate function around it; the enforcement is a `profiles.kind` conjunct inside
    `programDayRows`' block subquery, which `isLiveProfile` has already pinned to this profile's row.
    An adult resolves no `blockId` and the query returns `[]` — the same "nothing programmed" shape
    its callers already handle.
@@ -299,7 +299,11 @@ and complete; this is the one thing it cannot reach.
 - **The routine editor's "Routine saved." is a snapshot, not a flag.** It records the saved payload on
   the render where the action turns `ok` (`useOnActionSuccess`, the shared success hook since V1-24
   PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
-  read as persisted. Don't replace it with an effect or a boolean.
+  read as persisted. Don't replace it with an effect or a boolean. It is an `Announcer`, mounted while empty
+  and beside (never inside) the error branch, with a `messageKey` per save, so a second save of the
+  same routine is heard too. The snapshot is the order SUBMITTED (taken on submit), so an edit made
+  while the save is in flight is never marked or said as saved; the first edit after a save clears
+  it. The routine page's title is `ROUTINE_COPY.heading`.
 
 - **Every page under `/p/` calls `requireSession()`, in-process** — and as of `AUTH-1` **1d** that is
   the whole rule. The routine editor is one of the four. ⚠️ **This said "calls `requireGatedPage()`

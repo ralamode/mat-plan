@@ -35,8 +35,8 @@ export const PROFILE_KIND = keyBySelf(PROFILE_KINDS);
  * makes a new member of `PROFILE_KINDS` a compile error here rather than a surface that renders a
  * raw enum value.
  *
- * ⚠️ **Display only.** Nothing branches on these strings — `readsHouseholdProgram(kind)`
- * (`./programming`) owns the one behavioural question the kind answers. A label is not a predicate.
+ * ⚠️ **Display only.** Nothing branches on these strings — `PROGRAM_READ_KIND` (`./programming`)
+ * owns the one behavioural question the kind answers. A label is not a predicate.
  */
 export const PROFILE_KIND_LABELS = {
   kid: 'Child',

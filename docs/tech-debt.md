@@ -31,6 +31,38 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   database passes), or the fresh start itself, which erases the seed-id household.
 - **Severity:** low today; it closes at R2.
 
+### The builder's copy is split into its own chunk in four route groups, so moving between them downloads it again (added 2026-11-20, from #805's diagnosis)
+
+- **What & why it's debt:** Turbopack now puts the program builder's copy into its own chunk of
+  about 35 KiB in four route groups: `/p/[profileId]`, `/programs/[programId]`, the two workout
+  pages and `/design/program`. That copy is `components/program-builder/builder-text.ts`'s
+  `BUILDER_COPY`, plus what it pulls from `lib/constants` (`AMEND_COPY`, `HOME_LINK`,
+  `itemCountText`). It used to share one chunk. Tiny edits in lane C's #798 set off the regrouping
+  (Native Scaling's #805 diagnosis).
+
+  Two import paths keep that copy reachable from both sides:
+  - **Code outside the builder imports pieces of it:**
+    - `components/day/day-copy.ts`: `BUILDER_COPY.programs` and `weekdayName`;
+    - `components/day/program-order-dialog.tsx`: `lastDayText`;
+    - `components/layout/nav-rail.tsx`: `BUILDER_COPY.programs`;
+    - `app/p/new/add-athlete-form.tsx`: `BUILDER_COPY.programs`;
+    - `app/p/page.tsx`: `programsNavLink`.
+  - **`builder-text.ts` imports from `lib/constants`**, the app's widest-shared module.
+
+- **Impact:** each page's own first load is unchanged (+1 KiB at most). The cost is a repeated
+  download of about 35 KiB when moving between those pages on a phone. It is not measured by any
+  gate: #805 moved the bundle check's synthetic row to lazy chunks, and the PERF-1 entry names it.
+- **The fix, to weigh (not yet chosen):**
+  - **(a)** Move the few pieces used outside the builder into a small shared module (for example
+    `lib/program-copy.ts`: the `programs` label, `programsNavLink`, `weekdayName`, `lastDayText`),
+    so `BUILDER_COPY` is reached only from the builder's routes.
+  - **(b)** Cut `builder-text.ts`'s import of `lib/constants` (or the reverse dependency), so the
+    bundler keeps one shared chunk.
+  - Either may be enough, and they combine. **Measure before and after:** a local `pnpm build`, then
+    compare `.next/static/chunks` across the four routes for a chunk holding `BUILDER_COPY`.
+- **Severity:** low. Lane B owns `builder-text.ts`; the day files are lane C's, so edits there would
+  be guest edits.
+
 ### A DAL can forward a writer through a wrapper function (added 2026-11-20, narrowed from #779's row by #790)
 
 - **What & why it's debt:** `apps/web/test/program-imports.test.ts` keys each `@mat-plan/db` name by
@@ -92,19 +124,18 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   have the fallback read the household's athlete count from a value it can see without the DAL.
 - **Severity:** low. Maintainer, 2026-11-17: "Add to tech-debt".
 
-### Two shell-wrapper walks (added 2026-11-17, DX-18 1b)
+### Two shell-wrapper walks (added 2026-11-17, DX-18 1b; narrowed 2026-11-21)
 
-- **What & why it's debt:** `.claude/hooks/guard-process-kill.mjs` imports `lex()` from
-  `.claude/hooks/guard-main-checkout.mjs` but walks the wrappers (`sudo`, `env`, `timeout`, `xargs`,
-  `bash -c`, `find -exec`, …) with its own copy of the loop in the sibling's `analyzeSegment`. The
-  sibling's walk is fused with git-specific state (the directory, `GIT_*` env, `-C`), so lifting it
-  is a refactor of a 962-line guard with 221 cases; DX-18 D2 chose a second, smaller walk instead.
+- **What & why it's debt:** two walks unwrap `sudo`, `env`, `timeout`, `xargs`, `bash -c`, `find
+-exec` and the rest. `.claude/hooks/shell-commands.mjs` serves the guards that apply in every
+  directory (`guard-process-kill.mjs`, `guard-hook-skip.mjs`, since 2026-11-21); the main-checkout
+  guard keeps its own loop in `analyzeSegment`, fused with git-specific state (the directory, `GIT_*`
+  env, `-C`), so lifting it is a refactor of a 962-line guard with 221 cases.
 - **Impact:** a wrapper added to one walk (a new `pnpm` form, `parallel`) is missed by the other, so
-  one guard sees through it and the other does not.
-- **The fix:** one exported walk in a shared module (`.claude/hooks/shell-walk.mjs`) that yields each
-  segment's command words after unwrapping, with a callback for the per-guard state; both hooks
-  call it, and `hooks.test.sh`'s wrapper cases run against both.
-- **Severity:** low. Both guards are best-effort and say so; each wrapper has a case in
+  the main-checkout guard and the other two can disagree about a command.
+- **The fix:** have `guard-main-checkout.mjs` consume `shell-commands.mjs`, with a callback for its
+  per-segment git state, and run `hooks.test.sh`'s wrapper cases against all three guards.
+- **Severity:** low. All three guards are best-effort and say so; each wrapper has a case in
   `hooks.test.sh`.
 
 ### The seed's ramp-target expansion reads every household's kid profiles (found 2026-11-16, by lane A outside its diff) — ✅ CLOSED 2026-11-18
@@ -277,7 +308,10 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   for hydration and are unchanged.
 - **What is left:** a REFUSAL on add or rename, submitted unhydrated, re-renders the island fresh.
   The typed name is gone (the add's `name` starts `''`; the rename's seeds from the stored name), so
-  the duplicate callout cannot match its folded name, and the form shows no message. Nothing is
+  the duplicate callout cannot match its folded name, and the form shows no message. The rename's
+  `stale` refusal (2026-11-20) is lost the same way: unhydrated, the field re-seeds from the stored
+  name, so a second Save is a replay that answers "Name saved." for the stored name, and the parent's
+  typing is gone (nothing is overwritten). Nothing is
   written. This is the state the reverted a-1d fix handled (`typed`/`chosenKind` on the envelope),
   reverted only because the POST never arrived; that reason is gone.
 - **Smaller, harmless, recorded:**
@@ -300,7 +334,35 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   changes the add or rename form.
 - **Severity:** low (a refusal path, a slow phone, nothing written).
 
-### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
+### The route announcer sometimes says the athlete, not the day (added 2026-11-21)
+
+- **What & why it's debt:** #798 titled the day page with its day so Next's route announcer would
+  say it on arrival and on paging. Next's announcer (`app-router-announcer.js`, Next 16.4) reads
+  `document.title` once when the router commits the new tree, and falls back to the page's `<h1>`
+  when the title is empty. The title is streamed metadata (it arrives after the shell), so on a
+  slow render the announcer reads the `<h1>` and says the athlete's name instead of the day. Seen on
+  CI: run 44908009063 (#809, no app code), attempt and retry, the node held "Athlete One".
+  ⚠️ **Two ways it goes wrong**, by what `document.title` holds at that moment: **empty** → it
+  reads the `<h1>` (observed); **still the old title** → it says nothing, or the old day again
+  (inferred from the code, not observed). It announces only a title that differs from the last.
+- **Impact:** low. The name is already on screen (no D8 leak), and the tab's title is right; a
+  screen-reader user paging days sometimes hears the athlete instead of the day.
+- **Proposed fix:** an in-page polite `Announcer` that says `dayTitle(day, today)` when the viewed
+  day changes, so the day is always said. ⚠️ It double-speaks whenever Next's own announcement is
+  right, so it needs a UX check and the maintainer's call. Not `htmlLimitedBots: /.*/`, which would
+  hold every page's shell until its metadata resolves, app-wide.
+- **Severity:** low.
+
+### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09) — ✅ CLOSED 2026-11-20
+
+> **Closed (FAM-1 day-page a11y, 2026-11-20).** The day page's title is its day line, short
+> (`dayTitle`: "Today · Fri, Nov 20"), from `generateMetadata` over the page's own `cache()`d
+> resolver, so the look-ahead fallback agrees. Never the name (D8). The routine page and the
+> picker, the two other untitled pages, got plain titles in the same PR. ⚠️ **Known limit:** two
+> athletes on the same day share a title, so switching between them is not announced (the route
+> announcer reads only a title that changes); focus stays on the athlete link just tapped, which
+> reads the name. The rename confirmation is the day, not the new name, for the same reason. The
+> text below is the original record.
 
 - **What & why it's debt:** `app/p/[profileId]/page.tsx` exports no `metadata`, so `document.title`
   stays the root layout's `APP_NAME`. Next's App Router announcer speaks the title **when it changes**
@@ -341,48 +403,43 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 ### Nothing measured how much JavaScript ships (added 2026-11-06) — ✅ CLOSED 2026-11-19 for bytes
 
 > ✅ **Closed by `PERF-1` (b)** ([plan](./plans/perf-1-bundle-size.md)): the `quality` job's "Bundle
-> size" step measures each route's first-load client JS and the total client chunks, compares them
+> size" step measures each route's first-load client JS and the client chunks no route loads first
+> (the lazy row; until 2026-11-20 it summed every chunk), compares them
 > with `.github/bundle-baseline.json`, and fails a move past the tolerance either way. What it
 > measures and does not, and the tolerance, are in `check-bundle-size.mjs`'s header.
+> **Still unmeasured:** total distinct client JS. A bundler regrouping that copies shared code into
+> several route groups (#798: the program builder's copy, ~35 KiB in four groups) costs a re-download
+> between those pages, and no row sees it. Moving builder copy out of `lib/constants`' import graph
+> may stop the regroup; that is lane B's to weigh.
 > ⚠️ **The entry's premise changed under it.** It said `next build` prints First Load JS per route;
 > Next 16 removed that column. The guard reads `.next/diagnostics/route-bundle-stats.json`, which is
 > undocumented, so a Next bump that drops or reshapes it makes the step exit 2 and name the file.
 > **Still unmeasured:** the CWV timings themselves (real-user p75 is `PERF-1` (a), lab scores are
 > `PERF-2`).
 
-### Two runtime auth proofs went with the gate, and the harness cannot replace them (found 2026-11-05, AUTH-1 1d)
+### A signed-out request is proved at runtime only on the no-Clerk branch (found 2026-11-05, AUTH-1 1d; narrowed 2026-11-20)
 
-- **What & why:** the e2e harness arms a principal in the **process environment**
-  (`E2E_SESSION_BYPASS_USER_ID`, snapshotted at module scope in `lib/env.ts`), so **no browser context
-  in the suite can be unauthenticated.** While the gate existed that did not matter: the proxy bounced
-  a cookie-less request, and three specs used that bounce as their witness. `1d` deletes it, and with
-  it:
-  - `e2e/landing.spec.ts`'s unauthenticated-action proof loses **variant 1** — the as-is replay, whose
-    only protection was "the internal fetch meets the proxy without a cookie". After `1d` that fetch
-    is bypass-authenticated, the Save action genuinely runs, and the spec's own tail assertion would
-    redden. Variant 2 (spoofed `x-action-forwarded`) survives on its own premise.
-  - `landing.spec.ts`'s "the app itself is still gated" is **deleted, not repointed**: the equivalent
-    claim is "`/p` redirects to `/sign-in`", which this harness cannot establish.
-  - `e2e/export-csv.spec.ts`'s "a request without the access cookie gets nothing" is **deleted**, and
-    it is the one case that was caught by observation rather than reasoning: it went RED in
-    `e2e:local`, because the export now correctly returns **200 with a real zip** to the
-    bypass-authenticated request. Rewriting it to accept 200 would have inverted its own subject.
-- **Impact:** production is **still protected** — the in-action `requireSession()` and the per-page
-  `requireSession()` are unit-proved, and `app/pages-need-a-session.test.ts` asserts the call per route.
-  What is lost is the **runtime** proof that an unauthenticated request does no work. 🔴 **Do not cite
-  "no unauthenticated request reaches the DB" as a property this SUITE demonstrates any more** — it
-  was cited that way in `docs/plans/ai-1-nl-logging.md`'s spend argument, and both halves of that
-  evidence vanished in one diff.
-- **Fix:** a **second, un-bypassed Playwright `webServer`** — one project whose server boots without
-  the bypass variable, carrying only the specs that need a genuine stranger. ⚠️ Deliberately NOT done
-  in `1d`: three review lenses independently found that a second server also proves the
-  _dark-deployment_ branch rather than the one under test (the harness has no Clerk keys either), and
-  it would break `test/bypass-is-contained.test.ts`'s pin on the exact set of sources naming the
-  bypass variable — Playwright's `webServer.env` can only SET a key, so the config must name it.
-  Design it against both constraints or not at all.
-- **Interim:** `proxy.test.ts` pins the matcher's SHAPE (`has`/`missing` absent on the compiled entry),
-  which catches the SEC-1 mutation at the config layer. It does **not** catch the exclusion being
-  re-introduced at another layer — an early `return` in `proxy()` keyed on a header.
+- **What & why:** AUTH-1 1d deleted three runtime proofs that a signed-out request is refused,
+  because the e2e harness armed a principal process-wide (`E2E_SESSION_BYPASS_USER_ID`, `lib/env.ts`).
+  A second, un-bypassed e2e server restored them on 2026-11-20 ([plan](plans/td-signed-out-e2e.md)).
+  That server has no Clerk keys, as neither harness does, so it takes the **dark** branch: `getCurrentUser()` returns
+  `null` at `lib/dal/session.ts:77` before `auth()`, and the proxy returns before `clerkMiddleware()`
+  is composed (`proxy.ts:172`).
+- **Impact:** what is runtime-proved is the refusal from `null` onward: every protected page sends a
+  stranger to sign-in, a real Server Action POST is refused and writes nothing, and the export answers
+  a member and refuses a stranger. What stays **unit-proved only** is the configured branch: the
+  Clerk-composed proxy, and a real `auth()` answering no `userId` (`session.test.ts:66`, `:174`,
+  `:194`).
+  - 🔴 **Do not cite "no unauthenticated request reaches the DB" as a property this SUITE
+    demonstrates**, on either branch. A missing session and a missing permission are refused
+    byte-identically by design, so no runtime proof can show which layer refused, or that nothing was
+    read. That stays unit-owned (`app/p/[profileId]/actions.test.ts`). It was cited that way in
+    `docs/plans/ai-1-nl-logging.md`'s spend argument.
+- **Fix:** Clerk development-instance keys on the e2e job, for the signed-out server only, so it
+  takes the configured branch. **Not now** _(maintainer, 2026-11-20: "no Clerk keys in CI")_: it
+  would put a live secret on a job that runs PR code, and Clerk's network in every e2e run.
+- **Severity:** P3. Production is protected by the unit-proved checks; this is the runtime evidence
+  for one branch.
 
 ### The `mp_gate` tombstone is removable on 2027-02-04 (added 2026-11-05, AUTH-1 1d)
 
@@ -568,7 +625,14 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   keeps explaining it.
 - **Severity:** low. It holds nothing today; the cost is the explaining.
 
-### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
+### Copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii) — ✅ CLOSED 2026-11-20
+
+> **Closed as overtaken (FAM-1 day-page a11y, 2026-11-20; board).** The last two copies,
+> `editable-set.tsx` and the `StrengthForm` island, were deleted with the old strength form (#725,
+> 12f), so no copy is left to share and a `useAnnounceAndFocus` hook would have no consumer. The
+> sweep found one silent region instead: `routine-editor.tsx`'s "Routine saved." mounted with its
+> text. It is now an `Announcer`, mounted empty, with a `messageKey` per save. The text below is the
+> original record.
 
 - **What & why:** `saved-announcer.tsx` (deleted at V1-24 3b-life-a), `bodyweight-amend.tsx`, `editable-set.tsx` and the
   `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
@@ -602,22 +666,6 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   ✅ **Closed (FAM-1 15c PR 1, 2026-11-20)**: `Sheet` takes `statusKey`, passed to its region as
   `messageKey`, and the dialog's status is `{ text, n }`. No U+00A0 idiom is left.
 - **Severity:** low.
-
-### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
-
-- **What & why:** `renameProfile` (`packages/db/src/writers/profile.ts`) has no `expected`/version
-  conjunct, so two devices — or one edit tab left open while someone renames from another — resolve
-  last-write-wins by server clock. ⚠️ **It compounds with the deliberate no-history decision**
-  (`PROF-1` a-r, 2026-11-07): the overwritten name is not recoverable from the app.
-- **Impact:** low today — two to five people in a household, and renaming is rare. It rises with
-  `COACH-1` (a second household's adult) and with any flow that leaves the screen open.
-- **Proposed fix:** carry the seeded name as a hidden `previousName`, add `eq(profiles.name,
-previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name changed on another
-  device"_ refusal — the `updateBodyweightEntryById` `seenValue` idiom, which already exists. One
-  more `db:verify` case and one more mutation patch. ⚠️ **It has a real cost to decide, not to
-  assume:** a replayed submit after a success would then refuse rather than no-op.
-- **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
-  rule is scoped to `/api/sync`, so there is no standing convention this violates.
 
 ### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
 
@@ -804,17 +852,15 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
-### Squawk lints new migrations only, and the CONCURRENTLY rule is review-enforced (recorded 2026-11-20)
+### Squawk lints new migrations only, so the findings in the old ones are listed here (recorded 2026-11-20)
 
-- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**, and `.squawk.toml` excludes
-  `require-concurrent-index-creation`. Linting every file is not viable as a gate: Squawk has **no
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. Linting every file is not viable as a gate: Squawk has **no
   baseline or suppression file**, so a gate over the findings below would be red on arrival. The
   forward-only guard makes those files immutable, so nothing in them can change; the findings are
   history, not a backlog, and each is accounted for below.
 - **Every finding on `main`, with its reason** (2026-11-20, Squawk 2.66.0, 33 files). Lines are
   1-based, the statement's first line. Reproduce:
-  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` (the 20); for the 27,
-  the same with a copy of `.squawk.toml` whose `excluded_rules` keeps only `prefer-bigint-over-int`.
+  `npx --yes squawk-cli@2.66.0 -c .squawk.toml packages/db/migrations/*.sql` reports all 47.
 
   **The 20 under the repo's config** (all in 0001–0009, written before Squawk was wired):
 
@@ -828,8 +874,8 @@ success.` Harmless there — nothing referenced the files yet.
   | 0009:27 (`sessions_day_role_check`)                                    | `constraint-missing-not-valid`                                  | The column was created in the statement above, so every row was NULL and passes; 0009's own comment.                                                                                                                                                              |
   | 0003:16 (`entries.kind` DROP NOT NULL)                                 | `ban-drop-not-null`                                             | A deliberate expand step: no column or data is removed, so it was safe to race the concurrent deploy (0003's header).                                                                                                                                             |
 
-  **The 27 under `require-concurrent-index-creation`**, which `.squawk.toml` excludes because
-  `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
+  **The 27 under `require-concurrent-index-creation`**, excluded in `.squawk.toml` until
+  2026-11-20 because `CONCURRENTLY` cannot run inside drizzle's single migration transaction. Every one is on a table
   that already existed; Squawk does not flag an index on a table the same file creates. A plain
   `CREATE INDEX` holds a `SHARE` lock, blocking writes but not reads, for the build, which on this
   app's row counts is milliseconds:
@@ -838,14 +884,13 @@ success.` Harmless there — nothing referenced the files yet.
   says why in a comment above the index; 0001, 0002 (header), 0005 and 0010 predate that habit.
   0027–0032 have none.
 
-- **Impact:** low. The record is now a fact rather than an implication. What stays open is the gate
-  itself: a NEW migration's non-concurrent index on a populated table passes CI, and only review
-  catches it, while a table is small enough that this is harmless.
-- **Proposed fix:** remove `require-concurrent-index-creation` from `excluded_rules`, so each new
-  index on an existing table needs a `-- squawk-ignore require-concurrent-index-creation` with its
-  reason (the 0024 idiom). That turns the review rule into a gate that asks for a written reason. The
-  real fix, a runner that applies a `CONCURRENTLY` file outside the transaction, is only worth
-  building when a table is large enough for the lock to matter.
+- **Impact:** low. Nothing in these files can change, so the list stays true; a Squawk version
+  bump may add findings to it, and the bump's PR re-runs the command above.
+- **Closed part:** a new migration's non-concurrent index on an existing table now fails Squawk
+  unless it carries `-- squawk-ignore require-concurrent-index-creation` with its reason
+  (`.squawk.toml`, maintainer 2026-11-20). The runner that would apply a `CONCURRENTLY` file outside
+  the transaction is still unbuilt; it is worth building only when a table is large enough for the
+  lock to matter.
 - **Severity:** low.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)

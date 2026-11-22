@@ -212,7 +212,8 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     archived notice ("… Nothing new can be logged. Restore them in Household settings."), else
     "Coming up" on a future day, else the closed-day sentence, above the program line (D36). The screen
     adds none of its own except its `closed_day` callout, which says only what happened ("Not
-    saved. This day can't be logged any more."), so it is true for an archived athlete too.
+    saved. This day is locked now."; "locked", like the closed-day notice, maintainer 2026-11-21),
+    so it is true for an archived athlete too.
     "Not on a program." says "Bodyweight and practice log here." only on a writable day. On TODAY,
     an athlete on no program today with one from tomorrow reads "Starts on a program tomorrow."
     (`startsTomorrow`, D46): 🔴 only on today, since `canGoForward` is true on every past day and
@@ -260,6 +261,17 @@ look-ahead and the narrowed window. Each step adds its files and invariants here
     receipt, or the receipt the form, which changes the section's height anyway, and a slot reserved
     on every unlogged section would cost each a taller heading on every visit. A workout keeps its
     slot from the first ✓ because nothing else in its card moves.
+
+25. 🔴 **The page's title is its day, never its athlete** (`dayTitle` in `day-nav.tsx`, from
+    `generateMetadata`; D8). Next's route announcer reads a title that CHANGES, so paging days and
+    arriving are USUALLY announced ("Tomorrow · Sat, Nov 21"). ⚠️ **Best-effort, not guaranteed:**
+    the title streams in after the tree commits, and when it is late the announcer reads the
+    `<h1>`, the athlete's name, or (title still stale) says nothing (tech-debt "The route announcer
+    sometimes says the athlete"). Two
+    athletes on one day share a title, so switching between them is silent (accepted, 2026-11-20).
+    The page and `generateMetadata` share one `cache()`d `resolveDayView`, so the title names the
+    day shown after the look-ahead fallback. `e2e/day-page.spec.ts` asserts the TITLE, never the
+    announcer's text, which is racy.
 
 ## Recorded differences from the prototype (v12)
 

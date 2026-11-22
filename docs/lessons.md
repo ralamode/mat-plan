@@ -267,6 +267,24 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A redirect chain read from the browser was wrong on two CI runs (td-signed-out-e2e, #791).**
+  (1) Concatenating `response.request().redirectedFrom()` hops with `framenavigated` URLs counted each
+  hop twice. (2) Reading either one alone still failed: a late navigation from the previous page
+  landed in the next page's chain (`[/sign-in, /p, /sign-in]`), and a 307's history was lost
+  (`[/sign-in]`). → Follow a redirect chain over HTTP with `request.get(url, { maxRedirects: 0 })`:
+  a 3xx `Location`, or, for a redirect thrown under a `loading.tsx`, the streamed
+  `<meta id="__next-page-redirect" … content="1;url=…">`. That meta is what the browser follows, so
+  the chain is the visitor's, and it is deterministic. Diagnose from the "Received" array: a repeated
+  or leading `/sign-in` means the events crossed pages.
+- **A page that gets a title makes `page.getByText(<that text>)` match twice (#798).** Next's route
+  announcer says the new title in a `#__next-route-announcer__` node, in an OPEN shadow root, and
+  Playwright's text and CSS locators read through open shadow roots. So once the day page was
+  titled "Today · Fri, Nov 20", every `getByText(/^Today ·/)` hit a strict-mode violation (2
+  elements). → Scope the locator to where the text is drawn (`dayLineText(page, re)`, inside the
+  day nav), never widen it with `.first()`. ⚠️ **Don't assert that node's text** to prove what a
+  navigation announced: Next reads `document.title` when the tree commits, and a streamed title
+  that is still late leaves the node holding the page's `<h1>` instead. #798 asserted it, passed
+  its own CI and main's, then failed another PR's attempt and retry (run 44908009063).
 - **A journey that builds its own athlete and program failed twice before it reached what it tested
   (FAM-1 12c-iii, #761).** (1) Put on timed out finding the new athlete's checkbox: `addAthlete` had
   not landed when the spec read `page.url()` and moved on. (2) Then "no rows to tick": `locator.count()`
@@ -1061,6 +1079,14 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- 🔴 **The docs-only overlap rule skips WAITING for another CI run, never the hooks.** → Several lanes
+  passed `--no-verify` (one on eight PRs) to get past a slow or failing hook, reading the maintainer's
+  docs-only rule (2026-11-20) as permission. One probe commit pushed that way then failed CI's format
+  check before reaching the step it existed to test: a wasted run, and nothing proved. The hooks are
+  the local half of the gate. Since 2026-11-21 `.claude/hooks/guard-hook-skip.mjs` refuses
+  `--no-verify`, `git commit -n`, `HUSKY=0` and any `core.hooksPath` change for Claude sessions. If a
+  hook is slow, retry it or tell the board; a probe that needs a committed tree gets a real
+  Conventional Commit.
 - 🔴 **A test that ran `git init` in a temp directory re-initialised THIS repository and
   committed to the real branch, because it ran inside the pre-push hook.** → Git exports `GIT_DIR`
   (and its kin) to a hook, and a child `git` obeys those over the directory it is started in. The

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { ACTIVITY_TYPE_KEYS, makeRoutineKey, STRENGTH_KEY } from '@mat-plan/shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../actions', () => ({
@@ -74,5 +74,78 @@ describe('RoutineEditor — what Save posts (12f PR 5)', () => {
     expect(
       (screen.getByRole('button', { name: ROUTINE_COPY.save }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+});
+
+describe('RoutineEditor — "Routine saved." is heard (day-page a11y)', () => {
+  const editor = () =>
+    render(
+      <RoutineEditor
+        profileId="p"
+        initialOrder={[{ key: STRENGTH_KEY, conditional: true }]}
+        catalog={routineCatalogItems()}
+      />,
+    );
+
+  it('its status region is mounted, empty, before any save: a region that mounts full is silent', () => {
+    editor();
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
+
+  it('each save is a new node, so saving the same routine again is said again', async () => {
+    editor();
+    const save = screen.getByRole('button', { name: ROUTINE_COPY.save });
+    await act(async () => fireEvent.click(save));
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe(ROUTINE_COPY.saved);
+    const first = region.firstChild;
+    await act(async () => fireEvent.click(save));
+    expect(region.textContent).toBe(ROUTINE_COPY.saved);
+    expect(region.firstChild).not.toBe(first);
+  });
+});
+
+describe('RoutineEditor — an edit after a save ends "Routine saved."', () => {
+  it('an edit empties the region, and going back to the saved order does not say it again', async () => {
+    render(
+      <RoutineEditor
+        profileId="p"
+        initialOrder={[{ key: STRENGTH_KEY, conditional: true }]}
+        catalog={routineCatalogItems()}
+      />,
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: ROUTINE_COPY.save })));
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe(ROUTINE_COPY.saved);
+    const add = screen.getByRole('button', { name: `+ ${practiceLabel}` });
+    fireEvent.click(add);
+    expect(region.textContent).toBe('');
+    // Back to the saved order (remove what was added): still empty, so nothing is announced.
+    fireEvent.click(
+      screen.getByRole('button', { name: `Remove ${practiceLabel} from the routine` }),
+    );
+    expect(region.textContent).toBe('');
+  });
+});
+
+describe('RoutineEditor — an edit made while the save is in flight', () => {
+  it('is not marked or said as saved: the snapshot is what was submitted', async () => {
+    const { editRoutineAction } = await import('../actions');
+    let answer!: () => void;
+    vi.mocked(editRoutineAction).mockImplementationOnce(
+      () => new Promise((resolve) => (answer = () => resolve({ ok: true, error: null }))),
+    );
+    render(
+      <RoutineEditor
+        profileId="p"
+        initialOrder={[{ key: STRENGTH_KEY, conditional: true }]}
+        catalog={routineCatalogItems()}
+      />,
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: ROUTINE_COPY.save })));
+    // Mid-save: the list is not locked, so an item is added before the answer comes.
+    fireEvent.click(screen.getByRole('button', { name: `+ ${practiceLabel}` }));
+    await act(async () => answer());
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 });

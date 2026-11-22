@@ -1,7 +1,7 @@
 import { localWeekday, ROW_REFUSAL, type DayPlan, type RowRefusal } from '@mat-plan/shared';
 
 import { BUILDER_COPY, weekdayName } from '@/components/program-builder/builder-text';
-import { UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
+import { NOT_SAVED_RELOAD, UNDO_LABEL, VALUE_JOINER } from '@/lib/constants';
 import { onDayText } from '@/lib/date';
 import { formatList, plural } from '@/lib/i18n/plural';
 
@@ -83,9 +83,9 @@ export const DAY_COPY = {
    * The whole screen turns read-only after the first `closed_day`. It says only what happened: the
    * day closed under the page, or the athlete was archived mid-session, and the page's own notice,
    * which the reload brings, gives the reason (maintainer, 2026-11-17; UX panel, 12c). The page's
-   * `CLOSED_DAY_NOTICE` ("only today and yesterday") would be false for an archived athlete.
+   * `CLOSED_DAY_NOTICE` ("today and yesterday stay open") would be false for an archived athlete.
    */
-  closed: 'Not saved. This day can’t be logged any more.',
+  closed: 'Not saved. This day is locked now.',
   progress: (done: number, total: number) => `${done} of ${total}`,
   notSaved: (count: number) => `${count} not saved`,
   logLabel: (name: string) => `Log ${name}`,
@@ -133,7 +133,7 @@ export const DAY_COPY = {
 /** "Couldn't save. Try again.": a ✓ and a reorder say the same thing when the server refuses. */
 const SAVE_FAILED = 'Couldn’t save. Try again.';
 const STALE = 'This changed since the page loaded.';
-const NOT_FOUND_COPY = 'Not saved. Reload the page.';
+const NOT_FOUND_COPY = NOT_SAVED_RELOAD;
 
 /** The athlete the plan is for, by name (the plan names its own athlete in `athletes`). */
 export function athleteNameOf(plan: DayPlan): string {

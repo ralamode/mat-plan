@@ -213,6 +213,9 @@ Deletion: [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone
   - **Guarded for Claude sessions** by a `PreToolUse` hook (`.claude/hooks/guard-main-checkout.mjs`):
     best-effort, not a security boundary; the allowlist is the hook's header. A `SessionStart` hook
     prints status, open PRs and stale or off-main worktrees. Both are inert under CI.
+  - **Hooks always run:** `.claude/hooks/guard-hook-skip.mjs` refuses `--no-verify`, `git commit -n`,
+    `HUSKY=0` and any `core.hooksPath` change, in every directory (maintainer, 2026-11-21). The
+    docs-only rule skips waiting for CI, never the hooks.
 - **Before running two tracks at once, run the rubric** in
   [docs/parallel-work.md](./docs/parallel-work.md). Gate 1 — disjoint file globs, **feature guides
   included** — is the one that actually fails. When a gate fails, pick an order and write the reason
@@ -464,7 +467,10 @@ CI gates: `drizzle-kit check` (snapshot parent collisions) + `generate` leaves a
   Squawk on new migrations + the e2e job's migrate+seed against an empty Postgres service. Where each
   gate runs, and which is NOT wired: "Local hooks vs CI merge-gates" above.
 Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside
-  app code — use expand→backfill→contract across separate deploys. Indexes CONCURRENTLY. New NOT NULL
+  app code — use expand→backfill→contract across separate deploys. Indexes: CONCURRENTLY cannot run
+  inside drizzle's one migrate transaction, so a plain CREATE INDEX on an EXISTING table carries
+  `-- squawk-ignore require-concurrent-index-creation` with its reason (row count, lock); that
+  written reason is the gate (since 2026-11-20). A large hot table: stop and plan. New NOT NULL
   via CHECK ... NOT VALID → backfill → VALIDATE. New FK/UNIQUE as NOT VALID → VALIDATE; every new ref
   column gets a covering index. Every migration SETs lock_timeout + statement_timeout. Backfills in
   bounded batches; avoid volatile defaults. IF [NOT] EXISTS guards for re-run safety.

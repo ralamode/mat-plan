@@ -181,7 +181,7 @@ const WRITES: [string, () => Promise<unknown>][] = [
   ],
   ['clearDayEntries', () => entries.clearDayEntries({ profilePublicId: ID, day: '2026-11-17' })],
   ['updateProfileRoutine', () => profiles.updateProfileRoutine(ID, {} as never)],
-  ['renameAthlete', () => profiles.renameAthlete(ID, 'New Name')],
+  ['renameAthlete', () => profiles.renameAthlete(ID, 'New Name', 'Old Name')],
   ['archiveAthlete', () => profiles.archiveAthlete(ID)],
   ['restoreAthlete', () => profiles.restoreAthlete(ID)],
   ['createAthlete', () => profiles.createAthlete({ name: 'New', kind: 'kid' } as never)],

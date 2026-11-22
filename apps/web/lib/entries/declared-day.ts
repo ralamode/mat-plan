@@ -10,10 +10,14 @@ import {
 } from '@mat-plan/shared';
 
 import { getActiveLocalDay } from '@/lib/active-timezone';
-import { LOOK_AHEAD_DAYS } from '@/lib/constants';
+import { LOOK_AHEAD_DAYS, NOT_SAVED_RELOAD } from '@/lib/constants';
 
-/** Shown when a form submits a day too far from the server's active-tz today (a stale tab). */
-export const DECLARED_DAY_CLOSED_ERROR = 'That day is no longer open for logging. Reload the page.';
+/**
+ * Shown when a form submits a day BEFORE the write window (a stale tab, past midnight): it is locked.
+ * A malformed day, or one not open yet (a tz that moved west mid-session), gets `NOT_SAVED_RELOAD`
+ * instead, since "locked" would be false there.
+ */
+export const DECLARED_DAY_CLOSED_ERROR = 'That day is locked now. Reload the page.';
 
 export type DeclaredDayResult = { ok: true; day: string } | { ok: false; error: string };
 
@@ -30,10 +34,11 @@ export async function resolveDeclaredDay(
   raw: FormDataEntryValue | null,
 ): Promise<DeclaredDayResult> {
   const parsed = isoDaySchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: DECLARED_DAY_CLOSED_ERROR };
+  if (!parsed.success) return { ok: false, error: NOT_SAVED_RELOAD };
   const today = await getActiveLocalDay();
   if (!isWritableDay(parsed.data, today)) {
-    return { ok: false, error: DECLARED_DAY_CLOSED_ERROR };
+    const notOpenYet = isoDayDiff(parsed.data, today) > 0;
+    return { ok: false, error: notOpenYet ? NOT_SAVED_RELOAD : DECLARED_DAY_CLOSED_ERROR };
   }
   return { ok: true, day: parsed.data };
 }
@@ -68,7 +73,7 @@ export function isWritableDay(day: string, today: string): boolean {
  * - `amendable`: a logged value offers Change. Follows the DAY only: an archived athlete's weight on
  *   today or yesterday stays correctable, as before.
  * - `showClosedNotice`: the read-only sentence, on a PAST closed day. Not for an archived athlete,
- *   where its "today and yesterday can be logged" is false and the archived notice gives the real
+ *   where its "today and yesterday stay open" is false and the archived notice gives the real
  *   reason, and not for a future day, which has not happened yet (maintainer, 2026-11-17).
  */
 export function dayPageFlags(day: string, today: string, archived: boolean) {
