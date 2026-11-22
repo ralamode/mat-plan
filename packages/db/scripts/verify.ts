@@ -2604,6 +2604,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 {
   await legacyStrengthFixture(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    scope: A_SCOPE,
     day: '2026-03-11',
     activityTypeId: scLiftActivityId,
     movements: [
@@ -2686,6 +2687,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
   await legacyStrengthFixture(asPg, {
     profilePublicId: V130_PROFILE,
+    scope: A_SCOPE,
     day: '2026-05-14',
     activityTypeId: scLiftActivityId,
     movements: [
@@ -2752,6 +2754,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
     entries: [qtyEntry],
   } = await legacyStrengthFixture(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+    scope: A_SCOPE,
     day: '2026-02-10',
     activityTypeId: scLiftActivityId,
     movements: [
@@ -5096,6 +5099,7 @@ const {
   entries: [snapReadEmpty],
 } = await legacyStrengthFixture(asPg, {
   profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
   day: '2026-03-09',
   activityTypeId: scLiftActivityId,
   dayRole: 'skill',
@@ -5105,6 +5109,7 @@ const {
   entries: [snapReadNull],
 } = await legacyStrengthFixture(asPg, {
   profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
   day: '2026-03-10',
   activityTypeId: scLiftActivityId,
   movements: [{ ...snapReadMovement, sets: [{ reps: 5, weight: 50 }] }],
@@ -5336,6 +5341,7 @@ await insertCalisthenicsBout({
 const bMovementClientId = newId();
 await legacyStrengthFixture(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
   day: '2026-03-03',
   activityTypeId: scLiftActivityId,
   movements: [
@@ -5354,6 +5360,7 @@ await legacyStrengthFixture(asPg, {
 const aMovementClientId = newId();
 await legacyStrengthFixture(asPg, {
   profilePublicId: sessionProfileA.publicId,
+  scope: A_SCOPE,
   day: '2026-03-03',
   activityTypeId: scLiftActivityId,
   movements: [
@@ -10576,6 +10583,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
     entries: [auditEntry],
   } = await legacyStrengthFixture(asPg, {
     profilePublicId: hideProfilePublicId,
+    scope: hideScope,
     day: AUDIT_DAY,
     activityTypeId: scLiftActivityId,
     sessionClientId: '019826b4-0000-7000-8000-00000000d500',

@@ -6,10 +6,12 @@ import {
   type SetStatus,
   type Unit,
 } from '@mat-plan/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { schema } from '../../src/client';
+import type { HouseholdScope } from '../../src/scope';
 import type { Executor } from '../../src/writers/executor';
+import { isLiveProfile, movementIsAvailableTo } from '../../src/writers/ownership';
 import { insertEntrySetRows } from '../../src/writers/session-rows';
 
 /**
@@ -22,9 +24,8 @@ import { insertEntrySetRows } from '../../src/writers/session-rows';
  *
  * ## What is frozen, and what is live
  *
- * - **`sessions`, `supersets`, `entries`: direct inserts, frozen.** Each sets exactly the columns
- *   the old writer set (`insertStrengthSessionRow`, `insertSupersetRow`, `writeSessionStrengthEntry`),
- *   and omits the rest so Postgres applies its defaults, as that writer did. ⚠️ Do not "update" the
+ * - **`sessions` and `entries`: direct inserts, frozen.** Each sets exactly the columns the old
+ *   writer set (`insertStrengthSessionRow`, `writeSessionStrengthEntry`), and omits the rest so Postgres applies its defaults, as that writer did. ⚠️ Do not "update" the
  *   lists to what a live writer writes today: what they describe is history.
  *   - No `workout_id` or `workout_name` (every legacy session has no workout), no
  *     `prescription_id` or `prescription_set` (no legacy entry is a program row).
@@ -42,7 +43,14 @@ import { insertEntrySetRows } from '../../src/writers/session-rows';
  *
  * A NULL snapshot (omit `prescribedSnapshot`), a `''` one, a skipped movement with zero sets
  * (`status: ENTRY_STATUS.skipped, sets: []`), a multi-set entry, a session with a `dayRole`, and a
- * session with no workout (all of them). Superset members as the old writer stamped them.
+ * session with no workout (all of them). Only these: no superset, no `feel`, one session type.
+ *
+ * ## Household correctness, through the live predicates
+ *
+ * The caller passes the `scope` of the profile's household (never minted here). The profile is
+ * resolved with `isLiveProfile(profilePublicId, scope)` and every movement checked with
+ * `movementIsAvailableTo(scope)`, as the writers do, so a fixture can never plant a row no writer
+ * could have written: another household's profile, or another household's movement. Either throws.
  *
  * 🔴 **Never an old built-in movement by slug or seed id.** A fixtures database holds none once the
  * old catalog leaves the seed, so a caller passes a movement it already holds: a test-library row or
@@ -72,8 +80,6 @@ export type LegacyStrengthMovement = {
   /** Omitted → NULL. `''` is written as `''`. */
   prescribedSnapshot?: string;
   sets: readonly LegacyStrengthSet[];
-  /** A superset member: the `clientId` of one of the session's `supersets`, and its order. */
-  superset?: { clientId: string; order: number };
 };
 
 export type LegacyStrengthFixture = {
@@ -86,24 +92,35 @@ export async function legacyStrengthFixture(
   exec: Executor,
   args: {
     profilePublicId: string;
+    /** The household the profile belongs to. Accepted, never minted. */
+    scope: HouseholdScope;
     day: string;
     activityTypeId: number;
-    /** Omitted → `LEGACY_SESSION_TYPES[0]` (`strength`), what every legacy proof logged. */
-    sessionType?: (typeof LEGACY_SESSION_TYPES)[number];
     sessionClientId?: string;
     dayRole?: string;
-    feel?: string;
-    supersets?: readonly { clientId: string; label?: string }[];
     movements: readonly LegacyStrengthMovement[];
   },
 ): Promise<LegacyStrengthFixture> {
-  // A fixture, so no household check: the caller names a profile it made.
   const [profile] = await exec
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
-    .where(eq(schema.profiles.publicId, args.profilePublicId))
+    .where(isLiveProfile(args.profilePublicId, args.scope))
     .limit(1);
-  if (!profile) throw new Error(`legacyStrengthFixture: no profile ${args.profilePublicId}`);
+  if (!profile) {
+    throw new Error(`legacyStrengthFixture: no live profile ${args.profilePublicId} in this scope`);
+  }
+  for (const m of args.movements) {
+    const [available] = await exec
+      .select({ id: schema.movements.id })
+      .from(schema.movements)
+      .where(and(eq(schema.movements.id, m.movementId), movementIsAvailableTo(args.scope)))
+      .limit(1);
+    if (!available) {
+      throw new Error(
+        `legacyStrengthFixture: movement ${m.movementId} is not available to this scope`,
+      );
+    }
+  }
 
   const [session] = await exec
     .insert(schema.sessions)
@@ -112,32 +129,15 @@ export async function legacyStrengthFixture(
       clientId: args.sessionClientId ?? newId(),
       profileId: profile.id,
       activityDate: args.day,
-      sessionType: args.sessionType ?? LEGACY_SESSION_TYPES[0],
+      // The old writer took other session types and a `feel` too; no proof reads those values.
+      sessionType: LEGACY_SESSION_TYPES[0],
       dayRole: args.dayRole ?? null,
-      feel: args.feel ?? null,
+      feel: null,
     })
     .returning({ id: schema.sessions.id, publicId: schema.sessions.publicId });
 
-  const supersetIdByClientId = new Map<string, number>();
-  for (const s of args.supersets ?? []) {
-    const [row] = await exec
-      .insert(schema.supersets)
-      .values({
-        publicId: newId(),
-        clientId: s.clientId,
-        sessionId: session.id,
-        label: s.label ?? null,
-      })
-      .returning({ id: schema.supersets.id });
-    supersetIdByClientId.set(s.clientId, row.id);
-  }
-
   const entries: LegacyStrengthFixture['entries'] = [];
   for (const m of args.movements) {
-    const supersetId = m.superset ? supersetIdByClientId.get(m.superset.clientId) : undefined;
-    if (m.superset && supersetId === undefined) {
-      throw new Error(`legacyStrengthFixture: no superset ${m.superset.clientId} in this session`);
-    }
     const clientId = m.clientId ?? newId();
     const [entry] = await exec
       .insert(schema.entries)
@@ -153,8 +153,8 @@ export async function legacyStrengthFixture(
         sessionId: session.id,
         ...(m.status !== undefined ? { status: m.status } : {}),
         ...(m.prescribedSnapshot !== undefined ? { prescribedSnapshot: m.prescribedSnapshot } : {}),
-        supersetId: supersetId ?? null,
-        supersetOrder: m.superset?.order ?? null,
+        supersetId: null,
+        supersetOrder: null,
       })
       .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
     await insertEntrySetRows(exec, {
