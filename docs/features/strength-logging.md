@@ -172,7 +172,8 @@ Two rules follow the unit:
    **holds** the id, the insert no-ops on conflict, and `reselectLiveByClientId` throws
    `no live row for client_id`. ⚠️ **Today that throw reaches `error.tsx`** —
    `V1-9b` B1-2 is the chunk that turns it into a typed envelope. `db:verify`'s B0 case asserts the
-   refusal and a committed mutation patch (`39`) proves it can fail. Why an identity and not a slot:
+   refusal, and mutation `39` breaks it (it reports on the weigh-in case, which runs first since
+   LEGACY-1 PR B). Why an identity and not a slot:
    `write-path.md` invariant 6.
    🔴 **A replay is answered only by a row the request owns.** `client_id` is unique per table, not
    per athlete, so the conflict can be with another athlete's row. `reselectLiveByClientId` takes a
