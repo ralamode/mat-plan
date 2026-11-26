@@ -101,7 +101,7 @@ fieldErrors: parsed.error.flatten().fieldErrors }`. **Validate before any DB cal
 5. `getProfileByPublicId(id)`. If it returns null: `{ ok:false, error:'No profile found…' }`.
 6. Call the DAL or writer. Map a null or not-found result to a typed error. **Expected failures
    return, unexpected ones throw** (to `error.tsx`). Never leak internals.
-7. `revalidatePath(\`/p/${profile.id}\`)`(+ sub-routes). A stale view invites a duplicate submit. One exception: the day page's four row writes call`refresh()` (AGENTS.md → Server conventions → Cache).
+7. `revalidatePath(athletePath(profile.id))` (+ sub-routes). A stale view invites a duplicate submit. One exception: the day page's four row writes call `refresh()` instead (AGENTS.md → Server conventions → Cache).
 8. `return { ok:true, error:null }`.
 
 ## 4. The form
