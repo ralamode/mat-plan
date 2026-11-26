@@ -13,12 +13,11 @@ import {
   type ProgramResult,
   type RowResult,
 } from '@mat-plan/shared';
-import { revalidatePath } from 'next/cache';
+import { refresh } from 'next/cache';
 import type { z } from 'zod';
 
 import { enterMutation } from '@/app/p/mutation-entry';
 import { getActiveLocalDay } from '@/lib/active-timezone';
-import { athletePath } from '@/lib/constants';
 import { amendDayRow, logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
 import { refreshAssignment } from '@/lib/dal/program/revalidate';
 import { reorderHouseholdPrograms } from '@/lib/dal/program/writes';
@@ -42,8 +41,13 @@ import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
  *    and lane E's writer take it as an argument, and the writer holds `day` to the window (today and
  *    yesterday, never a day after today, D32), so a crafted older or future day answers
  *    `closed_day` whatever the page rendered.
- * 6. One DAL call. On success only, the athlete's day page is revalidated, and the answer is built
- *    field by field: never the writer's object as it stands.
+ * 6. One DAL call. On success only, the page the ✓ was sent from is refreshed with Next's `refresh()`
+ *    (PERF-3), and the answer is built field by field: never the writer's object as it stands.
+ *    `refresh()`, not `revalidatePath`: both put the day page's fresh tree in the ✓'s own response,
+ *    so counts, "Done ✓" and Collapse update with the row as before, but `revalidatePath` also
+ *    empties the router's prefetch cache, and every link on the page (about 16 requests, each
+ *    re-running the session checks) was fetched again after every ✓ (measured on production,
+ *    2026-11-26). The other athletes' day pages are dynamic and read anew on navigation.
  *
  * 🔴 **Every one of these is a public endpoint** (AGENTS.md → Server conventions). Since 12c the day
  * page imports this module, which puts the action ids in the build's manifest; from then on Next
@@ -70,8 +74,9 @@ async function writeRow<T extends { profilePublicId: string }>(
   if (!profile) return NOT_FOUND;
   const result = await write(parsed.data, await getActiveLocalDay());
   if (!result.ok) return { ok: false, reason: result.reason };
-  // The answer is built field by field, and only a success revalidates the athlete's day page.
-  revalidatePath(athletePath(profile.id));
+  // The answer is built field by field, and only a success refreshes the page (PERF-3: `refresh()`,
+  // so the router's prefetch cache is kept; see step 6 above).
+  refresh();
   return {
     ok: true,
     entryPublicId: result.entryPublicId,
