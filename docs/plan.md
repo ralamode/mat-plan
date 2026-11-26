@@ -2174,8 +2174,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
   and that a session write the household seam **refuses** has already committed the caller's text — a
   cross-tenant _write_ primitive surviving its own refusal. **That primitive does not need a second
-  household:** `logStrengthSession` runs `findOrCreateMovementId` _before_ `writeStrengthSession`'s
-  in-transaction profile resolve (`apps/web/lib/dal/entries.ts`; the order is pinned by
+  household:** _(historical: that DAL is deleted, LEGACY-1 C1)_ `logStrengthSession` ran `findOrCreateMovementId` _before_ `writeStrengthSession`'s
+  in-transaction profile resolve (`apps/web/lib/dal/entries.ts`; the order was pinned by
   `entries.test.ts`), so any gate-holder's session write, even one the write core then refuses for
   any reason, commits its catalog text. TEN-2 may move the find-or-create inside the transaction,
   after the profile resolves. Expand (nullable `household_id` + partial unique indexes) → move every
@@ -2184,8 +2184,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   (`2a`, `2b`, `2c`, `2c-1`, `2d`); each carries a migration or a correction, so each needs its own
   plan and panel. ✅ **FOUR have landed** — `2a` (`0015`), `2b` (`0016`), `2c` (`0017`), `2d` (`0018`);
   the fifth, **`2c-1`, is a measured no-op on current data and stays open as a conditional**:
-  re-measure immediately before the invite, implement only if non-zero. `TEN-2b-1` and `TEN-2b-2`
-  remain as their own deferred rows.
+  re-measure immediately before the invite, implement only if non-zero. `TEN-2b-1` closed as
+  overtaken (LEGACY-1 C1); `TEN-2b-2` is re-scoped and waits for a boundary plan.
   **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing could serve
   two households before AUTH-1 (the resolver threw on a second live household — removed at 1c-4), so
   the window opens the moment household #2 exists. Evidence, the alternative considered and the recommendation:
