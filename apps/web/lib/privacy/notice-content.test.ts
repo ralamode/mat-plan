@@ -323,7 +323,7 @@ describe('the route reads nothing at request time', () => {
 });
 
 describe('the renderer undoes the preflight rules the notice depends on', () => {
-  it('numbers the ordered list — `notice.md` cross-references "(1) and (2)"', () => {
+  it('numbers the ordered list — `notice.md` cross-references "(limitation 1)"', () => {
     // Preflight sets `list-style: none` on `ol`. Without `list-decimal` the paragraph that tells a
     // parent the worst-case exposure points at numbers that are not on the page.
     // 🔴 **Repointed at AUTH-1 1d, and NOT just to stay green.** The old probe was
@@ -332,7 +332,9 @@ describe('the renderer undoes the preflight rules the notice depends on', () => 
     // the string would have passed while the sentence it quoted was false. The derivation is
     // rewritten to name its premises in words, and keeps ONE numeric cross-reference — which is all
     // this test actually needs, because its subject is whether the numbers are VISIBLE.
-    expect(flattened).toContain('(limitation 2)');
+    // Repointed again at the fresh start's close-out: the "(limitation 2)" sentence said the names
+    // list was still shared, which the fresh start ended, so it went and this true one replaced it.
+    expect(flattened).toContain('(limitation 1)');
     expect(BLOCK_CLASS.ol).toContain('list-decimal');
     expect(BLOCK_CLASS.ul).toContain('list-disc');
   });
