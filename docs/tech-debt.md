@@ -33,7 +33,12 @@ client is already executing a query is deprecated and will be removed in pg@9.0`
   Re-check `migrate.ts` for the same pattern at the same time.
 - **Severity:** P3; act before any pg 9 bump (Dependabot's PR is the reminder).
 
-### A fixtures seed cannot tell production from a fixtures database before the fresh start (added 2026-11-20, CAT-3 A2-ii)
+### A fixtures seed cannot tell production from a fixtures database before the fresh start (added 2026-11-20, CAT-3 A2-ii) — ✅ CLOSED 2026-11-26
+
+- **Closed by the fresh start (`CAT-3` R2, 2026-11-26):** step 3 erased the household that carried
+  `SEED_HOUSEHOLD_PUBLIC_ID`, and step 8's report, read on production after step 7, counted 0
+  households and 0 profiles with any `SEED_PUBLIC_IDS` id, hidden rows included (`R4 (1)`). So no live
+  production household carries the seed id, and `assertSeedOwnsDatabase` refuses a fixtures seed there.
 
 - **What & why it's debt:** `assertSeedOwnsDatabase` (`packages/db/src/seed.ts`) refuses a fixtures seed
   only on a database where a live household exists and none carries `SEED_HOUSEHOLD_PUBLIC_ID`.
