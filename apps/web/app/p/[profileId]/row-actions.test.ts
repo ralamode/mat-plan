@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * and the zone's today, and answers with the DAL's result, so each of those reaches the screen as
  * the writer gave it.
  */
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), refresh: vi.fn() }));
 // Throws like Next's, so a redirect misplaced inside a try cannot pass silently.
 vi.mock('next/navigation', () => ({
   redirect: vi.fn(() => {
@@ -52,16 +52,15 @@ vi.mock('@/lib/dal/program/writes', () => ({
 }));
 vi.mock('@/lib/dal/program/revalidate', () => ({ refreshAssignment: vi.fn() }));
 
-import { revalidatePath } from 'next/cache';
+import { refresh, revalidatePath } from 'next/cache';
 
 import { getActiveLocalDay } from '@/lib/active-timezone';
-import { athletePath } from '@/lib/constants';
 import { amendDayRow, logDayRow, retickDayRow, untickDayRow } from '@/lib/dal/day/day';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { refreshAssignment } from '@/lib/dal/program/revalidate';
 import { reorderHouseholdPrograms } from '@/lib/dal/program/writes';
 import { sessionUserOrNull } from '@/lib/dal/session';
-import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
+import { checkMutationLimit, ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 import { describeActionMatrices } from '@/test/action-matrix';
 
 import {
@@ -191,7 +190,40 @@ describe('the row actions (FAM-1 12b)', () => {
     expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.bad_value });
     expect(getProfileByPublicId).not.toHaveBeenCalled();
     for (const dal of DAL) expect(dal).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['✓', () => logRowAction(writeInput())],
+    ['un-✓', () => untickRowAction(untickInput())],
+    ['re-✓', () => retickRowAction(retickInput())],
+    ['Change', () => amendRowAction(amendInput())],
+  ])(
+    '%s for an athlete outside the household is not_found, nothing is written or refreshed',
+    async (_label, call) => {
+      vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+      expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.not_found });
+      for (const dal of DAL) expect(dal).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  // The shared matrices above assert `revalidatePath` only, so for these four they would pass
+  // whatever `refresh()` did: the no-session and rate-limited refusals are pinned here (PERF-3).
+  it.each([
+    ['✓', () => logRowAction(writeInput())],
+    ['un-✓', () => untickRowAction(untickInput())],
+    ['re-✓', () => retickRowAction(retickInput())],
+    ['Change', () => amendRowAction(amendInput())],
+  ])('%s refused for no session or the limiter refreshes nothing', async (_label, call) => {
+    vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+    expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.not_found });
+    vi.mocked(checkMutationLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });
+    expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.retry });
+    for (const dal of DAL) expect(dal).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('hands the DAL the parsed input and the zone’s today, read in the action', async () => {
@@ -206,18 +238,16 @@ describe('the row actions (FAM-1 12b)', () => {
     expect(vi.mocked(amendDayRow).mock.calls[0]).toEqual([amendInput(), TODAY]);
   });
 
-  it('a success answers field by field and revalidates the athlete’s day page', async () => {
+  it('a success answers field by field and refreshes the page, never revalidatePath (PERF-3)', async () => {
     vi.mocked(logDayRow).mockResolvedValueOnce({ ...LOGGED, extra: 'never sent' } as never);
     expect(await logRowAction(writeInput())).toEqual(LOGGED);
     expect(await untickRowAction(untickInput())).toEqual({ ...LOGGED, hiddenAt: HIDDEN_AT });
     expect(await retickRowAction(retickInput())).toEqual(LOGGED);
     expect(await amendRowAction(amendInput())).toEqual(LOGGED);
-    expect(vi.mocked(revalidatePath).mock.calls).toEqual([
-      [athletePath(PROFILE_ID)],
-      [athletePath(PROFILE_ID)],
-      [athletePath(PROFILE_ID)],
-      [athletePath(PROFILE_ID)],
-    ]);
+    // `refresh()` keeps the router's prefetch cache; `revalidatePath` emptied it, and every link on
+    // the day page was fetched again after each ✓ (measured on production, 2026-11-26).
+    expect(refresh).toHaveBeenCalledTimes(4);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -237,6 +267,7 @@ describe('the row actions (FAM-1 12b)', () => {
     expect(await untickRowAction(untickInput())).toEqual(refused);
     expect(await retickRowAction(retickInput())).toEqual(refused);
     expect(await amendRowAction(amendInput())).toEqual(refused);
+    expect(refresh).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -248,6 +279,7 @@ describe('the row actions (FAM-1 12b)', () => {
       ok: false,
       reason: ROW_REFUSAL.bad_value,
     });
+    expect(refresh).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
