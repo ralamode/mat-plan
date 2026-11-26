@@ -194,6 +194,22 @@ describe('the row actions (FAM-1 12b)', () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['✓', () => logRowAction(writeInput())],
+    ['un-✓', () => untickRowAction(untickInput())],
+    ['re-✓', () => retickRowAction(retickInput())],
+    ['Change', () => amendRowAction(amendInput())],
+  ])(
+    '%s for an athlete outside the household is not_found, nothing is written or refreshed',
+    async (_label, call) => {
+      vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+      expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.not_found });
+      for (const dal of DAL) expect(dal).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
   it('hands the DAL the parsed input and the zone’s today, read in the action', async () => {
     await logRowAction(writeInput());
     await untickRowAction(untickInput());

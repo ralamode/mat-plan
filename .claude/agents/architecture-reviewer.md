@@ -20,7 +20,7 @@ Look for:
 
 - RSC-first; the DAL boundary (`db` and `process.env` only in `lib/dal`); a DTO, never a raw row;
   Server Actions for mutations, Route Handlers for reads/batch; the engine stays pure
-- a Server Action missing `withServerActionInstrumentation` or `revalidatePath`, or a non-async export
+- a Server Action missing `withServerActionInstrumentation` or `revalidatePath` (the day page's four row writes use `refresh()` instead: AGENTS.md → Server conventions → Cache), or a non-async export
   from a `'use server'` file
 - file placement, naming and hierarchy: does the new file live where AGENTS.md says it belongs?
 - seams: does the change paint the next PR into a corner, or fight an invariant in the feature guide?

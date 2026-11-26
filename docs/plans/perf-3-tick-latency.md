@@ -115,9 +115,12 @@ production, where every one of those prefetches was a round trip competing with 
 
 ## Risks / rollback
 
-- **Other pages' cached copies.** `revalidatePath` also told the router its copies of other pages
-  were stale. Those pages are dynamic and per-user, and the router's dynamic stale time is 0, so a
-  navigation fetches them anew. Back/Forward reuses the copy it has, as it does for any page.
+- **Other pages' cached copies.** `refresh()` evicts the router's Back/Forward cache exactly as
+  `revalidatePath` did (both revalidation kinds call `invalidateBfCache`, Next 16.4.6
+  `server-action-reducer.js:213-216`), and the ✓'s returned page is written back, so Back shows the
+  day after the ✓ and other pages are fetched again. The prefetch cache it now keeps holds only route
+  trees and the layouts above each `loading.tsx` (the root layout, `ClerkRoot`), none of which shows
+  ✓-dependent data; `staleTimes` is unset, so a page itself is fetched on every navigation.
 - **Rollback:** revert the PR. No data or schema change.
 
 ## Out-of-scope / deferred
