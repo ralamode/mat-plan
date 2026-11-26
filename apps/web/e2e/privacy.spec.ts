@@ -44,8 +44,10 @@ test.describe('public', () => {
       page.getByRole('heading', { level: 2, name: 'How long we keep it' }),
     ).toBeVisible();
     // ⚠️ Repointed at AUTH-1 1d — see `notice-content.test.ts` for why the old cross-reference
-    // ("That follows from (1) and (2)") could not simply be re-quoted.
-    await expect(page.getByText('(limitation 2)')).toBeVisible();
+    // ("That follows from (1) and (2)") could not simply be re-quoted. Repointed again at the fresh
+    // start's close-out (#816), which removed the shared-names limitation the old "(limitation 2)"
+    // cited; the unit test carries the same change.
+    await expect(page.getByText('(limitation 1)')).toBeVisible();
   });
 
   test('the data-inventory link points at the real file in the public repo', async ({ page }) => {

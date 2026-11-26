@@ -532,13 +532,14 @@ The shapes those lanes agree on, the fakes and the preview route are
    row was hidden is now a **refusal** rather than a duplicate. Each answers differently, and that
    is worth knowing before B1-2 unifies them:
    - **strength** → `reselectLiveByClientId` throws `no live row for client_id`, which reaches
-     `error.tsx` and loses the form. `db:verify`'s B0 case asserts it; mutation `39` proves it fails.
+     `error.tsx` and loses the form. `db:verify`'s B0 case asserts it.
      The same throw answers a row held by **someone else** (another athlete's session, another
      session's entry or superset): the re-select carries an owner conjunct, same message on purpose
      ([strength-logging.md](./strength-logging.md) invariant 6; mutations `440`–`443`).
    - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
      branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
-     now names this case. Also asserted in the B0 block.
+     now names this case. Asserted first in the B0 block, and the case mutation `39` reddens (since
+     LEGACY-1 PR B; the strength case breaks under it too, after).
    - **check-ins** → `own_hidden` per item; since `V1-9b` B1-2 (#387) the action names the field
      that did not save.
    - **life activities** → `own_hidden`; since B1-2 the action refuses rather than reporting
@@ -1043,7 +1044,12 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   write failed, which prompts a duplicate submit. **One exception (PERF-3):** the day page's four row
   writes (`row-actions.ts`) call Next's `refresh()` instead. It puts the same fresh page in the
   response, but `revalidatePath` also emptied the router's prefetch cache, so every link on the day
-  page was fetched again after each ✓ (about 16 requests, measured on production 2026-11-26).
+  page was fetched again after each ✓ (about 16 requests, measured on production 2026-11-26). It is safe
+  only while the router's prefetches hold no ✓-dependent data: today they hold route trees and the
+  layouts above each `loading.tsx`. A layout under `/p` or `/programs` that renders a per-day count, a
+  `<Link prefetch>` (full prefetch) to a page with counts, or turning on PPR or `cacheComponents`
+  would serve that data for up to 5 minutes after a ✓; such a change returns these actions to
+  `revalidatePath`. `e2e/day-page.spec.ts` pins the response header (`x-action-revalidated: 2`).
 
 - **Server Actions are not HTTP routes and cannot be tested as such.** Test them as plain async
   functions with Clerk's `auth()` and Drizzle mocked. Async Server Components need Playwright, not

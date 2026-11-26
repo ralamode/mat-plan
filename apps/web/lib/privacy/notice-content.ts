@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-20. This is a beta."
+            "text": "Last updated: 2026-11-26. This is a beta."
           }
         ]
       }
@@ -776,7 +776,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Three honest limitations during the beta:"
+            "text": "Honest limitations during the beta:"
           }
         ]
       }
@@ -876,33 +876,29 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " (new in\nthis version): who you are signed in as decides which household's data the app will show you, and\nthat is checked on every read and every write. "
+              "text": " (new in\nthis version): who you are signed in as decides which household's data the app will show you, and\nthat is checked on every read and every write. ✅ "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "One part is still shared:"
+                  "text": "The list of exercise names is separated too"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " the list of exercise\nnames is common to every household (see \"Movement names\" below), and it has to be separated before\na second family is invited. "
+              "text": ":\nevery name the app supplies is written by the project, and the only other names in your list are\nones your own household typed, which no other household sees (see \"Movement names\" below). "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "The beta still starts with a single invited family"
+                  "text": "The\nbeta still starts with a single invited family."
                 }
               ]
-            },
-            {
-              "k": "text",
-              "text": ", because that\nlast part is not finished."
             }
           ]
         }
@@ -961,7 +957,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " a membership is held by a PERSON, not by an athlete, so one\nmembership opens every athlete in the household — and the app does not record who did what. The\nlist of exercise names is also still common to every household (limitation 2). Guard your Google\naccount the way you would guard a password."
+              "text": " a membership is held by a PERSON, not by an athlete, so one\nmembership opens every athlete in the household — and the app does not record who did what.\nRemoving someone from the household is what closes it for them (limitation 1). Guard your Google\naccount the way you would guard a password."
             }
           ]
         }
@@ -2124,7 +2120,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs you built, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. An athlete added through the app can be erased today; the athletes the app started with\ncannot be erased one at a time yet, because an older copy of the setup could put them back; they are\nremoved together, with the rest of the starting data, when the app is started fresh."
+        "text": ": only the adult can, because it is their\ndata. The same confirmation, 7-day pause and restore point as a household deletion apply (an adult is\nconfirmed on their own invitation channel, and their full copy goes to them), and \"What remains\nafterwards\" below applies too. What stays is the household's: the programs you built, any name typed into a program, workout or\nmovement, including copies of that text kept on other athletes' logs, and every sign-in account; an\nadult athlete can ask for their own account to be deleted as well. Before anything is removed we ask\nyou about three things, and remove each only if you say so: a program only that athlete was ever on;\na workout copied out of such a program into another of your programs, which keeps its own copy of the\ninstructions and targets and the name of the program it came from, so you can keep it or have the\nprogram it was copied into removed too; and a movement your household typed that only that athlete's\nlog, or a program you chose to remove, used. A program another athlete has trained on is not\nremoved, and we will tell you. For an athlete,\nthe record of the deletion holds the athlete's internal identifier and no login ids unless their\naccount went too. Any athlete can be erased on request: every athlete in the app was added through\nit."
       }
     ]
   },
@@ -2164,7 +2160,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not hidden. Your\nsign-in accounts are deleted too. The household the app started with is the one exception for now: it\nis removed with the rest of the starting data when the app is started fresh, not on its own."
+        "text": ", not hidden. Your\nsign-in accounts are deleted too."
       }
     ]
   },
@@ -2379,40 +2375,14 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " If someone in your household types a movement that isn't already in the app's\ncatalogue, whatever they typed is stored as a movement "
+              "text": " Every name the app supplies is written by the project. The only other names in\nyour list are ones your own household typed: a name that is not already in the list is stored as\nyour household's own, no other household sees it, and it is deleted with your household. Please type only the name of an exercise there, "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "belonging to your household"
-                }
-              ]
-            },
-            {
-              "k": "text",
-              "text": ", and it "
-            },
-            {
-              "k": "strong",
-              "children": [
-                {
-                  "k": "text",
-                  "text": "is\nremoved"
-                }
-              ]
-            },
-            {
-              "k": "text",
-              "text": " when you delete your household. Two things to know while the catalogue is still being\nseparated: a name that another household typed first is still shared with yours, so it can appear to\nboth of you; and a shared name like that stays in the catalogue when either household is deleted,\nuntil the separation is finished. Please type only the name of an exercise there — "
-            },
-            {
-              "k": "strong",
-              "children": [
-                {
-                  "k": "text",
-                  "text": "never a\nperson's name or anything personal."
+                  "text": "never a person's name or\nanything personal."
                 }
               ]
             }
@@ -2479,7 +2449,48 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
+        "text": "What changed on 26 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The app was started fresh."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " On the maintainer's decision, the household the app started with, and\neverything logged in it, was erased; the adults' sign-in accounts were kept and joined to a new, empty\nhousehold, so nobody had to sign up again. Before that, each athlete's data was offered as an export.\nThe app was not paused, so anything logged after that export and before the erasure was erased too,\nand for that time a signed-in adult had no household to open; the restore point holds it. That restore\npoint, from just before, is held for 7 days and then deleted. The old list of movement names went\nwith it: every name the app supplies is now written by the project, and the only other names in a\nhousehold's list are ones it typed itself. So the two limitations about shared\nnames are gone, and the athletes the app started with are no longer an exception to erasure."
+      }
+    ]
+  },
+  {
+    "k": "h2",
+    "children": [
+      {
+        "k": "text",
         "text": "What changed on 20 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(This section describes what was true on 20 November 2026. The notes and names it mentions were\nerased with the starting household on 26 November 2026.)"
+          }
+        ]
       }
     ]
   },
@@ -3036,7 +3047,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "(both pending the maintainer's re-read)"
+            "text": "(both accepted with the 2026-11-26 sign-off)"
           }
         ]
       },
@@ -3082,6 +3093,45 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "k": "text",
         "text": ".\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "2026-11-26:"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " re-reviewed against the fresh start: the starting household's erasure, the separated list\nof movement names, and the athletes and household that are no longer an exception "
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(the maintainer\nread and approved it)"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ".\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Signed off for Beta 0 by the maintainer (the household operator), 2026-11-26"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", after\nthe fresh start, covering every re-review above.\n"
       },
       {
         "k": "strong",

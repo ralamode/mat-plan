@@ -172,6 +172,7 @@ import {
   rolledBack,
   type VerifyContext,
 } from './verify/harness';
+import { legacyStrengthFixture } from './verify/legacy-strength-fixture';
 
 /**
  * CAT-3 A2-ii (plan D3, D4): the shared verify database is a fixtures database, so its library rows
@@ -534,6 +535,20 @@ console.log('✓ profiles scoped to root household (household_id NOT NULL)');
 // messages say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is
 // inserted, ~3400 lines down, at the V1-10 programming fixture.
 const A_SCOPE = householdScopeForScript(households[0].id);
+// The positive read through A_SCOPE, kept beside its definition (LEGACY-1 PR B): a seed profile
+// resolves under `isLiveProfile`, the predicate every scoped read below rides. It is the control
+// `02-wrong-scope-everywhere.patch` reddens first, so that patch no longer depends on a proof
+// elsewhere in the file staying where it is.
+assert.equal(
+  (
+    await db
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(isLiveProfile(profiles[0].publicId, A_SCOPE))
+  ).length,
+  1,
+  'TEN-1 1b: A_SCOPE resolves a seed profile of its own household (the positive control for every A_SCOPE read)',
+);
 
 // ── PROF-1 b: THE THIRD SCOPE — household A, as a MEMBER rather than the owner ───────────────────
 // 🔴 **A legitimately-minted member, which is the whole reason this exists.** `b-s` proved the owner
@@ -2580,25 +2595,23 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   );
 }
 
-// ── V1-13b: the month-scoped export reads, against rows the REAL writer authored ────────────────────
+// ── V1-13b: the month-scoped export reads, against rows the legacy writer left ──────────────────────
 // The formatters have golden vectors; these prove the READS — ordering, the soft-delete filters, the
 // skipped-movement LEFT JOIN, and that a month boundary is half-open. Run through the shipped
-// `strengthMonthRows`, so the DAL and this proof cannot diverge.
+// `strengthMonthRows`, so the DAL and this proof cannot diverge. The rows are the legacy strength
+// writer's shapes, which production still holds (a multi-set entry, a skipped movement with zero
+// sets), written by `legacyStrengthFixture` (LEGACY-1).
 {
-  const EXPORT_SESSION = newId();
-  await writeStrengthSession(asPg, {
+  await legacyStrengthFixture(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
     scope: A_SCOPE,
     day: '2026-03-11',
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: EXPORT_SESSION,
     activityTypeId: scLiftActivityId,
     movements: [
       {
         movementName: movX.name,
         unit: 'lb',
         movementId: movX.id,
-        clientId: newId(),
         sets: [
           { reps: 5, weight: 70 },
           { reps: 5, weight: 75 },
@@ -2609,7 +2622,6 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
         movementName: movY.name,
         unit: 'lb',
         movementId: movY.id,
-        clientId: newId(),
         status: ENTRY_STATUS.skipped,
         sets: [],
       },
@@ -2663,35 +2675,32 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   console.log('✓ V1-13b: export reads — skipped LEFT JOIN, quantities, half-open month, BOLA');
 }
 
-// ── V1-30: a newly loggable unit round-trips from the REAL writer to the export read ───────────────
+// ── V1-30: a newly loggable unit round-trips from a stored legacy row to the export read ───────────
 // The CSV tests build rows by hand; this proves the stored side. Before V1-30 the session schema
 // refused `m` outright and a `kg` set made the export throw. This asserts on what the fold and the CSV
 // builder consume: the quantity row's (dimension, unit) and `strengthMonthRows`' unit + value; the
 // bytes `20m`/`85kg` are pinned by the strength-log CSV tests over those same fields. (Since FAM-1 14a
 // the fold, `foldStrengthMonth`, sits beside the query, and lane E's `verifyExport` asserts the
-// program rows' bytes through it.)
+// program rows' bytes through it.) The rows are `legacyStrengthFixture`'s (LEGACY-1); the quantities
+// go through the live `insertEntrySetRows`, which derives each one's dimension from its unit.
 {
   const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
-  await writeStrengthSession(asPg, {
+  await legacyStrengthFixture(asPg, {
     profilePublicId: V130_PROFILE,
     scope: A_SCOPE,
     day: '2026-05-14',
-    sessionType: SESSION_TYPES[0],
-    sessionClientId: newId(),
     activityTypeId: scLiftActivityId,
     movements: [
       {
         movementName: movX.name,
         unit: 'kg',
         movementId: movX.id,
-        clientId: newId(),
         sets: [{ reps: 5, weight: 85 }],
       },
       {
         movementName: movY.name,
         unit: 'm',
         movementId: movY.id,
-        clientId: newId(),
         sets: [{ reps: 1, weight: 20 }],
       },
     ],
@@ -2730,7 +2739,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
     ],
     'V1-30: the export read returns each unit with its value',
   );
-  console.log('✓ V1-30: kg and m round-trip from the writer to the export read');
+  console.log('✓ V1-30: kg and m round-trip from a stored row to the export read');
 }
 
 // ── GAP-3: the composite-FK unit guard, and the shapes fixed columns could not hold ────────────────
@@ -2738,11 +2747,34 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
 // not by review — there is no third spelling that gets a mass unit into a length quantity, because
 // `dimension` is the shared column of two composite FKs against two PRIMARY KEYS.
 {
+  // The rows: a legacy hold (`legacyStrengthFixture`, LEGACY-1), the shape the labeled-movement
+  // proof above logs. Its first two sets are bodyweight and carry NO quantity, so each slot below is
+  // free to be written; the third is 30 seconds.
+  const {
+    entries: [qtyEntry],
+  } = await legacyStrengthFixture(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+    scope: A_SCOPE,
+    day: '2026-02-10',
+    activityTypeId: scLiftActivityId,
+    movements: [
+      {
+        movementName: movX.name,
+        unit: 'sec',
+        movementId: movX.id,
+        sets: [
+          { reps: 5, weight: null, isBodyweight: true },
+          { reps: 3, weight: null, isBodyweight: true },
+          { reps: 1, weight: 30 },
+        ],
+      },
+    ],
+  });
   const qtySetId = (
     (
       await db.execute(sql`
-        select es.id from entry_sets es join entries e on e.id = es.entry_id
-        where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} order by es.idx limit 1`)
+        select es.id from entry_sets es
+        where es.entry_id = ${qtyEntry.id} order by es.idx limit 1`)
     ).rows as unknown as { id: number }[]
   )[0].id;
 
@@ -2784,8 +2816,8 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const wornSetId = (
     (
       await db.execute(sql`
-        select es.id from entry_sets es join entries e on e.id = es.entry_id
-        where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} order by es.idx offset 1 limit 1`)
+        select es.id from entry_sets es
+        where es.entry_id = ${qtyEntry.id} order by es.idx offset 1 limit 1`)
     ).rows as unknown as { id: number }[]
   )[0].id;
   await db.insert(schema.entrySetQuantities).values(
@@ -5058,25 +5090,46 @@ assert.equal(
 // hand-built rows, `db:verify` read the column by direct `select`, and the e2e exports under an
 // unchanged program where frozen and live bytes coincide. This is the read-side twin of the write
 // mutant that mutation 34 catches.
+//
+// Its rows are the two shapes production holds, written by `legacyStrengthFixture` (LEGACY-1), not
+// by the writer above, so this read outlives that writer: a `day_role` session whose entry froze
+// `''`, and a session with no day role whose entry was never snapshotted (NULL).
+const snapReadMovement = { movementId: movX.id, movementName: movX.name, unit: 'lb' } as const;
+const {
+  entries: [snapReadEmpty],
+} = await legacyStrengthFixture(asPg, {
+  profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
+  day: '2026-03-09',
+  activityTypeId: scLiftActivityId,
+  dayRole: 'skill',
+  movements: [{ ...snapReadMovement, prescribedSnapshot: '', sets: [{ reps: 5, weight: 50 }] }],
+});
+const {
+  entries: [snapReadNull],
+} = await legacyStrengthFixture(asPg, {
+  profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
+  day: '2026-03-10',
+  activityTypeId: scLiftActivityId,
+  movements: [{ ...snapReadMovement, sets: [{ reps: 5, weight: 50 }] }],
+});
 const snapExportRows = await strengthMonthRows(asPg, {
   profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
   month: '2026-03',
   scope: B_SCOPE,
 });
-// Keyed on (date, movement): the query returns no `client_id`, and the same movement appears on
-// both days — 03-02 with a day role asserted (frozen `''`) and 03-03 without one (NULL).
-const snapByDay = new Map(
-  snapExportRows
-    .filter((r) => r.movementId === snapMovA.id)
-    .map((r) => [r.date, r.prescribedSnapshot] as const),
-);
+// Keyed on the entry: the query returns no `client_id`, and the fixture returned each entry's id.
+// A row the read did not return reads `undefined`, which neither assertion accepts.
+const snapReadOf = (entryId: number) =>
+  snapExportRows.find((r) => r.entryId === entryId)?.prescribedSnapshot;
 assert.equal(
-  snapByDay.get('2026-03-02'),
+  snapReadOf(snapReadEmpty.id),
   '',
   "V1-22 chunk 2: the EXPORT query returns '' as '' — a nullif(…, '') here would send every open() row back to today's program",
 );
 assert.equal(
-  snapByDay.get('2026-03-03'),
+  snapReadOf(snapReadNull.id),
   null,
   "V1-22 chunk 2: the EXPORT query returns NULL as NULL — a coalesce(…, '') here would make every never-snapshotted row look frozen",
 );
@@ -5283,15 +5336,13 @@ await insertCalisthenicsBout({
   profileId: rampTestProfile.id,
 });
 
-// (c) a real strength session through the REAL writer → updateStrengthSetById
-const bSessionClientId = newId();
+// (c) a strength session as production holds it (`legacyStrengthFixture`, LEGACY-1) → the export
+// read below, and updateStrengthSetById
 const bMovementClientId = newId();
-await writeStrengthSession(asPg, {
+await legacyStrengthFixture(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
   scope: B_SCOPE,
   day: '2026-03-03',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: bSessionClientId,
   activityTypeId: scLiftActivityId,
   movements: [
     {
@@ -5303,17 +5354,14 @@ await writeStrengthSession(asPg, {
     },
   ],
 });
-// …and the mirror for household A, through the same writer, so the matrix's positive directions
+// …and the mirror for household A, from the same builder, so the matrix's positive directions
 // both exercise a set this block created rather than reaching for one an earlier proof may have
 // soft-deleted or made un-editable on its way past.
-const aSessionClientId = newId();
 const aMovementClientId = newId();
-await writeStrengthSession(asPg, {
-  profilePublicId: ssArgs.profilePublicId,
+await legacyStrengthFixture(asPg, {
+  profilePublicId: sessionProfileA.publicId,
   scope: A_SCOPE,
   day: '2026-03-03',
-  sessionType: SESSION_TYPES[0],
-  sessionClientId: aSessionClientId,
   activityTypeId: scLiftActivityId,
   movements: [
     {
@@ -9637,46 +9685,8 @@ const REPLAY_REFUSED = /no live row for client_id/;
     ],
   } as const;
 
-  // 1 · Log it, then HIDE the entry the way V1-9b will: `deleted_at` on the row, nothing else.
-  const b0 = await writeStrengthSession(asPg, b0Args);
-  const [b0Session] = await db
-    .select({ id: schema.sessions.id })
-    .from(schema.sessions)
-    .where(eq(schema.sessions.publicId, b0.sessionId));
-  await db
-    .update(schema.entries)
-    .set({ deletedAt: new Date() })
-    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
-
-  // 2 · Replay the SAME graph. The hidden entry is still in the (now non-partial) index, so the
-  //     insert no-ops on conflict and the live re-select finds nothing — a refusal, not a twin.
-  //     🔴 This is the assertion the mutation patch reddens: with the predicate back, the insert
-  //     succeeds and this `rejects` never fires.
-  await assert.rejects(
-    () => writeStrengthSession(asPg, b0Args),
-    REPLAY_REFUSED,
-    'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
-      'frees the client_id',
-  );
-
-  // 3 · And the count is the direct evidence: ONE row carries that client_id, hidden or not.
-  const b0Rows = await db
-    .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
-    .from(schema.entries)
-    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
-  assert.equal(b0Rows.length, 1, 'V1-9b B0: the hidden entry was not twinned by the replay');
-  assert.ok(b0Rows[0].deletedAt !== null, 'V1-9b B0: …and it is still hidden');
-
-  // 4 · The session row itself: same client_id, still one row, and the replay reached it. (The
-  //     session was never hidden, so this is the ordinary replay path — it must keep working.)
-  const b0Sessions = await db
-    .select({ id: schema.sessions.id })
-    .from(schema.sessions)
-    .where(eq(schema.sessions.clientId, B0_SESSION_CID));
-  assert.equal(b0Sessions.length, 1, 'V1-9b B0: the session was not twinned either');
-  assert.equal(b0Sessions[0].id, b0Session.id, 'V1-9b B0: and it is the same session row');
-
-  // 4b · 🔴 **The OTHER writer B0 changes, which the strength case cannot reach.**
+  // 0 · 🔴 **The OTHER writer B0 changes, which the strength case cannot reach.** First in this
+  //      block (LEGACY-1 PR B), because it is the behavioural case that outlives the strength writer.
   //      `insertBodyweightEntry` infers no target (`onConflictDoNothing()` — every unique
   //      arbitrates, V1-24 1e), so it has its own three-branch fallback. Post-B0 a replay of a
   //      HIDDEN weigh-in whose day slot has since been freed conflicts on the non-partial
@@ -9685,12 +9695,13 @@ const REPLAY_REFUSED = /no live row for client_id/;
   //      through the one writer with no arbiter to re-predicate.
   //
   //      ⚠️ **What this case is and is NOT proven by, probed three ways.** 1e reaches (c) by two
-  //      other routes (a foreign metric's `client_id`, an evening-only day), and because `db:verify`
-  //      is fail-fast and 1e runs first, every single-literal mutation that breaks this case breaks
-  //      an earlier one too: restoring the index predicate reddens the strength case above;
-  //      dropping (a)'s liveness guard reddens 1e's dead-row case; swallowing the (c) throw reddens
-  //      1e's foreign-metric case. So this case is **not independently isolable today** — said
-  //      plainly rather than implied.
+  //      other routes (a foreign metric's `client_id`, an evening-only day), and `db:verify` is
+  //      fail-fast with 1e running first, so two of the three single-literal mutations that break
+  //      this case break an earlier one too: dropping (a)'s liveness guard reddens 1e's dead-row
+  //      case; swallowing the (c) throw reddens 1e's foreign-metric case. The third is this case's
+  //      own: restoring the index predicate (`39-client-id-partial-again.patch`) passes every 1e
+  //      route, and this assertion is the first it reddens. The strength case below breaks under it
+  //      too; it is ordered after this one so that 39 is aimed at a writer that stays.
   //
   //      What it does catch, and nothing else would: a future change that answers THIS route
   //      plausibly while leaving 1e's routes throwing — a fourth branch that looks up hidden rows
@@ -9740,6 +9751,45 @@ const REPLAY_REFUSED = /no live row for client_id/;
       ),
     );
   assert.equal(b0BwRows.length, 1, 'V1-9b B0: …and the hidden weigh-in was not twinned');
+
+  // 1 · Log it, then HIDE the entry the way V1-9b will: `deleted_at` on the row, nothing else.
+  const b0 = await writeStrengthSession(asPg, b0Args);
+  const [b0Session] = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.publicId, b0.sessionId));
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
+
+  // 2 · Replay the SAME graph. The hidden entry is still in the (now non-partial) index, so the
+  //     insert no-ops on conflict and the live re-select finds nothing — a refusal, not a twin.
+  //     With the predicate back the insert succeeds and this `rejects` never fires; the weigh-in case
+  //     above is what `39-client-id-partial-again.patch` reports, since it runs first.
+  await assert.rejects(
+    () => writeStrengthSession(asPg, b0Args),
+    REPLAY_REFUSED,
+    'V1-9b B0: replaying a HIDDEN strength entry is refused, not duplicated — the hide no longer ' +
+      'frees the client_id',
+  );
+
+  // 3 · And the count is the direct evidence: ONE row carries that client_id, hidden or not.
+  const b0Rows = await db
+    .select({ id: schema.entries.id, deletedAt: schema.entries.deletedAt })
+    .from(schema.entries)
+    .where(eq(schema.entries.clientId, b0Args.movements[0].clientId));
+  assert.equal(b0Rows.length, 1, 'V1-9b B0: the hidden entry was not twinned by the replay');
+  assert.ok(b0Rows[0].deletedAt !== null, 'V1-9b B0: …and it is still hidden');
+
+  // 4 · The session row itself: same client_id, still one row, and the replay reached it. (The
+  //     session was never hidden, so this is the ordinary replay path — it must keep working.)
+  const b0Sessions = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(eq(schema.sessions.clientId, B0_SESSION_CID));
+  assert.equal(b0Sessions.length, 1, 'V1-9b B0: the session was not twinned either');
+  assert.equal(b0Sessions[0].id, b0Session.id, 'V1-9b B0: and it is the same session row');
 
   // 5 · The STRUCTURAL case, after the behaviour: none of the five indexes carries a predicate.
   //     Read from `pg_indexes`, so it measures the LIVE schema the migration produced rather than
@@ -10527,9 +10577,15 @@ const REPLAY_REFUSED = /no live row for client_id/;
 
   // ── 5 · The reader audit: a hidden parent hides its live children everywhere ───────────────────
   const AUDIT_DAY = '2027-03-07'; // a month NOTHING else in this file occupies — see below
-  const auditArgs = {
-    ...flatArgs,
+  // A strength entry as production holds it (`legacyStrengthFixture`, LEGACY-1): an entry with a set
+  // and its quantity, which is what makes the live-children trap below observable.
+  const {
+    entries: [auditEntry],
+  } = await legacyStrengthFixture(asPg, {
+    profilePublicId: hideProfilePublicId,
+    scope: hideScope,
     day: AUDIT_DAY,
+    activityTypeId: scLiftActivityId,
     sessionClientId: '019826b4-0000-7000-8000-00000000d500',
     movements: [
       {
@@ -10540,8 +10596,7 @@ const REPLAY_REFUSED = /no live row for client_id/;
         sets: [{ reps: 5, weight: 100 }],
       },
     ],
-  } as const;
-  await writeStrengthSession(asPg, auditArgs);
+  });
   const monthOf = (day: string) => day.slice(0, 7);
 
   const beforeStrength = await strengthMonthRows(asPg, {
@@ -10556,10 +10611,6 @@ const REPLAY_REFUSED = /no live row for client_id/;
   });
   assert.ok(beforeStrength.length > 0, 'V1-9b B1-1b: the audit fixture is in the export');
 
-  const [auditEntry] = await db
-    .select({ publicId: schema.entries.publicId })
-    .from(schema.entries)
-    .where(eq(schema.entries.clientId, auditArgs.movements[0].clientId));
   const auditHide = await db.transaction((tx) =>
     hideEntries(asTx(tx), {
       profilePublicId: hideProfilePublicId,

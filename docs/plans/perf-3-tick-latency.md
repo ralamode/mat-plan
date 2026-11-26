@@ -88,13 +88,18 @@ none of that.
 
 ## File-by-file changes (step 1)
 
-| Path                                             | Change | What & why                                                                                   |
-| ------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------- |
-| `apps/web/app/p/[profileId]/row-actions.ts`      | EDIT   | `writeRow` calls `refresh()` (from `next/cache`) on success; docblock step 6 says why.       |
-| `apps/web/app/p/[profileId]/row-actions.test.ts` | EDIT   | A success calls `refresh` four times and `revalidatePath` never; each refusal calls neither. |
-| `AGENTS.md`                                      | EDIT   | Server conventions → Cache: the scoped exception, so later reviews do not flag it.           |
-| `docs/features/write-path.md`                    | EDIT   | The "`revalidatePath` is not optional" trap names the exception and the reason.              |
-| `docs/features/day-page.md`                      | EDIT   | The `row-actions.test.ts` row says what is now asserted.                                     |
+| Path                                                                                                                        | Change | What & why                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/app/p/[profileId]/row-actions.ts`                                                                                 | EDIT   | `writeRow` calls `refresh()` (from `next/cache`) on success; docblock step 6 says why.                               |
+| `apps/web/app/p/[profileId]/row-actions.test.ts`                                                                            | EDIT   | A success calls `refresh` four times and `revalidatePath` never; each refusal calls neither.                         |
+| `AGENTS.md`                                                                                                                 | EDIT   | Server conventions → Cache: the scoped exception, so later reviews do not flag it.                                   |
+| `docs/features/write-path.md`                                                                                               | EDIT   | The "`revalidatePath` is not optional" trap names the exception and the reason.                                      |
+| `docs/features/day-page.md`                                                                                                 | EDIT   | The `row-actions.test.ts` row says what is now asserted.                                                             |
+| `docs/features/program-builder.md`                                                                                          | EDIT   | A trap: `app/programs/layout.tsx` must render nothing a ✓ changes.                                                   |
+| `apps/web/e2e/day-page.spec.ts`                                                                                             | EDIT   | The first ✓ of each item answers `x-action-revalidated: 2`, so a returned `revalidatePath` or cookie write fails CI. |
+| `apps/web/app/p/layout.tsx`, `apps/web/app/programs/layout.tsx`                                                             | EDIT   | A comment: the layout renders nothing a ✓ changes, and why that matters now.                                         |
+| `.claude/skills/add-server-action/SKILL.md`, `.claude/skills/review-pr/SKILL.md`, `.claude/agents/architecture-reviewer.md` | EDIT   | Name the exception where a reviewer checks for `revalidatePath`.                                                     |
+| `docs/plan.md`                                                                                                              | EDIT   | The PERF-3 backlog row.                                                                                              |
 
 ## Measured on step 1 (local production build, LTE-like throttling, 4× slower CPU, 8 taps 2.5 s apart)
 
@@ -109,15 +114,19 @@ production, where every one of those prefetches was a round trip competing with 
 ## Test plan
 
 - `row-actions.test.ts` (above).
-- The e2e smoke runs unchanged: the response still carries the page, so every journey that reads
-  counts or Collapse after a ✓ still sees them at once.
+- The e2e smoke's journeys are unchanged: the response still carries the page, so every journey
+  that reads counts or Collapse after a ✓ still sees them at once. `day-page.spec.ts` adds one
+  assertion: the first ✓ of each item answers `x-action-revalidated: 2`.
 - Production re-measure after deploy, with the maintainer's go (it writes to their own day).
 
 ## Risks / rollback
 
-- **Other pages' cached copies.** `revalidatePath` also told the router its copies of other pages
-  were stale. Those pages are dynamic and per-user, and the router's dynamic stale time is 0, so a
-  navigation fetches them anew. Back/Forward reuses the copy it has, as it does for any page.
+- **Other pages' cached copies.** `refresh()` evicts the router's Back/Forward cache exactly as
+  `revalidatePath` did (both revalidation kinds call `invalidateBfCache`, Next 16.4.6
+  `server-action-reducer.js:213-216`), and the ✓'s returned page is written back, so Back shows the
+  day after the ✓ and other pages are fetched again. The prefetch cache it now keeps holds only route
+  trees and the layouts above each `loading.tsx` (the root layout, `ClerkRoot`), none of which shows
+  ✓-dependent data; `staleTimes` is unset, so a page itself is fetched on every navigation.
 - **Rollback:** revert the PR. No data or schema change.
 
 ## Out-of-scope / deferred
@@ -125,6 +134,10 @@ production, where every one of those prefetches was a round trip competing with 
 - Steps 2 and 3 (above), each with its own plan; step 2 with a UX panel.
 - **The cold first tap** (≈ 680 ms): a Vercel function and/or Neon compute waking; the maintainer's
   console settings, a separate note with costs.
+- **The day page's other writes still call `revalidatePath`:** Bodyweight's and Life's "Log"
+  buttons (`actions.ts`), and Clear this day / Restore (`clear-day-actions.ts`), so each still
+  empties the prefetch cache. They are one-off submits, not the rapid per-row ticks this step is
+  about; moving them is a follow-up once step 1 is measured on production.
 - **Showing the dashed state only after ≈ 300 ms:** the UX lens recommends against it (an in-flight
   ✓ must never look saved, FAM-1 12c). Not proposed.
 

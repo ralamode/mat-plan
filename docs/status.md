@@ -3,12 +3,23 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-10-15
+**Last updated:** 2026-11-26
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
 
 ## Where we are right now
+
+**Beta 0's features are built; what is left is a week of use, ops and privacy.** `FAM-1`, the
+family program, merged all 72 PRs of its chart on 2026-11-20. `CAT-3`'s movement library is complete
+(587 movements), and **its fresh start ran in production on 2026-11-26**: the seeded household was
+erased, the old movement list went with it, and the household signed in again to an empty, ordinary
+household. The maintainer's family now uses the app for a week (`FAM-1` step 16); the maintainer signed off the privacy notice
+the same day (`PRIV-1`), and the phone run-through follows. The PRs left before the first invite each have an
+approved plan, except `OPS-3`'s restore drill. The forward view is [roadmap.md](./roadmap.md) →
+"Active milestone".
+
+### Earlier — the picture before `FAM-1` (kept as written, 2026-11-13)
 
 **`CRUD-1` step 6b is UNDER WAY: the server takes a movement id (#372), and the picker component exists.** The log form's submit
 payload now carries an optional movement **public id**, and that id — never the client's label —

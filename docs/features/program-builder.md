@@ -474,6 +474,10 @@ start`. #593 stopped those prefetches; whether the route now reaches `networkidl
   `useNameForm()` (`const { name, fieldRef, … } = …`); `form.name` in JSX fails `react-hooks/refs`.
 - **Focus a field in the same tap that opens it.** Mount the form with `flushSync`, then focus: a
   focus deferred to a frame may not raise the iPhone keyboard.
+- **`app/programs/layout.tsx` must render nothing a ✓ changes** (PERF-3). The day page's row actions
+  answer with `refresh()`, which keeps the router's prefetches, and this layout is one of them: a
+  per-day count here would stay stale for up to 5 minutes after a ✓. Adding one returns those
+  actions to `revalidatePath` ([write-path.md](./write-path.md) → "`revalidatePath` is not optional").
 
 ## Changing it
 

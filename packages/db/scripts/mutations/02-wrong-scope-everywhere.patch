@@ -1,13 +1,12 @@
 diff --git a/packages/db/scripts/verify.ts b/packages/db/scripts/verify.ts
-index 2dbd906..d5c3323 100644
 --- a/packages/db/scripts/verify.ts
 +++ b/packages/db/scripts/verify.ts
-@@ -437,7 +437,7 @@ console.log('✓ profiles scoped to root household (household_id NOT NULL)');
+@@ -534,7 +534,7 @@
  // was implicitly written against, so threading it is what keeps those proofs proving what their
  // messages say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is
  // inserted, ~3400 lines down, at the V1-10 programming fixture.
 -const A_SCOPE = householdScopeForScript(households[0].id);
 +const A_SCOPE = householdScopeForScript(households[0].id + 1);
- 
- // ── PROF-1 b: THE THIRD SCOPE — household A, as a MEMBER rather than the owner ───────────────────
- // 🔴 **A legitimately-minted member, which is the whole reason this exists.** `b-s` proved the owner
+ // The positive read through A_SCOPE, kept beside its definition (LEGACY-1 PR B): a seed profile
+ // resolves under `isLiveProfile`, the predicate every scoped read below rides. It is the control
+ // `02-wrong-scope-everywhere.patch` reddens first, so that patch no longer depends on a proof
