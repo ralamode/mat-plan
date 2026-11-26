@@ -57,13 +57,17 @@ V1-14b can assert a clean diff; **P2** is real but rare.
 
 ### P0-2 — Text loads are unwritable (`BW`, `band`, `30in`, `20s`, `123 (50ft)`)
 
+> ⚠️ **`strengthSetSchema` is deleted (LEGACY-1, 2026-11-26).** The day page's row write replaced
+> it: typed quantities per slot (`rowValuesSchema`, `packages/shared/src/program/pieces.ts`). The
+> bullets below describe the schema as it stood when this gap was found.
+
 - **Contract wants:** 10 distinct `load` shapes; only 2 are numeric.
-- **App produces:** a number. `strengthSetSchema` accepts **only** `{reps: positive int, weight: number}`.
+- **App produced:** a number. `strengthSetSchema` (deleted) accepted **only** `{reps: positive int, weight: number}`.
   `entry_sets.weight_label` and `entry_sets.seconds` **exist in the schema with zero writers**.
 - **Consequence today:** a bodyweight movement logs `weight: 0` and would export `0`, **not `BW`** — a
   silent lie in the training record, and the single most common shape in the kids' program (pull-ups,
   dips, hollow holds, ab rollouts are all `BW`).
-- **Fix:** extend `strengthSetSchema` to accept a text load into `weight_label`, and surface it in the
+- **Fix (as proposed then):** extend `strengthSetSchema` to accept a text load into `weight_label`, and surface it in the
   set input (a free-text field or a `BW`/`band` affordance). The read path already handles it —
   `formatSetLine`/`isEditableSet` were built for exactly this.
 - **Note:** this is also the change that would unblock the **editable prefill** the V1-10 panel rejected

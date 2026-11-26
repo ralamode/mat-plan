@@ -107,7 +107,8 @@ export const DAY_ROLE_LABELS: Record<DayRole, string> = {
  *
  * `SLOT_LABEL_MAX` also bounds the two other short texts an author types beside a workout: a
  * superset's group name and its "rest after" (FAM-1 plan §4). Sets per item reuse
- * `MAX_SETS_PER_MOVEMENT` (`strength-session.ts`), and instructions reuse `FREE_TEXT_NOTE_MAX`.
+ * `MAX_SETS_PER_MOVEMENT` (`strength-session.ts`, where it is the only export left), and
+ * instructions reuse `FREE_TEXT_NOTE_MAX`.
  */
 export const PROGRAM_NAME_MAX = 60;
 export const WORKOUT_NAME_MAX = 30;

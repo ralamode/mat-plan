@@ -124,7 +124,9 @@ export const LOGGABLE_DIMENSION_LABELS: Record<string, string> = {
 
 /**
  * Decimal places a logged quantity may carry — ONE precision for every unit, read by `PLAIN_DECIMAL`
- * below, so every field that types a quantity refuses exactly where the server would.
+ * below, so a field that types a quantity refuses what the `numeric(8,3)` column would round. ⚠️ The
+ * row schemas (`rowValuesSchema`) do not check decimal places: a fourth place reaching the writer is
+ * rounded by the column (`writers/day/log-row.ts`), not refused.
  *
  * 3, matching `numeric(8,3)` on `entry_sets.value_num`. It replaces a `step="0.5"` that was sized for
  * barbell plates and blocked `6.25 ft`, `1.25 min` and `61.25 kg` — 1.25 kg plates are real. A 0.5

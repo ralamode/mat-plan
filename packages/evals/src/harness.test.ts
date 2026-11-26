@@ -122,11 +122,13 @@ describe('the registered cases', () => {
   });
 
   it('carries positive controls, so the invariant class cannot pass vacuously', () => {
-    // If `rowWriteSchema` refused everything, all ten refusals would hold and the gate would be
-    // green while the app was broken. These are the cases that make that impossible.
+    // If `rowWriteSchema` or `rowAmendSchema` refused everything, its ten refusals would hold and
+    // the gate would be green while the app was broken. These are the cases that make that
+    // impossible: five per write path.
     const controls = invariantCases.filter((c) => c.id.startsWith('inv-control-'));
 
-    expect(controls.length).toBeGreaterThanOrEqual(5);
+    expect(controls.length).toBeGreaterThanOrEqual(10);
+    expect(controls.filter((c) => c.id.startsWith('inv-control-amend-'))).toHaveLength(5);
     for (const c of controls) expect(c.run().held).toBe(true);
   });
 });

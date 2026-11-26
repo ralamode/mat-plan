@@ -5,6 +5,7 @@ import {
   MOVEMENT_NAME_MESSAGES,
   movementLabelSchema,
   movementNameSchema,
+  movementSlug,
 } from './movements';
 
 /**
@@ -37,6 +38,7 @@ describe('movementNameSchema — a TYPED name earns the typed-name rules (PICK-1
   it.each([
     ['a,b', MOVEMENT_NAME_MESSAGES.commaOrLineBreak],
     ['Bench\npress', MOVEMENT_NAME_MESSAGES.commaOrLineBreak],
+    ['Bench\rPress', MOVEMENT_NAME_MESSAGES.commaOrLineBreak],
     ['🙂', MOVEMENT_NAME_MESSAGES.noLetter],
     ['  ', MOVEMENT_NAME_MESSAGES.missing],
     ['a'.repeat(MOVEMENT_NAME_MAX + 1), MOVEMENT_NAME_MESSAGES.tooLong],
@@ -107,5 +109,17 @@ describe('movementLabelSchema — a name the DATABASE supplied does not (correct
     };
     expect(issues('  ')).toEqual([MOVEMENT_NAME_MESSAGES.missing]);
     expect(issues('a'.repeat(MOVEMENT_NAME_MAX + 1))).toEqual([MOVEMENT_NAME_MESSAGES.tooLong]);
+  });
+});
+
+describe('movementSlug', () => {
+  // The decision, made executable (GAP-1 P2-2). `movementSlug` is a PERSISTED natural key: its
+  // derivation is inlined as SQL in applied, forward-only migration 0002, so changing it would leave
+  // existing rows on the old slug, stop `ON CONFLICT (slug)` firing, and split one movement's history
+  // across two `movements` rows. Sanitising the slug also fixes nothing: the guard is at the name
+  // boundary (the comma rule above), not the derivation. See docs/csv-recording-gaps.md P2-2 before
+  // changing this.
+  it('does NOT sanitise the slug — the guard is at the name boundary, not the derivation', () => {
+    expect(movementSlug('Bench, Close Grip')).toBe('bench,_close_grip');
   });
 });

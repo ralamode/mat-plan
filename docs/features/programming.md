@@ -151,8 +151,8 @@ is what catches one that got in another way (`TEN-2b`'s `23505` fallback does cr
 
 **What follows is the defect as it stood before `TEN-2b`**, kept because it is what the 1d proof
 asserts. `TEN-2c` closed the **denial** half; the read leak's residual closes at `TEN-2c-1`. The
-strength log writes `movements` from free text (`resolveSessionMovements` → `findOrCreateMovement` →
-`packages/db/src/writers/movement-catalog.ts`), and prescriptions resolved by **slug** against a
+strength log wrote `movements` from free text (the session resolver, deleted since by LEGACY-1, →
+`findOrCreateMovement` → `packages/db/src/writers/movement-catalog.ts`), and prescriptions resolved by **slug** against a
 single global namespace — the same arbiter — so:
 
 - whichever household types a movement name **first** pins that slug's row permanently, with its own

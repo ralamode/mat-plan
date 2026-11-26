@@ -279,12 +279,28 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 - **Fix:** revisit the older-day recovery path before FAM-1 slice 3 opens the new page to the
   household, or before a second household.
 
+### Small leftovers after LEGACY-1 (added 2026-11-26, LEGACY-1 C2b)
+
+- **What & why it's debt:** three body-only follow-ups the deletion left, none worth a PR alone:
+  - `DAY_ROLE_TO_SESSION_TYPE` (`packages/shared/src/programming.ts`) is read only by
+    `apps/web/lib/programming/contract.test.ts` and a comment in `packages/db/src/schema.ts`, whose
+    "writer/action-enforced" invariant is out of date: nothing writes `sessions.day_role` now;
+  - `DROPPED_GLOBAL_SLUG_UNIQUE` in `packages/db/src/writers/movement-catalog.ts` is unused; its
+    docblock still describes a `catch` that TEN-2d deleted;
+  - `EntryDTO.sessionDayRole` (`apps/web/lib/dal/entries.ts`) is selected for the day page and
+    rendered nowhere.
+- **Fix:** delete each (and the schema comment's claim) in the next PR that touches the file.
+- **Severity:** low.
+
 ### Columns the legacy strength writer was the last to write (added 2026-11-26, LEGACY-1 C2b)
 
-- **What & why it's debt:** LEGACY-1 deleted the old strength writer, the only code that wrote
-  these. Nothing writes or reads them now, beyond the export, erasure and `db:verify`:
-  - `ramp_targets`, beyond erasure and verify;
-  - `sessions.day_role` and `feel`;
+- **What & why it's debt:** LEGACY-1 deleted the old strength writer, the last code that wrote
+  most of these, and the adherence read. Nothing writes or reads them now, beyond the export,
+  erasure, `db:verify` and the one reader named below:
+  - `ramp_targets`, last read by `weeklyAdherenceRows` (deleted); the old writer never wrote it;
+  - `sessions.day_role` and `feel`. `day_role` still has one reader: `listEntriesForDay`
+    (`apps/web/lib/dal/entries.ts`, the day page's read) selects it into `EntryDTO.sessionDayRole`,
+    which nothing renders;
   - `supersets.label` and `note`;
   - the NULL arm of `entries.prescribed_snapshot`;
   - inserts into `uq_entries_superset_order`.

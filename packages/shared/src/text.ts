@@ -94,14 +94,15 @@ export function hasALetter(value: string): boolean {
  * The canonical optional free-text note schema — the single SHAPE (not just the max literal) shared by
  * every free-text field, so "no note" has ONE representation everywhere. `.trim().transform(v => v ||
  * undefined)` maps a left-blank ('') or whitespace-only ('  '→trim→'') input to `undefined` → the DAL
- * writes NULL (never ''); `.optional()` accepts an absent field. Reused by bodyweight `notes` and
- * session `feel` — a new free-text field imports this rather than re-deriving the normalization.
+ * writes NULL (never ''); `.optional()` accepts an absent field. Reused by bodyweight `notes` and the
+ * profile and program text fields — a new free-text field imports this rather than re-deriving the
+ * normalization.
  *
  * The newline guard (GAP-1 P2-3) sits AFTER `.trim()` — which already strips leading/trailing breaks —
  * so it rejects only an INTERIOR newline, the one that would split a row. A comma is deliberately NOT
  * rejected here: the contract quotes a comma-bearing `notes` on export. This is a trust-boundary guard,
- * not an ergonomic one — `feel` is an `<input type="text">`, which strips CR/LF on paste, so the only
- * way to reach it is a crafted body.
+ * not an ergonomic one — a single-line `<input type="text">` strips CR/LF on paste, so the only way
+ * to reach it is a crafted body.
  */
 export const freeTextNoteSchema = z
   .string()

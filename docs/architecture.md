@@ -235,8 +235,8 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
   request forever. The creator is closed instead — the fixture seed (`seedFixtures`) refuses to insert
   when a live household exists. Since `OPS-2` PR 1 production's seed writes no household at all.
 - ✅ **`movements` came inside the seam at `TEN-2b`.** Movement resolution takes a
-  `HouseholdScope` (`findOrCreateMovement`, and `resolveMovementByPublicId` since `PICK-1` PR 2;
-  the `findOrCreateMovementId` wrapper that used to sit in the DAL is deleted) and resolves
+  `HouseholdScope` (`findOrCreateTypedMovement` and its `findOrCreateMovement` wrapper; `PICK-1`
+  PR 2's `resolveMovementByPublicId` and the DAL's `findOrCreateMovementId` are both deleted) and resolves
   **global-first** — the curated namespace (`household_id IS NULL`),
   then this household's own, then an insert into this household's own — so a name a household types
   belongs to it and is deleted with it. ✅ **`TEN-2c` (migration `0017`) dropped the non-partial

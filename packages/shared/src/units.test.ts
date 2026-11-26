@@ -69,8 +69,9 @@ describe('MAX_QUANTITY_BY_UNIT / quantityCeiling', () => {
     expect(cap!).toBeGreaterThan(0);
   });
 
-  it('the two mass units share ONE ceiling, the one `numericSetSchema` reads', () => {
-    // Re-typing it there is how the two would disagree with nothing red.
+  it('the two mass units share ONE ceiling', () => {
+    // `verify/day.ts` refuses a ✓ one past it; re-typing the number there is how the two would
+    // disagree with nothing red.
     expect(quantityCeiling('lb')).toBe(MASS_QUANTITY_CEILING);
     expect(quantityCeiling('kg')).toBe(MASS_QUANTITY_CEILING);
   });
