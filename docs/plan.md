@@ -2504,7 +2504,7 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   defined household deletion ([runbooks.md](./runbooks.md)) with the residuals stated, the consent
   requirements `AUTH-1` must wire, and SECURITY.md's threat model rewritten for many households. The
   evidence it is derived from — all 18 tables, the processors, the committed-data inventory — is
-  [data-inventory.md](./privacy/data-inventory.md). **Signed off by the accountable role, with a date**
+  [data-inventory.md](./privacy/data-inventory.md). **Signed off by the accountable role, with a date** — ✅ **signed off 2026-11-26** by the maintainer, after the fresh start ([notice](./privacy/notice.md) → About this notice)
   (amended from "a named reviewer": `AGENTS.md` forbids personal names in docs, so the exit criterion
   was unsatisfiable as written). **Not legal advice.**
   **Two code follow-ons remain — `PRIV-2` is the actual `AUTH-1` gate.** _(Beta 0.)_
@@ -2709,7 +2709,9 @@ that keeps the next PR from reintroducing one._
 
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
-- **PRIV-4 — the pre-invite privacy re-read: one sign-off, not one per PR.** _(maintainer,
+- **PRIV-4 — the pre-invite privacy re-read: one sign-off, not one per PR.** ✅ **Signed off
+  2026-11-26** with `PRIV-1`'s, after the fresh start; a later change to what is stored re-opens it
+  through the notice's own triggers. _(maintainer,
   2026-11-07, from `PROF-1` a-r.)_ 🔴 **Gate: after CRUD-1's athlete and workout chunks are done,
   BEFORE the first family outside the maintainer's is invited.** The maintainer has not invited
   anyone and will not until a household can CRUD athletes and workouts, so `/privacy` has exactly
