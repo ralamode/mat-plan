@@ -274,8 +274,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   (`units.ts:164`).
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
-  moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
+- **Fix:** the package owners delete the callerless code in their own PRs. Revisit the older-day recovery path before FAM-1 slice 3 opens
   the new page to the household, or before a second household.
 
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)
