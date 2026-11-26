@@ -511,7 +511,7 @@ deletion end to end. What is left before the first invite:
 - **The maintainer's:** the week of real use (`FAM-1` step 16, from 2026-11-26), the phone
   run-through, then the `PRIV-1` sign-off; the ref scan's three steps; `DX-5(a)`; the sign-in
   provider's bot protection.
-- **PRs, each with an approved plan:** #816 (the notice after the fresh start), four `CAT-3` PRs
+- **PRs, each with an approved plan:** four `CAT-3` PRs
   ([plan](../plans/cat-3-after-the-fresh-start.md)), `PRIV-3` 2b, 3 and 3b, and the ref scan
   ([plan](../plans/oss-1-scan-every-ref.md)).
 - **No plan yet:** `OPS-3`, the per-household restore drill. It left the trial week's path on
