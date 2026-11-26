@@ -3047,7 +3047,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "(both pending the maintainer's re-read)"
+            "text": "(both accepted with the 2026-11-26 sign-off)"
           }
         ]
       },
@@ -3112,13 +3112,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "(pending the\nmaintainer's re-read)"
+            "text": "(the maintainer\nread and approved it)"
           }
         ]
       },
       {
         "k": "text",
         "text": ".\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Signed off for Beta 0 by the maintainer (the household operator), 2026-11-26"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", after\nthe fresh start, covering every re-review above.\n"
       },
       {
         "k": "strong",
