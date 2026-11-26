@@ -164,7 +164,9 @@ Contract: ANY request/response change ⇒ its shared zod schema (types via z.inf
 Time:   lib/dal + writers get day + tz as args; only routes/actions (and their private helpers)
         read the tz cookie.
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
-Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
+Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation;
+        the day page's four row writes use refresh() instead (PERF-3: same fresh page, keeps prefetches;
+        when it stops being safe: write-path.md → "revalidatePath is not optional").
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
 Rate limit: @upstash/ratelimit (sliding window) on mutations and the zip export; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);

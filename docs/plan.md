@@ -1919,6 +1919,14 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   pages V1-12 already scans with axe (`/`, Today, the routine editor), as a trend and a regression
   signal rather than a hard gate at first. **Before the club pilot.** Needs a plan (touches CI).
 
+- **PERF-3 — a ✓ settles fast.** _(maintainer, 2026-11-25: "the logging pages must be lightning fast
+  and reliable"; measured 2026-11-26.)_ A ✓ on a phone sits in its saving state for 0.65–1.4 s. Each
+  ✓ re-renders the whole day page inside its response (≈ 17 sequential queries) and its
+  `revalidatePath` then makes the router fetch every linked page again (≈ 16 requests). **Beta 0.**
+  Three steps ([plan](./plans/perf-3-tick-latency.md)): **(1) built**: the row actions call
+  `refresh()`, which ends the prefetch burst; (2) the ✓ answers with its row only, the card's state
+  derived on the phone (own plan + UX panel); (3) the write reads the household once.
+
 ## BETA — share with other families ([milestone](./milestones/beta-1.md))
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
