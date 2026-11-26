@@ -1,0 +1,1 @@
+CAT-3 R1: the dry run says --apply would refuse an FK into movements that does not abort a delete

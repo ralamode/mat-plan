@@ -117,8 +117,9 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   only walks the chain when appending, so the break stays latent until the NEXT migration fails with
   `are pointing to a parent snapshot … which is a collision`. Set `prevId` to the id of the snapshot
   BEFORE it. (migration 0011 shipped this bug in #139; found while generating 0012, repaired in #147.)
-  → **Now CI-enforced**: the forward-only guard checks the whole chain on every PR, so this cannot
-  recur. If you hit the collision error, the guard's output names the file and the expected id.
+  → **Now CI-enforced**: `pnpm snapshots:check` checks the whole chain (where it runs: AGENTS.md →
+  "Local hooks vs CI merge-gates"), so this cannot recur. Its output names the file and the
+  expected id.
 
 - **`pnpm typecheck` is green while `packages/**` is broken.** → It was `pnpm --filter web exec tsc
 --noEmit`, and `apps/web/tsconfig.json` was the repo's ONLY tsconfig, with an `include` relative to

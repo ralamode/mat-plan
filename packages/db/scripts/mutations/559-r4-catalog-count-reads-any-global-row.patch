@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 5ae24dd7..139eef54 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -687,7 +687,7 @@ async function freshStartCounts(db: Database) {
+       await db
+         .select({ slug: schema.movements.slug })
+         .from(schema.movements)
+-        .where(and(movementIsCatalog(), isNull(schema.movements.deletedAt)))
++        .where(and(movementIsGlobal(), isNull(schema.movements.deletedAt)))
+     ).map((r) => r.slug),
+   );
+   return {

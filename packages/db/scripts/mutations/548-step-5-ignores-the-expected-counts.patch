@@ -1,0 +1,13 @@
+diff --git a/packages/db/scripts/corrections/movement-gates.ts b/packages/db/scripts/corrections/movement-gates.ts
+index 0fcab19b..bcbafddb 100644
+--- a/packages/db/scripts/corrections/movement-gates.ts
++++ b/packages/db/scripts/corrections/movement-gates.ts
+@@ -141,7 +141,7 @@ export function legacyMovementDeletionIssue({
+       'reference a legacy movement (hidden rows included); nothing deleted'
+     );
+   }
+-  if (expected === 'dry-run') return null;
++  return null;
+   const keys = Object.keys(LEGACY_COUNT_ENV) as (keyof LegacyMovementCounts)[];
+   const missing = keys.filter((k) => expected[k] === 'unset');
+   if (missing.length > 0) {
