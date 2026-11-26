@@ -1919,6 +1919,18 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   pages V1-12 already scans with axe (`/`, Today, the routine editor), as a trend and a regression
   signal rather than a hard gate at first. **Before the club pilot.** Needs a plan (touches CI).
 
+- **PERF-3 — explore where a CDN makes the app faster on a phone.** _(maintainer, 2026-11-26; an
+  exploration, not yet a build.)_ Vercel already serves the app through its CDN, so the question is
+  what more it could cache at the edge, and what that saves a phone on a gym floor. Start by measuring
+  (PERF-1 (a) is the real-use source once it lands): which responses are cached today and which are
+  rendered on every request. Candidates to check: the pages that read no household data (the landing
+  page, the privacy notice, the sign-in shell); the movement library, which is the same for every
+  household; and static assets and images. **The rule that bounds it:** per-household data is never
+  cached across users (AGENTS.md → Server conventions, Cache), so anything behind sign-in stays
+  dynamic. **Done when** a short write-up names each candidate, its measured cost today and the
+  expected saving, and says which, if any, earn a PR. Not to be confused with the third-party CDN
+  Clerk loads its sign-in code from, which is a supply-chain question (`docs/tech-debt.md`).
+
 ## BETA — share with other families ([milestone](./milestones/beta-1.md))
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
