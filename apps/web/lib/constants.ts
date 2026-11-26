@@ -1445,12 +1445,6 @@ export const MAIN_CONTENT_ID = 'main';
  */
 export const NOTHING_TO_EXPORT = 'Nothing logged yet, so there is nothing to export.';
 
-/**
- * Typed-error copy shared by every amend path (V1-24 PR 1b).
- *
- * `editStrengthSetAction` had `'That set could not be found.'` inline; a second amend surface would
- * have re-worded the same failure. One place, so the two cannot answer it differently.
- */
 const entriesText = (n: number) => plural(n, { one: '1 entry', other: `${n} entries` });
 
 /**

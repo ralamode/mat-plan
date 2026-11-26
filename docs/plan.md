@@ -3082,43 +3082,24 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   row: gaps are normal in these files, so a dropped row reads as a day off — silent loss. Per-row failure or a
   typed error page.
 
-- **V1-36 — the set-edit guard is looser than the UI says.** 🟡 Filed 2026-10-02 by the V1-24 3a fact
-  sheet. Strength-logging invariant 3 says `isEditableSet` and `updateStrengthSetById`'s guard are
-  identical, but the client requires exactly one quantity (`set-display.ts`), and the SQL guard only
-  requires a live primary mass quantity. A crafted POST can edit a set the UI shows as locked (it
-  updates the primary only). A server fix plus a `db:verify` proof.
+- ✅ **V1-36 — the set-edit guard is looser than the UI says. CLOSED with the path (LEGACY-1 C2b,
+  2026-11-26).** Filed 2026-10-02 by the V1-24 3a fact sheet: a crafted POST could edit a set the UI
+  showed as locked. The gap was in `updateStrengthSetById`'s guard, which is deleted, and the client
+  check it cited (`set-display.ts`) no longer exists.
 
 <a id="legacy-1"></a>
 
-- **LEGACY-1 — retire the legacy strength write path.** _(maintainer, 2026-11-19, on the FAM-1 12f
-  plan's Q4: "Yes, own row after FAM-1 (Recommended)"; FAM-1 plan decision D51. Tech debt, after
-  FAM-1. Not Beta 0.)_ **Planned 2026-11-20:** [plan](./plans/legacy-1-retire-strength-path.md)
-  (v2 after a three-lens panel, approved by the maintainer 2026-11-20). FAM-1 step 12f deletes the old strength form and its three
-  actions ([plan](./plans/fam-1-12f-retire-old-forms.md)). After 12f PR 3 nothing in the app can
-  write a legacy strength session. 12f leaves the path below the actions in place on purpose. This
-  row retires it.
-  - **Left with no caller in the app after 12f PR 3:** the two DAL functions, `logStrengthSession`
-    and `editStrengthSet` (`apps/web/lib/dal/entries.ts`), with their tests; their writers in
-    `packages/db`, `writeStrengthSession` and `updateStrengthSetById`
-    (`src/writers/strength-session.ts`), with their `db:verify` proofs; and the shared schemas they
-    parse, whose tests sit in the app's route folder (`strength-session-schema.test.ts`,
-    `strength-set-schema.test.ts`).
-  - **Other exports the 12f plan's debt list names**, each with no caller in the app once 12f is
-    done: `readsHouseholdProgram` (`packages/shared/src/programming.ts`), which mutation 12's patch
-    quotes as context; `STRENGTH_DAY_ROLES`; `loggableUnitsOf`; `ACTIVITY_INPUT_SHAPE` (after 12f
-    PR 5); and `weeklyAdherenceRows` in `packages/db` (after 12f PR 4), with the comments that still
-    say a page calls it. This row's plan says which go with the path and which stay.
-  - **Not this row's:** `lib/entries/entry-label.ts`, kept on purpose as the only app code that
-    words an old entry (FAM-1 plan D21), and the `wake` activity type, which the export needs.
-  - **It needs its own plan.** It touches `packages/db` proofs and many mutation patches. The plan
-    first shows, for each export, that nothing live reaches it. The 12f plan records
-    `writeStrengthSession` as reached only through the kept DAL function; that is re-checked then.
-  - **It closes `TEN-2b-1` as overtaken.** That row plans a change to `writeStrengthSession`'s
-    transaction, for a caller that will no longer exist. This row's plan says what becomes of the
-    ordering assertion in `entries.test.ts`, which `TEN-2b-1` says "must be changed deliberately,
-    never deleted", and what `TEN-2b-2`, ordered after `TEN-2b-1`, waits for in its place.
-  - `V1-36`, above, is a gap in the same path's edit guard. This row's plan says whether it closes
-    with the path.
+- ✅ **LEGACY-1 — retire the legacy strength write path. CLOSED 2026-11-26.** _(maintainer,
+  2026-11-19, on the FAM-1 12f plan's Q4; FAM-1 plan decision D51. Tech debt, after FAM-1.)_
+  [Plan](./plans/legacy-1-retire-strength-path.md), approved 2026-11-20 after a three-lens panel.
+  FAM-1 12f left the old strength form's write path in place with no caller; this row deleted it in
+  five PRs: A (#807, unused shared exports), B (#814, the kept proofs moved onto a legacy-row
+  fixture), C1 (#815, the app DAL), C2a (#828, the writer's `db:verify` proofs) and C2b (the writer,
+  its movement resolver, `prescribedSnapshotsFor`, `weeklyAdherenceRows` and the legacy schemas).
+  Every proof of a property live code or schema still has was kept. It closed `TEN-2b-1` (overtaken)
+  and `V1-36`, and re-scoped `TEN-2b-2`. `lib/entries/entry-label.ts` stays (D21). What the schema
+  still holds is [tech-debt](./tech-debt.md) → "Columns the legacy strength writer was the last to
+  write".
 
 - **E2E-3 — `export-full-day`'s determinism check can race another spec's strength write.** 🟡 Filed
   2026-10-02 (V1-24 3a correctness lens). Its comment says no other spec submits the strength form;

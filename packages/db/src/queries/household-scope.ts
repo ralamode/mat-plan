@@ -6,7 +6,7 @@ import { schema } from '../client';
 /**
  * How many live households this database contains, up to two — **the pre-AUTH-1 scope resolution,
  * single-sourced** (TEN-1 1b) so `apps/web/lib/dal/household.ts` and `db:verify` run the IDENTICAL
- * query. The `weeklyAdherenceRows` / `householdProfileRows` precedent.
+ * query. The `programDayRows` / `householdProfileRows` precedent.
  *
  * ⚠️ **`LIMIT 2` is an AMBIGUITY PROBE, not a pick.** Exactly one row → that household's scope.
  * Zero → the app is dark (an empty database). Two → `getHouseholdScope()` **throws**: the server

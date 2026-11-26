@@ -268,19 +268,34 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   branch is reset from main afterwards, or stop recommending the branch refresh.
 - **Severity:** low.
 
-### Older days have no in-app fix, and the old forms left callerless code in the packages (added 2026-11-15, 12f half closed 2026-11-20)
+### Older days have no in-app fix (added 2026-11-15; the callerless-code half closed by LEGACY-1, 2026-11-26)
 
-- **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
-  capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
-  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet` (deleted, LEGACY-1 C1);
-  `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
-  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`,
-  `STRENGTH_DAY_ROLES` and `ACTIVITY_INPUT_SHAPE` (deleted, LEGACY-1 A); and `loggableUnitsOf`
-  (`units.ts:164`).
-- **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
-  there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** the package owners delete the callerless code in their own PRs. Revisit the older-day recovery path before FAM-1 slice 3 opens
-  the new page to the household, or before a second household.
+- **What & why it's debt:** days before yesterday are read-only, and the page states no way to fix a
+  wrong value there; the route is a correction (`db:correct`). Acceptable while one household uses
+  the app.
+- **Closed half:** the callerless code FAM-1 12f left in the packages is deleted
+  ([LEGACY-1](./plans/legacy-1-retire-strength-path.md), A through C2b). `lib/entries/entry-label.ts`
+  stays, by recorded decision D21: it words an old entry.
+- **Fix:** revisit the older-day recovery path before FAM-1 slice 3 opens the new page to the
+  household, or before a second household.
+
+### Columns the legacy strength writer was the last to write (added 2026-11-26, LEGACY-1 C2b)
+
+- **What & why it's debt:** LEGACY-1 deleted the old strength writer, the only code that wrote
+  these. Nothing writes or reads them now, beyond the export, erasure and `db:verify`:
+  - `ramp_targets`, beyond erasure and verify;
+  - `sessions.day_role` and `feel`;
+  - `supersets.label` and `note`;
+  - the NULL arm of `entries.prescribed_snapshot`;
+  - inserts into `uq_entries_superset_order`.
+
+  `sessions.client_id` and `supersets.client_id` are server-minted now, so their indexes no longer
+  arbitrate a replay.
+
+- **Why not dropped:** production rows still hold all of these, and the export still reads them.
+- **Fix:** a separate expand→contract change per column, once the export no longer needs them
+  ([plan](./plans/legacy-1-retire-strength-path.md) → "Left in the schema").
+- **Severity:** low.
 
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)
 
@@ -1099,18 +1114,18 @@ success.` Harmless there — nothing referenced the files yet.
 
 ## Set-edit LWW uses server-`now()`, not the client-supplied timestamp (V1-9)
 
-- **What:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`, V1-9) advances
-  `entry_sets.updated_at` to the DB `now()` on each edit. The AGENTS.md schema convention mandates
-  last-writer-wins on the **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so
-  offline clock-skew resolves correctly. **The day page's Change does the same** (FAM-1 11c-i,
-  `amendRow` → `updateEntrySetRows` in `writers/session-rows.ts`: the set, its quantities and the
-  entry), and so does 11c-ii's revive (`logRow` in `writers/day/log-row.ts`: the entry it brings
+- **What:** the day page's Change (FAM-1 11c-i, `amendRow` → `updateEntrySetRows` in
+  `writers/session-rows.ts`: the set, its quantities and the entry) advances `updated_at` to the DB
+  `now()` on each edit. The AGENTS.md schema convention mandates last-writer-wins on the
+  **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so offline clock-skew
+  resolves correctly. The V1-9 set edit that first did this is deleted (LEGACY-1); 11c-ii's revive
+  does the same (`logRow` in `writers/day/log-row.ts`: the entry it brings
   back and the set it soft-deletes); v1.5 sync must find all of them.
 - **Impact:** none today — there is a single ONLINE writer (no offline outbox until v1.5), so `now()` is
   always `> created_at` and no two devices race an edit. Correct for the current deployment.
 - **Proposed fix:** at **v1.5** (offline + TanStack Query + the sync outbox), take the client `updated_at`
-  in `editStrengthSetSchema`, thread it into the writer, and add `.where(incoming >= stored)` to the UPDATE
-  (the same LWW guard the sync path applies to every mutable row). The writer edge already flags the spot.
+  in the row-amend schema, thread it into the writer, and add `.where(incoming >= stored)` to the UPDATE
+  (the same LWW guard the sync path applies to every mutable row).
 - **Severity:** low (deferred with the rest of the offline/LWW work).
 
 ## `profiles.routine_config` is JSONB — a knowing exception to the typed-columns rule (V1-18)

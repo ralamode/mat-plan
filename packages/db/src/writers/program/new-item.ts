@@ -54,7 +54,7 @@ type NewItemResult = ProgramResult<{
  * Refusals: a name or type the schema refuses is `invalid`; it is never `name_taken`; past the cap,
  * `limit_reached`. D25's races are closed by the lock: a second add at the same moment waits, then
  * finds the first add's item by the picker's rule (`pushups` after `push ups` included) and selects
- * it with `existed: true`. Only the strength logger's own find-or-create (`findOrCreateMovement`)
+ * it with `existed: true`. Only `findOrCreateMovement`, which no app path calls since LEGACY-1,
  * still makes items outside the lock.
  */
 export async function newItem(

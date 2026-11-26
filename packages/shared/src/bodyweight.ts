@@ -57,7 +57,7 @@ export const IMPLAUSIBLE_BODYWEIGHT_MESSAGE =
  * *"`.pick()` cannot be used on object schemas containing refinements"* — at **module load**, which
  * `tsc` does not catch and which takes the whole app down at first import. V1-24 PR 1b's draft plan
  * specified exactly that and was caught by a probe, not by review. `strength.ts` carries the same
- * warning for `numericSetSchema`, which is why `editStrengthSetSchema` can extend it.
+ * warning for `numericSetSchema`.
  *
  * So: keep the base plain, extend it per path, and apply the bound **last** via the one shared
  * refiner below. Both paths then enforce an identical rule from a single definition.

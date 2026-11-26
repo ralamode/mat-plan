@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT } from './bodyweight';
+import { BODYWEIGHT_UNITS } from './bodyweight';
 import { buildBodyweight } from './csv/bodyweight';
 import { CSV_UNIT_SUFFIX, EXPORTABLE_UNITS } from './csv/value';
 import { TRACKING_TYPE, TRACKING_TYPES } from './movements';
 import { TRACKING_TYPE_FIELDS, unitsForTrackingType } from './program/pieces';
 import { prescribedText } from './program/prescribed-text';
 import { QUANTITY_SLOT, QUANTITY_SLOT_ROWS, slotAcceptsDimension } from './quantity-slots';
-import { sessionMovementSchema } from './strength-session';
 import {
-  isLoggableUnit,
   isPlainDecimal,
   isWholeNumber,
-  LOGGABLE_DIMENSION_NOUNS,
-  LOGGABLE_DIMENSIONS,
-  LOGGABLE_UNITS,
-  loggableUnitsOf,
   UNIT_CODES,
   unitsOfDimension,
   MASS_QUANTITY_CEILING,
@@ -30,48 +24,18 @@ import {
   UNIT_SINGULAR_LABELS,
 } from './units';
 
+/** Every unit a tracking type offers: what the workout editor and the day page can put in a row. */
+const OFFERED_UNITS = [...new Set(TRACKING_TYPES.flatMap(unitsForTrackingType))];
+
 /**
- * **The chain (V1-30): every unit the form can put in state is one the server accepts, and every unit
- * the server accepts is one the export can write.**
- *
- * Each link is "true by construction" in its own file; this checks them against each other
- * (docs/plans/v1-30-loggable-units.md). It runs the WIRED field (`sessionMovementSchema.shape.unit`,
- * what the action actually validates with), not a helper, so reverting the field to
- * `z.enum(BODYWEIGHT_UNITS)` turns it red.
+ * The bodyweight CSV's link. The strength chain this file used to hold (the legacy form's units ⊆
+ * its schema's ⊆ the export's) went with that form's schema (LEGACY-1 C2b); that every unit a
+ * tracking type offers reaches the export is `csv/strength-log-types.test.ts`'s job.
  */
-describe('offerable ⊆ accepted ⊆ exportable', () => {
-  const wiredUnit = sessionMovementSchema.shape.unit;
-
-  // Every way a unit reaches the form's movement state: the Unit select (per dimension), the
-  // household default, and the bodyweight units the default is drawn from. A catalog default is
-  // filtered through `isLoggableUnit` in the scaffold, so it is already one of these.
-  const offerable = [
-    ...new Set([
-      ...LOGGABLE_DIMENSIONS.flatMap(loggableUnitsOf),
-      DEFAULT_BODYWEIGHT_UNIT,
-      ...BODYWEIGHT_UNITS,
-    ]),
-  ];
-
-  // Independent of the server's enum: every dimension the Measuring select offers must have units,
-  // or the form shows "Time" with an empty Unit select (loggableUnitsOf filters through the schema).
-  // Every unit of the dimension, except `mi`, which FAM-1 step 3 added for the new day page only.
-  it.each(LOGGABLE_DIMENSIONS)('the form offers every %s unit it had', (d) => {
-    expect(loggableUnitsOf(d)).toEqual(unitsOfDimension(d).filter((u) => u !== 'mi'));
-    expect(loggableUnitsOf(d).length).toBeGreaterThan(0);
-  });
-
-  it.each(offerable)('the server accepts %s', (unit) => {
-    expect(wiredUnit.safeParse(unit).success).toBe(true);
-  });
-
-  it.each(wiredUnit.options)('the export can write %s', (unit) => {
-    expect(EXPORTABLE_UNITS).toContain(unit);
-  });
-
+describe('every bodyweight unit is exportable', () => {
   // The bodyweight CSV is a SECOND export path with its own per-unit rule, and `EXPORTABLE_UNITS`
   // (the strength-load spelling, `85kg`) is no spelling for the `weight_lb` column. Without this
-  // link, a third bodyweight unit passes every check above and then throws inside `buildBodyweight`
+  // link, a third bodyweight unit passes every other check and then throws inside `buildBodyweight`
   // at export time -- 500-ing the profile's whole export history, which is the failure CSV-1's own
   // review rejected. Fail here instead, where it costs a test run.
   it.each(BODYWEIGHT_UNITS)('the bodyweight export can write %s', (unit) => {
@@ -81,48 +45,32 @@ describe('offerable ⊆ accepted ⊆ exportable', () => {
   });
 });
 
-describe('the units no form offers', () => {
-  const NON_LOGGABLE = UNIT_CODES.filter((u) => !isLoggableUnit(u));
-
+describe('the units with no CSV load spelling', () => {
   // The one literal pin of this set (AGENTS.md → constants). A new unit code lands in exactly one of
-  // the two lists, and this says which.
-  it('are exactly bool, count, mi and timing', () => {
-    expect([...NON_LOGGABLE].sort()).toEqual(['bool', 'count', 'mi', 'timing']);
-  });
-
-  it.each(NON_LOGGABLE)('%s is refused by the legacy server schema', (unit) => {
-    expect(sessionMovementSchema.shape.unit.safeParse(unit).success).toBe(false);
-  });
-
-  // `mi` is the one exception: the old form never offers it, but a Distance item on the new day page
-  // logs in it, so the export must be able to write it (FAM-1 step 3).
-  it.each(NON_LOGGABLE.filter((u) => u !== 'mi'))('%s has no CSV spelling', (unit) => {
-    expect(EXPORTABLE_UNITS).not.toContain(unit);
-  });
-});
-
-describe('copy for every loggable dimension', () => {
-  it.each(LOGGABLE_DIMENSIONS)('%s has a noun for error messages', (d) => {
-    expect(LOGGABLE_DIMENSION_NOUNS[d]).toBeTruthy();
+  // the two lists, and this says which. A Count's number is written in `reps`, never as a load.
+  it('are exactly bool, count and timing', () => {
+    expect(UNIT_CODES.filter((u) => !EXPORTABLE_UNITS.includes(u)).sort()).toEqual([
+      'bool',
+      'count',
+      'timing',
+    ]);
   });
 });
 
 /**
- * V1-30b-ii — the per-unit stored-value ceiling. This is the guard `units.ts` and
- * `strength-session.ts` both cite: the refine treats a MISSING cap as "refuse", and this is what keeps
- * that branch unreachable rather than load-bearing.
+ * V1-30b-ii — the per-unit stored-value ceiling. This is the guard `units.ts` cites: a caller treats
+ * a MISSING cap as "refuse", and this is what keeps that branch unreachable rather than load-bearing.
  */
 describe('MAX_QUANTITY_BY_UNIT / quantityCeiling', () => {
-  it.each([...LOGGABLE_UNITS])('%s has a ceiling that fits numeric(8,3)', (u) => {
+  it.each(OFFERED_UNITS)('%s has a ceiling that fits numeric(8,3)', (u) => {
     const cap = quantityCeiling(u);
     expect(cap, `no ceiling declared for ${u}`).toBeDefined();
     expect(cap!).toBeLessThanOrEqual(MAX_STORABLE_QUANTITY);
     expect(cap!).toBeGreaterThan(0);
   });
 
-  it('the two mass units share ONE ceiling, so the log and edit paths cannot drift', () => {
-    // `numericSetSchema.max()` (the edit path) reads the same const; re-typing it there is how the
-    // two paths would disagree with nothing red.
+  it('the two mass units share ONE ceiling, the one `numericSetSchema` reads', () => {
+    // Re-typing it there is how the two would disagree with nothing red.
     expect(quantityCeiling('lb')).toBe(MASS_QUANTITY_CEILING);
     expect(quantityCeiling('kg')).toBe(MASS_QUANTITY_CEILING);
   });
@@ -157,18 +105,9 @@ describe('UNIT_SINGULAR_LABELS', () => {
  * step 3"). These replace three of lane A's lines in `program/owed.test.ts`.
  */
 describe('FAM-1 step 3: every tracking type is storable', () => {
-  const offeredByAType = [...new Set(TRACKING_TYPES.flatMap(unitsForTrackingType))];
-
   // Without a cap, a quantity in that unit is REFUSED (quantityCeiling's contract), so a Count in
-  // `count` would be unloggable. Derived from what the editor offers plus what the old form offers.
-  it.each([...new Set([...offeredByAType, ...LOGGABLE_UNITS])])(
-    '%s has a ceiling that fits numeric(8,3)',
-    (u) => {
-      const cap = quantityCeiling(u);
-      expect(cap, `no ceiling declared for ${u}`).toBeDefined();
-      expect(cap!).toBeLessThanOrEqual(MAX_STORABLE_QUANTITY);
-    },
-  );
+  // `count` would be unloggable. The cap for every offered unit is the MAX_QUANTITY_BY_UNIT case
+  // above.
 
   it('(primary, count) and a ceiling for count exist, so a Count in count is storable', () => {
     expect(TRACKING_TYPE_FIELDS[TRACKING_TYPE.count].slot).toBe(QUANTITY_SLOT.primary);

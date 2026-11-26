@@ -93,38 +93,6 @@ sequenceDiagram
   UI-->>Kid: updated Today view
 ```
 
-## 2g. Resolving a movement — the id decides, ids before inserts (PICK-1 PR 2)
-
-```mermaid
-flowchart TD
-  S["submitted movements[]<br/>each: movementPublicId? + movementName"] --> P1
-  subgraph DB["packages/db · resolveSessionMovements — OUTSIDE the transaction"]
-    P1{"phase 1:<br/>every movementPublicId"} -->|resolves global-or-own| OK[row: id + name]
-    P1 -->|any miss| NO["throw MovementNotAvailableError<br/>'Movement not available'"]
-    OK --> P2["phase 2: findOrCreateMovement<br/>for the TYPED names only — INSERTS"]
-  end
-  P2 --> B["ResolvedSessionMovement[]<br/>built FIELD BY FIELD<br/>movementName = the DATABASE's"]
-  B --> W
-  subgraph TX["writeStrengthSession · db.transaction"]
-    W[isLiveProfile — the profile seam] --> RC{"assertMovementsAreAvailable<br/>global-or-own, re-checked HERE"}
-    RC -->|any not available| RB["throw → ROLLBACK<br/>nothing commits"]
-    RC -->|all available| I[insert session → entries → sets]
-  end
-  style P1 fill:#fde68a,stroke:#b45309
-  style RC fill:#fecaca,stroke:#b91c1c
-  style NO fill:#fecaca,stroke:#b91c1c
-  style RB fill:#fecaca,stroke:#b91c1c
-```
-
-**Two shapes to read off it:** phase 2 is the only phase that writes, which is why phase 1 comes
-first; and the **red node is the seam** — phase 1 reads outside the transaction, so the re-check is
-what the rollback protects.
-
-The invariant itself — the phase order, the seam, what the refusal may and may not say, and the one
-bounded consequence the id path creates — is [write-path.md](./features/write-path.md) → **14**. This
-section is the shape; that one is the rule. (§2f above is its neighbour and the two compose: §2g
-resolves the `movement_id` that §2f freezes.)
-
 ## 2c. Batch write path — logging a day's check-ins (V1-5; historical since FAM-1 12f)
 
 The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by
@@ -466,16 +434,16 @@ flowchart TD
   style U fill:#bbf7d0,stroke:#15803d
 ```
 
-🔴 **The highlighted node is one function with two callers, and that is the point.** Both paths must
-answer "what was prescribed" identically; while the composer was private to a `server-only` async
-function, `packages/db` could not call it and the agreement could only be asserted by a test.
+⚠️ **The log-time half (top) was the legacy strength writer's, deleted by LEGACY-1.** The rows it
+froze stay, and the export still reads them; only the fallback branch calls the highlighted node
+now. It had two callers by design: both paths had to answer "what was prescribed" identically.
 
 ⚠️ **`''` is an answer, not a missing value** — it is what an `open()` prescription renders, and 11 of
 the 13 seeded are open. Only `IS NULL` takes the fallback branch. NULL means "logged before chunk 2,
 or logged with no day role"; everything else freezes, so chunk 4's edits cannot rewrite history.
 
-**Since FAM-1 11b the snapshot has two freezing paths.** The flow above is the strength writer's (a
-day-role prescription, matched by movement). A program row (§2i) freezes its own prescription's text
+**Since FAM-1 11b the snapshot had two freezing paths.** The flow above was the legacy strength
+writer's (a day-role prescription, matched by movement). A program row (§2i) freezes its own prescription's text
 inside its transaction, through `prescribedText` (`@mat-plan/shared/program/prescribed-text`), the
 renderer the day page and the export share; its `''` (a Check) is the same real value as above. The
 export's NULL fallback reaches only the first path's rows: a program row is never written NULL.
@@ -583,9 +551,9 @@ on a day no assignment covers any more keeps its ids, read from the live block (
 fixtures with ids mapped exactly.
 
 > **The V1-10 program card before it** (`resolveDayRole` → `getProgramDay` → `programDayRows`) is
-> unmounted from the day page since V1-24 3b-page (#418). `programDayRows` still feeds the export and
-> the legacy snapshot writer (§2f) until FAM-1 12f deletes it; its history is in
-> [ADR 0007](./decisions/0007-scheduling-model.md).
+> unmounted from the day page since V1-24 3b-page (#418). `programDayRows` still feeds the export's
+> live fallback; the legacy snapshot writer (§2f) that also read it is deleted (LEGACY-1). Its history
+> is in [ADR 0007](./decisions/0007-scheduling-model.md).
 
 ## 3. Offline outbox → sync
 

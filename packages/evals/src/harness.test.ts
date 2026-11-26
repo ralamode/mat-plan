@@ -122,7 +122,7 @@ describe('the registered cases', () => {
   });
 
   it('carries positive controls, so the invariant class cannot pass vacuously', () => {
-    // If `strengthSetSchema` refused everything, all ten refusals would hold and the gate would be
+    // If `rowWriteSchema` refused everything, all ten refusals would hold and the gate would be
     // green while the app was broken. These are the cases that make that impossible.
     const controls = invariantCases.filter((c) => c.id.startsWith('inv-control-'));
 

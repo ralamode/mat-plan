@@ -53,8 +53,7 @@ export const QUANTITY_SLOT_LABELS: Record<QuantitySlot, string> = {
  * CASCADE`, and `db:seed` runs on every push to main). ADDING one stays cheap.
  */
 export const QUANTITY_SLOT_DIMENSIONS_BY_CODE: Record<QuantitySlot, readonly UnitDimension[]> = {
-  // `count` since FAM-1 step 3: a Count item ("Write it") may log a plain number (plan §2, R7). The
-  // legacy strength form does NOT offer it: `LOGGABLE_DIMENSIONS` (`units.ts`) excludes it by name.
+  // `count` since FAM-1 step 3: a Count item ("Write it") may log a plain number (plan §2, R7).
   primary: ['mass', 'length', 'time', 'count'],
   vest: ['mass'],
   ankle: ['mass'],

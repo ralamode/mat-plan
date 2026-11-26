@@ -94,18 +94,3 @@ index f962f316..1aaf2334 100644
              ),
            )
        : [];
-diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
-index cbe6ee5a..b3031002 100644
---- a/packages/db/src/writers/strength-session.ts
-+++ b/packages/db/src/writers/strength-session.ts
-@@ -390,7 +390,9 @@ export async function writeStrengthSession(
-     const [profile] = await tx
-       .select({ id: schema.profiles.id })
-       .from(schema.profiles)
--      .where(isLiveProfile(args.profilePublicId, args.scope))
-+      .where(
-+        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
-+      )
-       .limit(1);
-     if (!profile) throw new Error(PROFILE_NOT_FOUND);
- 

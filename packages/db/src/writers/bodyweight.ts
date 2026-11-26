@@ -8,13 +8,12 @@ import { ownedEntryIds } from './ownership';
 
 /**
  * Amend ONE already-logged bodyweight's value (V1-24 PR 1b), single-sourced HERE in `packages/db` so
- * the app DAL and `db:verify` prove the IDENTICAL guard — the `updateStrengthSetById` doctrine, and
- * the reason it cannot live in `apps/web/lib/dal` (`verify.ts` imports only `../src/*`, so a writer
- * there would fork a second, unproved copy of a security boundary).
+ * the app DAL and `db:verify` prove the IDENTICAL guard, and the reason it cannot live in
+ * `apps/web/lib/dal` (`verify.ts` imports only `../src/*`, so a writer there would fork a second,
+ * unproved copy of a security boundary).
  *
- * A single atomic UPDATE — **no transaction**, unlike the strength writer. The value lives on
- * `entries` itself; that writer became a transaction only when GAP-3 moved its magnitude to a child
- * row, and its docblock records exactly that.
+ * A single atomic UPDATE — **no transaction**: the value lives on `entries` itself, not on a child
+ * row.
  *
  * Returns the amended entry's `public_id`, or `null` when the guarded WHERE matched no row. `null` is
  * an EXPECTED outcome with **four** causes, and the caller must tell them apart — see the note on

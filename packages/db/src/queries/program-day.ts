@@ -17,7 +17,7 @@ import { isLiveProfile, programBlockIsLegacy } from '../writers/ownership';
 
 /**
  * The programmed movements for ONE kid on ONE `day_role` (V1-10 slice 2), single-sourced here so the app
- * read DAL and the `db:verify` proof run the IDENTICAL SQL (the `weeklyAdherenceRows` precedent — the proof
+ * read DAL and the `db:verify` proof run the IDENTICAL SQL (the first such query here — the proof
  * would otherwise cover a different join shape than the DAL ships). `db` is typed like the seed's
  * (`NodePgDatabase<schema>`); the PGlite verify harness passes its cast db.
  *
@@ -96,13 +96,10 @@ export function programDayRows(
         // this subquery joined, so the kind conjunct narrows THAT row: an adult resolves no
         // `blockId`, the query returns `[]`, and that is the same "nothing programmed" shape the DAL
         // already handles. ⚠️ **Guarded HERE, not in the page or the DAL**, because this one query
-        // feeds every consumer — today the export's live fallback (`liveMatchesFor`) and, since
-        // V1-22 chunk 2 (the day card and the scaffold/prefill via `getProgramDay` were its others),
-        // `prescribedSnapshotsFor`, which FREEZES this query's answer onto the entry permanently.
-        // 🔴 **So the `id DESC LIMIT 1` block rule and the kind conjunct are now write-path
-        // concerns, not display ones** — what they decide is recorded, not merely shown.
-        // Guarding the latter consumers separately would be copies, and
-        // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
+        // feeds every consumer — today only the export's live fallback (`liveMatchesFor`); the day
+        // card, the scaffold/prefill and the legacy writer's frozen snapshot were the others (LEGACY-1).
+        // Guarding a consumer separately would be a copy, and
+        // `db:verify` drives the query rather than the DAL, so a copy would go unproven.
         eq(schema.profiles.kind, PROGRAM_READ_KIND),
         programBlockIsLegacy(),
         isNull(schema.programBlocks.deletedAt),

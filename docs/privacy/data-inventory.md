@@ -622,11 +622,11 @@ separately. **Four were reached by the UI** (two until `PROF-1` a-r; the fourth,
 1. **`sessions.feel`** — "how it felt". **No page writes it any more** (re-read 2026-11-20): its one
    input was on the strength form (deleted in #725), and the action that wrote it went in #741. Rows
    written before keep it. The DAL wrapper that still accepted it (`logStrengthSession`) is deleted
-   (LEGACY-1, 2026-11-21), so nothing in the app can write it.
+   (LEGACY-1, 2026-11-21), and the writer below it with it (2026-11-26), so no code can write it.
 2. **The movement-name box — historical** (re-read 2026-11-20). Its input was on the strength form
    (`strength-form.tsx`, deleted in #725), which wrote `entries.movement_name` **and** a `movements`
-   row; no page does now, and the DAL that remained (`logStrengthSession`) is deleted (LEGACY-1,
-   2026-11-21). Today a
+   row; no page does now, and the DAL that remained (`logStrengthSession`) and its writer are deleted
+   (LEGACY-1, 2026-11-21 and 2026-11-26). Today a
    typed movement name comes only from the program builder's "+ New item", which writes a
    `movements` row in the household's own namespace. The stock below was deleted at the fresh start
    (2026-11-26). **This was
