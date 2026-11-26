@@ -1040,7 +1040,10 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
 
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
-  write failed, which prompts a duplicate submit.
+  write failed, which prompts a duplicate submit. **One exception (PERF-3):** the day page's four row
+  writes (`row-actions.ts`) call Next's `refresh()` instead. It puts the same fresh page in the
+  response, but `revalidatePath` also emptied the router's prefetch cache, so every link on the day
+  page was fetched again after each ✓ (about 16 requests, measured on production 2026-11-26).
 
 - **Server Actions are not HTTP routes and cannot be tested as such.** Test them as plain async
   functions with Clerk's `auth()` and Drizzle mocked. Async Server Components need Playwright, not
