@@ -505,7 +505,7 @@ another slot, or a second one in the same slot, is the writer's to refuse.
       household item.** The old Strength form's logger made one for a typed name
       (`resolveSessionMovements`), outside this cap and its lock, an accepted gap (decided
       overnight, 2026-11-18). Step 12f retired that form, so nothing in the app reaches it now;
-      `LEGACY-1` deletes the path (C1, #815, then C2b).
+      `LEGACY-1` deletes the path (C1, #815, then C2b, #830).
     - **One function counts a household's items: `householdItemsFull(options)`**
       (`program-shapes.ts`), from the picker's options: an option whose `owner` is `household`
       counts, a library movement never does. The fake and the picker's "full" line ask it (the picker since 15 PR 1, #664).
