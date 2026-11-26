@@ -96,9 +96,10 @@ import {
 // cannot reach the constructor that takes a household id as an argument at all (module resolution
 // fails on a deep bare import). A script has no request to derive a scope from, so it NAMES one.
 import { householdScopeForScript } from '../src/writers/household-scope-script';
-// TEN-1 1d: the REAL find-or-create the app DAL delegates to. `apps/web/lib/dal/catalog.ts` is
-// `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
-// run the code the app runs if that core lives here (write-path.md invariant 3).
+// TEN-1 1d: the REAL find-or-create, a one-line wrapper over `findOrCreateTypedMovement`, the core
+// `newItem` (`src/writers/program/new-item.ts`) calls. The app's DAL modules are `server-only` and
+// import the app's env, so the catalog verdict at the end of this file can only run the code the app
+// runs because that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
 import {
   findNameMatch,
@@ -1552,8 +1553,8 @@ assert.equal(
 console.log('✓ V1-6b-1: ramp_target ⋈ entries join returns actual (50) alongside target (45)');
 
 // ── V1-6b-2: the ramp fixture's other profile, kept as fixture (LEGACY-1) ─────────────────────────
-// `weeklyAdherenceRows`, the read this section proved, was deleted by LEGACY-1 with the old Today
-// card. Its fixture stays: the ramp-test profile's public id is read below (the TEN-1 matrix, the
+// `weeklyAdherenceRows`, the read this section proved, has had no caller since the old Today card
+// went, and LEGACY-1 retires it; its proof is deleted. Its fixture stays: the ramp-test profile's public id is read below (the TEN-1 matrix, the
 // B1-1b reader audit), and the second profile's target and bout are rows later counts include.
 const RAMP_TEST_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000f0'; // rampTestProfile above
 const [otherRampProfile] = await db
@@ -1717,7 +1718,7 @@ async function upsertReturningId(
     .returning({ id: table.id });
   if (row) return row.id;
   // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the guard the old strength writer's
-  // `reselectLiveByClientId` carried (deleted with that writer by LEGACY-1), not a shortcut.**
+  // `reselectLiveByClientId` carried (retired with that writer by LEGACY-1), not a shortcut.**
   // Before V1-9b B0 the partial UNIQUE kept a hidden row out of the index, so a conflict implied a
   // LIVE row and an unguarded re-select was merely sloppy. B0 puts hidden rows back in the index, so
   // a conflict can now be WITH a hidden row — and this re-select would hand its id back and attach
@@ -2212,8 +2213,8 @@ console.log(
 // not by review — there is no third spelling that gets a mass unit into a length quantity, because
 // `dimension` is the shared column of two composite FKs against two PRIMARY KEYS.
 {
-  // The rows: a legacy hold (`legacyStrengthFixture`, LEGACY-1), the shape the labeled-movement
-  // proof above logs. Its first two sets are bodyweight and carry NO quantity, so each slot below is
+  // The rows: a legacy hold (`legacyStrengthFixture`, LEGACY-1), the shape the old writer's
+  // labeled-movement proof logged before LEGACY-1 deleted it. Its first two sets are bodyweight and carry NO quantity, so each slot below is
   // free to be written; the third is 30 seconds.
   const {
     entries: [qtyEntry],
@@ -2405,8 +2406,8 @@ console.log(
 
 // ── GAP-1 P0-1: `sessions.day_role` — WHICH programmed day a session was ───────────────────────────
 // The CHECK's frozen literals can't silently drift from the shared const (the prescriptions precedent).
-// (The old strength writer's day_role round-trips were deleted with it by LEGACY-1; no writer sets
-// the column now. The CHECK still holds for the rows production carries.)
+// (The old strength writer's day_role round-trips were deleted by LEGACY-1, which retires that
+// writer; no live writer sets the column. The CHECK still holds for the rows production carries.)
 await assertCheckCoversConst('sessions_day_role_check', DAY_ROLES);
 
 // A garbage literal is refused by the CHECK.
@@ -2426,7 +2427,8 @@ console.log('✓ GAP-1: sessions.day_role — CHECK parity, bad-literal reject')
 // The mix matters: one `done` set and one `sub_failure` set on the SAME movement, which is the
 // realistic shape ("3 sets, the last one failed") and the one entry-level storage could never
 // express. The rows are `legacyStrengthFixture`'s (LEGACY-1), whose sets go through the live
-// `insertEntrySetRows`; the old writer's edit refusal was deleted with that writer.
+// `insertEntrySetRows`. The old edit path's refusal of a sub-failure set was deleted with the rest
+// of that path's proofs (LEGACY-1).
 const {
   entries: [sfEntry],
 } = await legacyStrengthFixture(asPg, {
@@ -3955,8 +3957,8 @@ assert.equal(emptyNotNull, 0, "V1-22 chunk 1: an '' snapshot must not satisfy IS
 console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
 
 // ── V1-22 chunk 2: the EXPORT reads the frozen prescription as it was stored ──────────────────────
-// The writer half of this section (the old strength writer freezing a snapshot) was deleted with
-// that writer by LEGACY-1. The live writer's freeze is `verify/day.ts` "9: the frozen prescription"
+// The writer half of this section (the old strength writer freezing a snapshot) was deleted by
+// LEGACY-1, which retires that writer. The live writer's freeze is `verify/day.ts` "9: the frozen prescription"
 // (mutation 129). What stays is the export's read of the column, over rows production holds.
 const SNAP2_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e5';
 await db.insert(schema.profiles).values({
@@ -3967,7 +3969,7 @@ await db.insert(schema.profiles).values({
 });
 // 🔴 **The READ side, through the query the export actually ships.** `coalesce(…, '')` or
 // `nullif(…, '')` on that select — one word — would survive every other gate: the pure tests run on
-// hand-built rows, the writer proofs read the column by direct `select`, and the e2e exports under an
+// hand-built rows, a direct `select` of the column cannot see the read, and the e2e exports under an
 // unchanged program where frozen and live bytes coincide.
 //
 // Its rows are the two shapes production holds, written by `legacyStrengthFixture` (LEGACY-1): a
@@ -4670,9 +4672,9 @@ console.log(
 // `docs/plans/ten-1-household-scope.md` → "1d as built — the catalog verdict", and the three PRs that
 // have moved it since: `ten-2a`, `ten-2b`, `ten-2c`.
 //
-// The function under test is `findOrCreateMovement`, the REAL core the app's find-or-create
-// delegates to (single-sourced in 1d exactly so this proof can run it; `apps/web/lib/dal/catalog.ts`
-// is `server-only` and cannot execute here).
+// The function under test is `findOrCreateMovement`, a one-line wrapper over
+// `findOrCreateTypedMovement`, the REAL core `newItem` calls (single-sourced in `packages/db` in 1d
+// exactly so this proof can run it; the app's DAL is `server-only` and cannot execute here).
 
 // (a) The structural fact everything below follows from.
 //
@@ -4952,8 +4954,8 @@ assert.equal(
 );
 
 // (e) A household-B row the resolver authored on B's behalf, kept as a fixture (LEGACY-1). It was the
-// catalog row a refused cross-household strength write left behind; that write path is deleted, so
-// the refusal is gone with it (the live writers' household refusals are `verify/day.ts` 6c and
+// catalog row a refused cross-household strength write left behind; LEGACY-1 retires that write
+// path and deleted its refusal's proof (the live writers' household refusals are `verify/day.ts` 6c and
 // `verify/program.ts` 6a-ii). The row stays because the dark gate below asserts over every row a
 // resolver authored, and an owned row in B's namespace is one of the shapes it must admit.
 const REFUSED_MOVEMENT_NAME = 'TEN-1 Refused Session Lift';
@@ -4965,7 +4967,7 @@ assert.equal(
 );
 
 // TEN-2b: the ids the REAL resolver returned in this run — one curated global resolve (box_jump),
-// one owned insert, and the rows the leak and the refusal produced. The re-taken dark gate in the
+// one owned insert, and the rows the leak and (e)'s fixture produced. The re-taken dark gate in the
 // TEN-2a/2b section below asserts over exactly these, because they are the only rows a resolver
 // touched; V1-1b's raw-SQL backfill fixture also writes `movements`, and nothing scopes those.
 const TEN2B_RESOLVER_IDS: number[] = [
@@ -8012,8 +8014,9 @@ console.log(
 //
 // ⚠️ **What a pass here proves, and the one thing it does not.** It proves the twin is impossible
 // for the weigh-in writer, whose refusal is a throw. It does NOT prove the app reports that refusal
-// well — `B1-2` owns the envelope. (The old strength writer's case, steps 1–4, was deleted with that
-// writer by LEGACY-1; the live row writer's hidden-replay answers are `verify/day.ts` 3–3i.)
+// well — `B1-2` owns the envelope. (The old strength writer's case, steps 1–4, was deleted by
+// LEGACY-1, which retires that writer; the live row writer's hidden-replay answers are
+// `verify/day.ts` 3–3i.)
 {
   // 0 · 🔴 **The weigh-in writer, the one B0 changes with no arbiter to re-predicate.**
   //      `insertBodyweightEntry` infers no target (`onConflictDoNothing()` — every unique
@@ -8793,7 +8796,7 @@ console.log(
       '…and the live one it was swapped for IS present (so the filter is not just an empty read)',
     );
 
-    // (b) was `weeklyAdherence` (Q7), the old Today card's read, deleted by LEGACY-1.
+    // (b) was `weeklyAdherence` (Q7), the old Today card's read, retired by LEGACY-1.
     // (c) The amends ride `ownedEntryIds`, which filters tombstones — so amending a HIDDEN weigh-in
     //     answers notFound, and leaves `deleted_at` alone.
     const amendHidden = await updateBodyweightEntryById(asPg, {

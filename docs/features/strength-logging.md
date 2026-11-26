@@ -26,8 +26,8 @@ owns:
 > FAM-1 row writer ([day-writers.md](./day-writers.md)). FAM-1 12f PR 3 removed the two actions
 > that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the two DAL
 > functions went in [`LEGACY-1`](../plan.md#legacy-1) C1 (2026-11-21). The schemas and the writer
-> below stay with their Vitest and `db:verify` coverage, with no caller, until LEGACY-1 C2 deletes
-> them ([plan](../plans/legacy-1-retire-strength-path.md)).
+> below stay, with their Vitest coverage and no caller, until LEGACY-1 C2b deletes them; their
+> `db:verify` proofs went in C2a ([plan](../plans/legacy-1-retire-strength-path.md)).
 
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
@@ -238,24 +238,26 @@ Real ones, each with the file to look at.
   guard is mass-only (`updateStrengthSetById`, invariant 3). Before V1-30 no non-mass set could be
   saved, so this population is new. A typo (`300 sec`) needs a new entry in
   `packages/db/scripts/corrections/registry.ts`, since there is no generic "fix a set" correction.
-  Making non-mass sets editable is its own backlog row. `db:verify` pins the refusal.
+  Making non-mass sets editable is its own backlog row. Its `db:verify` proof was deleted by
+  LEGACY-1 C2a.
 
 - **`updateStrengthSetById`'s ownership subselect is `writers/ownership.ts`.** Same predicate as the
-  bodyweight amend, extracted when the second caller arrived — which means V1-9's existing
-  cross-profile `db:verify` proof now covers the shared helper too.
+  bodyweight amend, extracted when the second caller arrived. V1-9's cross-profile `db:verify`
+  proof of this edit was deleted by LEGACY-1 C2a; the helper's live proofs are the bodyweight
+  amend's (V1-24 1b) and the TEN-1 1b read matrix's `ownedEntryIds` row.
 
   **Since TEN-1 1b the set-edit also takes a `scope`** (`updateStrengthSetById(exec, { …, scope })`),
   which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
-  guarded UPDATE. The app DAL that resolved it (`editStrengthSet`) is deleted (LEGACY-1 C1). `db:verify`'s TEN-1 write matrix proves the refusal in **both**
-  directions with no side effect.
+  guarded UPDATE. The app DAL that resolved it (`editStrengthSet`) is deleted (LEGACY-1 C1). This edit's rows in `db:verify`'s TEN-1 write
+  matrix were deleted by LEGACY-1 C2a; the matrix still proves the bodyweight amend's refusal.
 
 - **`writeStrengthSession`'s in-transaction profile resolve is household-scoped too (TEN-1 1c).** It
   takes a **required** `scope` and runs the same single-sourced `isLiveProfile`, so a profile outside
   the scope resolves to nothing and the core throws `Profile not found` — byte-identical to the shape
   an unknown or soft-deleted profile already got, with the **whole multi-table graph rolled back**.
-  `db:verify` asserts both directions and that no `sessions` row survived a refusal: a refusal that
-  wrote half a session would be worse than a leak, because the athlete's next replay would attach to
-  it. The app DAL that resolved the scope and passed it down (`logStrengthSession`) is deleted
+  `db:verify` asserted both directions and that no `sessions` row survived a refusal (a refusal
+  that wrote half a session would be worse than a leak, because the athlete's next replay would
+  attach to it); that proof was deleted by LEGACY-1 C2a. The app DAL that resolved the scope and passed it down (`logStrengthSession`) is deleted
   (LEGACY-1 C1).
 
   ✅ **Movement resolution still runs BEFORE this, and it is SCOPED as of `TEN-2b`** — the DAL's
@@ -288,7 +290,8 @@ Real ones, each with the file to look at.
   - **the refused write still commits** — the DAL resolves every movement before
     `writeStrengthSession`, whose in-transaction re-resolve is the actual seam, so a POST the seam
     **refuses** has already written globally-visible caller-supplied text. A cross-tenant **write**
-    primitive surviving its own refusal, categorically different from a read leak.
+    primitive surviving its own refusal, categorically different from a read leak. (This case's
+    `db:verify` fixture was deleted by LEGACY-1 C2a, with the write path it reproduced.)
 
   **`TEN-2` is the fix** (a `household_id` column plus partial unique indexes, three PRs; see
   `plan.md` → TEN-2a/2b/2c), and the recorded verdict is that it belongs in **Beta 0**, before a

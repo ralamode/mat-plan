@@ -483,15 +483,17 @@ The shapes those lanes agree on, the fakes and the preview route are
        DAL resolves every movement before `writeStrengthSession`, whose in-transaction re-resolve is
        the actual seam. A cross-tenant **write** primitive surviving its own refusal, which is
        categorically worse than a read leak. ⚠️ **Two vehicles, not one proof:** `db:verify`'s
-       refused-write case is a **fixture reproducing the DAL's call order** (it calls
-       `findOrCreateMovement` itself, so its last assertion cannot fail); the order was pinned
-       by an `entries.test.ts` test on the SQL `logStrengthSession` emitted. ✅ **That DAL function is
+       refused-write case was a **fixture reproducing the DAL's call order** (it called
+       `findOrCreateMovement` itself, so its last assertion could not fail; LEGACY-1 C2a deleted
+       it); the order was pinned by an `entries.test.ts` test on the SQL `logStrengthSession`
+       emitted. ✅ **That DAL function is
        deleted (LEGACY-1 C1, 2026-11-21)**, and the test was retired deliberately with a record in
-       its place; `TEN-2b-1` closed as overtaken. The writer below it goes in C2.
+       its place; `TEN-2b-1` closed as overtaken. The writer below it goes in C2b.
        ✅ **`PICK-1` PR 2 narrowed this, and did not close it.** `resolveSessionMovements` resolves
        every submitted movement **id** before it creates any typed name, so a body refused _for its
-       id_ now commits nothing at all — proved by `db:verify` (a), whose typed sibling is chosen to
-       slug onto no existing row so phase 2 really would insert, and by `37-typed-before-ids.patch`.
+       id_ now commits nothing at all — proved by `db:verify`'s PICK-1 (a), whose typed sibling was
+       chosen to slug onto no existing row so phase 2 really would insert, and by
+       `37-typed-before-ids.patch`, until LEGACY-1 C2a deleted both (the resolver goes in C2b).
        What survived was the original case: a typed name in a session the **profile** seam then
        refused. With the DAL deleted nothing in the app reaches it, and `TEN-2b-1` closed as
        overtaken (LEGACY-1 C1).
@@ -523,7 +525,8 @@ The shapes those lanes agree on, the fakes and the preview route are
    `PROF-1` a-0 and is now the rule rather than the exception (ADR 0008 decision 3.4).
    🔴 **The arbiters still say `where: isNull(deletedAt)`, and that is deliberate — do not "tidy" it
    in the PR that changes an index.** A supplied predicate still infers against a non-partial index
-   (`db:verify` exercises the real writer and proves it), so the two can change in either order
+   (`verify.ts`'s `upsertReturningId` fixture infers through one on every run; the strength
+   writer's own case was deleted by LEGACY-1 C2a), so the two can change in either order
    without a window where neither works. Dropping the `where:` in the same deploy as the index change
    is how you get a statement that matches nothing in between.
    ⚠️ **A NEW `client_id` arbiter is non-partial from birth** — the rule is in the
@@ -541,7 +544,7 @@ The shapes those lanes agree on, the fakes and the preview route are
    - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
      branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
      now names this case. Asserted first in the B0 block, and the case mutation `39` reddens (since
-     LEGACY-1 PR B; the strength case breaks under it too, after).
+     LEGACY-1 PR B; the strength case that broke under it too was deleted in C2a).
    - **check-ins** → `own_hidden` per item; since `V1-9b` B1-2 (#387) the action names the field
      that did not save.
    - **life activities** → `own_hidden`; since B1-2 the action refuses rather than reporting
@@ -716,8 +719,8 @@ The shapes those lanes agree on, the fakes and the preview route are
       `resolveMovementByPublicId`, and the writer receives `movements.name` **from the row** — never
       the client's `movementName`. So the resolved movement is built **field by field**, not
       `{ ...m, movementId }`: a spread would carry the client's label into
-      `entries.movement_name`, and silently undo this. `db:verify` (c) is what proves the
-      database's name arrives. ⚠️ **That column is NOT a CSV column** — the export's `movement`
+      `entries.movement_name`, and silently undo this. `db:verify`'s PICK-1 (c) proved the
+      database's name arrives, until LEGACY-1 C2a deleted it with the resolver's other proofs. ⚠️ **That column is NOT a CSV column** — the export's `movement`
       column reads `movements.slug` through the entry's `movement_id`
       (`queries/export-month.ts` → `csvMovement`) and never selects `movement_name`, which only
       the day page reads (`lib/entries/entry-label.ts`). So the stake here is the day page's
@@ -725,8 +728,9 @@ The shapes those lanes agree on, the fakes and the preview route are
     - **Phase 1 resolves every id; only then does phase 2 find-or-create the typed names.** Phase 2
       is the only phase that writes, so a body refused for a bad id commits **nothing** — not even
       a typed sibling in the same submission. Swap the phases and the refusal still happens, just
-      after a catalog row nothing can remove has committed: `37-typed-before-ids.patch` is that
-      swap, and the assertion it reddens is "the refusal wrote NOTHING", never the refusal itself.
+      after a catalog row nothing can remove has committed: `37-typed-before-ids.patch` was that
+      swap, and the assertion it reddened was "the refusal wrote NOTHING", never the refusal itself
+      (both retired by LEGACY-1 C2a).
     - **The seam is `assertMovementsAreAvailable`, inside the transaction** (`writers/strength-session.ts`),
       after the profile resolve and before the first insert — exactly where `isLiveProfile` already
       is, and for the same reason. Phase 1 is a pre-check **outside** the transaction, so between its
