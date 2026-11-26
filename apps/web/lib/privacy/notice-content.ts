@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: [R2 date]. This is a beta."
+            "text": "Last updated: 2026-11-26. This is a beta."
           }
         ]
       }
@@ -2449,7 +2449,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "What changed on [R2 date]"
+        "text": "What changed on 26 November 2026"
       }
     ]
   },
@@ -2488,7 +2488,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "(This section describes what was true on 20 November 2026. The notes and names it mentions were\nerased with the starting household on [R2 date].)"
+            "text": "(This section describes what was true on 20 November 2026. The notes and names it mentions were\nerased with the starting household on 26 November 2026.)"
           }
         ]
       }
@@ -3099,7 +3099,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "[R2 date]:"
+            "text": "2026-11-26:"
           }
         ]
       },

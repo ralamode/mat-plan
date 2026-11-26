@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: [R2 date]. This is a beta.**
+**Last updated: 2026-11-26. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -363,7 +363,7 @@ Because this cannot be undone, both of the steps below stay in place:
   current code does not remove it from the history**. That is being worked on, and it is a permanent
   limitation of having built this in the open.
 
-## What changed on [R2 date]
+## What changed on 26 November 2026
 
 **The app was started fresh.** On the maintainer's decision, the household the app started with, and
 everything logged in it, was erased; the adults' sign-in accounts were kept and joined to a new, empty
@@ -378,7 +378,7 @@ names are gone, and the athletes the app started with are no longer an exception
 ## What changed on 20 November 2026
 
 _(This section describes what was true on 20 November 2026. The notes and names it mentions were
-erased with the starting household on [R2 date].)_
+erased with the starting household on 26 November 2026.)_
 
 **"How it felt" and the box for typing a movement's name are no longer listed as text boxes.** No
 page shows either any more. A note or a movement name typed there before is still kept with its
@@ -480,7 +480,7 @@ who can get in, what Upstash is sent, and what a refused sign-up leaves behind. 
 2026-11-19** against the export becoming the household owners' and its rate limit, and against
 Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
 the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name. The Clear this day bullet's heading now says "workout names, and any notes written with them" _(the maintainer approved it)_.
-**[R2 date]:** re-reviewed against the fresh start: the starting household's erasure, the separated list
+**2026-11-26:** re-reviewed against the fresh start: the starting household's erasure, the separated list
 of movement names, and the athletes and household that are no longer an exception _(pending the
 maintainer's re-read)_.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
