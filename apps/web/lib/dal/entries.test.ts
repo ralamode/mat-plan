@@ -1,5 +1,5 @@
 import { ENTRY_STATUS, PROFILE_NOT_FOUND } from '@mat-plan/shared';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // DAL-1 / TEN-1 1b: `listEntriesForDay` must scope by THE live-profile predicate — so a soft-deleted
 // profile's entries never come back, and (since TEN-1) neither do another household's. The predicate
