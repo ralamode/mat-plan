@@ -104,11 +104,11 @@ flowchart LR
   T --> AU[3 · AUTH-1 ✅ · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅ 1c-2 ✅<br/>1c-3a ✅ 1c-3b ✅ 1c-4a ✅ 1c-4 ✅ 1d ✅]
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, V1-9b]
-  S --> F[FAM-1 · the family program, to step 15]
-  K[14 · CAT-3 · the movement library] --> R[fresh start of the live app]
+  S --> F[FAM-1 · the family program, to step 15 ✅]
+  K[14 · CAT-3 · the movement library ✅] --> R[fresh start of the live app ✅ 2026-11-26]
   F --> R
-  O2[1 · the seed split OPS-2] --> R
-  O2 --> P3a[PRIV-3 2a · the erasure core]
+  O2[1 · the seed split OPS-2 ✅] --> R
+  O2 --> P3a[PRIV-3 2a · the erasure core ✅]
   P3a --> R
   F --> W[FAM-1 step 16 · the week of real use]
   R --> W
@@ -454,7 +454,7 @@ Their deliverables are unchanged and still written below; only when they start h
 - [ ] No open P0. DX-5(a) merge gates are enforced.
 - [ ] Previews hold no production data and no production credential; fork protection is on (OPS-1).
 - [ ] The prod seed writes reference data only and cannot re-create a deleted household (OPS-2; PR 1 is merged and applied, #592).
-- [ ] The live app holds no test athletes (`CAT-3`'s fresh start; OPS-2 PR 2 is retired, since after the fresh start it has no target).
+- [x] ✅ **2026-11-26.** The live app holds no test athletes (`CAT-3`'s fresh start; OPS-2 PR 2 is retired, since after the fresh start it has no target).
 - [ ] A single household has been restored from backup without touching any other (OPS-3).
 - [ ] `db:verify` proves that a second household cannot read, write, correct or export the first's data —
       every entry point, including the movement catalog (TEN-1).
@@ -466,6 +466,8 @@ Their deliverables are unchanged and still written below; only when they start h
       mis-logged entry.
 - [ ] Privacy notice, consent and retention policy are live; household deletion has been run once end
       to end; the privacy review is **signed off by the accountable role, with a date** (PRIV-1).
+      _2026-11-26: the household deletion has run end to end in production — the fresh start's
+      erasure, every check zero. The sign-off is still owed, after the phone run-through._
       _(Was "by a named person" — `AGENTS.md` forbids personal names in docs, which made this
       unsatisfiable as written. Amended by PRIV-1; same accountability, the form this repo permits.)_
       **Live** means `PRIV-2` has shipped `/privacy` on the app's own domain — a `docs/` file is not a
@@ -500,6 +502,20 @@ Ticked but not crossed off above, verified 2026-11-13: `TEN-1` ✅ · `AUTH-1` �
 (2026-10-08) · `ONB-0` ✅ (2026-10-07).
 
 ### What is left, in dependency order
+
+**Status on 2026-11-26.** `FAM-1`'s chart is merged (2026-11-20) and **`CAT-3`'s fresh start ran
+on 2026-11-26** as an erase, the maintainer's choice over carrying a week of real data across: every
+check zero, merges unfrozen the same day. That ticks "no test athletes" and runs the household
+deletion end to end. What is left before the first invite:
+
+- **The maintainer's:** the week of real use (`FAM-1` step 16, from 2026-11-26), the phone
+  run-through, then the `PRIV-1` sign-off; the ref scan's three steps; `DX-5(a)`; the sign-in
+  provider's bot protection.
+- **PRs, each with an approved plan:** #816 (the notice after the fresh start), four `CAT-3` PRs
+  ([plan](../plans/cat-3-after-the-fresh-start.md)), `PRIV-3` 2b, 3 and 3b, and the ref scan
+  ([plan](../plans/oss-1-scan-every-ref.md)).
+- **No plan yet:** `OPS-3`, the per-household restore drill. It left the trial week's path on
+  2026-11-18 and still gates the first outside invite.
 
 **Status on 2026-11-19.** The table below is the picture of 2026-11-13, kept as written. Since then:
 
