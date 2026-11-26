@@ -2,7 +2,7 @@
 
 > Backlog: [plan.md](../plan.md) row PERF-3, step 2. Parent: [perf-3-tick-latency.md](./perf-3-tick-latency.md)
 > (step 1, #821). Milestone: Beta 0. Tags: `FAM-1`, `tech-debt`. **Plan only; reshaped by a seven-lens
-> panel. Needs the maintainer's pick (§ Decision) before any code.**
+> panel. The maintainer picked A then C (2026-11-26).**
 
 ## Where this sits
 
@@ -60,7 +60,7 @@ every page load, not only a ✓.
 | B. The row-only design now                     | everything in the table above                                                                                                                                                                                                  | 4–5 PRs        | high: the screen's state moves to the phone, in the heart of the app |
 | C. Defer to v1.5                               | do A now; build the row-only design with the offline queue, where TanStack Query and an outbox provide the store, the write log and the re-read the panel asked for                                                            | A now, B later | low now                                                              |
 
-**Recommendation: A now, then C.** If the measurement shows the re-render is a large share of a
+**Maintainer's pick (2026-11-26): "A then C".** _(Recommendation was A now, then C.)_ If the measurement shows the re-render is a large share of a
 phone ✓ even after parallelising, B comes back with this table as its requirements list.
 
 ## If A is chosen: acceptance
@@ -93,3 +93,13 @@ phone ✓ even after parallelising, B comes back with this table as its requirem
 | R-S2, A-S2                | Reuse, arch.                  | The design-preview fake already applies writes; it must become the shared patch                          | **accepted** | Requirement for B.                                                         |
 | UX-P2-2                   | UX                            | A 60 s re-read lands under a thumb; re-read after a stale refusal instead                                | **accepted** | Open question 1 of the draft answered: no timer.                           |
 | —                         | Privacy, security             | No blocker: same audience, `no-store`, no new processor, bodyweight absent                               | noted        |                                                                            |
+
+### Measurement, first pass (2026-11-26, production dashboards, read with the maintainer's go)
+
+Vercel Observability, `/p/[profileId]`, last 12 h, 136 invocations: time to first byte p75 **283 ms**;
+duration avg 2.31 s / p75 3.47 s / p95 9 s (includes streaming and Fluid's shared time, not what a
+phone waits for); active CPU p75 481 ms, which does not reconcile with the route's 10 s total over 136
+calls (≈ 74 ms average), so it is not relied on; cold starts 5.9 %. External calls: Clerk ≈ 130 ms
+(32 calls), Upstash ≈ 20 ms. Neon is not listed (not a `fetch`). Vercel tracing is not configured, so
+production cannot split write from re-render. **Next:** a local breakdown on a production build with
+an injected per-query delay matching Neon's in-region round trip, before any parallelising PR.
