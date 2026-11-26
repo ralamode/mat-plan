@@ -21,7 +21,8 @@ name: sign-in drift
 #   pull_request      — only when this check's own files change. It never opens an issue.
 #
 # Least privilege: nothing at the top; the check job reads; only the report job writes issues, and
-# it runs the DEFAULT BRANCH's script, never a branch's.
+# it pins its helper script to the DEFAULT BRANCH. On a dispatch from a branch, the workflow file
+# itself (so this job's inline step) is the branch's; only writers can dispatch.
 #
 # 🔴 The boundary is Chromium's SANDBOX (on: the drift config's `chromiumSandbox`, plus the sysctl
 # step below). This is the one job that runs live third-party JavaScript in a browser. No dependency
@@ -140,6 +141,9 @@ jobs:
           RESULT: ${{ needs.check.result }}
           TARGET: ${{ inputs.url || env.PRODUCTION_URL }}
         run: |
+          # The dispatch `url` input is validated only in the check job, whose failure is what runs
+          # this one, so it is checked again before it reaches a public issue.
+          [[ "$TARGET" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] || TARGET='(an invalid url input)'
           body="$RUNNER_TEMP/issue.md"
           {
             echo "The sign-in drift check ended \`$RESULT\` against $TARGET: $RUN_URL"

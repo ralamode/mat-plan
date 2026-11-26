@@ -109,8 +109,9 @@ Find out within a week, without anyone having to look, when a new Clerk CDN buil
     - its condition is `if: always() && needs.check.result != 'success' && github.event_name !=
 'pull_request'`;
     - its permissions are `contents: read` and `issues: write`;
-    - it checks out **the default branch's** script only (sparse, `persist-credentials: false`), so a
-      dispatched branch never supplies the code that holds `issues: write`.
+    - it checks out **the default branch's** script only (sparse, `persist-credentials: false`), so
+      the helper is never a branch's. On a dispatch from a branch, the workflow file itself, and so
+      this job's inline step, is the branch's; only writers can dispatch.
 - **The issue script is `.github/scripts/open-or-comment-issue.sh <title> <body-file>`.**
   - It passes the title as data (`jq --arg`).
   - It matches only open issues authored by `app/github-actions`, so a same-titled issue anyone opens

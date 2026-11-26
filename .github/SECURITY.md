@@ -300,6 +300,16 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
   mitigation, if ever needed, is a secret-free prior step that fetches the binary against a committed
   sha256 and passes `path_to_claude_code_executable`. A `claude-code-action` bump is its own PR and
   is re-verified by hand ([runbooks.md](../docs/runbooks.md) → `CLAUDE_CODE_OAUTH_TOKEN`, step 6).
+- **Accepted residual: `signin-drift.yml` runs live, unpinned third-party JavaScript on `main`**
+  _(the maintainer approved the check, 2026-11-20)_. Its weekly run loads production `/sign-in`, so
+  Clerk's CDN script executes in Chromium on a runner whose Actions cache scope is `main`'s, and
+  `migrate.yml` restores its pnpm cache from that scope in the job that holds
+  `PROD_DATABASE_URL_UNPOOLED`. The chain is hostile Clerk JS → renderer RCE → sandbox escape →
+  the runner's cache token → a poisoned entry `migrate.yml` restores. **The boundary is Chromium's
+  sandbox** (`chromiumSandbox: true` in `playwright.drift.config.ts`, plus the workflow's sysctl
+  step); the production CSP's `connect-src` confines where page script can connect, and the drift
+  job itself saves no cache. It reopens if that sandbox can no longer be enabled on the runner. The
+  narrower close, if ever wanted, is dropping `cache: pnpm` from `migrate.yml`.
 - Threat model and both panel rounds: [DX-1 plan](../docs/plans/dx-1-claude-review.md).
 
 ## API shape
