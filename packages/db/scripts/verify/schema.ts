@@ -314,8 +314,8 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
   // ── (e) a Count of a plain number is storable: (primary, count) is a slot pair ───────────────────
   await rolledBack(async (tx) => {
     // A set with no primary quantity yet, so the slot's own UNIQUE cannot be what answers. Planted
-    // here, a bodyweight set with no quantity (LEGACY-1): it used to be found among the rows the old
-    // strength writer's proofs left in the shared database, and those proofs are deleted.
+    // here, a bodyweight set with no quantity (LEGACY-1): it used to be found among the rows the
+    // old strength writer's proofs left in the shared database, and those proofs are deleted.
     const [owner] = await tx
       .select({ publicId: schema.profiles.publicId })
       .from(schema.profiles)

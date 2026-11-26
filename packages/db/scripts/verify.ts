@@ -46,7 +46,6 @@ import {
   UNIT_CODES,
   UNIT_DIMENSION,
   UNIT_DIMENSIONS,
-  UNIT_DIMENSION_BY_CODE,
   WEEK_LENGTH_DAYS,
   activityTypeSeedRowSchema,
   assertRollupAggregation,
@@ -98,8 +97,8 @@ import {
 import { householdScopeForScript } from '../src/writers/household-scope-script';
 // TEN-1 1d: the REAL find-or-create, a one-line wrapper over `findOrCreateTypedMovement`, the core
 // `newItem` (`src/writers/program/new-item.ts`) calls. The app's DAL modules are `server-only` and
-// import the app's env, so the catalog verdict at the end of this file can only run the code the app
-// runs because that core lives here (write-path.md invariant 3).
+// import the app's env, so the catalog verdict at the end of this file can only run the code the
+// app runs because that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
 import {
   findNameMatch,
@@ -1552,38 +1551,13 @@ assert.equal(
 );
 console.log('✓ V1-6b-1: ramp_target ⋈ entries join returns actual (50) alongside target (45)');
 
-// ── V1-6b-2: the ramp fixture's other profile, kept as fixture (LEGACY-1) ─────────────────────────
+// ── V1-6b-2: its proof deleted by LEGACY-1; one constant stays ────────────────────────────────
 // `weeklyAdherenceRows`, the read this section proved, has had no caller since the old Today card
-// went, and LEGACY-1 retires it; its proof is deleted. Its fixture stays: the ramp-test profile's public id is read below (the TEN-1 matrix, the
-// B1-1b reader audit), and the second profile's target and bout are rows later counts include.
+// went, and LEGACY-1 retires it. The ramp-test profile's public id stays for the TEN-1 1b read
+// matrix's `ownedEntryIds` row. The second profile's target and bout, the scoping decoy, had no
+// other reader and went with the proof.
 const RAMP_TEST_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000f0'; // rampTestProfile above
-const [otherRampProfile] = await db
-  .insert(schema.profiles)
-  .values({
-    publicId: '019826b4-0000-7000-8000-0000000000e0',
-    name: 'Other Ramp Kid',
-    kind: PROFILE_KIND.kid,
-    householdId: households[0].id,
-  })
-  .returning({ id: schema.profiles.id });
-await db.insert(schema.rampTargets).values({
-  publicId: '019826b4-0000-7000-8000-0000000000e1',
-  profileId: otherRampProfile.id,
-  metricKey: METRIC_KEYS.pushups,
-  weekStart: RAMP_TEST_WEEK_START,
-  targetValue: '999',
-});
-await db.insert(schema.entries).values({
-  publicId: '019826b4-0000-7000-8000-0000000001e0',
-  clientId: '019826b4-0000-7000-8000-0000000002e0',
-  profileId: otherRampProfile.id,
-  activityDate: '2026-01-05',
-  unit: 'count',
-  activityTypeId: calisthenicsId,
-  metricKey: METRIC_KEYS.pushups,
-  valueNum: '500',
-  status: ENTRY_STATUS.done,
-});
+
 // ── V1-7: life activities (wake timing event + wrestling practice) — the generality proof ──────
 // The APP write shape: kind NULL for both; wake is a NEITHER-source timing event (metric/movement
 // NULL → unit resolves to 'timing') carrying value_num = local minutes-since-midnight (forced
@@ -1720,9 +1694,9 @@ async function upsertReturningId(
   // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the guard the old strength writer's
   // `reselectLiveByClientId` carried (retired with that writer by LEGACY-1), not a shortcut.**
   // Before V1-9b B0 the partial UNIQUE kept a hidden row out of the index, so a conflict implied a
-  // LIVE row and an unguarded re-select was merely sloppy. B0 puts hidden rows back in the index, so
-  // a conflict can now be WITH a hidden row — and this re-select would hand its id back and attach
-  // children to a dead parent.
+  // LIVE row and an unguarded re-select was merely sloppy. B0 puts hidden rows back in the index,
+  // so a conflict can now be WITH a hidden row — and this re-select would hand its id back and
+  // attach children to a dead parent.
   const [live] = await db
     .select({ id: table.id })
     .from(table)
@@ -2214,8 +2188,8 @@ console.log(
 // `dimension` is the shared column of two composite FKs against two PRIMARY KEYS.
 {
   // The rows: a legacy hold (`legacyStrengthFixture`, LEGACY-1), the shape the old writer's
-  // labeled-movement proof logged before LEGACY-1 deleted it. Its first two sets are bodyweight and carry NO quantity, so each slot below is
-  // free to be written; the third is 30 seconds.
+  // labeled-movement proof logged before LEGACY-1 deleted it. Its first two sets are bodyweight and
+  // carry NO quantity, so each slot below is free to be written; the third is 30 seconds.
   const {
     entries: [qtyEntry],
   } = await legacyStrengthFixture(asPg, {
@@ -3958,8 +3932,9 @@ console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
 
 // ── V1-22 chunk 2: the EXPORT reads the frozen prescription as it was stored ──────────────────────
 // The writer half of this section (the old strength writer freezing a snapshot) was deleted by
-// LEGACY-1, which retires that writer. The live writer's freeze is `verify/day.ts` "9: the frozen prescription"
-// (mutation 129). What stays is the export's read of the column, over rows production holds.
+// LEGACY-1, which retires that writer. The live writer's freeze is `verify/day.ts` "9: the frozen
+// prescription" (mutation 129). What stays is the export's read of the column, over rows production
+// holds.
 const SNAP2_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e5';
 await db.insert(schema.profiles).values({
   publicId: SNAP2_PROFILE_PUBLIC_ID,
@@ -3969,8 +3944,8 @@ await db.insert(schema.profiles).values({
 });
 // 🔴 **The READ side, through the query the export actually ships.** `coalesce(…, '')` or
 // `nullif(…, '')` on that select — one word — would survive every other gate: the pure tests run on
-// hand-built rows, a direct `select` of the column cannot see the read, and the e2e exports under an
-// unchanged program where frozen and live bytes coincide.
+// hand-built rows, a direct `select` of the column cannot see the read, and the e2e exports under
+// an unchanged program where frozen and live bytes coincide.
 //
 // Its rows are the two shapes production holds, written by `legacyStrengthFixture` (LEGACY-1): a
 // `day_role` session whose entry froze `''`, and a session with no day role whose entry was never
@@ -4178,6 +4153,8 @@ console.log(
 // its ids from `newId()` / those builders' own counters: a hand-assigned id that collided with
 // `uq_entries_client_id` would make an `onConflictDoNothing` builder silently hand back ANOTHER
 // profile's row, and the matrix would then be asserting about the wrong entry while staying green.
+// The letters skip (b) on purpose: LEGACY-1 deleted that fixture (the adherence read's) with its
+// proof. Nothing is missing.
 // (a) a weigh-in → the bodyweight amend + its re-read
 const bTarget = await insertBodyweightProbe({
   profileId: verifyProfileRow.id,
@@ -4953,23 +4930,10 @@ assert.equal(
   'TEN-2b WRITE: …with NOTHING written — `seedProgram` resolves every ref before the block insert, so a refusal leaves no partial block and household A’s pull card does not render another household’s string at all',
 );
 
-// (e) A household-B row the resolver authored on B's behalf, kept as a fixture (LEGACY-1). It was the
-// catalog row a refused cross-household strength write left behind; LEGACY-1 retires that write
-// path and deleted its refusal's proof (the live writers' household refusals are `verify/day.ts` 6c and
-// `verify/program.ts` 6a-ii). The row stays because the dark gate below asserts over every row a
-// resolver authored, and an owned row in B's namespace is one of the shapes it must admit.
-const REFUSED_MOVEMENT_NAME = 'TEN-1 Refused Session Lift';
-const refusedMovementId = await findOrCreateMovement(asPg, B_SCOPE, REFUSED_MOVEMENT_NAME);
-assert.equal(
-  (await movementRow(refusedMovementId))?.householdId,
-  verifyHh.id,
-  "TEN-2b fixture: the resolver authors a name household B typed into B's OWN namespace",
-);
-
 // TEN-2b: the ids the REAL resolver returned in this run — one curated global resolve (box_jump),
-// one owned insert, and the rows the leak and (e)'s fixture produced. The re-taken dark gate in the
-// TEN-2a/2b section below asserts over exactly these, because they are the only rows a resolver
-// touched; V1-1b's raw-SQL backfill fixture also writes `movements`, and nothing scopes those.
+// one owned insert, and the leak's row. The re-taken dark gate in the TEN-2a/2b section below
+// asserts over exactly these, because they are the only rows a resolver touched; V1-1b's raw-SQL
+// backfill fixture also writes `movements`, and nothing scopes those.
 const TEN2B_RESOLVER_IDS: number[] = [
   aMovementId,
   bMovementId,
@@ -4979,7 +4943,6 @@ const TEN2B_RESOLVER_IDS: number[] = [
   // (via `bMovementId` above) B's own row for a slug A typed first. They are the inverted
   // assertions' subjects, so they belong in the end-state membership proof too.
   unpoisonedId,
-  refusedMovementId,
 ];
 
 // ⚠️ **NOT A BARE "isolated", and that is deliberate.** This headline is the only input to beta-1's
@@ -8018,6 +7981,8 @@ console.log(
 // LEGACY-1, which retires that writer; the live row writer's hidden-replay answers are
 // `verify/day.ts` 3–3i.)
 {
+  // The steps run 0, 5, 6 on purpose: 1–4 were the old strength writer's case, deleted by LEGACY-1.
+  // Nothing is missing.
   // 0 · 🔴 **The weigh-in writer, the one B0 changes with no arbiter to re-predicate.**
   //      `insertBodyweightEntry` infers no target (`onConflictDoNothing()` — every unique
   //      arbitrates, V1-24 1e), so it has its own three-branch fallback. Post-B0 a replay of a
@@ -8139,8 +8104,8 @@ console.log(
   }
 
   console.log(
-    '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden entry is REFUSED rather ' +
-      'than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
+    '✓ V1-9b B0: a hide no longer frees a client_id — replaying a hidden weigh-in is REFUSED ' +
+      'rather than twinned, the five identity arbiters carry no predicate on the live schema, and the ' +
       'slot arbiters still do',
   );
 }

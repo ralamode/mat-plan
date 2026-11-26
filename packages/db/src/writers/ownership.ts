@@ -32,11 +32,12 @@ import type { Executor } from './executor';
  * validation/derivation used in two places becomes one exported helper, not a copy-paste."* This is a
  * **security** predicate, which is the strongest case there is for single-sourcing it.
  *
- * ⚠️ Extracted here with **two** consumers, not speculatively: `updateStrengthSetById` converts to a
- * caller in the same PR, so V1-9's existing `db:verify` cross-profile proof covers this helper for
- * free (and `db:verify` proves the profile soft-delete half for both writers). `listEntriesForDay`
- * (the app DAL's day read) and `weeklyAdherenceRows` joined in DAL-1 — the two sites that had
- * skipped the soft-delete half.
+ * ⚠️ Extracted here with **two** consumers, not speculatively: `updateStrengthSetById` converted to
+ * a caller in the same PR. Its proofs (V1-9's cross-profile case, the dead-profile edit) were
+ * deleted by LEGACY-1 C2a; this helper's live proofs are `db:verify`'s V1-24 1b, including (j), the
+ * soft-deleted profile, and TEN-1 1b's `ownedEntryIds` read-matrix row. `listEntriesForDay` (the
+ * app DAL's day read) and `weeklyAdherenceRows` joined in DAL-1 — the two sites that had skipped
+ * the soft-delete half.
  *
  * ## TEN-1 1b — the third conjunct IS the tenancy seam
  *
@@ -257,8 +258,10 @@ export function movementInHousehold(scope: HouseholdScope) {
  * only the **resolver's** copy — so nothing in the repo could have caught the **in-transaction**
  * copy being widened instead, which is the dangerous direction, since the pre-check is the one a
  * reader assumes is sufficient. Pointed at this helper, that widening now reaches **both** call
- * sites from one edit. (`db:verify` is fail-fast, so case (a) is the assertion that reports it;
- * the property that matters is that the in-transaction copy can no longer be widened alone.)
+ * sites from one edit. (`db:verify` is fail-fast, and LEGACY-1 C2a deleted PICK-1's case (a), so
+ * mutation 36 now reddens `FAM-1 6a-ii: saving another household's item is not_found` first. The
+ * live users it reaches are `saveWorkout`, `day/row-steps.ts`, `newItem` and the day-plan read; the
+ * property that matters is that the in-transaction copy can no longer be widened alone.)
  *
  * ⚠️ **Sharing the expression does not collapse the defence into one.** What makes the re-check a
  * seam is *when* it runs — inside the transaction the rollback protects, after the profile resolve.

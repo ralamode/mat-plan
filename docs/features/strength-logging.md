@@ -25,9 +25,9 @@ owns:
 > ⚠️ **No screen logs through this path.** The day page logs and changes strength rows through the
 > FAM-1 row writer ([day-writers.md](./day-writers.md)). FAM-1 12f PR 3 removed the two actions
 > that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the two DAL
-> functions went in [`LEGACY-1`](../plan.md#legacy-1) C1 (2026-11-21). The schemas and the writer
-> below stay, with their Vitest coverage and no caller, until LEGACY-1 C2b deletes them; their
-> `db:verify` proofs went in C2a ([plan](../plans/legacy-1-retire-strength-path.md)).
+> functions went in [`LEGACY-1`](../plan.md#legacy-1) C1 (2026-11-21). The schemas (with their
+> Vitest tests) and the writer below stay, with no caller, until LEGACY-1 C2b deletes them; the
+> writer's `db:verify` proofs went in C2a ([plan](../plans/legacy-1-retire-strength-path.md)).
 
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
