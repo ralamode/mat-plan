@@ -107,8 +107,17 @@ test.describe('Morning habits rows', () => {
         await tick(page, item).click();
         await settled(tick(page, item), false);
       }
-      // An empty ✓ logs the prescription (D13).
+      // An empty ✓ logs the prescription (D13). PERF-3: the action answers with `refresh()`, which
+      // Next marks `x-action-revalidated: 2`; `1` would mean the router drops its prefetches again
+      // and fetches every link on the page after each ✓ (a `revalidatePath` or a cookie write flips it).
+      const answer = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && !!r.request().headers()['next-action'],
+      );
       await tick(page, item).click();
+      expect(
+        (await answer).headers()['x-action-revalidated'],
+        `${item}: refresh() only, so the router keeps its prefetches`,
+      ).toBe('2');
       await settled(tick(page, item), true);
       await page.reload();
       await expect(tick(page, item), `${item}: the ✓ was saved`).toHaveAttribute(

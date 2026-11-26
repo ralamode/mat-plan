@@ -106,7 +106,7 @@ with no rule citation is taste. Mark it P2, or drop it.
    conventions"). Watch for: `'use client'` where RSC works, a `db` import or `process.env` read
    outside `lib/dal`, `sql.raw`/interpolated SQL, `dangerouslySetInnerHTML`, a raw row returned
    instead of a DTO, a non-async export from a `'use server'` file, a Server Action missing
-   `withServerActionInstrumentation` or `revalidatePath`.
+   `withServerActionInstrumentation` or `revalidatePath` (the day page's four row writes use `refresh()` instead: AGENTS.md → Server conventions → Cache).
 4. **Schema / migration** (if `packages/db` changed). Follow the `db-migration` skill's checklist:
    generated SQL committed, timeouts and statement-breakpoints, `squawk-ignore` directly above its
    statement, expand→contract, a `db:verify` proof for new constraints, seeds idempotent.
