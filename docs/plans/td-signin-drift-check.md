@@ -176,7 +176,8 @@ Estimated at about 300 lines, plus this plan.
 - **The sandbox:** Chromium's sandbox failed on the first run, because Ubuntu 24.04's AppArmor
   restricts unprivileged user namespaces. The workflow lifts that on the throwaway runner, which is
   Chromium's documented fix, so the browser runs **sandboxed**. § Decisions 5's fallback was not
-  needed and no SECURITY.md residual is recorded.
+  needed, so no sandbox residual is recorded; the cache-scope residual is (SECURITY.md →
+  `signin-drift.yml`).
 - **Links:** production has **4** links in `<main>`. Two are Clerk's and under 44px: the Clerk logo
   ("Secured by Clerk") at 14px and **"Join waitlist" at 18px**. Both are named exceptions
   (`VENDOR_LINK_EXCEPTIONS`), each of which must match exactly one link. "Join waitlist" could be
