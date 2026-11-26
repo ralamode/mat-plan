@@ -269,10 +269,9 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
   edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet` (deleted, LEGACY-1 C1);
   `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
-  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
-  (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
-  `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
-  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user was `lib/checkins`.
+  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`,
+  `STRENGTH_DAY_ROLES` and `ACTIVITY_INPUT_SHAPE` (deleted, LEGACY-1 A); and `loggableUnitsOf`
+  (`units.ts:164`).
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
 - **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context

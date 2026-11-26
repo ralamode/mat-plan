@@ -492,9 +492,9 @@ The shapes those lanes agree on, the fakes and the preview route are
        every submitted movement **id** before it creates any typed name, so a body refused _for its
        id_ now commits nothing at all — proved by `db:verify` (a), whose typed sibling is chosen to
        slug onto no existing row so phase 2 really would insert, and by `37-typed-before-ids.patch`.
-       What survives is the original case: a typed name in a session the **profile** seam then
-       refuses. `TEN-2b-1` is the row that closes it, and since V1-22 chunk 2 it must carry the
-       snapshot read with it (see that row).
+       What survived was the original case: a typed name in a session the **profile** seam then
+       refused. With the DAL deleted nothing in the app reaches it, and `TEN-2b-1` closed as
+       overtaken (LEGACY-1 C1).
 
      **`TEN-2` is the fix**, and the recorded verdict is that it belongs in Beta 0 — before a second
      household exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built"_. Do not read

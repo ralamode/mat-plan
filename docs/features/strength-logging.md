@@ -264,8 +264,8 @@ Real ones, each with the file to look at.
   `findOrCreateMovement` for a typed name, which resolves **global-first**. So a movement a
   household types belongs to that household, and a session the seam then refuses leaves its catalog
   row in the **caller's own** namespace: garbage the deletion procedure removes, not a cross-tenant
-  write. Moving the call inside the transaction is `TEN-2b-1`; `entries.test.ts` pins the current
-  order deliberately. ✅ **`TEN-2c` dropped the non-partial `movements_slug_unique`, so the second
+  write. `TEN-2b-1` would have moved the call inside the transaction; it closed as overtaken
+  (LEGACY-1 C1), and `entries.test.ts`'s ordering pin was retired with a record. ✅ **`TEN-2c` dropped the non-partial `movements_slug_unique`, so the second
   typist now gets their own row and the denial window is closed.** ⚠️ One residual survives — the
   **pre-`TEN-2b`** rows still at `household_id IS NULL`, which global-first serves to every household
   — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing, via

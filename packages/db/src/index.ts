@@ -39,7 +39,6 @@ export * from './queries/household-membership';
 // The single-sourced pre-AUTH-1 scope resolution (TEN-1 1b) — db:verify proves the soft-deleted
 // household case against a real database, which prose cannot.
 export * from './queries/household-scope';
-// The single-sourced strength-session write core (V1-8-2), run by both the app DAL and db:verify.
 export * from './writers/bodyweight';
 export * from './writers/checkin';
 // V1-9b B1-1b: the ONLY module that HIDES an entry (the row writer's revive, private to
