@@ -43,6 +43,25 @@ one ✓ is ≈ 32 sequential queries: ≈ 15 for the write (the household read t
 to re-render the page inside the same response. The count does not grow with the number of checked
 items: each query reads a whole kind of row at once.
 
+**On the phone's side** (the same build with React's profiler on, a 4× slower CPU, LTE-like network,
+six taps on the fixture day of 12 items; 2026-11-26). Each ✓ makes five React commits:
+
+| Commit                          | When                                 | Components re-rendered                                  | React time |
+| ------------------------------- | ------------------------------------ | ------------------------------------------------------- | ---------- |
+| 1. the row goes dashed          | at the tap                           | 4 (the row)                                             | ≈ 1 ms     |
+| 2. the card learns it is busy   | +10–20 ms                            | 5 (`DayBody`, the card, Collapse)                       | ≈ 1 ms     |
+| 3. **the row settles**          | +65–90 ms (the answer)               | 6–7 (the row, `DayBody`)                                | ≈ 1 ms     |
+| 4. the card is no longer busy   | + a few ms                           | 5                                                       | ≈ 1 ms     |
+| 5. the returned page is applied | ≈ 15–40 ms **after** the row settled | **227: every component on the page**, 21 links included | 7–12 ms    |
+
+Main-thread work per tap: 33–53 ms of script, 2–6 ms of layout in 3 passes, 1–2 ms of style. The
+step-5 re-render of the whole page is real, but it is small and it lands **after** the row has
+already settled, so it does not lengthen the dashed state. There is no layout thrash. **The delay a
+phone shows is the network and the server, not rendering.** Step 2 still removes the whole-page
+re-render and the decoding of the 34 KB response (≈ 20–30 ms of main thread per tap), and the cost
+grows with the page: on a long list (the feed), per-row isolation and virtualization matter. That
+belongs to the performance track.
+
 ## The order, and why
 
 | Step                                       | What changes                                                                                                                                                                                  | Removes                               | Risk                                                             |
