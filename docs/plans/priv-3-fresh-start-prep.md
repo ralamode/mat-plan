@@ -252,6 +252,13 @@ A hand `UPDATE` that gave an old row a `modality` shows in (2). The report print
 retires `MOVEMENT_SEED_PUBLIC_IDS`, lands after R4's second run or keeps (2) working; the spec's F1 row
 is told.
 
+**As built (2026-11-20):** R4's counts are four separate lines, `R4 (1)` to `R4 (4)`, and A2-ii's line
+"global rows with a modality but no CATALOG_MOVEMENTS slug" is the fifth must-be-0. Step 5 keeps the
+spec's one predicate (`movementIsCatalog() IS NOT TRUE`, or a legacy seed id): a global row with a
+modality but a non-library slug is not deleted, and is a stop at step 8 instead _(lane P, 2026-11-20:
+a destructive predicate stays the spec's; A2-ii's exact test keeps the census honest, not the delete
+set)_.
+
 ### D4. R1: the runbook
 
 **"Restore from a Neon branch"** fills the stub at "Cut a Neon RESTORE branch before a destructive/backfill
@@ -439,7 +446,8 @@ Each path exists from its own merge.
 
 This lane's block is 260–289, then 330–339, taken in PR order (`priv-3-guarded-deletion.md:478`). 260–278
 are used. Before R2 come 2a (seven), R0 (five) and R1 (seven), which is 19 against the 21 left. 2b, 3 and
-3b need about six more, so the board is asked for a further block now.
+3b need about six more, so the board is asked for a further block now. _As built (2026-11-20):_ R1 took `545`–`561` from the board's block
+`540`–`569` (R0 took `336`–`339` and `540`–`544`).
 
 ## Test plan
 

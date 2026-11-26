@@ -91,6 +91,14 @@ jobs:
           fi
           node .github/scripts/check-action-pins.mjs $resolve
 
+      # ── Migration snapshot chain (docs/plans/dx-snapshot-chain-script.md) ──
+      # Every event, PRs and pushes to main: the chain is read from the tree, so it needs no
+      # base. Before `Setup pnpm` and before the PR-only forward-only guard, so it fails in
+      # seconds and a red guard cannot hide it (a break surfaces in a LATER, unrelated PR). It
+      # runs on the runner's preinstalled Node.
+      - name: Migration snapshot chain
+        run: node .github/scripts/check-snapshot-chain.mjs
+
       # ── Forward-only migrations (AGENTS.md → DB rules) ──────────────────────
       # A migration already on main has run against prod and its SQL is hashed in
       # __drizzle_migrations, so editing/renaming/deleting one makes the repo and
@@ -125,10 +133,11 @@ jobs:
           # `__drizzle_migrations`, so editing one makes prod and the repo diverge silently —
           # that stays strictly add-only. A `meta/*_snapshot.json` is drizzle's local diffing
           # state: never applied, never hashed, never read by prod. Blocking its repair meant a
-          # CORRUPT snapshot could not be fixed at all (see the chain check below, and #147).
+          # CORRUPT snapshot could not be fixed at all (see the chain check, and #147).
           # Two things still cover it: the drift guard (`generate` must leave a clean tree)
-          # catches a snapshot that disagrees with schema.ts, and the chain check below catches
-          # a broken parent link — which is the failure this exclusion exists to let us repair.
+          # catches a snapshot that disagrees with schema.ts, and the "Migration snapshot chain"
+          # step before this one catches a broken parent link — which is the failure this
+          # exclusion exists to let us repair.
           CHANGED=$(git diff --name-status --no-renames --diff-filter=DMRTC \
             "$BASE_SHA...HEAD" -- "$MIG" ":(exclude)$JOURNAL" \
             ":(exclude)$MIG/meta/*_snapshot.json")
@@ -159,50 +168,9 @@ jobs:
               | "  \($e[.].tag): when=\($e[.].when)\(if ($e[.].when | type) != "number" then " (not a number)" else "" end), not after \($e[. - 1].tag) (\($e[. - 1].when))"]
             | join("\n")' <<<"$HEAD_JOURNAL")
 
-          # ── Snapshot chain integrity ────────────────────────────────────────
-          # Each snapshot's `prevId` must be the PREVIOUS snapshot's `id`. drizzle only walks
-          # this chain when APPENDING, so a broken link is invisible — `generate` reports "No
-          # schema changes" and `db:verify` passes — until the next migration dies with
-          # "are pointing to a parent snapshot ... which is a collision".
-          #
-          # Exactly that shipped in #139 and sat on main undetected: merging two generated
-          # migrations and promoting the second snapshot to the first's filename leaves
-          # `prevId === id`, a self-reference. Checked here so the class cannot recur, and
-          # checked on EVERY PR (not just ones touching migrations) because the break is
-          # introduced by one PR and only surfaces in a later, unrelated one.
-          CHAIN_BAD=''
-          PREV_ID=''
-          for SNAP in $(ls "$MIG"/meta/[0-9]*_snapshot.json 2>/dev/null | sort); do
-            SNAP_ID=$(jq -r '.id' "$SNAP")
-            SNAP_PREV=$(jq -r '.prevId' "$SNAP")
-            if [ -n "$PREV_ID" ] && [ "$SNAP_PREV" != "$PREV_ID" ]; then
-              CHAIN_BAD="$CHAIN_BAD\n  $(basename "$SNAP"): prevId=$SNAP_PREV, expected $PREV_ID"
-            fi
-            if [ "$SNAP_PREV" = "$SNAP_ID" ]; then
-              CHAIN_BAD="$CHAIN_BAD\n  $(basename "$SNAP"): prevId === id (self-referential)"
-            fi
-            PREV_ID="$SNAP_ID"
-          done
-
-          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ] && [ -z "$CHAIN_BAD" ] && [ -z "$ORDER_BAD" ]; then
-            echo "Forward-only guard OK — no applied migration modified, snapshot chain intact, journal in time order."
+          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ] && [ -z "$ORDER_BAD" ]; then
+            echo "Forward-only guard OK — no applied migration modified, journal append-only and in time order."
             exit 0
-          fi
-
-          if [ -n "$CHAIN_BAD" ]; then
-            printf 'Broken snapshot chain:%b\n' "$CHAIN_BAD"
-            cat <<'CHAINMSG'
-
-          Each meta/NNNN_snapshot.json must have prevId == the PREVIOUS snapshot's id.
-          drizzle only walks this chain when appending, so a break is silent until the
-          NEXT migration fails to generate. Outside a merge with main (the two-pass
-          add-or-drop in the db-migration skill), fix it by setting the offending prevId to
-          the id of the snapshot before it — the snapshot files are NOT applied to prod and
-          are safe to repair. NOT after merging main or after a regenerate: then a
-          snapshot of yours main lacks is probably still in meta/, and the .sql may hold
-          main's DDL. Don't hand-edit the prevId; follow .claude/skills/db-migration/SKILL.md
-          -> "Regenerate on top of main".
-          CHAINMSG
           fi
 
           if [ -n "$ORDER_BAD" ]; then
@@ -238,7 +206,7 @@ jobs:
           (meta/*_snapshot.json excepted — see the comment on the check).
           MSG
           fi
-          echo '::error::Forward-only / snapshot-chain / journal-order violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
+          echo '::error::Forward-only / journal-order violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
           exit 1
 
       # ── Squawk: lint NEW migrations ────────────────────────────────────────
@@ -326,9 +294,10 @@ jobs:
 
       # ── Local gates in CI (DX-5(b); docs/plans/dx-5b-local-gates-in-ci.md) ──
       # Through pnpm, so package.json stays the single definition. Steps that must
-      # run before `Setup pnpm` (action pins, feature guides) call `node` directly;
-      # that is the only exception. These are integrity checks for honest authors,
-      # not a security boundary: a PR runs its own copy of every script here.
+      # run before `Setup pnpm` (action pins, feature guides, catalog records, the snapshot
+      # chain) call `node` directly; that is the only exception. These are integrity checks
+      # for honest authors, not a security boundary: a PR runs its own copy of every script
+      # here.
       - name: Skills guard
         run: pnpm skills:check
 
@@ -432,8 +401,8 @@ jobs:
 
       # `drizzle-kit check` first: it exits 1 when two snapshots claim one parent (the collision two
       # lanes sharing the migration queue produce), and needs no database. It does NOT catch a
-      # snapshot whose prevId is its own id (#139, docs/lessons.md): it passes that. Only the
-      # forward-only guard's inline chain check above catches it, on PRs only. Keep both.
+      # snapshot whose prevId is its own id (#139): the "Migration snapshot chain" step does,
+      # on every event. Keep both.
       - name: DB snapshot parent collisions + drift guard + migration/seed verify
         run: |
           pnpm --filter @mat-plan/db db:check
