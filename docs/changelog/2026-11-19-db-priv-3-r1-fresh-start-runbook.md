@@ -1,0 +1,21 @@
+- **2026-11-19** — **The runbook has the fresh start's steps, and the Neon restore stubs are filled**
+  (`PRIV-3` · `CAT-3` R1, draft; [plan](../plans/priv-3-fresh-start-prep.md) D4). A one-time section,
+  "The fresh start (`CAT-3` R2)", walks steps 0 to 9 with each command, its expected output, a
+  "Second run" line and what to do when step 3's `--apply` refuses on a total mismatch, a deadlock
+  (`40P01`) or a lock timeout (`55P03`). "Cut a Neon RESTORE branch" and "Restore from a Neon branch"
+  are written, and the ledger gains the export outcome and the branch's name and expiry.
+- **2026-11-20** — **The fresh start's step 5 is built: a correction that deletes the old global
+  movements, and refuses while anything references one** (`PRIV-3` · `CAT-3` R1;
+  [plan](../plans/priv-3-fresh-start-prep.md) D2, D3). `delete-legacy-movements-2026-11-20` deletes
+  the global movements that are not catalog rows, or carry a legacy seed `public_id`, with their
+  equipment and muscle rows; catalog rows and a household's own movements are never selected. It reads
+  every foreign key into `movements` from the catalog and refuses a reference from any of them (hidden
+  rows included), a key it cannot count, and a key that does not abort a delete. `--apply` locks the
+  rows, re-reads the references under the lock, deletes by the locked ids only, rolls back if a delete
+  removes fewer rows than it locked, reads `DATABASE_URL_UNPOOLED` only, and needs the three current
+  counts restated (`EXPECT_LEGACY_*`). The dry run always prints every count and exits 0; when
+  `--apply` would refuse it says so and offers no counts. The movements-ownership report gains the
+  fresh start's four counts (`R4 (1)` to `R4 (4)`), each read from the table (live catalog rows only),
+  printed after its TEN-2c expectation under their own. The runbook's full copy now names its
+  movements and is produced before step 5, and a restore re-applies every removal made after its
+  cut. Not yet run: it runs at the fresh start's step 5.

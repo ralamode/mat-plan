@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 5ae24dd7..6fccf05b 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -1287,7 +1287,6 @@ export const DELETE_LEGACY_MOVEMENTS_NAME = 'delete-legacy-movements-2026-11-20'
+  */
+ const legacyMovement = () =>
+   and(
+-    movementIsGlobal(),
+     or(
+       sql`(${movementIsCatalog()}) IS NOT TRUE`,
+       inArray(schema.movements.publicId, [...MOVEMENT_SEED_PUBLIC_IDS]),

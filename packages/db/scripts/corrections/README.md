@@ -54,6 +54,11 @@ still needs its own PR. Each correction below names the row that fixes the cause
    export and is offered the full copy, hidden rows included, or the go records that it declined). The go and its date go in the ledger, not the Applied row. ⚠️ `PRIV-3` 2b's `erase-household`, the
    general deletion correction, is **not** a drop-in entry: `Correction.run` takes no target and the runner ignores positional args,
    so it needs a `--household <public_id>` flag — a runner change, with its own plan.
+   **`delete-legacy-movements-2026-11-20` (CAT-3 R1) departs from rules 3 and 5:** it targets by a
+   predicate (`legacyMovement()`: global rows that are not catalog rows, or carry a legacy seed
+   `public_id`) and deletes by the internal ids it locked, never a `public_id` given to it; and, as a
+   deletion, it has no `deleted_at` filter, on its selection or on the references that refuse it, since
+   a hidden row still holds its foreign key. Reasoning: [its plan](../../../../docs/plans/priv-3-fresh-start-prep.md), D2.
 9. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
    privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue
    or commit — replace it with `…`.
@@ -80,15 +85,16 @@ nothing never ends with "1 change(s) would be made" (`summary.test.ts`).
 applied flag and `--apply` leaves no artifact, so this column is the only record. A correction merges
 before it is run, so a row lands here as `pending` and is dated in a follow-up commit.
 
-| Name                                | What                                                                                   | Cause fixed by    | Applied        |
-| ----------------------------------- | -------------------------------------------------------------------------------------- | ----------------- | -------------- |
-| `kb-swings-2026-09-28`              | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`                          | V1-24             | **2026-09-30** |
-| `bodyweight-duplicates-2026-09-30`  | 3 weigh-ins on one day; the 12:17 morning row is the keeper                            | V1-24             | **2026-10-01** |
-| `null-routine-to-full-2026-10-07`   | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed | ONB-0             | `pending`      |
-| `movements-ownership-2026-10-11`    | Census of the `movements` rows `TEN-2c` does not fix — aggregate counts only           | TEN-2c-1          | `pending`      |
-| `household-claim-2026-10-25`        | No Clerk account was bound to the household, so 1c's resolver had nothing to resolve   | AUTH-1 1b         | `pending`      |
-| `create-household-2026-11-17`       | The fresh start erases the seeded household, and the app cannot create one             | PRIV-3            | `pending`      |
-| `erase-seeded-household-2026-11-19` | The fresh start deletes the seeded household and everything in it (K7)                 | PRIV-3 · CAT-3 R0 | `pending`      |
+| Name                                 | What                                                                                               | Cause fixed by    | Applied        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- | ----------------- | -------------- |
+| `kb-swings-2026-09-28`               | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`                                      | V1-24             | **2026-09-30** |
+| `bodyweight-duplicates-2026-09-30`   | 3 weigh-ins on one day; the 12:17 morning row is the keeper                                        | V1-24             | **2026-10-01** |
+| `null-routine-to-full-2026-10-07`    | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed             | ONB-0             | `pending`      |
+| `movements-ownership-2026-10-11`     | Census of the `movements` rows `TEN-2c` does not fix — aggregate counts only                       | TEN-2c-1          | `pending`      |
+| `household-claim-2026-10-25`         | No Clerk account was bound to the household, so 1c's resolver had nothing to resolve               | AUTH-1 1b         | `pending`      |
+| `create-household-2026-11-17`        | The fresh start erases the seeded household, and the app cannot create one                         | PRIV-3            | `pending`      |
+| `erase-seeded-household-2026-11-19`  | The fresh start deletes the seeded household and everything in it (K7)                             | PRIV-3 · CAT-3 R0 | `pending`      |
+| `delete-legacy-movements-2026-11-20` | The fresh start replaces the old global movements with the catalog, and the app cannot delete them | PRIV-3 · CAT-3 R1 | `pending`      |
 
 ⚠️ **`household-claim-2026-10-25` carries NEITHER target in this table, deliberately.** It takes a
 household `public_id` and a Clerk user id from the **environment**, and both are personal data in a

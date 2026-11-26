@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-20. This is a beta.**
+**Last updated: 2026-11-26. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -132,7 +132,7 @@ still works.
   none of the three reads your data. ⚠️ The sign-in screen also links OUT to Clerk's waitlist page,
   which is not ours and is covered above.
 
-**Three honest limitations during the beta:**
+**Honest limitations during the beta:**
 
 1. ✅ **The shared access code is gone** (new in this version). Until now getting in took a code that
    everyone in the household typed, with no way to withdraw it from one person — rotating it meant
@@ -145,10 +145,10 @@ still works.
    **who** did what. See the limitation below.
 2. **Separating one family's data from another's is done in the parts that read your log** (new in
    this version): who you are signed in as decides which household's data the app will show you, and
-   that is checked on every read and every write. **One part is still shared:** the list of exercise
-   names is common to every household (see "Movement names" below), and it has to be separated before
-   a second family is invited. **The beta still starts with a single invited family**, because that
-   last part is not finished.
+   that is checked on every read and every write. ✅ **The list of exercise names is separated too**:
+   every name the app supplies is written by the project, and the only other names in your list are
+   ones your own household typed, which no other household sees (see "Movement names" below). **The
+   beta still starts with a single invited family.**
 3. **Anyone signed in to your household can see any athlete's full history in the app** — including
    a child tapping a sibling's tile — **and only a household owner can download it.** Today every
    adult given a sign-in to a household is its owner, so anyone signed in can still download; the
@@ -156,8 +156,8 @@ still works.
    version is that getting in takes **your own sign-in and a membership in your household**, and
    nothing else opens the app.
    ⚠️ **Why that is still a limitation:** a membership is held by a PERSON, not by an athlete, so one
-   membership opens every athlete in the household — and the app does not record who did what. The
-   list of exercise names is also still common to every household (limitation 2). Guard your Google
+   membership opens every athlete in the household — and the app does not record who did what.
+   Removing someone from the household is what closes it for them (limitation 1). Guard your Google
    account the way you would guard a password.
 
 ## Who else it passes through
@@ -317,9 +317,8 @@ program it was copied into removed too; and a movement your household typed that
 log, or a program you chose to remove, used. A program another athlete has trained on is not
 removed, and we will tell you. For an athlete,
 the record of the deletion holds the athlete's internal identifier and no login ids unless their
-account went too. An athlete added through the app can be erased today; the athletes the app started with
-cannot be erased one at a time yet, because an older copy of the setup could put them back; they are
-removed together, with the rest of the starting data, when the app is started fresh.
+account went too. Any athlete can be erased on request: every athlete in the app was added through
+it.
 
 **A program, a workout or a movement you typed can't be deleted in the app, but the household owner
 can ask and it is removed.** First we tell you which athletes it affects, and offer a change that
@@ -332,8 +331,7 @@ runbook, "Remove one program, workout or typed item on request".
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
-sign-in accounts are deleted too. The household the app started with is the one exception for now: it
-is removed with the rest of the starting data when the app is started fresh, not on its own.
+sign-in accounts are deleted too.
 
 Because this cannot be undone, both of the steps below stay in place:
 
@@ -355,20 +353,32 @@ Because this cannot be undone, both of the steps below stay in place:
 - **Server logs** at Vercel, and **error reports** at Sentry, for their retention periods. Neither
   should contain your data, but logs record that requests happened, and Vercel's request logs keep the
   address of an athlete's page (it carries their internal identifier, not a name) for 24 hours.
-- **Movement names.** If someone in your household types a movement that isn't already in the app's
-  catalogue, whatever they typed is stored as a movement **belonging to your household**, and it **is
-  removed** when you delete your household. Two things to know while the catalogue is still being
-  separated: a name that another household typed first is still shared with yours, so it can appear to
-  both of you; and a shared name like that stays in the catalogue when either household is deleted,
-  until the separation is finished. Please type only the name of an exercise there — **never a
-  person's name or anything personal.**
+- **Movement names.** Every name the app supplies is written by the project. The only other names in
+  your list are ones your own household typed: a name that is not already in the list is stored as
+  your household's own, no other household sees it, and it is deleted with your household. Please type only the name of an exercise there, **never a person's name or
+  anything personal.**
 - **Any export you downloaded.** That copy is yours and outside our reach.
 - **The public source code.** The project is open source. Some early test data — including two
   children's first names — was committed to it before this review, and **removing a name from the
   current code does not remove it from the history**. That is being worked on, and it is a permanent
   limitation of having built this in the open.
 
+## What changed on 26 November 2026
+
+**The app was started fresh.** On the maintainer's decision, the household the app started with, and
+everything logged in it, was erased; the adults' sign-in accounts were kept and joined to a new, empty
+household, so nobody had to sign up again. Before that, each athlete's data was offered as an export.
+The app was not paused, so anything logged after that export and before the erasure was erased too,
+and for that time a signed-in adult had no household to open; the restore point holds it. That restore
+point, from just before, is held for 7 days and then deleted. The old list of movement names went
+with it: every name the app supplies is now written by the project, and the only other names in a
+household's list are ones it typed itself. So the two limitations about shared
+names are gone, and the athletes the app started with are no longer an exception to erasure.
+
 ## What changed on 20 November 2026
+
+_(This section describes what was true on 20 November 2026. The notes and names it mentions were
+erased with the starting household on 26 November 2026.)_
 
 **"How it felt" and the box for typing a movement's name are no longer listed as text boxes.** No
 page shows either any more. A note or a movement name typed there before is still kept with its
@@ -470,6 +480,9 @@ who can get in, what Upstash is sent, and what a refused sign-up leaves behind. 
 2026-11-19** against the export becoming the household owners' and its rate limit, and against
 Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
 the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name. The Clear this day bullet's heading now says "workout names, and any notes written with them" _(the maintainer approved it)_.
+**2026-11-26:** re-reviewed against the fresh start: the starting household's erasure, the separated list
+of movement names, and the athletes and household that are no longer an exception _(pending the
+maintainer's re-read)_.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out

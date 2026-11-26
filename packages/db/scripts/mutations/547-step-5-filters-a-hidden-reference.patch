@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/movement-ownership.ts b/packages/db/src/queries/movement-ownership.ts
+index bb71f30d..6a6e5688 100644
+--- a/packages/db/src/queries/movement-ownership.ts
++++ b/packages/db/src/queries/movement-ownership.ts
+@@ -278,7 +278,7 @@ export async function movementReferenceCounts(
+     const [row] = rowsOf<{ n: number }>(
+       await exec.execute(sql`
+         SELECT count(*)::int AS n FROM ${sql.identifier(fk.schemaName)}.${sql.identifier(fk.table)}
+-         WHERE ${movements(sql`${sql.identifier(column)}`)}`),
++         WHERE ${movements(sql`${sql.identifier(column)}`)}${fk.table === 'entries' ? sql` AND deleted_at IS NULL` : sql``}`),
+     );
+     out.push({ table: movementFkTable(fk), column, rows: row?.n ?? 0 });
+   }
