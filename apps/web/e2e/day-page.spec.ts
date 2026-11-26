@@ -109,7 +109,7 @@ test.describe('Morning habits rows', () => {
       }
       // An empty ✓ logs the prescription (D13). PERF-3: the action answers with `refresh()`, which
       // Next marks `x-action-revalidated: 2`; `1` would mean the router drops its prefetches again
-      // and fetches every link on the page after each ✓ (a cookie write or a tag can flip it).
+      // and fetches every link on the page after each ✓ (a `revalidatePath` or a cookie write flips it).
       const answer = page.waitForResponse(
         (r) => r.request().method() === 'POST' && !!r.request().headers()['next-action'],
       );

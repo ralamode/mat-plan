@@ -60,7 +60,7 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { refreshAssignment } from '@/lib/dal/program/revalidate';
 import { reorderHouseholdPrograms } from '@/lib/dal/program/writes';
 import { sessionUserOrNull } from '@/lib/dal/session';
-import { ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
+import { checkMutationLimit, ROW_WRITE_RATE_LIMIT } from '@/lib/rate-limit';
 import { describeActionMatrices } from '@/test/action-matrix';
 
 import {
@@ -209,6 +209,22 @@ describe('the row actions (FAM-1 12b)', () => {
       expect(revalidatePath).not.toHaveBeenCalled();
     },
   );
+
+  // The shared matrices above assert `revalidatePath` only, so for these four they would pass
+  // whatever `refresh()` did: the no-session and rate-limited refusals are pinned here (PERF-3).
+  it.each([
+    ['✓', () => logRowAction(writeInput())],
+    ['un-✓', () => untickRowAction(untickInput())],
+    ['re-✓', () => retickRowAction(retickInput())],
+    ['Change', () => amendRowAction(amendInput())],
+  ])('%s refused for no session or the limiter refreshes nothing', async (_label, call) => {
+    vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+    expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.not_found });
+    vi.mocked(checkMutationLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });
+    expect(await call()).toEqual({ ok: false, reason: ROW_REFUSAL.retry });
+    for (const dal of DAL) expect(dal).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
 
   it('hands the DAL the parsed input and the zone’s today, read in the action', async () => {
     await logRowAction(writeInput());
