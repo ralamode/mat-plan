@@ -1919,6 +1919,14 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   pages V1-12 already scans with axe (`/`, Today, the routine editor), as a trend and a regression
   signal rather than a hard gate at first. **Before the club pilot.** Needs a plan (touches CI).
 
+- **PERF-3 — a ✓ settles fast.** _(maintainer, 2026-11-25: "the logging pages must be lightning fast
+  and reliable"; measured 2026-11-26.)_ A ✓ on a phone sits in its saving state for 0.65–1.4 s. Each
+  ✓ re-renders the whole day page inside its response (≈ 17 sequential queries) and its
+  `revalidatePath` then makes the router fetch every linked page again (≈ 16 requests). **Beta 0.**
+  Three steps ([plan](./plans/perf-3-tick-latency.md)): **(1) built**: the row actions call
+  `refresh()`, which ends the prefetch burst; (2) the ✓ answers with its row only, the card's state
+  derived on the phone (own plan + UX panel); (3) the write reads the household once.
+
 ## BETA — share with other families ([milestone](./milestones/beta-1.md))
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
@@ -2515,7 +2523,7 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   defined household deletion ([runbooks.md](./runbooks.md)) with the residuals stated, the consent
   requirements `AUTH-1` must wire, and SECURITY.md's threat model rewritten for many households. The
   evidence it is derived from — all 18 tables, the processors, the committed-data inventory — is
-  [data-inventory.md](./privacy/data-inventory.md). **Signed off by the accountable role, with a date**
+  [data-inventory.md](./privacy/data-inventory.md). **Signed off by the accountable role, with a date** — ✅ **signed off 2026-11-26** by the maintainer, after the fresh start ([notice](./privacy/notice.md) → About this notice)
   (amended from "a named reviewer": `AGENTS.md` forbids personal names in docs, so the exit criterion
   was unsatisfiable as written). **Not legal advice.**
   **Two code follow-ons remain — `PRIV-2` is the actual `AUTH-1` gate.** _(Beta 0.)_
@@ -2720,7 +2728,9 @@ that keeps the next PR from reintroducing one._
 
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
-- **PRIV-4 — the pre-invite privacy re-read: one sign-off, not one per PR.** _(maintainer,
+- **PRIV-4 — the pre-invite privacy re-read: one sign-off, not one per PR.** ✅ **Signed off
+  2026-11-26** with `PRIV-1`'s, after the fresh start; a later change to what is stored re-opens it
+  through the notice's own triggers. _(maintainer,
   2026-11-07, from `PROF-1` a-r.)_ 🔴 **Gate: after CRUD-1's athlete and workout chunks are done,
   BEFORE the first family outside the maintainer's is invited.** The maintainer has not invited
   anyone and will not until a household can CRUD athletes and workouts, so `/privacy` has exactly
