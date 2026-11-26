@@ -464,10 +464,11 @@ Their deliverables are unchanged and still written below; only when they start h
       he signs in, and only by him.
 - [ ] On iOS Safari and Android Chrome, with no help: sign in → add an athlete → log a day → delete a
       mis-logged entry.
-- [ ] Privacy notice, consent and retention policy are live; household deletion has been run once end
+- [x] ✅ **2026-11-26.** Privacy notice, consent and retention policy are live; household deletion has been run once end
       to end; the privacy review is **signed off by the accountable role, with a date** (PRIV-1).
-      _2026-11-26: the household deletion has run end to end in production — the fresh start's
-      erasure, every check zero. The sign-off is still owed, after the phone run-through._
+      _2026-11-26: the household deletion has run end to end in production (the fresh start's
+      erasure, every check zero), and the maintainer signed the notice off the same day (#827),
+      ahead of the phone run-through by choice._
       _(Was "by a named person" — `AGENTS.md` forbids personal names in docs, which made this
       unsatisfiable as written. Amended by PRIV-1; same accountability, the form this repo permits.)_
       **Live** means `PRIV-2` has shipped `/privacy` on the app's own domain — a `docs/` file is not a
@@ -506,10 +507,11 @@ Ticked but not crossed off above, verified 2026-11-13: `TEN-1` ✅ · `AUTH-1` �
 **Status on 2026-11-26.** `FAM-1`'s chart is merged (2026-11-20) and **`CAT-3`'s fresh start ran
 on 2026-11-26** as an erase, the maintainer's choice over carrying a week of real data across: every
 check zero, merges unfrozen the same day. That ticks "no test athletes" and runs the household
-deletion end to end. What is left before the first invite:
+deletion end to end. The maintainer signed off `PRIV-1` the same day (#827). What is left
+before the first invite:
 
 - **The maintainer's:** the week of real use (`FAM-1` step 16, from 2026-11-26), the phone
-  run-through, then the `PRIV-1` sign-off; the ref scan's three steps; `DX-5(a)`; the sign-in
+  run-through; the ref scan's three steps; `DX-5(a)`; the sign-in
   provider's bot protection.
 - **PRs, each with an approved plan:** four `CAT-3` PRs
   ([plan](../plans/cat-3-after-the-fresh-start.md)), `PRIV-3` 2b, 3 and 3b, and the ref scan

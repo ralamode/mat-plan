@@ -14,8 +14,8 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 family program, merged all 72 PRs of its chart on 2026-11-20. `CAT-3`'s movement library is complete
 (587 movements), and **its fresh start ran in production on 2026-11-26**: the seeded household was
 erased, the old movement list went with it, and the household signed in again to an empty, ordinary
-household. The maintainer's family now uses the app for a week (`FAM-1` step 16); the phone
-run-through and the `PRIV-1` sign-off follow. The PRs left before the first invite each have an
+household. The maintainer's family now uses the app for a week (`FAM-1` step 16); the maintainer signed off the privacy notice
+the same day (`PRIV-1`), and the phone run-through follows. The PRs left before the first invite each have an
 approved plan, except `OPS-3`'s restore drill. The forward view is [roadmap.md](./roadmap.md) →
 "Active milestone".
 
