@@ -76,8 +76,9 @@ regresses. The numbers are kept, because other docs cite them.
 
 1. **The LLM never authors a load.** AGENTS.md's one inviolable product rule. Nothing on the write
    path copies a prescribed load into a set; a frozen prescription is a rendering stored on the
-   entry, never a set's value. `packages/evals`' invariant class holds the live row write
-   (`rowWriteSchema`) to it: a prescription string is not a number, so it cannot be stored as one.
+   entry, never a set's value. `packages/evals`' invariant class holds both live row writes to
+   it, the ✓ (`rowWriteSchema`) and Change (`rowAmendSchema`): a prescription string is not a number,
+   so it cannot be stored as one.
 
 _Invariants 2 and 3, the legacy set and edit guards, went with the legacy writer (LEGACY-1)._
 

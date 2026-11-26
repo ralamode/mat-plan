@@ -281,7 +281,7 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 
 ### Small leftovers after LEGACY-1 (added 2026-11-26, LEGACY-1 C2b)
 
-- **What & why it's debt:** three body-only follow-ups the deletion left, none worth a PR alone:
+- **What & why it's debt:** three body-only leftovers found during the deletion, none worth a PR alone:
   - `DAY_ROLE_TO_SESSION_TYPE` (`packages/shared/src/programming.ts`) is read only by
     `apps/web/lib/programming/contract.test.ts` and a comment in `packages/db/src/schema.ts`, whose
     "writer/action-enforced" invariant is out of date: nothing writes `sessions.day_role` now;

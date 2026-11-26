@@ -61,7 +61,8 @@ only a deleted export used is deleted too.
 **Stays live:**
 
 - **In the trimmed shared file:** `MAX_SETS_PER_MOVEMENT`, `numericSetSchema`,
-  `NUMBER_TOO_HIGH_MESSAGE`, `movementNameSchema` and its tests. So
+  `NUMBER_TOO_HIGH_MESSAGE`, `movementNameSchema` and its tests. ⚠️ Superseded 2026-11-26 — see
+  § Amendment. So
   `packages/shared/src/strength-session.ts` is trimmed, not deleted.
 - **Elsewhere:** `PROGRAM_READ_KIND`, `ACTIVITY_INPUT_SHAPES` (the array), `findOrCreateTypedMovement`,
   `insertEntrySetRows`, `readLiveSets`, `movementIsAvailableTo`, `isLiveProfile`, `ownedEntryIds`.
@@ -73,6 +74,7 @@ only a deleted export used is deleted too.
 | "Mutation patches" → "Re-aim … **36** → the surviving `movementIsAvailableTo` assertion" (done in PR B) | **36 is re-aimed in C2**, in the change that deletes the PICK-1 PR 2 block. Its live targets (`saveWorkout`, `row-steps.ts`, `newItem`, the day-plan read) are proved in the lane modules, which run after `verify.ts`'s body, so while the PICK-1 block exists its `(a)` assertion is always the first to fail. PR B leaves 36 unchanged                                                             |
 | "Order and split" → the **C2** row, one PR                                                              | **2026-11-26: C2 is split** into **C2a** (the dead proofs deleted, mutations retired and re-aimed; the source still present) and **C2b** (source, schemas, evals, docs). Size: about 4,500 lines; the risky proof cuts stay reviewable apart from the mechanical deletion. Between them the writer, resolver, `prescribedSnapshotsFor` and `weeklyAdherenceRows` are uncalled and unproven for one PR |
 | "The proofs, by section" → the P1-1b row, "delete"                                                      | **2026-11-26: P1-1b is cut inside, not deleted.** Its per-set status assertions (the column default `done`, a `sub_failure` set keeping its reps, the set count) prove the live `entry_sets` status column, so they stay, messages verbatim, on `legacyStrengthFixture`. Only the `updateStrengthSetById` half goes. V1-9 and the V1-24 dead-profile edit are deleted as planned                      |
+| "Stays live" → `numericSetSchema`, `NUMBER_TOO_HIGH_MESSAGE`; the evals → `rowWriteSchema`              | **2026-11-26, C2b review:** `numericSetSchema` is cut to `reps` (nothing read its `weight`), and `NUMBER_TOO_HIGH_MESSAGE` is deleted with it. The evals cover **`rowAmendSchema` (Change) too**, not only `rowWriteSchema` (the ✓): every refusal and control runs over both.                                                                                                                        |
 
 ## The proofs, by section
 
@@ -150,7 +152,7 @@ shards run them all.
 - **The evals' write-path invariant** (`packages/evals/src/cases/invariants.ts`) parses
   `strengthSetSchema`, which no reachable write has parsed since FAM-1 12f. This is pre-existing,
   found by the panel. It is **re-pointed at the live day schemas** (`rowValuesSchema` /
-  `rowWriteSchema`) in the PR that removes the schema's last consumer, so the "LLM never authors
+  `rowWriteSchema`; ⚠️ superseded 2026-11-26, see § Amendment) in the PR that removes the schema's last consumer, so the "LLM never authors
   loads" gate tests the path that writes.
 
 ## Left in the schema, on purpose (for the record; a later contract step)

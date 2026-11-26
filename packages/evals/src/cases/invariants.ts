@@ -14,7 +14,8 @@ import type { EvalCase } from '../harness';
  * (LEGACY-1 C2b): no write had parsed it since FAM-1 12f. These cases now parse **both schemas that
  * carry a logged row's values** (`packages/shared/src/program/day-shapes.ts`): `rowWriteSchema`, the
  * body the day page's ✓ sends, and `rowAmendSchema`, the body its Change sends. Every case runs over
- * each, so a schema that stops refusing a prescription fails its own cases. A logged quantity's `value` is a **number** there (`rowValuesSchema` in `program/pieces.ts`,
+ * each, so a schema that stops refusing a prescription fails its own cases. A logged quantity's
+ * `value` is a **number** there (`rowValuesSchema` in `program/pieces.ts`,
  * `0..MAX_STORABLE_QUANTITY`), so a prescription string is refused by the field's TYPE.
  *
  * That difference is the whole reason these cases are worth gating a build on. A regex blocklist
