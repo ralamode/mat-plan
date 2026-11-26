@@ -501,11 +501,11 @@ another slot, or a second one in the same slot, is the writer's to refuse.
     `MAX_PROGRAM_WORKOUTS` (50: a saved new workout and a copy alike) and `MAX_DAY_SLOTS` (30: one
     weekday of one program's week), in `program-shapes.ts`. The refusal is its own word because
     `invalid` reads as "something typed is wrong" and a screen marks a field for it.
-    - **The item cap is `newItem`'s.** The old Strength form's logger also makes a household item
-      for a typed name (`resolveSessionMovements`), outside this cap and its lock, and stays so
-      until that form is retired (step 12f) or the library's fresh start: refusing a set
-      mid-workout over an item count would cost more than it protects (decided overnight,
-      2026-11-18; an accepted gap).
+    - **The item cap is `newItem`'s, and since step 12f `newItem` is the only live creator of a
+      household item.** The old Strength form's logger made one for a typed name
+      (`resolveSessionMovements`), outside this cap and its lock, an accepted gap (decided
+      overnight, 2026-11-18). Step 12f retired that form, so nothing in the app reaches it now;
+      `LEGACY-1` deletes the path (C1, #815, then C2b).
     - **One function counts a household's items: `householdItemsFull(options)`**
       (`program-shapes.ts`), from the picker's options: an option whose `owner` is `household`
       counts, a library movement never does. The fake and the picker's "full" line ask it (the picker since 15 PR 1, #664).
