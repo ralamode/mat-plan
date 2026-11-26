@@ -478,11 +478,13 @@ one.**
 2026-10-26. Re-reviewed 2026-11-05** against the retirement of the shared access code, which changed
 who can get in, what Upstash is sent, and what a refused sign-up leaves behind. **Re-reviewed
 2026-11-19** against the export becoming the household owners' and its rate limit, and against
-Clear this day _(both pending the maintainer's re-read)_. **2026-11-20:** "How it felt" removed from
+Clear this day _(both accepted with the 2026-11-26 sign-off)_. **2026-11-20:** "How it felt" removed from
 the text-box list, which no page renders any more _(the maintainer approved it)_, and so was the old box for typing a movement's name. The Clear this day bullet's heading now says "workout names, and any notes written with them" _(the maintainer approved it)_.
 **2026-11-26:** re-reviewed against the fresh start: the starting household's erasure, the separated list
-of movement names, and the athletes and household that are no longer an exception _(pending the
-maintainer's re-read)_.
+of movement names, and the athletes and household that are no longer an exception _(the maintainer
+read and approved it)_.
+**Signed off for Beta 0 by the maintainer (the household operator), 2026-11-26**, after
+the fresh start, covering every re-review above.
 **Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out
