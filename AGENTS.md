@@ -319,7 +319,7 @@ movement picker.
 - **`pnpm verify` — optional before a PR** (CI runs all of it, DX-18). Everything CI's `quality` job does **except
   `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
   says nothing about it):
-  `format:check` → `lint` → `typecheck` → `test` → `eval` → `db:check` (snapshot parent collisions) → `db:verify` → `db:mutations` → `skills:check`
+  `format:check` → `lint` → `typecheck` → `test` → `eval` → `snapshots:check` (the snapshot chain) → `db:check` (snapshot parent collisions) → `db:verify` → `db:mutations` → `skills:check`
   (every path and `pnpm` script a skill cites exists; no two skills share a trigger phrase; each ends with a `## Done when` checklist; each red flag cites its incident) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
   each patch in `packages/db/scripts/mutations/` and asserts `db:verify` goes **RED** — a boundary
@@ -335,7 +335,8 @@ movement picker.
   the BRANCH (`<date>-<branch-with-slashes-as-dashes>.md`), so a descriptively-named one is found
   and rejected. `actions:check` runs here
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
-  workflow changes), the one gate whose CI form is not the `package.json` script. `db:verify` runs on
+  workflow changes); `snapshots:check` is the other, a direct `node` call before pnpm on every
+  event. Those two are the `verify` gates whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
   **Not covered by it:** `next build` (CI-only), bundle size (CI-only; the guard's header), the
   Playwright smoke (next bullet), gitleaks, Squawk, and the forward-only guard (Squawk and the guard
@@ -347,7 +348,7 @@ movement picker.
   through. Bare `pnpm --filter web e2e` provisions no database — use `e2e:local`.
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", holds the line): typecheck · lint · `prettier --check` · tests ·
-  `next build` · bundle size (CI-only; the guard's header) · gitleaks (on `main`, its own per-commit workflow) · (DB) `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
+  `next build` · bundle size (CI-only; the guard's header) · gitleaks (on `main`, its own per-commit workflow) · (DB) `snapshots:check` (every event) + `db:check` + drift check + `db:verify` · `audit:check` · `skills:check` ·
   `guards:test` · `status:check` · **mutation proof** (`mutations`, sharded) · **forward-only** + **Squawk** on new migrations · **action pins**
   ([SECURITY.md](./.github/SECURITY.md) → Supply chain). CI re-runs everything regardless of hooks.
   **Skip labels are read from the PR event: after adding one, PUSH (an empty commit is fine) — a re-run
@@ -462,7 +463,8 @@ Queue: ONE unapplied migration on main at a time. Merge the next only after migr
   PENDING run and drops older pending ones, so two quick merges apply together, in one transaction.
 Where it runs: GitHub Actions is the SINGLE migrator, on merge to main, against the DIRECT/unpooled
   Neon string. NEVER in the Vercel build (concurrent preview builds would race / DDL the wrong DB).
-CI gates: `drizzle-kit check` (snapshot parent collisions) + `generate` leaves a clean tree (drift
+CI gates: `snapshots:check` (the snapshot chain, every event) + `drizzle-kit check` (snapshot parent
+  collisions) + `generate` leaves a clean tree (drift
   guard) + `db:verify` on PGlite +
   Squawk on new migrations + the e2e job's migrate+seed against an empty Postgres service. Where each
   gate runs, and which is NOT wired: "Local hooks vs CI merge-gates" above.

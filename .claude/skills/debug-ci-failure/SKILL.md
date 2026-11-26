@@ -57,6 +57,7 @@ A timeout that passes when re-run alone is load, not a defect: see
 
 | CI step (`ci.yml`)                | Local reproduction                                                                                |
 | --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Migration snapshot chain          | `pnpm snapshots:check`                                                                            |
 | Forward-only migration guard      | `git diff --name-status origin/main -- packages/db/migrations` (only `A` allowed)                 |
 | Squawk (new migrations)           | `npx squawk-cli@2.66.0 -c .squawk.toml <new .sql>`                                                |
 | Feature guides                    | `pnpm guides:check`                                                                               |
