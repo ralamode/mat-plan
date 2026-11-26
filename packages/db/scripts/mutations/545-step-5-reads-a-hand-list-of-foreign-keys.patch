@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/movement-ownership.ts b/packages/db/src/queries/movement-ownership.ts
+index bb71f30d..ebb3e3b0 100644
+--- a/packages/db/src/queries/movement-ownership.ts
++++ b/packages/db/src/queries/movement-ownership.ts
+@@ -226,6 +226,7 @@ export async function foreignKeysIntoMovements(exec: Reads): Promise<MovementFor
+         JOIN pg_class r ON r.oid = c.conrelid
+         JOIN pg_namespace n ON n.oid = r.relnamespace
+        WHERE c.contype = 'f' AND c.confrelid = 'public.movements'::regclass
++         AND r.relname IN ('entries', 'prescriptions', 'movement_equipment', 'movement_muscles')
+        ORDER BY n.nspname, r.relname, c.conname`),
+   );
+   const list = (v: string[] | string): string[] => (typeof v === 'string' ? JSON.parse(v) : v);

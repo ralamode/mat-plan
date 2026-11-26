@@ -43,6 +43,7 @@ it is approved, one batch PR at a time.
 | 12    | Olympic lifts and kettlebell work: cleans, snatches, jerks, thrusters, get-ups       | 31      |
 | 13    | Bodyweight skills: handstands, levers, planche, L-sit, muscle-ups, rolls             | 24      |
 | 14    | Gap-fill: movements the family batches left out                                      | 22      |
+| 15    | Program additions: splits and active flexibility, stance holds, grip, core steps     | 39      |
 
 ## How a batch arrives
 

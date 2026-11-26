@@ -15,6 +15,24 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The seed's session timeouts are fired, not awaited, so its first query races them (added 2026-11-21, from CAT-3 A2-ii's rehearsal)
+
+- **What & why it's debt:** `packages/db/scripts/seed.ts` sets `lock_timeout` and
+  `statement_timeout` in `pool.on('connect', …)` with `void client.query("SET …")`, unawaited. The
+  seed's first query is then issued on that client while the `SET` is still executing. pg 8 queues
+  it, so the timeouts do apply first, but logs `DeprecationWarning: Calling client.query() when the
+client is already executing a query is deprecated and will be removed in pg@9.0` (seen in the
+  maintainer's production rehearsal, 2026-11-21, and in every `screenshot:ephemeral` run).
+- **Impact:** none on pg 8 beyond the warning. **The trigger is pg 9**: once the queueing is removed,
+  the seed's first statements could run before the timeouts are set, or fail, on `migrate.yml`'s
+  production run.
+- **The fix:** set the session state before the first query, awaited. For example, pass
+  `options: '-c lock_timeout=5s -c statement_timeout=60s'` where the connection allows it (the
+  comment above the handler says a pooler may refuse startup parameters, so check the unpooled string
+  is what the seed uses), or wrap `seed()`'s work so each client runs the `SET` first and awaits it.
+  Re-check `migrate.ts` for the same pattern at the same time.
+- **Severity:** P3; act before any pg 9 bump (Dependabot's PR is the reminder).
+
 ### A fixtures seed cannot tell production from a fixtures database before the fresh start (added 2026-11-20, CAT-3 A2-ii)
 
 - **What & why it's debt:** `assertSeedOwnsDatabase` (`packages/db/src/seed.ts`) refuses a fixtures seed
@@ -212,8 +230,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 > ✅ **Closed (2026-11-19):** `pnpm --filter @mat-plan/db db:check` runs first in `ci.yml`'s DB step
 > and in `pnpm verify` (`db:check`). Checked on drizzle-kit as pinned: a snapshot given its
 > neighbour's `prevId` makes it exit 1 ("… are pointing to a parent snapshot … which is a
-> collision"), and a clean tree exits 0. ⚠️ It passes a snapshot whose `prevId` is its own `id` (#139);
-> only the forward-only guard's inline chain check catches that, on PRs only, so both stay. The entry
+> collision"), and a clean tree exits 0. ⚠️ It passes a snapshot whose `prevId` is its own `id` (#139).
+> Since 2026-11-19 `snapshots:check` catches that on every event and in `pnpm verify`
+> ([plan](./plans/dx-snapshot-chain-script.md)); before, only the PR-only forward-only guard did. The entry
 > is kept for its history (its Fix line's `check` script is named `db:check`).
 
 - **What & why it's debt:** `packages/db/package.json` defines a `check` script (`drizzle-kit

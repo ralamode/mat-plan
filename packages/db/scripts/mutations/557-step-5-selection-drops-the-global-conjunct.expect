@@ -1,0 +1,1 @@
+CAT-3 R1: the dry run finds exactly the legacy rows and their join rows (the NULL-modality row and the hand-updated seed row included)
