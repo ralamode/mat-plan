@@ -130,6 +130,8 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   expect(changeMid).toBeGreaterThan(labelBox!.y);
   expect(changeMid).toBeLessThan(valueBox!.y + valueBox!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  // The Change's re-render briefly drops the streamed <title> (~370 ms in #830's trace; tech-debt.md).
+  await expect(page, 'the page has its title back after the Change').not.toHaveTitle('');
   await expectNoAxeViolations(page, 'the logged practice row at 360px');
   await expectTapTargets(page, 'the logged practice row at 360px');
 

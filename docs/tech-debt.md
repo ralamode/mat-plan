@@ -15,6 +15,32 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The page's `<title>` briefly disappears after a Server Action's re-render (added 2026-11-26, from #830's e2e retry)
+
+- **What & why it's debt:** in #830's retry trace (run 45895755653), the `<title>`, a `<meta>` and a
+  `<link>` were gone from `<head>` for about 370 ms after the Change action's response, then came
+  back. No request was in flight in that gap. A screen reader or an axe scan in that window finds no
+  title; `log-bodyweight.spec.ts` failed `document-title` at its 360px scan this way. The mechanism
+  is **not verified**: where Next holds the streamed metadata while it applies an action's tree.
+  Related to "The route announcer sometimes says the athlete, not the day" below, but not the same:
+  that one is a late title on arrival, this one is the title removed after a write.
+- **Impact:** low. The title is right again within a moment; the spec waits for it before its scan.
+- **Proposed fix:** find why the action's tree drops the metadata (a Suspense boundary around it is
+  the first guess), and keep the old title until the new one arrives.
+- **Severity:** low.
+
+### After Clear on the Life row, the old editor stays on screen until the new form arrives (added 2026-11-26, from #830's e2e diagnosis)
+
+- **What & why it's debt:** the row's island reports the clear and moves focus from the action's
+  result, which arrives before the revalidated tree (`single-value-live.tsx`). On a slow connection
+  the "cleared" status and focus land while the old editor is still showing: 3.7 s in a run with the
+  download throttled to 8000 B/s. A value typed then is discarded when the replacement form mounts,
+  or a Save sends it against the row just cleared, which is refused. Nothing is overwritten.
+- **Impact:** low. A person on a slow phone may have to type the minutes again.
+- **Proposed fix, to weigh:** hide or disable the editor once its clear succeeds, or announce and
+  move focus only after the new tree lands. Owner: the bodyweight / practice lane (lane S).
+- **Severity:** low.
+
 ### The seed's session timeouts are fired, not awaited, so its first query races them (added 2026-11-21, from CAT-3 A2-ii's rehearsal)
 
 - **What & why it's debt:** `packages/db/scripts/seed.ts` sets `lock_timeout` and

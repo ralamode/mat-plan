@@ -280,7 +280,8 @@ access token`, which reads like a permissions problem with the repo. The cause w
   download through CDP before the clear (`Network.emulateNetworkConditions`, 8000 B/s): it fails
   3 in 3, and passes 3 in 3 with the fix. The retry's `document-title` failure was a second
   window: a Server Action's tree drops the streamed `<title>` from `<head>` for a few hundred ms.
-  `expectNoAxeViolations` now waits for a title before it scans. (LEGACY-1 C2, #828)
+  That spec's 360px scan waits for a title first (`tech-debt.md` has the entry). (LEGACY-1 C2,
+  #828)
 - **A redirect chain read from the browser was wrong on two CI runs (td-signed-out-e2e, #791).**
   (1) Concatenating `response.request().redirectedFrom()` hops with `framenavigated` URLs counted each
   hop twice. (2) Reading either one alone still failed: a late navigation from the previous page
