@@ -2182,8 +2182,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
   and that a session write the household seam **refuses** has already committed the caller's text — a
   cross-tenant _write_ primitive surviving its own refusal. **That primitive does not need a second
-  household:** `logStrengthSession` runs `findOrCreateMovementId` _before_ `writeStrengthSession`'s
-  in-transaction profile resolve (`apps/web/lib/dal/entries.ts`; the order is pinned by
+  household:** _(historical: that DAL is deleted, LEGACY-1 C1)_ `logStrengthSession` ran `findOrCreateMovementId` _before_ `writeStrengthSession`'s
+  in-transaction profile resolve (`apps/web/lib/dal/entries.ts`; the order was pinned by
   `entries.test.ts`), so any gate-holder's session write, even one the write core then refuses for
   any reason, commits its catalog text. TEN-2 may move the find-or-create inside the transaction,
   after the profile resolves. Expand (nullable `household_id` + partial unique indexes) → move every
@@ -2192,8 +2192,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   (`2a`, `2b`, `2c`, `2c-1`, `2d`); each carries a migration or a correction, so each needs its own
   plan and panel. ✅ **FOUR have landed** — `2a` (`0015`), `2b` (`0016`), `2c` (`0017`), `2d` (`0018`);
   the fifth, **`2c-1`, is a measured no-op on current data and stays open as a conditional**:
-  re-measure immediately before the invite, implement only if non-zero. `TEN-2b-1` and `TEN-2b-2`
-  remain as their own deferred rows.
+  re-measure immediately before the invite, implement only if non-zero. `TEN-2b-1` closed as
+  overtaken (LEGACY-1 C1); `TEN-2b-2` is re-scoped and waits for a boundary plan.
   **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing could serve
   two households before AUTH-1 (the resolver threw on a second live household — removed at 1c-4), so
   the window opens the moment household #2 exists. Evidence, the alternative considered and the recommendation:
@@ -2295,7 +2295,12 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   writer-enforced; a predicate would make a card vanish, and in `export-month` would silently drop a
   month of CSV), and the backfill's _"logs each one"_ became a count, for privacy.
 
-- **TEN-2b-1 — move find-or-create inside `writeStrengthSession`'s transaction.** _(Beta 0; deferred
+- ✅ **TEN-2b-1 — CLOSED as overtaken (LEGACY-1 C1, 2026-11-21).** Its creator, `logStrengthSession`,
+  is deleted, and its ordering test was retired deliberately with a record in `entries.test.ts`. The
+  live creator, `newItem`, creates in one transaction and refuses before it inserts. The reasoning is
+  the [LEGACY-1 plan](./plans/legacy-1-retire-strength-path.md)'s "The rows this settles". The
+  original row follows.
+  **TEN-2b-1 — move find-or-create inside `writeStrengthSession`'s transaction.** _(Beta 0; deferred
   from TEN-2b, which is where the reasoning lives.)_ Today `logStrengthSession` resolves every
   movement **before** the write core opens its transaction, so a session the household seam refuses
   has already committed its catalog text. **TEN-2b defused the cross-tenant half** — that row now
@@ -2321,8 +2326,14 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   in the meantime.
 
 - **TEN-2b-2 — the orphan-row correction: a custom movement nothing references.** _(Beta 0; deferred
-  from TEN-2b; runs AFTER `TEN-2b-1` per TEN-2a's rule (d), or it deletes rows the live app is still
-  creating.)_ 1d's surviving-refusal primitive creates exactly these. The row is **removed, not
+  from TEN-2b.)_ ⚠️ **RE-SCOPED, NOT BUILDABLE AS WRITTEN (LEGACY-1 C1, 2026-11-21; the maintainer
+  deferred the boundary to this row's own plan, 2026-11-20).** `TEN-2b-1` closed as overtaken, so the
+  ordering this row waited on is gone. Its predicate is wrong now: `newItem` deliberately commits a
+  household movement that no workout uses yet. The picker lists it and the item cap counts it, so
+  "nothing references it → hard DELETE" would delete items a person made on purpose. Its plan must
+  first fix a boundary, for example rows created before the FAM-1 12f PR 3 deploy (the last moment
+  the legacy creator could run), or close the row in favour of an in-app item removal. The original
+  text follows. 1d's surviving-refusal primitive creates exactly these. The row is **removed, not
   assigned**, and it must be a **HARD `DELETE`**: the registry's only delete precedent is a **soft**
   one, and a tombstoned app-authored row still occupies its slug in a namespace whose resolver has no
   `deleted_at` filter, so it would be handed back forever. Justified by `corrections/README.md` rule 8.

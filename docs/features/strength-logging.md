@@ -24,9 +24,10 @@ owns:
 
 > ⚠️ **No screen logs through this path.** The day page logs and changes strength rows through the
 > FAM-1 row writer ([day-writers.md](./day-writers.md)). FAM-1 12f PR 3 removed the two actions
-> that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the schemas, the DAL
-> functions and the writer below stay with their Vitest and `db:verify` coverage, with no caller,
-> until [`LEGACY-1`](../plan.md#legacy-1) retires the path (the maintainer, 2026-11-19, Q4).
+> that called it (`logStrengthSessionAction`, `editStrengthSetAction`); the two DAL
+> functions went in [`LEGACY-1`](../plan.md#legacy-1) C1 (2026-11-21). The schemas and the writer
+> below stay with their Vitest and `db:verify` coverage, with no caller, until LEGACY-1 C2 deletes
+> them ([plan](../plans/legacy-1-retire-strength-path.md)).
 
 ## The prescription is frozen when the set is logged (V1-22 chunk 2)
 
@@ -64,7 +65,6 @@ flowchart TD
   end
 
   subgraph server["server"]
-    DAL["lib/dal/entries.ts<br/>logStrengthSession · editStrengthSet"]
     WRITER["writers/strength-session.ts<br/>ONE transaction"]
     EDIT["writers/strength-session.ts<br/>updateStrengthSetById"]
   end
@@ -73,9 +73,9 @@ flowchart TD
     SESS[(sessions)] --> ENT[(entries)] --> SETS[(entry_sets)] --> QTY[(entry_set_quantities)]
   end
 
-  DAL --> SESSIONSCHEMA --> SETSCHEMA
-  DAL --> WRITER --> db
-  DAL --> EDIT --> db
+  SESSIONSCHEMA --> SETSCHEMA
+  WRITER --> db
+  EDIT --> db
 ```
 
 ## Files
@@ -245,8 +245,7 @@ Real ones, each with the file to look at.
 
   **Since TEN-1 1b the set-edit also takes a `scope`** (`updateStrengthSetById(exec, { …, scope })`),
   which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
-  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()` (no caller
-  since FAM-1 12f PR 3 removed its action). `db:verify`'s TEN-1 write matrix proves the refusal in **both**
+  guarded UPDATE. The app DAL that resolved it (`editStrengthSet`) is deleted (LEGACY-1 C1). `db:verify`'s TEN-1 write matrix proves the refusal in **both**
   directions with no side effect.
 
 - **`writeStrengthSession`'s in-transaction profile resolve is household-scoped too (TEN-1 1c).** It
@@ -255,17 +254,17 @@ Real ones, each with the file to look at.
   an unknown or soft-deleted profile already got, with the **whole multi-table graph rolled back**.
   `db:verify` asserts both directions and that no `sessions` row survived a refusal: a refusal that
   wrote half a session would be worse than a leak, because the athlete's next replay would attach to
-  it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so
-  `ResolvedSessionMovement` is unchanged (no app caller since FAM-1 12f PR 3).
+  it. The app DAL that resolved the scope and passed it down (`logStrengthSession`) is deleted
+  (LEGACY-1 C1).
 
   ✅ **Movement resolution still runs BEFORE this, and it is SCOPED as of `TEN-2b`** — the DAL's
   `findOrCreateMovementId` wrapper is gone (`PICK-1` PR 2 deleted it); `resolveSessionMovements`
-  takes the same `HouseholdScope` `logStrengthSession` already resolved and reaches
+  took the same `HouseholdScope` the deleted `logStrengthSession` resolved and reaches
   `findOrCreateMovement` for a typed name, which resolves **global-first**. So a movement a
   household types belongs to that household, and a session the seam then refuses leaves its catalog
   row in the **caller's own** namespace: garbage the deletion procedure removes, not a cross-tenant
-  write. Moving the call inside the transaction is `TEN-2b-1`; `entries.test.ts` pins the current
-  order deliberately. ✅ **`TEN-2c` dropped the non-partial `movements_slug_unique`, so the second
+  write. `TEN-2b-1` would have moved the call inside the transaction; it closed as overtaken
+  (LEGACY-1 C1), and `entries.test.ts`'s ordering pin was retired with a record. ✅ **`TEN-2c` dropped the non-partial `movements_slug_unique`, so the second
   typist now gets their own row and the denial window is closed.** ⚠️ One residual survives — the
   **pre-`TEN-2b`** rows still at `household_id IS NULL`, which global-first serves to every household
   — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing, via

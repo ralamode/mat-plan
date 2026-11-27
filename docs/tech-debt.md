@@ -225,8 +225,8 @@ client is already executing a query is deprecated and will be removed in pg@9.0`
   `apps/web/lib/dal/quiet-db-errors.ts` (shared since 12b, moved out of `lib/dal/program/`) with only
   the operation, the error's type, the SQLSTATE and the stack's frame lines, so the gate above is
   met. **Closed by `V1-9b` B1-2:** every write in `lib/dal/entries.ts` and `lib/dal/profiles.ts`
-  (fourteen functions, fifteen calls: `logStrengthSession`'s movement find-or-create has its own,
-  `logStrengthSession.resolveMovements`), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
+  (thirteen functions, one call each, re-counted 2026-11-21 when LEGACY-1 C1 deleted the legacy
+  strength DAL), pinned by `lib/dal/writes-quiet-errors.test.ts`. The scope
   read (`household.ts`), whose parameter is the Clerk user id, rethrows a `DbWriteError` too
   (`household.test.ts`). The other reads stay unwrapped; their parameters are ids and a day.
 
@@ -272,16 +272,14 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
 
 - **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
   capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
-  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet`;
+  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet` (deleted, LEGACY-1 C1);
   `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
-  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`
-  (`packages/shared/src/programming.ts:55`), which mutation 12's patch quotes as context;
-  `STRENGTH_DAY_ROLES` (`programming.ts:105`) and `loggableUnitsOf` (`units.ts:164`). 12f PR 5 adds
-  `ACTIVITY_INPUT_SHAPE` (`activity-shapes.ts:19`), whose last user was `lib/checkins`.
+  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`,
+  `STRENGTH_DAY_ROLES` and `ACTIVITY_INPUT_SHAPE` (deleted, LEGACY-1 A); and `loggableUnitsOf`
+  (`units.ts:164`).
 - **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
   there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** the package owners delete the callerless code in their own PRs (mutation 12's context
-  moves with `readsHouseholdProgram`). Revisit the older-day recovery path before FAM-1 slice 3 opens
+- **Fix:** the package owners delete the callerless code in their own PRs. Revisit the older-day recovery path before FAM-1 slice 3 opens
   the new page to the household, or before a second household.
 
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)

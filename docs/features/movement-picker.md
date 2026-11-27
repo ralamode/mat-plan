@@ -102,9 +102,11 @@ path and **creating** the deliberate one.
    throw.** A review argued a crafted body makes it an _expected_ refusal owed a typed envelope; the
    maintainer kept Decision 2, and `C4m` (merge) — the chunk that makes a dead id genuinely reachable
    — owns turning it into one. ⚠️ The error surfaces at `app/error.tsx` and the form is lost; the
-   docblock used to claim otherwise. ⚠️ Since `V1-9b` B1-2 the DAL rethrows it as a `DbWriteError`
-   (`logStrengthSession.resolveMovements failed (MovementNotAvailableError)`), so `C4m` must catch it
-   inside the wrap or return it as a writer result; an `instanceof` in the action never matches.
+   docblock used to claim otherwise. ⚠️ The DAL that rethrew it as a `DbWriteError`
+   (`logStrengthSession`) is deleted (LEGACY-1 C1, 2026-11-21), so no app path reaches this throw:
+   it holds only for the callerless resolver, which LEGACY-1 C2 deletes. The live save refuses a
+   dead or foreign item id with a typed `not_found` (`writers/program/save-workout.ts`), and `C4m`
+   builds on that path.
 
 7. ✅ **The `prescribed` match compares `movement_id` on BOTH sides, and a rename cannot move it.**
    **Closed, not pending.** This invariant used to read "after C4r renames a row, chunk 2's slug match
