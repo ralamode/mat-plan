@@ -8,7 +8,7 @@ import { inHousehold } from '../writers/ownership';
 
 /**
  * The profile-picker read (TEN-1 1b), single-sourced here so the app DAL (`listProfiles`) and the
- * `db:verify` proof run the **IDENTICAL** query — the `weeklyAdherenceRows` / `programDayRows`
+ * `db:verify` proof run the **IDENTICAL** query — the `programDayRows`
  * precedent, and `and(isNull(deletedAt), inHousehold(scope))` is the whole predicate, so there is
  * nothing for a second copy to drift on.
  *

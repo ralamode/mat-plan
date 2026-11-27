@@ -9,9 +9,9 @@ import type { PrescriptionSeedRow, PrescriptionTargetSeedRow } from '../programm
  *
  * ## Why both functions live here, in `packages/shared/src/csv/`
  *
- * Three callers, and the home has to serve all of them:
+ * Three callers when it was written, and the home had to serve all of them:
  *
- * 1. the log-time writer — `packages/db/src/writers/prescribed-snapshot.ts`;
+ * 1. the legacy log-time writer — deleted by LEGACY-1;
  * 2. the backfill correction — `packages/db/scripts/corrections/` (chunk 3);
  * 3. the export fallback — `apps/web/lib/dal/export.ts`.
  *
@@ -68,7 +68,7 @@ export function effectiveReps(p: Pick<PrescribedParts, 'reps' | 'targetReps'>): 
  * 🔴 **An `open()` prescription renders `''` — the DOMINANT shape, 11 of the 13 seeded.** `''` is a
  * real value here and must survive storage as `''`; it is NOT the same as "no prescription", which
  * is NULL. Every truthiness guard between this function and the column is a bug that silently
- * collapses eleven of thirteen rows (see `prescribedSnapshotsFor`, and `db:verify`'s `''` case).
+ * collapses eleven of thirteen rows (see `db:verify`'s `''` case).
  */
 export function formatPrescribedForExport(p: PrescribedParts): string {
   const reps = effectiveReps(p) ?? '';

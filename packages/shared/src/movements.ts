@@ -95,8 +95,8 @@ export function movementSlug(name: string): string {
 /**
  * The app-input cap on a movement NAME. The column is unbounded `text`, so this is the boundary's
  * limit, not the schema's — named here (AGENTS.md constants) because it was an inline `.max(100)` on
- * `sessionMovementSchema.movementName` and PICK-1, `MOV-1` and `V1-22` A4 all need the same number.
- * A contract test pins the value once.
+ * the legacy session schema's movement name and PICK-1, `MOV-1` and `V1-22` A4 all need the same
+ * number. A contract test (`movements.test.ts`) pins the value once.
  */
 export const MOVEMENT_NAME_MAX = 100;
 
@@ -108,7 +108,7 @@ export const MOVEMENT_NAME_MAX = 100;
  * ⚠️ **`missing` reads "Choose a movement.", not "Enter a movement."** _(PICK-1 Decision 1, a
  * deliberate copy change.)_ After PICK-1 PR 4 the field is a button that opens a picker, not a text
  * box, so "enter" names an interaction the screen no longer offers. The old string shipped from
- * `strength-session.ts`'s inline `.min(1)`; tests asserting it change with it.
+ * the legacy session schema's inline `.min(1)`; tests asserting it change with it.
  */
 export const MOVEMENT_NAME_MESSAGES = {
   missing: 'Choose a movement.',
@@ -134,30 +134,26 @@ export const movementLabelSchema = z
 
 /**
  * The messages a TYPED movement name earns — the rules that apply to free text and not to a label
- * the database supplied. **One definition, two consumers**, which is why it is a function returning
- * messages rather than two `.refine()` calls copied into each:
- *
- * 1. {@link movementNameSchema}, the standalone schema `MOV-1`'s rename and `V1-22` A4 import;
- * 2. `logStrengthSessionSchema`'s `superRefine`, which cannot use that schema directly — it must
- *    report at `['movements', i, 'movementName']`, the path the action's `Movement N: …` mapping
- *    already understands, and only for movements WITHOUT a `movementPublicId`.
- *
- * A third typed-name rule added here therefore reaches both. Returns `[]` for an acceptable name.
+ * the database supplied. A function returning messages rather than a `.refine()`, so a consumer that
+ * must report at its own issue path can apply it. Today {@link movementNameSchema} is the one (the
+ * picker, the catalog entry and `newItem` parse through it); the legacy session schema was the other,
+ * deleted by LEGACY-1. A typed-name rule added here reaches them all. Returns `[]` for an acceptable
+ * name.
  *
  * ⚠️ **The comma rule guards the SLUG, an input rule rather than an export guard since FAM-1 14a.**
  * `movementSlug(name)` keeps commas (it only collapses whitespace and lower-cases), and the slug is
  * what the CSV's `movement` column prints (`packages/db/src/queries/export-month.ts` →
  * `csvMovement`). Until 14a `csvRow` threw on a comma there; it now quotes any field the RFC 4180
  * way (`packages/shared/src/csv/row.ts`), so a comma no longer fails the export. ⚠️ `entries.movement_name` is **not exported at all**, which an
- * earlier version of this note and of `sessionMovementSchema`'s claimed; the export query selects
+ * earlier version of this note and of the legacy session schema claimed; the export query selects
  * only the slug. `"` stays legal — `30" Box Jump` is real data.
  *
  * 🔴 **`noLetter` is skipped for an EMPTY value, deliberately.** `movementLabelSchema`'s `min(1)`
  * already owns "there is no name here" with its own message, and in zod a `.min()` failure does
  * **not** abort the outer object's refinements — so without this guard a blank card produced
  * *"Choose a movement."* **and** *"…needs at least one letter."*, two faults for one mis-tap, on the
- * single most common error a spare card on a gym floor produces. Probed, and the schema test asserts
- * the blank case `toEqual` exactly one message so the double cannot come back.
+ * single most common error a spare card on a gym floor produces. Probed, and `movements.test.ts`
+ * asserts the blank case `toEqual` exactly one message so the double cannot come back.
  */
 export function typedMovementNameIssues(value: string): readonly string[] {
   const issues: string[] = [];
@@ -169,9 +165,8 @@ export function typedMovementNameIssues(value: string): readonly string[] {
 /**
  * A movement name a person TYPED — the label shape plus {@link typedMovementNameIssues}' rules.
  *
- * The session schema deliberately does **not** use this (see that function's note 2); its consumers
- * are the surfaces where a name is the whole input: `MOV-1`'s rename and `V1-22` A4's authored
- * movement names. Kept here rather than in either of those so the four rules have one home.
+ * Its consumers are the surfaces where a name is the whole input. Kept here rather than in any one
+ * of them so the four rules have one home.
  */
 export const movementNameSchema = movementLabelSchema.superRefine((value, ctx) => {
   for (const message of typedMovementNameIssues(value)) {

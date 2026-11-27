@@ -1,9 +1,4 @@
-import {
-  newId,
-  type RowValues,
-  type StrengthSetInput,
-  UNIT_DIMENSION_BY_CODE,
-} from '@mat-plan/shared';
+import { newId, type RowValues, type SetStatus, UNIT_DIMENSION_BY_CODE } from '@mat-plan/shared';
 
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
@@ -11,9 +6,9 @@ import { schema } from '../client';
 import type { Executor } from './executor';
 
 /**
- * Row helpers for the entry graph: the strength writer and the FAM-1 row writer
- * (`writers/day/log-row.ts`) both write an entry's set rows through them (FAM-1 steps 11a, 11b), and Change rewrites a logged
- * row's numbers through `updateEntrySetRows` (11c-i).
+ * Row helpers for the entry graph: the FAM-1 row writer (`writers/day/log-row.ts`) writes an entry's
+ * set rows through them (FAM-1 steps 11a, 11b), and Change rewrites a logged row's numbers through
+ * `updateEntrySetRows` (11c-i).
  *
  * ⚠️ Not re-exported from `src/index.ts`. Each helper writes part of an entry inside its caller's
  * transaction; called on its own it would leave a half-written graph.
@@ -21,7 +16,7 @@ import type { Executor } from './executor';
 
 /**
  * A set as `insertEntrySetRows` takes it, **derived, never re-typed** (FAM-1 11b): the reps and the
- * quantities of a logged row (`RowValues`), plus the strength set's two modes and its status.
+ * quantities of a logged row (`RowValues`), plus the set row's two mode columns and its status.
  *
  * - `reps` omitted → the column is omitted (NULL). A Check, Count, Duration, Time-per-set or
  *   Distance row has no reps. 🔴 Never pass a placeholder: the column has no CHECK, and an invented
@@ -29,7 +24,9 @@ import type { Executor } from './executor';
  * - Each quantity carries its own slot and unit, so a Distance row reaches the `distance` slot.
  */
 export type EntrySetRowInput = Pick<RowValues, 'reps' | 'quantities'> &
-  Partial<Pick<StrengthSetInput, 'isBodyweight' | 'isBand' | 'status'>>;
+  Partial<Pick<typeof schema.entrySets.$inferInsert, 'isBodyweight' | 'isBand'>> & {
+    status?: SetStatus;
+  };
 
 /**
  * Write an entry's `entry_sets` rows (1-based `idx`) and each set's `entry_set_quantities` rows. A
@@ -37,10 +34,9 @@ export type EntrySetRowInput = Pick<RowValues, 'reps' | 'quantities'> &
  * composite FK checks. Columns a set does not set are OMITTED, so Postgres applies its own defaults
  * and a `done` set writes a byte-identical row.
  *
- * Callers: `writeSessionStrengthEntry` (one PRIMARY quantity per set that carries a weight) and the
- * FAM-1 row writer (one set per ✓, D3). Each calls it when it created the entry or, for the row
- * writer's revive (11c-ii), after soft-deleting the revived entry's live set; never on a replay, so a
- * retry never doubles the sets.
+ * Callers: the FAM-1 row writer (one set per ✓, D3), when it created the entry or, for its revive
+ * (11c-ii), after soft-deleting the revived entry's live set; never on a replay, so a retry never
+ * doubles the sets. `db:verify`'s fixtures write legacy-shaped sets through it too.
  */
 export async function insertEntrySetRows(
   exec: Executor,
@@ -103,7 +99,7 @@ export async function insertEntrySetRows(
  *
  * The same conventions as {@link insertEntrySetRows}: `reps` is set only where the type has reps,
  * never invented; a value goes in as `String(value)` for the numeric column. It takes only the
- * numbers (`Pick<RowValues, 'reps' | 'quantities'>`): the strength modes and status are not Change's.
+ * numbers (`Pick<RowValues, 'reps' | 'quantities'>`): the set's modes and status are not Change's.
  *
  * - **Each UPDATE must touch exactly one row**, or it throws: a broken entry graph (no live set, two,
  *   a missing quantity row) is a defect, never a partial write. The caller's transaction rolls it
@@ -115,9 +111,8 @@ export async function insertEntrySetRows(
  *   own `deleted_at` stays NULL) are never written.
  * - **`updated_at` advances to the server's `now()`** on the set, each quantity and the entry. That is
  *   not client last-writer-wins: see `docs/tech-debt.md` → "Set-edit LWW uses server-`now()`".
- * - Child order is `entry_sets` then `entry_set_quantities`, as `updateStrengthSetById`, so the two
- *   paths take row locks in one order. That function is not reused: it is addressed by a set's
- *   public id, guarded to mass, done and non-bodyweight sets, and asserts no row count.
+ * - Child order is `entry_sets` then `entry_set_quantities`, so a later second writer of these rows
+ *   takes row locks in the same order.
  */
 export async function updateEntrySetRows(
   exec: Executor,
