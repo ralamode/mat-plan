@@ -1924,8 +1924,9 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   ✓ re-renders the whole day page inside its response (≈ 17 sequential queries) and its
   `revalidatePath` then makes the router fetch every linked page again (≈ 16 requests). **Beta 0.**
   Three steps ([plan](./plans/perf-3-tick-latency.md)): **(1) built**: the row actions call
-  `refresh()`, which ends the prefetch burst; (2) the ✓ answers with its row only, the card's state
-  derived on the phone (own plan + UX panel); (3) the write reads the household once.
+  `refresh()`, which ends the prefetch burst (#821); (2) measure the page re-render inside each ✓,
+  then run its independent reads together ([plan](./plans/perf-3b-page-rerender.md); the row-only
+  design is deferred to v1.5); (3) the write reads the household once.
 
 - **PERF-4 — explore where a CDN makes the app faster on a phone.** _(maintainer, 2026-11-26; an
   exploration, not yet a build.)_ Vercel already serves the app through its CDN, so the question is
