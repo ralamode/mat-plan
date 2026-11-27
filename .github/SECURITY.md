@@ -99,10 +99,10 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     repair step. **Two of 1d's three defects ARE closed by `TEN-2b`:** a session write the seam
     refuses now leaves its row in the **caller's own** namespace (garbage, not a cross-tenant write),
     and the other household's Today card can no longer render it — `seedProgram` resolves the global
-    namespace only and **refuses** loudly instead. ⚠️ **Still true and unchanged:** the surviving-row
-    primitive needs no second household, because `logStrengthSession` runs find-or-create _before_ the
-    write core's in-transaction profile resolve (`apps/web/lib/dal/entries.ts`) — moving it inside is
-    `TEN-2b-1`. ⚠️ **This said "the rate limiter is wired to the gate login only, so a gate-code
+    namespace only and **refuses** loudly instead. ✅ **The surviving-row primitive is gone (LEGACY-1, 2026-11-21):**
+    it was `logStrengthSession` running find-or-create _before_ the write core's in-transaction
+    profile resolve, and that DAL function is deleted. The live creator, `newItem`, creates in one
+    transaction and refuses before it inserts. `TEN-2b-1` closed as overtaken. ⚠️ **This said "the rate limiter is wired to the gate login only, so a gate-code
     holder can still mint unbounded `movements` rows of chosen text" — that is false as of AUTH-1 1d,
     in the SAFE direction, and leaving it would tell a reader a live minting primitive exists.** The
     gate and its limiter are deleted; every mutation now goes through `enterMutation`, which checks a
@@ -300,6 +300,16 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
   mitigation, if ever needed, is a secret-free prior step that fetches the binary against a committed
   sha256 and passes `path_to_claude_code_executable`. A `claude-code-action` bump is its own PR and
   is re-verified by hand ([runbooks.md](../docs/runbooks.md) → `CLAUDE_CODE_OAUTH_TOKEN`, step 6).
+- **Accepted residual: `signin-drift.yml` runs live, unpinned third-party JavaScript on `main`**
+  _(the maintainer approved the check, 2026-11-20)_. Its weekly run loads production `/sign-in`, so
+  Clerk's CDN script executes in Chromium on a runner whose Actions cache scope is `main`'s, and
+  `migrate.yml` restores its pnpm cache from that scope in the job that holds
+  `PROD_DATABASE_URL_UNPOOLED`. The chain is hostile Clerk JS → renderer RCE → sandbox escape →
+  the runner's cache token → a poisoned entry `migrate.yml` restores. **The boundary is Chromium's
+  sandbox** (`chromiumSandbox: true` in `playwright.drift.config.ts`, plus the workflow's sysctl
+  step); the production CSP's `connect-src` confines where page script can connect, and the drift
+  job itself saves no cache. It reopens if that sandbox can no longer be enabled on the runner. The
+  narrower close, if ever wanted, is dropping `cache: pnpm` from `migrate.yml`.
 - Threat model and both panel rounds: [DX-1 plan](../docs/plans/dx-1-claude-review.md).
 
 ## API shape

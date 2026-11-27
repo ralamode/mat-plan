@@ -14,15 +14,12 @@ import {
   lastBodyweightBefore,
   isLiveProfile,
   readLiveSets,
-  resolveSessionMovements,
   restoreClear,
   schema,
   updateBodyweightEntryById,
   updatePracticeEntryById,
-  updateStrengthSetById,
   writeCheckinEntries,
   type CheckinWriteResult,
-  writeStrengthSession,
 } from '@mat-plan/db';
 import {
   type ClearEvent,
@@ -40,7 +37,6 @@ import {
   type EntryKind,
   type EntryStatus,
   type QuantitySlot,
-  type SessionMovementInput,
   type SessionType,
   type Unit,
   type UnitDimension,
@@ -351,8 +347,7 @@ export type CheckinResult = {
  * a NULL-valued "presence" row would be rejected in prod. `db:verify` pins both directions.
  * (The 1/0 encoding is also what V1-6's sum/last aggregation and V1-13's CSV pivot want.)
  *
- * No transaction: a single multi-row INSERT is already atomic. `logStrengthSession` uses one
- * because it spans the sessions / entries / entry_sets tables.
+ * No transaction: a single multi-row INSERT is already atomic.
  */
 export async function logCheckinEntries(args: {
   profilePublicId: string;
@@ -410,8 +405,8 @@ export async function logCheckinEntries(args: {
 
   // V1-9b B1-1: the INSERT moved to `packages/db/src/writers/checkin.ts`, so `db:verify` runs the
   // real statement against a real database instead of an emitted-SQL assertion about its shape.
-  // Everything above stays here for the reason `logStrengthSession` keeps its own resolution: the
-  // catalog reads are cached reference data, and the profile resolve is household-scoped.
+  // Everything above stays here: the catalog reads are cached reference data, and the profile
+  // resolve is household-scoped.
   const written = await quietDbErrors('logCheckinEntries', () =>
     writeCheckinEntries(db, { profileId: profile.id, values }),
   );
@@ -426,76 +421,8 @@ export async function logCheckinEntries(args: {
   }));
 }
 
-export type LogStrengthSessionArgs = {
-  profilePublicId: string;
-  sessionType: string;
-  clientId: string; // client-stamped UUIDv7 (parent SESSION)
-  day: string;
-  feel?: string; // optional session feel note (V1-8-3b)
-  dayRole?: string; // GAP-1 P0-1: the programmed day the athlete asserted (never derived)
-  // V1-8-3d: the supersets to create; each movement references one via `supersetClientId` (on the
-  // SessionMovementInput). No catalog resolution needed — a pass-through, like `feel`.
-  supersets?: readonly { clientId: string; label?: string }[];
-  movements: readonly SessionMovementInput[]; // { movementName, unit, clientId, sets, superset tags }
-};
-
 /**
- * Writes a flat multi-movement strength SESSION (V1-8-2): one `sessions` row grouping N movement
- * `entry`s (each → its `entry_set`s) in ONE transaction, per-row idempotency at every level. This
- * is a THIN wrapper — it resolves the catalog ids the pure write core can't (the `sc_lift`
- * activity type + each movement's `movement_id`, both cached/idempotent-by-slug, so resolving them
- * OUTSIDE the tx is safe), then hands off to `writeStrengthSession` in `packages/db`, which the
- * `db:verify` proof runs too (single-sourced — no drift). Profile ownership is re-resolved inside
- * the core by `public_id` (the F7 seam). Returns the session's public id.
- */
-export async function logStrengthSession(
-  args: LogStrengthSessionArgs,
-): Promise<{ sessionId: string }> {
-  // TEN-1 1c: the scope rides into the write core, whose in-transaction profile resolve is the
-  // actual seam (`writeStrengthSession`). Resolved BEFORE the catalog work so a request with no
-  // household does none of it, and so the resolver below can be handed it.
-  //
-  // ⚠️ The residual, stated honestly: movement resolution still runs BEFORE `writeStrengthSession`'s
-  // transaction, so a session the household seam then REFUSES may already have committed a typed
-  // name's catalog row. TEN-2b defused the cross-tenant half — the committed row lands in the
-  // caller's OWN namespace (`household_id = scope`), where the household-deletion procedure removes
-  // it — so what survives a refusal is garbage, not a leak. PICK-1 PR 2 narrowed it further: a body
-  // whose movement ID is refused now commits NOTHING, because `resolveSessionMovements` resolves
-  // every id before it creates any typed name. What remains is a typed name in a session the
-  // PROFILE seam then refuses. Moving the whole thing inside the transaction is `TEN-2b-1`, which
-  // must carry the V1-22 chunk-2 snapshot read with it (see that row); `entries.test.ts` pins the
-  // current order deliberately.
-  const scope = await getHouseholdScope();
-  if (!scope) throw new Error(PROFILE_NOT_FOUND);
-
-  const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
-  // PICK-1 PR 2: ids before inserts, in `packages/db` so `db:verify` runs this exact function rather
-  // than a lookalike (write-path invariant 3) — which is the only way the cross-household refusal is
-  // PROVED. This DAL is now a pass-through: it holds no resolution logic of its own.
-  // A typed name's find-or-create is a write too (its own INSERT, before the session's transaction).
-  // Its own operation name, so a log line tells a catalog failure from the session's.
-  const movements = await quietDbErrors('logStrengthSession.resolveMovements', () =>
-    resolveSessionMovements(db, scope, args.movements),
-  );
-
-  return quietDbErrors('logStrengthSession', () =>
-    writeStrengthSession(db, {
-      profilePublicId: args.profilePublicId,
-      scope,
-      day: args.day,
-      sessionType: args.sessionType,
-      sessionClientId: args.clientId,
-      dayRole: args.dayRole,
-      activityTypeId,
-      feel: args.feel,
-      supersets: args.supersets,
-      movements,
-    }),
-  );
-}
-
-/**
- * Amend ONE logged bodyweight's value (V1-24 PR 1b). Thin, exactly like `editStrengthSet`: the
+ * Amend ONE logged bodyweight's value (V1-24 PR 1b). Thin: the
  * single-sourced `updateBodyweightEntryById` core owns the guard, so no ownership check leaks out
  * here and `db:verify` proves the same code the app runs.
  *
@@ -633,28 +560,6 @@ export async function lastBodyweight(
   const last = await lastBodyweightBefore(db, { profilePublicId, scope, day });
   if (!last || !isBodyweightUnit(last.unit)) return null;
   return { ...last, unit: last.unit };
-}
-
-/**
- * Edit ONE logged strength set's reps/weight (V1-9). Thin: hands off to the single-sourced
- * `updateStrengthSetById` core (which `db:verify` also runs), whose guarded UPDATE proves the set
- * belongs to the live `profilePublicId` — so no ownership check leaks out here. Returns the edited
- * set's public id, or `null` when nothing matched (wrong owner / stale-or-deleted set) — the action
- * maps `null` to a typed error, never a throw.
- */
-export async function editStrengthSet(args: {
-  profilePublicId: string;
-  setId: string;
-  reps: number;
-  weight: number;
-}): Promise<{ setId: string } | null> {
-  const scope = await getHouseholdScope();
-  if (!scope) return null;
-
-  const updated = await quietDbErrors('editStrengthSet', () =>
-    updateStrengthSetById(db, { ...args, scope }),
-  );
-  return updated ? { setId: updated.publicId } : null;
 }
 
 // ── Clear this day: the banner's read and Restore all (V1-9b B1-2) ─────────────────────────────────

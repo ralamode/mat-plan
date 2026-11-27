@@ -384,8 +384,8 @@ test.describe('public routes', () => {
      * new one joins no gate until somebody adds it; `app/pages-need-a-session.test.ts` globs, which is
      * why that half is easy to assume covers this one.
      *
-     * ⚠️ **This measures the DARK state, and nothing in this repo can measure the other one.** CI has
-     * no Clerk keys, so `/sign-in` renders the plain fallback panel here; the keys-present state is
+     * ⚠️ **This measures the DARK state; the lit one is `e2e/signin.drift.ts`'s, weekly against
+     * production (`signin-drift.yml`), not this PR suite's.** CI has no Clerk keys, so `/sign-in` renders the plain fallback panel here; the keys-present state is
      * Clerk's own CDN-shipped DOM, at a FLOATING MAJOR (`@clerk/clerk-js@6`, `@clerk/ui@1` —
      * `@clerk/shared/dist/versionSelector.mjs`), on a page this project cannot reach without an
      * instance. So no a11y property of Clerk's card is pinned by anything here

@@ -313,7 +313,7 @@ movement picker.
   at a time, machine-wide unless `~/.cache/mat-plan/heavy-slots` (one number) allows more, held by
   [the slot](./.github/scripts/heavy-slot.mjs). Run locally to write code (one file, one probe), debug a CI failure,
   `pnpm probe`, edit CI itself, during an Actions outage, for `pnpm dev`, and for production
-  operations (corrections; never tests against production). **Everything else heavy runs on CI:
+  operations (corrections; never tests against production, with one named exception: `signin-drift.yml`'s weekly read-only load of the public `/sign-in`, no sign-in and no submit _(maintainer, 2026-11-20)_). **Everything else heavy runs on CI:
   push, and let it gate.** That includes the mutation proof (CI's sharded `mutations` jobs; one
   patch locally is `db:mutations --only 288`). The filtered commands (one test, one package, one spec) are in
   [debug-ci-failure](./.claude/skills/debug-ci-failure/SKILL.md) and
@@ -364,6 +364,8 @@ movement picker.
   run there means it could not be _measured_, never that it is too low.
   **CodeQL is NOT a PR check** (push to `main`, weekly, on demand; findings in Security → Code
   scanning), so a green PR says nothing about it.
+  **The sign-in drift check is NOT a PR check** (`signin-drift.yml`: weekly against production, on
+  demand, and on a PR only when its own files change); a red scheduled run opens one issue.
   ⚠️ **The Neon-branch apply — a prod-shaped migration rehearsal on PRs — is NOT wired**
   ([tech-debt](./docs/tech-debt.md) → "last unwired CI gate"). Never cite an unwired gate as a safety
   argument.
