@@ -1,0 +1,156 @@
+name: sign-in drift
+
+# Does production /sign-in still render, styled and usable, on this week's Clerk build?
+# (Plan: docs/plans/td-signin-drift-check.md; the check: apps/web/e2e/signin.drift.ts.)
+#
+# Clerk's browser runtime floats on a CDN major, which the maintainer chose over pinning
+# (2026-11-19: "Don't pin; check it periodically"), so the screen can change between two identical
+# deploys with no PR. This loads the PUBLIC page with the production CSP live. It never signs in,
+# taps Google or submits a form; it is the one named exception to AGENTS.md's "never tests against
+# production" (maintainer, 2026-11-20).
+#
+# DELIBERATELY NOT A PULL-REQUEST CHECK. It gates no change; the `pull_request` trigger below only
+# runs it when the check itself is edited, so a broken spec shows up on its own PR, not as a false
+# issue a week later.
+#
+# Triggers:
+#   schedule          — weekly, Tuesdays 07:43 UTC, off the hour (GitHub's cron queue is congested
+#                       at :00). ⚠️ GitHub disables a schedule after 60 days with no activity in a
+#                       public repository; re-enable it from the Actions tab if that ever happens.
+#   workflow_dispatch — on demand, with an optional `url` for that run only.
+#   pull_request      — only when this check's own files change. It never opens an issue.
+#
+# Least privilege: nothing at the top; the check job reads; only the report job writes issues, and
+# it pins its helper script to the DEFAULT BRANCH. On a dispatch from a branch, the workflow file
+# itself (so this job's inline step) is the branch's; only writers can dispatch.
+#
+# 🔴 The boundary is Chromium's SANDBOX (on: the drift config's `chromiumSandbox`, plus the sysctl
+# step below). This is the one job that runs live third-party JavaScript in a browser. No dependency
+# cache is defence in depth, not the boundary: a scheduled run on main could otherwise write cache
+# entries other main jobs restore (migrate.yml, which holds the production database string, among
+# them), but code that escaped the sandbox could write them with the job's own token regardless.
+on:
+  schedule:
+    - cron: '43 7 * * 2'
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'An https:// origin to check instead of production, for this run only'
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - apps/web/e2e/signin.drift.ts
+      - apps/web/e2e/a11y-checks.ts
+      - apps/web/e2e/csp.ts
+      - apps/web/e2e/contexts.ts
+      - apps/web/lib/constants.ts
+      - apps/web/package.json
+      - apps/web/playwright.drift.config.ts
+      - .github/workflows/signin-drift.yml
+      - .github/scripts/open-or-comment-issue.sh
+
+concurrency:
+  group: signin-drift-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  # Production, committed so a settings change cannot repoint the scheduled check unreviewed.
+  PRODUCTION_URL: https://mat-plan.dev
+  ISSUE_TITLE: sign-in drift check red
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # ci.yml's reasoning holds: no `--with-deps` (its apt call is the flaky half), and the
+      # runner image carries Chromium's libraries.
+      - name: Install Chromium
+        run: pnpm --filter web exec playwright install chromium
+
+      # Chromium's sandbox needs unprivileged user namespaces, which Ubuntu 23.10+ restricts through
+      # AppArmor ("No usable sandbox!", the first run of this check). Lifting the restriction on this
+      # throwaway VM is Chromium's documented fix (docs/security/apparmor-userns-restrictions.md),
+      # and it keeps the browser sandboxed, which matters for the one job here that runs live
+      # third-party JavaScript.
+      - name: Allow Chromium's sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Run the drift check
+        env:
+          DRIFT_BASE_URL: ${{ inputs.url || env.PRODUCTION_URL }}
+        run: pnpm --filter web e2e:drift
+
+      # Screenshots and the text report only (the config turns traces off), kept a week.
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signin-drift-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+
+  # A red scheduled or dispatched run opens (or comments on) one issue, so it is not a red mark
+  # nobody reads. The body is fixed text: nothing the checked page rendered reaches this job.
+  report:
+    name: report
+    needs: [check]
+    if: >-
+      !cancelled() && needs.check.result == 'failure' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts/open-or-comment-issue.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ needs.check.result }}
+          TARGET: ${{ inputs.url || env.PRODUCTION_URL }}
+        run: |
+          # The dispatch `url` input is validated only in the check job, whose failure is what runs
+          # this one, so it is checked again before it reaches a public issue.
+          [[ "$TARGET" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] || TARGET='(an invalid url input)'
+          body="$RUNNER_TEMP/issue.md"
+          {
+            echo "The sign-in drift check ended \`$RESULT\` against $TARGET: $RUN_URL"
+            echo
+            echo "- **Clerk drift or our change?** The run log prints the full CSP violation list (the line starting \"csp violations\") and the failing assertion. Check whether a production deploy landed since the last green run; if none did, it is Clerk's CDN build."
+            echo "- **A dashboard change** (access mode, the application name in the heading, bot protection) also reads as drift."
+            echo
+            echo "Plan and assertions: docs/plans/td-signin-drift-check.md."
+          } >"$body"
+          bash .github/scripts/open-or-comment-issue.sh "$ISSUE_TITLE" "$body"
