@@ -137,3 +137,7 @@ Secondary experiments, in order of expected value:
 - `docs/lessons.md` → E2E section (the ruled-out list is mirrored there for grep-ability)
 - `ci-skip-e2e` label — the documented escape hatch, applied to #83/#84 so unrelated dependency bumps
   could merge. **Every use should be linked back here.**
+- **A lookalike that is NOT this bug** (2026-11-26): `log-bodyweight.spec.ts` failing at `steps.ts:206`
+  (#711, #830) also left no practice POST and no row. There the spec never clicked: it read the
+  page before a clear's revalidated tree landed. Its `docs/lessons.md` entry (E2E) has the cause
+  and a reproduction. Don't count it as a sighting here.

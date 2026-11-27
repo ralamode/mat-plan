@@ -45,6 +45,10 @@ export async function expectActuallyDark(page: Page, context: string): Promise<v
 /** Scan with the WCAG 2.0/2.1 A + AA rule sets. Zero tolerance — no allowlist (nothing to grandfather
  *  on a first scan), and the dependency is EXACTLY pinned so a rule-set bump can't redden an unrelated PR. */
 export async function expectNoAxeViolations(page: Page, context: string): Promise<void> {
+  // Scan the settled document. A Server Action's revalidated tree drops the streamed metadata from
+  // `<head>` and adds it back a moment later, so straight after a write `document.title` can be empty
+  // (#830's retry). A page with no title still fails here, by name.
+  await expect(page, `${context}: the document has no <title>`).not.toHaveTitle('');
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(
     violations.map((v) => `${v.id} (${v.nodes.length}): ${v.help}`),
