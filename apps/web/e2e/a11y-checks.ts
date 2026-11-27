@@ -167,6 +167,7 @@ export async function expectLinkTargets(
   root: Locator,
   context: string,
   expected?: number,
+  opts: { exceptions?: readonly LinkTargetException[] } = {},
 ): Promise<void> {
   const links = await root.getByRole('link').all();
   if (expected === undefined) {
@@ -174,14 +175,43 @@ export async function expectLinkTargets(
   } else {
     expect(links.length, `${context}: link count`).toBe(expected);
   }
+  const excepted = new Set((opts.exceptions ?? []).map((e) => e.name));
+  const names: string[] = [];
   const undersized: string[] = [];
   for (const link of links) {
+    const name = await linkName(link);
+    names.push(name);
+    if (excepted.has(name)) continue;
     const height = (await link.boundingBox())?.height ?? 0;
     if (height < MIN_TAP_TARGET_PX) {
       undersized.push(`${await describeControl(link)} → ${Math.round(height)}px`);
     }
   }
+  // An exception names exactly one link: one that matches none is stale, and one that matches two
+  // would excuse a link nobody looked at.
+  for (const name of excepted) {
+    expect(
+      names.filter((n) => n === name).length,
+      `${context}: the exception for link "${name}" matches exactly one link`,
+    ).toBe(1);
+  }
   expect(undersized, `${context}: links under ${MIN_TAP_TARGET_PX}px tall`).toEqual([]);
+}
+
+/**
+ * A link excused from the 44px bar, by its accessible name (`aria-label`, else its text), with the
+ * reason. Only for vendor DOM this app cannot size (the sign-in drift check's Clerk links); every
+ * entry needs the evidence that it cannot be met, and the maintainer's say for a new one.
+ */
+export type LinkTargetException = { name: string; reason: string };
+
+/** A link's accessible name as `LinkTargetException` matches it: `aria-label`, else its text. */
+async function linkName(link: Locator): Promise<string> {
+  const [label, text] = await Promise.all([
+    link.getAttribute('aria-label'),
+    link.innerText().catch(() => ''),
+  ]);
+  return (label ?? text ?? '').trim();
 }
 
 /**
