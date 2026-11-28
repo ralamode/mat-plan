@@ -1,0 +1,17 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index e79235b5..c5e5416e 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -435,6 +435,12 @@ export async function seedReference(
+ 
+   // CAT-3 A2-i: the library's one writer. Since F1-i no legacy row follows it on any database.
+   const written = await seedCatalog(db, catalog);
++  if (catalog === CATALOG_FIXTURE) {
++    await db
++      .insert(schema.movements)
++      .values([...MOVEMENT_SEED_ROWS])
++      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
++  }
+ 
+   return { ...written, householdRowsOnCatalogSlugs, householdRowsOnSeedSlugs };
+ }
