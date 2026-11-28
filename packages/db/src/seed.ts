@@ -11,7 +11,7 @@ import {
   MOVEMENT_SEED_ROWS,
   MUSCLE_ROLE,
   newId,
-  PROGRAM_SEED,
+  LEGACY_PROGRAM_FIXTURE,
   QUANTITY_SLOT_ROWS,
   type ProgramBlockSeedRow,
   type RoutineConfig,
@@ -123,7 +123,7 @@ export const SEED_ATHLETE_TWO_ROUTINE = {
  */
 
 // The fixed seed public_ids now live in `@mat-plan/shared` (packages/shared/src/seed-ids.ts) so the app-side
-// PROGRAM_SEED can reference the same household + kids; re-exported here so existing importers (db:verify,
+// LEGACY_PROGRAM_FIXTURE can reference the same household + kids; re-exported here so existing importers (db:verify,
 // tests) keep resolving them from '../src/seed'.
 export {
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -141,7 +141,7 @@ export {
  * 🔴 **The environment flag that turns the fixtures on: `SEED_FIXTURES=1`** (FAM-1 plan D10, `OPS-2`).
  *
  * With it, the seed also writes `seedFixtures` (the seed household and its four role-named athletes),
- * `PROGRAM_SEED` and `seedProgramFixtures`' programs (lane P, step 6c). Without it, which is how
+ * `LEGACY_PROGRAM_FIXTURE` and `seedProgramFixtures`' programs (lane P, step 6c). Without it, which is how
  * `migrate.yml` seeds **production**, it writes reference data only (`seedReference`), and household
  * rows a database already holds stay as they are. Only the exact value `1` turns it on.
  *
@@ -213,9 +213,9 @@ export function resolveSeedOptions(
  *   not provably local or the preview.
  *
  * 🔴 **CAT-3 A2-ii (spec E4): the flag also picks the movement library** ([plan](../../../docs/plans/
- * cat-3-a2-ii-seed-switch.md), D1). Without it, `CATALOG_MOVEMENTS` and no legacy rows (production);
- * with it, `CATALOG_FIXTURE`, then the 35 legacy rows the e2e specs and fixtures name. One name decides
- * both, so no caller can write the real library beside the legacy rows, or the reverse.
+ * cat-3-a2-ii-seed-switch.md), D1). Without it, `CATALOG_MOVEMENTS` (production); with it,
+ * `CATALOG_FIXTURE`. Since CAT-3 F1-i neither writes a legacy row; until then the flag also wrote the
+ * 35 old built-ins. One name decides the library, so no caller can write the wrong one.
  *
  * 🔴 **With fixtures, ownership is checked before ANY write** (plan D2). The fixture library is global
  * reference data, shown to every household: written into a database the seed does not own and then
@@ -236,13 +236,13 @@ export async function seed(
   const library = seedLibraryOf(fixtures ? 'fixture' : 'catalog');
   const counts = await seedReference(db, { library });
 
-  // FAM-1 D10: the authored program (`PROGRAM_SEED`, the Youth Daily Program block, human-authored —
-  // the LLM never authors loads) and lane P's fixture programs are written ONLY when the caller asks
+  // FAM-1 D10: the legacy program fixture (`LEGACY_PROGRAM_FIXTURE`, one block in the legacy tables)
+  // and lane P's fixture programs are written ONLY when the caller asks
   // for fixtures, which production's seed never does. So, since OPS-2 PR 1, are the seed household and
   // its athletes, which they need first. Program rows a database already holds are left alone.
   if (fixtures) {
     const household = await seedFixtures(db);
-    await seedProgram(db, PROGRAM_SEED);
+    await seedProgram(db, LEGACY_PROGRAM_FIXTURE);
     // K29: the world's items resolve over the library this run wrote, the one the app reads here.
     await seedProgramFixtures(db, householdScopeForScript(household.id), library.entries);
   }
@@ -251,20 +251,18 @@ export async function seed(
 }
 
 /**
- * What `seedReference` writes as movements (CAT-3 A2-ii, D1): the library's entries, and whether the
- * legacy `MOVEMENT_SEED_ROWS` follow them. `seed` only ever builds one with `seedLibraryOf`; `db:verify`
- * builds others to prove one case at a time.
+ * What `seedReference` writes as movements (CAT-3 A2-ii, D1; F1-i): the library's entries, and no
+ * other global movement. `seed` only ever builds one with `seedLibraryOf`; `db:verify` builds others to
+ * prove one case at a time. Since F1-i a test database holds the test library only, as production
+ * holds the real one only: the 35 old built-ins are written by nothing.
  */
 export interface SeedLibrary {
   readonly entries: readonly CatalogMovement[];
-  readonly legacyMovements: boolean;
 }
 
-/** The library a seed writes, by name (K29): the real one alone, or the test one plus the legacy rows. */
+/** The library a seed writes, by name (K29): the real one, or the test one. */
 export function seedLibraryOf(name: CatalogLibraryName): SeedLibrary {
-  return name === 'fixture'
-    ? { entries: CATALOG_FIXTURE, legacyMovements: true }
-    : { entries: CATALOG_MOVEMENTS, legacyMovements: false };
+  return { entries: name === 'fixture' ? CATALOG_FIXTURE : CATALOG_MOVEMENTS };
 }
 
 /** `seedReference`'s required options. No default, as `SeedOptions.fixtures` has none. */
@@ -297,8 +295,8 @@ export interface SeedCounts {
 }
 
 /**
- * Every reference table, idempotently, then the library entries it is given (`seedCatalog`, before
- * the legacy movements), with the TEN-2c and CAT-3 shadow counts taken before either movements insert
+ * Every reference table, idempotently, then the library entries it is given (`seedCatalog`; no legacy
+ * movement since CAT-3 F1-i), with the TEN-2c and CAT-3 shadow counts taken before the movements insert
  * (so they read only what households owned beforehand). Exported for `db:verify`; `seed` is its only
  * other caller.
  */
@@ -405,8 +403,8 @@ export async function seedReference(
   // and the omission (a `seedableMovements` filter) happened BEFORE the arbiter was ever consulted. So
   // demoting only the `throw` would leave the curated row still never inserted, forever, with nothing
   // complaining loudly — a loud confidentiality guard turned into a silent, permanent gap in reference
-  // data, strictly worse than the status quo. The filter is therefore gone and `MOVEMENT_SEED_ROWS` is
-  // inserted whole; the partial arbiter is correct and idempotent on its own.
+  // data, strictly worse than the status quo. The filter therefore went, and the legacy rows were
+  // inserted whole on the partial arbiter. Since CAT-3 F1-i no seed writes them at all.
   //
   // ⚠️ **Why detect at all, then?** Because a household owning a seeded slug is still worth saying out
   // loud: global-first means that household's own row is now permanently shadowed by the curated one,
@@ -421,9 +419,9 @@ export async function seedReference(
   // and this lands in a world-readable Actions log. Never a slug, never a `name`. `db:verify` asserts
   // the count is printed and the slug is not, and the privacy half is the one a rewrite loses first.
   //
-  // CAT-3 A2-ii: taken whether or not this run writes the legacy rows. Production keeps its 35 until
-  // the fresh start (R2), and global-first keeps serving them, so a household row on one is still
-  // shadowed and still worth a count (plan D1; mutation 329).
+  // CAT-3 A2-ii: taken on every run (plan D1; mutation 329). Since the fresh start production holds
+  // no legacy row and since F1-i no seed writes one, so a household row on a legacy slug is counted
+  // but shadowed by nothing; the count retires with the legacy list in CAT-3 PR 3.
   const householdRowsOnSeedSlugs = await countOwnedRowsOn(
     db,
     MOVEMENT_SEED_ROWS.map((m) => m.slug),
@@ -435,18 +433,8 @@ export async function seedReference(
     catalog.map((entry) => entry.slug).filter((slug) => !legacySlugs.has(slug)),
   );
 
-  // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
-  // DO NOTHING skips it (the order A2-ii's fixtures need, spec E4).
+  // CAT-3 A2-i: the library's one writer. Since F1-i no legacy row follows it on any database.
   const written = await seedCatalog(db, catalog);
-
-  // No filter: every seeded movement is offered to the arbiter, which is the whole fix. CAT-3 A2-ii:
-  // only on a fixtures database (E4); production's 35 stay as they are until R2 deletes them.
-  if (library.legacyMovements) {
-    await db
-      .insert(schema.movements)
-      .values([...MOVEMENT_SEED_ROWS])
-      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
-  }
 
   return { ...written, householdRowsOnCatalogSlugs, householdRowsOnSeedSlugs };
 }
@@ -799,7 +787,7 @@ export async function seedProgram(
     // by slug (`uq_movements_slug_global`), so the map below can no longer be overwritten by a
     // household's own row, and a prescription can no longer silently attach to another household's
     // movement. A slug that exists ONLY in some household's namespace now falls through to the
-    // unknown-slug throw below — correct and loud: `seedProgram` seeds `PROGRAM_SEED`, whose slugs
+    // unknown-slug throw below — correct and loud: `seedProgram` seeds `LEGACY_PROGRAM_FIXTURE`, whose slugs
     // are all catalog slugs, and there is no authoring path that puts a household row here.
     const movementRows = movementSlugs.length
       ? await db

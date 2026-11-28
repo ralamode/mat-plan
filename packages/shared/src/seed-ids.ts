@@ -1,7 +1,7 @@
 /**
  * Fixed UUIDv7s for the single-tenant v0/v1 seed rows — the stable identities that make a re-seed conflict on
  * the natural key / public_id instead of inserting duplicates. Hoisted to `shared` (from `packages/db`) so
- * BOTH the DB seed and the app-authored `PROGRAM_SEED` (which references the household + specific kids by
+ * BOTH the DB seed and the app-authored `LEGACY_PROGRAM_FIXTURE` (which references the household + specific kids by
  * public_id) can single-source them — `packages/shared` can't import `packages/db`, so the consts live here
  * and `packages/db/src/seed.ts` re-exports them for back-compat.
  *

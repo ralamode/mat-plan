@@ -255,7 +255,8 @@ export async function verifySeedOnAFreshDatabase(): Promise<void> {
     }
 
     // CAT-3 A2-ii, E4 (A1): production's seed writes the approved library and no legacy row. Checked
-    // FIRST, so a seed that still writes the legacy rows (mutation 598) fails here.
+    // FIRST, so a seed that wrote the legacy rows would fail here (mutation 598 proved it until CAT-3
+    // F1-i deleted the legacy insert, and with it the switch the mutation flipped).
     assertRefTableMatches(
       'CAT-3 A2-ii A1: global movements are exactly the CATALOG_MOVEMENTS slugs, and no legacy row',
       await keysOf(tx, schema.movements, sql`slug`, sql`${schema.movements.householdId} IS NULL`),
@@ -454,6 +455,11 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
   // B4: the TEN-2c report still fires without fixtures (`329`), as a count (CAT-3 A2-i).
   await rolledBack(async (tx) => {
     const slug = MOVEMENT_SEED_ROWS[0].slug;
+    // CAT-3 F1-i: the fixture world's own items include rows on old built-in slugs, so the report
+    // fires on this database before the plant too. The count is what the plant must move.
+    const legacyCount = (out: string) =>
+      Number(/(\d+) household-owned movement\(s\) share a legacy seed slug/.exec(out)?.[1] ?? 0);
+    const baseline = legacyCount(await captureOutput(() => seed(asDb(tx), { fixtures: false })));
     await insertMovementOwnedBy(asTx(tx), ctx.B_SCOPE, {
       publicId: newId(),
       slug,
@@ -464,6 +470,11 @@ export async function verifySeedLeavesHouseholdsAlone(ctx: VerifyContext): Promi
     assert.ok(
       /share a legacy seed slug/.test(warned),
       'OPS-2 B4: seed({ fixtures: false }) still reports a household row on a seeded slug (TEN-2c)',
+    );
+    assert.equal(
+      legacyCount(warned),
+      baseline + 1,
+      'OPS-2 B4: …and its count takes in the planted row (CAT-3 F1-i)',
     );
     assert.ok(
       !warned.includes(slug),

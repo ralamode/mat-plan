@@ -143,12 +143,9 @@ describe('seed() picks the movement library by its flag (CAT-3 A2-ii, E4)', () =
   const body = source.slice(source.indexOf('export async function seed('));
   const seedBody = body.slice(0, body.indexOf('\n}\n'));
 
-  it('the real library alone without the flag; the test library and the legacy rows with it', () => {
-    expect(seedLibraryOf('catalog')).toEqual({
-      entries: CATALOG_MOVEMENTS,
-      legacyMovements: false,
-    });
-    expect(seedLibraryOf('fixture')).toEqual({ entries: CATALOG_FIXTURE, legacyMovements: true });
+  it('the real library without the flag; the test library alone with it (CAT-3 F1-i)', () => {
+    expect(seedLibraryOf('catalog')).toEqual({ entries: CATALOG_MOVEMENTS });
+    expect(seedLibraryOf('fixture')).toEqual({ entries: CATALOG_FIXTURE });
   });
 
   it('seed() names the library once, from the flag, and only through seedLibraryOf', () => {

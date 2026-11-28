@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { PGlite } from '@electric-sql/pglite';
+import { MOVEMENT_SEED_ROWS } from '@mat-plan/shared';
 import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
@@ -118,6 +119,34 @@ export async function expectRejectedBy(
     constraintName,
     `expected rejection by constraint '${constraintName}', got '${violated ?? '(none)'}'`,
   );
+}
+
+/**
+ * Plant old built-ins (`MOVEMENT_SEED_ROWS`, all of them or the given slugs) as global rows on `tx`,
+ * the shape production held before the fresh start: a seed id, no modality, no join row. Returns each
+ * planted row's id by slug.
+ *
+ * 🔴 **CAT-3 F1-i: a fixtures database holds no old built-in**, so the shared verify database has
+ * none. A proof that needs one (a library entry held by a legacy row, a count that skips legacy rows)
+ * plants it here, inside its own `rolledBack`, and never reads one off the shared database. Only on a
+ * `tx`: a planted row left behind would put back exactly the state F1-i removed.
+ */
+export async function plantLegacyGlobals(
+  tx: VerifyTx,
+  slugs?: readonly string[],
+): Promise<Map<string, number>> {
+  const rows = slugs
+    ? slugs.map((slug) => {
+        const row = MOVEMENT_SEED_ROWS.find((r) => r.slug === slug);
+        if (!row) throw new Error(`plantLegacyGlobals: ${slug} is not an old built-in`);
+        return row;
+      })
+    : [...MOVEMENT_SEED_ROWS];
+  const planted = await tx
+    .insert(schema.movements)
+    .values(rows)
+    .returning({ id: schema.movements.id, slug: schema.movements.slug });
+  return new Map(planted.map((r) => [r.slug, r.id]));
 }
 
 /**

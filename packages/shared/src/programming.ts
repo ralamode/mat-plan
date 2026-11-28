@@ -200,10 +200,9 @@ export const programBlockSeedRowSchema = z.object({
 });
 export type ProgramBlockSeedRow = z.infer<typeof programBlockSeedRowSchema>;
 
-// Seed builders (module-private) — keep PROGRAM_SEED readable. `both` = the same load for both kids with the
-// prescription's shared reps; `perKid` = explicit per-kid load, plus a per-kid `reps` override only where a
-// kid deviates from `target_reps`. Every value below is transcribed VERBATIM from Ray's program doc — the
-// human authored every load (the LLM never authors loads).
+// Seed builders (module-private) — keep LEGACY_PROGRAM_FIXTURE readable. `both` = the same load for both
+// athletes with the prescription's shared reps; `perKid` = explicit per-athlete load, plus a per-athlete
+// `reps` override. A fixture: no value here is a real prescription (the LLM never authors loads).
 const ATHLETE_ONE = SEED_PROFILE_PUBLIC_ID;
 const ATHLETE_TWO = SEED_PROFILE_2_PUBLIC_ID;
 function both(load: string | null): PrescriptionTargetSeedRow[] {
@@ -231,70 +230,42 @@ function fixed(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
 }
 
 /**
- * The program seed — **Ray's youth daily A/B program**, the one the kids actually run
- * ([spec](../../../docs/samples/youth-daily-program/README.md)).
+ * **The legacy program fixture** (CAT-3 F1-i): one block in the legacy block tables, for test
+ * databases only. It keeps the shape of the youth daily A/B block it replaced (Day A: seven
+ * prescriptions, Day B: six, one fixed "3 x 10 per side"), so the proofs that read the legacy tables
+ * read the same counts. Since F1-i its movements are test-library slugs (`CATALOG_FIXTURE`): a test
+ * database holds no old built-in, so the old slugs would make `seedProgram` throw.
  *
- * ## It runs EVERY calendar day, alternating A → B → A
+ * It stays a fixture of the legacy block tables, which the export (`programDayRows`) still reads;
+ * retiring those is `LEGACY-1`. `strength_a` / `strength_b` are reused as Day A / Day B, and no
+ * prescription has reps or a load except the fixed one. The athlete ids are the seed's fixtures.
  *
- * There is no rest day; load is managed by rotating which movements appear. Day A carries box jumps
- * and inverted rows, Day B carries KB swings, and the four core movements plus the hip thrusts run
- * every session — so the athlete does a jump *or* a swing daily while each individual movement lands
- * every other session.
- *
- * ⚠️ **The letter is derived from the CALENDAR, not from completed sessions.**
- * The spec is emphatic that it should come from a completed-session count and names the failure mode
- * (`date % 2` doubles up box jumps after a missed day). **Ray accepted that deliberately**
- * (2026-09-24): *"I don't mind if they miss a day and end up doing the same thing twice, that's on
- * them. The way this works is by streak and consistency, stacking days."* True session-indexing is
- * backlog row YDP-1, blocked on SCHED-1. Do not "fix" this without asking.
- *
- * ## No prescribed reps and no prescribed loads — by design
- *
- * `sets` and `targetReps` are NULL on every rotating and core movement. The paper sheet deliberately
- * shows no goal numbers, only what was done, *"which reduced the 'I failed today' effect"*. Ten set
- * columns exist as headroom, not a target, and the set count is genuinely variable day to day. The
- * one exception is the hip thrusts, whose prescription really is fixed.
- *
- * ## `strength_a` / `strength_b` are reused as Day A / Day B
- *
- * Deliberate, and temporary. Proper `ydp_a`/`ydp_b` roles need a migration altering two CHECKs; Ray
- * chose (2026-09-24) to have the kids logging tonight instead. The consequence is stated rather than
- * hidden: **this block REPLACES the Kids S&C Foundation block**, which is archived verbatim at
- * [docs/programs/kids-sc-foundation-archived.md](../../../docs/programs/kids-sc-foundation-archived.md)
- * and can be re-seeded when it returns. Both cannot be active at once, because `programDayRows` picks
- * the newest block per day-role.
- *
- * 🔴 **Test databases only, since FAM-1 step 1 (plan D10).** `seed(db, { fixtures: true })` writes this
- * (CI's smoke, the preview database, the local harnesses); production's seed does not, so an edit
- * here never reaches production. Production keeps the block it already holds; change it there with a
- * `db:correct` correction until the program builder ships (`docs/features/programming.md`).
+ * 🔴 **Test databases only** (FAM-1 plan D10). `seed(db, { fixtures: true })` writes this (CI's
+ * smoke, the preview database, the local harnesses); production's seed never does.
  */
-export const PROGRAM_SEED: readonly ProgramBlockSeedRow[] = [
+export const LEGACY_PROGRAM_FIXTURE: readonly ProgramBlockSeedRow[] = [
   {
     householdPublicId: SEED_HOUSEHOLD_PUBLIC_ID,
     slug: 'youth_daily_program', // === movementSlug('Youth Daily Program')
     name: 'Youth Daily Program',
-    notes:
-      'Runs every day, alternating A and B. No prescribed reps or loads — log what you actually did. Add sets before adding reps; progress box height rather than jump reps, and bell weight once 3x15 is crisp.',
+    notes: 'Runs every day, alternating A and B. No prescribed reps or loads: log what you did.',
     prescriptions: [
-      // ── Day A ── core four, then the A-only rotating pair, then the every-day hip thrusts ──
-      { dayRole: 'strength_a', movementSlug: 'push-ups', idx: 0, ...open() },
-      { dayRole: 'strength_a', movementSlug: 'pull-up', idx: 1, ...open() },
-      { dayRole: 'strength_a', movementSlug: 'leg_raises', idx: 2, ...open() },
-      { dayRole: 'strength_a', movementSlug: 'v-sit_crunches', idx: 3, ...open() },
-      { dayRole: 'strength_a', movementSlug: 'box_jump', idx: 4, ...open() },
-      { dayRole: 'strength_a', movementSlug: 'inverted_rows', idx: 5, ...open() },
-      { dayRole: 'strength_a', movementSlug: 'single-leg_hip_thrusts', idx: 6, ...fixed() },
+      // ── Day A ── four every-day movements, the A-only pair, then the fixed one ──
+      { dayRole: 'strength_a', movementSlug: 'incline_push-up', idx: 0, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'chin-up', idx: 1, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'reverse_lunge', idx: 2, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'dead_hang', idx: 3, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'squat_jump', idx: 4, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'dumbbell_row', idx: 5, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'single-leg_romanian_deadlift', idx: 6, ...fixed() },
 
-      // ── Day B ── the same core four, KB swings instead of the A pair ──
-      // Deliberately lighter on pulling: that is what gives the medial elbow and finger flexors a
-      // recovery window between Day A row sessions.
-      { dayRole: 'strength_b', movementSlug: 'push-ups', idx: 0, ...open() },
-      { dayRole: 'strength_b', movementSlug: 'pull-up', idx: 1, ...open() },
-      { dayRole: 'strength_b', movementSlug: 'leg_raises', idx: 2, ...open() },
-      { dayRole: 'strength_b', movementSlug: 'v-sit_crunches', idx: 3, ...open() },
-      { dayRole: 'strength_b', movementSlug: 'kb_swings', idx: 4, ...open() },
-      { dayRole: 'strength_b', movementSlug: 'single-leg_hip_thrusts', idx: 5, ...fixed() },
+      // ── Day B ── the same four, one B-only movement, then the fixed one ──
+      { dayRole: 'strength_b', movementSlug: 'incline_push-up', idx: 0, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'chin-up', idx: 1, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'reverse_lunge', idx: 2, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'dead_hang', idx: 3, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'medicine_ball_chest_pass', idx: 4, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'single-leg_romanian_deadlift', idx: 5, ...fixed() },
     ],
   },
 ];

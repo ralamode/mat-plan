@@ -88,6 +88,10 @@ erasure graph".
 
 ## Traps
 
+- **`db:verify`'s shared database holds no old built-in since CAT-3 F1-i.** The fresh start's step-5
+  and R4 proofs (`verify/erasure.ts`) plant the legacy rows they delete or count with
+  `plantLegacyGlobals` (`verify/harness.ts`), inside their own rolled-back transaction.
+
 - **A proof of a session setting must reset it first.** The last migration and the seed leave the
   session at `lock_timeout` 5s and `statement_timeout` 60s, the values `setLocalTimeouts` sets, and
   PGlite has one session, so a check that reads them back passes whether or not the code set them.

@@ -72,6 +72,7 @@ import {
   asTx,
   db,
   idsOf,
+  plantLegacyGlobals,
   rolledBack,
   rowsOf,
   type VerifyContext,
@@ -1787,6 +1788,9 @@ async function verifyLegacyMovementDeletion(): Promise<void> {
       })
       .returning({ id: schema.movements.id });
     await plantJoins(legacy!.id);
+    // CAT-3 F1-i: a fixtures database holds no old built-in, so the seed rows step 5 meets are planted
+    // here, as production held them before the fresh start.
+    await plantLegacyGlobals(tx);
     const [handUpdated] = rowsOf<{ id: number }>(
       await tx.execute(sql`
         UPDATE movements SET modality = ${MODALITY.skill}
@@ -2078,7 +2082,9 @@ async function verifyFreshStartCounts(): Promise<void> {
       'CAT-3 R1: R4 (1) counts seed-namespace profiles by public_id',
     );
 
-    // (2) every row, a modality or not; (3) global rows that are not catalog rows.
+    // (2) every row, a modality or not; (3) global rows that are not catalog rows. CAT-3 F1-i: the seed
+    // rows are planted, since a fixtures database holds none.
+    await plantLegacyGlobals(tx);
     const [m2] = await r4Counts(tx, 2);
     const [m3] = await r4Counts(tx, 3);
     await tx.execute(sql`

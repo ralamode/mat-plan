@@ -1,9 +1,8 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
-index 457659db..9ae9e979 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -241,9 +241,8 @@ export async function seed(
-     await seedProgram(db, PROGRAM_SEED);
+@@ -245,9 +245,8 @@ export async function seed(
+     await seedProgram(db, LEGACY_PROGRAM_FIXTURE);
      // K29: the world's items resolve over the library this run wrote, the one the app reads here.
      await seedProgramFixtures(db, householdScopeForScript(household.id), library.entries);
 +    reportSeed(counts);

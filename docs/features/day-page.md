@@ -348,6 +348,11 @@ contract's `quantityText` (C1, #436).
 
 ## Changing it
 
+On a fixtures database (CI, `e2e:local`, and the preview once it is reset) no old built-in exists
+since CAT-3 F1-i: the fixture world's items whose names the test library lacks are the household's own
+under the world's names, and four resolve to test-library rows. A spec finds a row by its workout, list
+or name as shown, never by an old built-in's name (`day-page.spec.ts`, Change).
+
 Start from the step's row in the plan (§5) and its prototype states (§8). A screen step gets a UX
 panel before it is built ([AGENTS.md](../../AGENTS.md) → "UI PR rules"). Re-run `pnpm test`, and
 `pnpm e2e:local e2e/program-preview-a11y.spec.ts` for the screen on the preview route.

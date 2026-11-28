@@ -23,7 +23,7 @@ import {
   unitsForTrackingType,
   WEEKDAYS,
   WORKOUT_NAME_MAX,
-  PROGRAM_SEED,
+  LEGACY_PROGRAM_FIXTURE,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_HOUSEHOLD_PUBLIC_ID,
   QUANTITY_SLOT,
@@ -101,6 +101,7 @@ import {
   db,
   expectRejectedBy,
   idsOf,
+  plantLegacyGlobals,
   rolledBack,
   rowsOf,
   type VerifyContext,
@@ -237,15 +238,15 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
     "✓ FAM-1 3: a 'workout' session inserts; sessions_session_type_check is SESSION_TYPES exactly",
   );
 
-  // ── (c) every built-in is typed as its seed row says (the fresh-seed path) ───────────────────────
+  // ── (c) CAT-3 F1-i: no seed writes a built-in any more, so there is none to type ────────────────
+  // It was "every built-in is typed as its seed row says (the fresh-seed path)". The typing is proved
+  // below on built-ins planted inside each proof's own transaction, the shape production held.
   assert.deepEqual(
     Object.fromEntries(await globalTypesBySlug(db)),
-    Object.fromEntries(SEEDED_TYPE_BY_SLUG),
-    'FAM-1 3: every global seeded movement carries the trackingType MOVEMENT_SEED_ROWS declares',
+    {},
+    'FAM-1 3: a fixtures database holds no built-in (CAT-3 F1-i), so the typing is proved on planted rows',
   );
-  console.log(
-    `✓ FAM-1 3: all ${SEEDED_TYPE_BY_SLUG.size} built-in items are typed as the seed declares`,
-  );
+  console.log('✓ FAM-1 3: a fixtures database holds no built-in to type (CAT-3 F1-i)');
 
   // ── (d) the migration's typing, run as written, on rows that hold the default (the prod path) ────
   // Every gate migrates an EMPTY movements table, so this is the only place the UPDATE meets rows
@@ -260,6 +261,8 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
   // migrations left them"). The typing touches only these slugs, so nothing outside them can move.
   const seededSlug = inArray(schema.movements.slug, [...SEEDED_TYPE_BY_SLUG.keys()]);
   await rolledBack(async (tx) => {
+    // CAT-3 F1-i: the built-ins, planted as production held them; no seed writes them any more.
+    await plantLegacyGlobals(tx);
     await tx
       .update(schema.movements)
       .set({ trackingType: DEFAULT_TRACKING_TYPE })
@@ -398,6 +401,8 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
     );
 
     const [seededReps] = notAtDefault;
+    // CAT-3 F1-i: the built-in is planted; a fixtures database holds none.
+    await plantLegacyGlobals(tx, [seededReps[0]]);
     const seededName = MOVEMENT_SEED_ROWS.find((r) => r.slug === seededReps[0])!.name;
     const global = await findOrCreateTypedMovement(exec, A_SCOPE, seededName, TRACKING_TYPE.check);
     assert.equal(
@@ -983,12 +988,17 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
  *
  * In a rolled-back transaction: hard-delete the seed household's program (targets → prescriptions →
  * blocks; nothing else references them), then `seed(…, { fixtures: false })` must leave it empty and
- * `seed(…, { fixtures: true })` must put `PROGRAM_SEED` back, every block, prescription and target.
+ * `seed(…, { fixtures: true })` must put `LEGACY_PROGRAM_FIXTURE` back, every block, prescription and target.
  * The seed runs on the transaction's own handle (PGlite has one connection).
  */
 async function verifyStep1(): Promise<void> {
-  const seedBlocks = PROGRAM_SEED.filter((b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID);
-  assert.ok(seedBlocks.length > 0, 'FAM-1 1: PROGRAM_SEED has a block for the seed household');
+  const seedBlocks = LEGACY_PROGRAM_FIXTURE.filter(
+    (b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID,
+  );
+  assert.ok(
+    seedBlocks.length > 0,
+    'FAM-1 1: LEGACY_PROGRAM_FIXTURE has a block for the seed household',
+  );
   const expected = {
     blocks: seedBlocks.map((b) => b.slug).sort(),
     prescriptions: seedBlocks.reduce((n, b) => n + b.prescriptions.length, 0),
@@ -1037,7 +1047,7 @@ async function verifyStep1(): Promise<void> {
       .where(inArray(schema.programAssignments.blockId, blocksOf));
 
     /**
-     * What the seed household's program holds now. The LEGACY rows (`PROGRAM_SEED`: block slugs,
+     * What the seed household's program holds now. The LEGACY rows (`LEGACY_PROGRAM_FIXTURE`: block slugs,
      * prescriptions, targets), and apart from them the fixture programs (FAM-1 6c-i, named by their
      * fixed client ids), with their workouts and assignments: every block of the household is one
      * or the other, so a program that is neither is still caught.
@@ -1149,7 +1159,7 @@ async function verifyStep1(): Promise<void> {
         fixturePrescriptions: SEED_PROGRAM_COUNTS.prescriptions,
         assignments: SEED_PROGRAM_COUNTS.assignments,
       },
-      'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
+      'FAM-1 1: seed({ fixtures: true }) writes LEGACY_PROGRAM_FIXTURE: every block, prescription and target',
     );
   });
   console.log(

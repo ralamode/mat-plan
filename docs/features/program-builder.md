@@ -434,7 +434,8 @@ flowchart LR
       among the caller's own options (one cached `householdMovementRows` read, shared with the
       picker's data), or `null`; served by `app/programs/how-to/[optionId]/route.ts`.
     - **The item picker's data** (`lib/dal/program/picker.ts`, CAT-3 P11-i): the household's own
-      items and, ⏳ **until the catalog's fresh start (CAT-3 chunk R), every old built-in**
+      items and, ⏳ **until the clean-up (CAT-3 PR 2), every old built-in** (none on a test
+      database since F1-i, and none in production since the fresh start)
       (maintainer, 2026-11-17: "Show all 35 until reset", which suspends "only ones with library
       data": hidden built-ins made search say a movement did not exist that `newItem` then
       selected), and since CAT-3 P11-ii-a every library row. Lane P's read builds each one

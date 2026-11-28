@@ -1,10 +1,9 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
-index 457659db..97073167 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -444,6 +444,17 @@ export async function seedReference(
-       .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
-   }
+@@ -436,6 +436,17 @@ export async function seedReference(
+   // CAT-3 A2-i: the library's one writer. Since F1-i no legacy row follows it on any database.
+   const written = await seedCatalog(db, catalog);
  
 +  const [anyLive] = await db
 +    .select({ id: schema.households.id })
