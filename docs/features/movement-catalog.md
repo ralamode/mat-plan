@@ -61,7 +61,7 @@ and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutati
    everything printed to stdout and stderr around
    the whole seed run.
 8. **`db:verify`'s shared database is a fixtures database** (A2-ii, D3): the test library only since
-   F1-i, as every e2e and preview database is. A proof that needs a legacy-shaped global row plants it
+   F1-i, as every fresh e2e database is (the persistent preview, once it is reset). A proof that needs a legacy-shaped global row plants it
    in its own rolled-back transaction. Every production seed in `db:verify` runs inside
    `rolledBack` with `seed(asDb(tx), …)` and reads on `tx` (a read through `db` hangs on PGlite's one
    connection). A proof that needs the real library writes it in its own rolled-back transaction.

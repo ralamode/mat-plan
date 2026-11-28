@@ -213,9 +213,9 @@ export function resolveSeedOptions(
  *   not provably local or the preview.
  *
  * 🔴 **CAT-3 A2-ii (spec E4): the flag also picks the movement library** ([plan](../../../docs/plans/
- * cat-3-a2-ii-seed-switch.md), D1). Without it, `CATALOG_MOVEMENTS` and no legacy rows (production);
- * with it, `CATALOG_FIXTURE`, then the 35 legacy rows the e2e specs and fixtures name. One name decides
- * both, so no caller can write the real library beside the legacy rows, or the reverse.
+ * cat-3-a2-ii-seed-switch.md), D1). Without it, `CATALOG_MOVEMENTS` (production); with it,
+ * `CATALOG_FIXTURE`. Since CAT-3 F1-i neither writes a legacy row; until then the flag also wrote the
+ * 35 old built-ins. One name decides the library, so no caller can write the wrong one.
  *
  * 🔴 **With fixtures, ownership is checked before ANY write** (plan D2). The fixture library is global
  * reference data, shown to every household: written into a database the seed does not own and then
@@ -295,8 +295,8 @@ export interface SeedCounts {
 }
 
 /**
- * Every reference table, idempotently, then the library entries it is given (`seedCatalog`, before
- * the legacy movements), with the TEN-2c and CAT-3 shadow counts taken before either movements insert
+ * Every reference table, idempotently, then the library entries it is given (`seedCatalog`; no legacy
+ * movement since CAT-3 F1-i), with the TEN-2c and CAT-3 shadow counts taken before the movements insert
  * (so they read only what households owned beforehand). Exported for `db:verify`; `seed` is its only
  * other caller.
  */

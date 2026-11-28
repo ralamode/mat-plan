@@ -34,7 +34,7 @@ They **co-exist permanently**. The maintainer runs a daily A/B program _and_ a w
 
 ```mermaid
 flowchart TD
-  subgraph authored["authored — TypeScript, no UI yet"]
+  subgraph authored["test fixture — TypeScript, no UI"]
     SEED["shared/programming.ts<br/>LEGACY_PROGRAM_FIXTURE"]
     SEEDFN["db/seed.ts → seedProgram()<br/>resolves refs, fails LOUDLY<br/>test databases only (SEED_FIXTURES)"]
   end
@@ -89,11 +89,10 @@ flowchart TD
    and mutation 55 keeps it honest. `householdHasProgram`, the second such read, was deleted at FAM-1
    12f PR 4 with its last caller (mutation 56 is retired).
 
-   ⚠️ **This is why only ONE block is seeded.** Since 2026-09-24 that is the **Youth Daily Program**
-   — the A/B rotation the kids actually run. The Kids S&C Foundation block it replaced is archived
-   verbatim at [docs/programs/kids-sc-foundation-archived.md](../programs/kids-sc-foundation-archived.md)
-   and can be re-seeded when it returns. Seeding both would silently hijack one program with the other,
-   because the newest block per day-role wins.
+   ⚠️ **This is why only ONE block is seeded.** Since CAT-3 F1-i it is `LEGACY_PROGRAM_FIXTURE`, a
+   test block in the legacy tables over test-library slugs, which keeps only the shape of the A/B block
+   it replaced (no real family's program is seeded anywhere). Seeding two would silently hijack one
+   with the other, because the newest block per day-role wins.
 
    🔴 **Since FAM-1 step 1 (plan D10) only TEST databases are seeded with it.** `seed(db, { fixtures })`
    writes `LEGACY_PROGRAM_FIXTURE` (and lane P's fixture programs) only when `fixtures` is true, which
@@ -331,7 +330,7 @@ and complete; this is the one thing it cannot reach.
 
 | If you are…                      | Start here                                                                                                                                                                                |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| changing the authored program    | Test databases: `shared/programming.ts` legacy fixture, then re-seed with `SEED_FIXTURES=1`. Production is not re-seeded (D10): a `db:correct` correction until the program builder ships |
+| changing the legacy fixture      | Test databases: `shared/programming.ts` legacy fixture, on a FRESH database (an existing one keeps its rows, so reset it). Production holds no legacy program since the fresh start (D10) |
 | changing the day's section order | `shared/routine.ts` — and remember NULL is meaningful                                                                                                                                     |
 | adding a write path              | V1-22. Both panels required; these are the first config-mutating endpoints.                                                                                                               |
 

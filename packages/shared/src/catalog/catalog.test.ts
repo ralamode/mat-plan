@@ -439,7 +439,7 @@ describe('CATALOG_FIXTURE covers what it says it covers', () => {
   });
 
   it('🔴 shares no slug and no name key with the legacy seed list (V3)', () => {
-    // A fixtures database holds both until the legacy list is retired (spec E4, F1).
+    // A fixtures database held both until CAT-3 F1-i; the legacy list itself goes in PR 3 (spec E4, F1).
     const legacySlugs = new Set<string>(MOVEMENT_SEED_ROWS.map((row) => row.slug));
     const legacyKeys = new Set(MOVEMENT_SEED_ROWS.map((row) => movementNameKey(row.name)));
     expect(CATALOG_FIXTURE.filter((e) => legacySlugs.has(e.slug)).map((e) => e.slug)).toEqual([]);

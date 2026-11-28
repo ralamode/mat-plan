@@ -995,7 +995,10 @@ async function verifyStep1(): Promise<void> {
   const seedBlocks = LEGACY_PROGRAM_FIXTURE.filter(
     (b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID,
   );
-  assert.ok(seedBlocks.length > 0, 'FAM-1 1: PROGRAM_SEED has a block for the seed household');
+  assert.ok(
+    seedBlocks.length > 0,
+    'FAM-1 1: LEGACY_PROGRAM_FIXTURE has a block for the seed household',
+  );
   const expected = {
     blocks: seedBlocks.map((b) => b.slug).sort(),
     prescriptions: seedBlocks.reduce((n, b) => n + b.prescriptions.length, 0),
@@ -1156,7 +1159,7 @@ async function verifyStep1(): Promise<void> {
         fixturePrescriptions: SEED_PROGRAM_COUNTS.prescriptions,
         assignments: SEED_PROGRAM_COUNTS.assignments,
       },
-      'FAM-1 1: seed({ fixtures: true }) writes PROGRAM_SEED: every block, prescription and target',
+      'FAM-1 1: seed({ fixtures: true }) writes LEGACY_PROGRAM_FIXTURE: every block, prescription and target',
     );
   });
   console.log(

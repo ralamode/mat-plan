@@ -767,7 +767,7 @@ assert.equal(
   METRIC_DEFINITION_SEED_ROWS.length,
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
-// CAT-3 A2-ii (plan D3): the shared database is a fixtures database, as every e2e and preview one is:
+// CAT-3 A2-ii (plan D3): the shared database is a fixtures database, as every fresh e2e one is:
 // the test library, exactly once, and since F1-i no legacy row (production's state after the fresh start).
 assert.deepEqual(
   {
@@ -3046,9 +3046,9 @@ console.log(
 );
 
 // ── V1-10 (PR 1): the programming data model (program_blocks → prescriptions → prescription_targets) ──
-// DB-only, ships dark; the seed ships EMPTY. Prove the SCHEMA (columns, CHECK↔const parity, FK/unique/CHECK
-// rejections) AND the seed RESOLVER — a test-only fixture driven through the REAL seedProgram, since the empty
-// LEGACY_PROGRAM_FIXTURE otherwise leaves the resolve-by-slug/public_id + ON CONFLICT arbiter unexercised until real data.
+// DB-only, ships dark. Prove the SCHEMA (columns, CHECK↔const parity, FK/unique/CHECK rejections) AND the
+// seed RESOLVER — a test-only fixture driven through the REAL seedProgram, so the resolve-by-slug/public_id
+// + ON CONFLICT arbiter is exercised beyond LEGACY_PROGRAM_FIXTURE's one block (CAT-3 F1-i).
 
 const V1_10_COLUMNS = [
   ['program_blocks', { public_id: 'uuid', household_id: 'bigint', slug: 'text', name: 'text' }],
@@ -3089,7 +3089,7 @@ await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 // The seed is now POPULATED with the maintainer's authored block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
 assert.ok(
   LEGACY_PROGRAM_FIXTURE.length >= 1,
-  'V1-10: PROGRAM_SEED is populated (the maintainer’s authored block)',
+  'V1-10: LEGACY_PROGRAM_FIXTURE is populated (the legacy test block)',
 );
 const seededBlocks = (
   (
@@ -3107,7 +3107,7 @@ const seededBlocks = (
 assert.equal(
   seededBlocks,
   LEGACY_PROGRAM_FIXTURE.length,
-  'V1-10: exactly PROGRAM_SEED’s blocks are seeded (no unexpected extras)',
+  'V1-10: exactly LEGACY_PROGRAM_FIXTURE’s blocks are seeded (no unexpected extras)',
 );
 
 // The kids_s&c_foundation block resolved all 3 strength days × 7 movements, with per-kid loads/reps intact.
@@ -4972,7 +4972,7 @@ console.log(
     '✅ CLOSED AT TEN-2d: the resolver’s 23505 fallback is DELETED — 0017 had already made it ' +
     'unreachable, and it outlived the drop by one PR only because nothing couples migrate.yml to the ' +
     'Vercel deploy. The global catalog is still SHARED on purpose: both households resolve the same ' +
-    'curated box_jump. ✅ ALREADY CLOSED at TEN-2b: seedProgram REFUSES a prescription naming another ' +
+    'curated library row (squat_jump on a fixtures database since CAT-3 F1-i). ✅ ALREADY CLOSED at TEN-2b: seedProgram REFUSES a prescription naming another ' +
     'household’s movement. ⚠️ **NOT CLOSED: any PRE-TEN-2b app-authored row still sitting at ' +
     'household_id IS NULL is resolved by global-first for EVERY household — the read leak’s residual, ' +
     'which closes at TEN-2c-1 (the split backfill). 0017 stopped it GROWING via ' +
