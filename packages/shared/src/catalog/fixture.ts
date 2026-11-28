@@ -29,8 +29,7 @@ import { catalogOptionOf, type CatalogOption } from './option';
  * moved to the medicine ball chest pass, which no world item names.
  *
  * Its slugs and name keys are disjoint from the legacy `MOVEMENT_SEED_ROWS`, which a fixtures
- * database held beside it until CAT-3 F1-i (spec V3); the legacy picker's aliases remain until PR 3,
- * **and so are its aliases from the
+ * database also holds until that list is retired (spec V3, F1), **and so are its aliases from the
  * legacy picker's** (`MOVEMENT_PICKER_ALIASES`): a query must never alias-hit one movement in each
  * list. That is why the short alias here is `SLRDL` and not the `RDL` the spec's C0a names: the
  * legacy list still answers to `RDL`. The search's vectors are ported with this alias.
