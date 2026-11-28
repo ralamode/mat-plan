@@ -28,11 +28,10 @@ import { catalogOptionOf, type CatalogOption } from './option';
  * and a distance in the world, which is the accepted prototype's); the count this library must cover
  * moved to the medicine ball chest pass, which no world item names.
  *
- * Its slugs and name keys are disjoint from the legacy `MOVEMENT_SEED_ROWS`, which a fixtures
- * database held beside it until CAT-3 F1-i (spec V3); the legacy picker's aliases remain until PR 3,
- * **and so are its aliases from the
- * legacy picker's** (`MOVEMENT_PICKER_ALIASES`): a query must never alias-hit one movement in each
- * list. That is why the short alias here is `SLRDL` and not the `RDL` the spec's C0a names: the
+ * Its slugs, name keys and aliases are disjoint from the legacy lists: `MOVEMENT_SEED_ROWS`, which a
+ * fixtures database held beside it until CAT-3 F1-i, and **the legacy picker's aliases**
+ * (`MOVEMENT_PICKER_ALIASES`), which remain until PR 3 (spec V3): a query must never alias-hit one
+ * movement in each list. That is why the short alias here is `SLRDL` and not the `RDL` the spec's C0a names: the
  * legacy list still answers to `RDL`. The search's vectors are ported with this alias.
  */
 const lift: Pick<
