@@ -331,8 +331,8 @@ flowchart TD
 ## Changing it
 
 Since CAT-3 F1-i a fixtures database, and `db:verify`'s shared one, holds the test library and no old
-built-in: `seedProgramFixtures` resolves 4 world items to test-library rows and makes the other 22 the
-household's own. A proof that needs an old built-in plants one in its own rolled-back transaction.
+built-in: `seedProgramFixtures` resolves the world items whose names the test library holds (Goblet
+squat, Side plank, Jump rope, Easy run) to its rows, and makes the rest the household's own. A proof that needs an old built-in plants one in its own rolled-back transaction.
 
 Start from the step's row in the plan (§5) and the decisions it cites (D19 for matching a saved
 workout to its rows). Re-run `pnpm db:verify` and `pnpm db:mutations`.

@@ -403,8 +403,8 @@ export async function seedReference(
   // and the omission (a `seedableMovements` filter) happened BEFORE the arbiter was ever consulted. So
   // demoting only the `throw` would leave the curated row still never inserted, forever, with nothing
   // complaining loudly — a loud confidentiality guard turned into a silent, permanent gap in reference
-  // data, strictly worse than the status quo. The filter is therefore gone and `MOVEMENT_SEED_ROWS` is
-  // inserted whole; the partial arbiter is correct and idempotent on its own.
+  // data, strictly worse than the status quo. The filter therefore went, and the legacy rows were
+  // inserted whole on the partial arbiter. Since CAT-3 F1-i no seed writes them at all.
   //
   // ⚠️ **Why detect at all, then?** Because a household owning a seeded slug is still worth saying out
   // loud: global-first means that household's own row is now permanently shadowed by the curated one,
@@ -419,9 +419,9 @@ export async function seedReference(
   // and this lands in a world-readable Actions log. Never a slug, never a `name`. `db:verify` asserts
   // the count is printed and the slug is not, and the privacy half is the one a rewrite loses first.
   //
-  // CAT-3 A2-ii: taken whether or not this run writes the legacy rows. Production keeps its 35 until
-  // the fresh start (R2), and global-first keeps serving them, so a household row on one is still
-  // shadowed and still worth a count (plan D1; mutation 329).
+  // CAT-3 A2-ii: taken on every run (plan D1; mutation 329). Since the fresh start production holds
+  // no legacy row and since F1-i no seed writes one, so a household row on a legacy slug is counted
+  // but shadowed by nothing; the count retires with the legacy list in CAT-3 PR 3.
   const householdRowsOnSeedSlugs = await countOwnedRowsOn(
     db,
     MOVEMENT_SEED_ROWS.map((m) => m.slug),

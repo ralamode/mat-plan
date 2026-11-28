@@ -5632,9 +5632,15 @@ console.log(
   const globalRowIds = await db
     .select({ id: schema.movements.id, slug: schema.movements.slug })
     .from(schema.movements)
-    .where(movementIsGlobal());
+    .where(movementIsGlobal())
+    .orderBy(schema.movements.id);
+  // The first by id, and never a legacy slug, so the "1 share a library slug" pin cannot miscount.
+  const legacySlugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
   const shadowedRow = globalRowIds.find(
-    (g) => FIXTURE_LIBRARY_SLUGS.has(g.slug) && unreferencedGlobalIds.has(g.id),
+    (g) =>
+      FIXTURE_LIBRARY_SLUGS.has(g.slug) &&
+      !legacySlugs.has(g.slug) &&
+      unreferencedGlobalIds.has(g.id),
   );
   const shadowed = shadowedRow && { id: shadowedRow.id, slug: shadowedRow.slug };
   assert.ok(
@@ -5685,8 +5691,9 @@ console.log(
   // seed put it back. That is the exact half the panel caught: with the `seedableMovements` filter
   // still in place, this assertion would fail — which is the point of making it.
   const SHADOW_NAME = 'TEN-2b shadow probe free text';
+  const SHADOW_PUBLIC_ID = '019826b4-0000-7000-8000-00000002b022';
   await db.insert(schema.movements).values({
-    publicId: '019826b4-0000-7000-8000-00000002b022',
+    publicId: SHADOW_PUBLIC_ID,
     slug: shadowed.slug,
     name: SHADOW_NAME,
     householdId: guardHousehold.id,
@@ -5732,7 +5739,7 @@ console.log(
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.movementEquipment)
         .innerJoin(schema.movements, eq(schema.movements.id, schema.movementEquipment.movementId))
-        .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'))
+        .where(eq(schema.movements.publicId, SHADOW_PUBLIC_ID))
     )[0]?.n,
     0,
     "TEN-2c SHADOW REPORT: …and the seed writes no join row for a household's movement on that slug (CAT-3 F1-i)",
@@ -5765,9 +5772,7 @@ console.log(
 
   // (c) THE POSITIVE DIRECTION: with no shadow, `seed()` is still idempotent — a third run after
   // everything above, so the partial arbiter is exercised against a populated table.
-  await db
-    .delete(schema.movements)
-    .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'));
+  await db.delete(schema.movements).where(eq(schema.movements.publicId, SHADOW_PUBLIC_ID));
   const quietMessage = await captureOutput(async () => {
     await seed(asPg, { fixtures: true });
   });
