@@ -32,6 +32,7 @@ import {
   constraintDef,
   db,
   expectRejectedBy,
+  plantLegacyGlobals,
   rolledBack,
   rowsOf,
   type VerifyContext,
@@ -452,6 +453,13 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
       .from(schema.movements)
       .where(isNull(schema.movements.householdId));
     assert.equal(before?.n, 0, 'CAT-3 A2-i E1: the proof starts with no global movement');
+    // CAT-3 F1-i: one legacy row, planted as production held them, on a slug the library lacks: no
+    // seed writes one any more, and without it "exactly the entries" could not tell a catalog row
+    // (a modality) from any global row (mutation 508).
+    const plantedLegacy = MOVEMENT_SEED_ROWS.find(
+      (r) => !CATALOG_MOVEMENTS.some((e) => e.slug === r.slug),
+    )!;
+    await plantLegacyGlobals(tx, [plantedLegacy.slug]);
 
     const counts = await seedReference(asDb(tx), {
       library: { entries: CATALOG_MOVEMENTS },
@@ -479,16 +487,12 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
         `CAT-3 A2-i E1: ${entry.slug}'s equipment and muscles are its entry's, in authored order`,
       );
     }
+    // CAT-3 F1-i: no seed writes an old built-in any more, on either library: the planted one is all.
     const [legacy] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(schema.movements)
       .where(and(isNull(schema.movements.householdId), isNull(schema.movements.modality)));
-    const shared = CATALOG_MOVEMENTS.filter((e) => LEGACY_SLUGS.has(e.slug)).length;
-    assert.equal(
-      legacy?.n,
-      MOVEMENT_SEED_ROWS.length - shared,
-      'CAT-3 A2-i E1: the legacy rows that share no slug are still written, after the catalog',
-    );
+    assert.equal(legacy?.n, 1, 'CAT-3 F1-i E1: the seed writes no legacy row, only the library');
     assert.deepEqual(
       [counts.catalogInserted, counts.catalogPresent, counts.catalogDuplicates],
       [CATALOG_MOVEMENTS.length, 0, 0],
@@ -594,6 +598,8 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
         .select()
         .from(schema.movements)
         .where(and(eq(schema.movements.slug, entry.slug), isNull(schema.movements.householdId)));
+    // CAT-3 F1-i: a fixtures database holds no old built-in, so the proof plants the one it needs.
+    await plantLegacyGlobals(tx, [entry.slug]);
     const before = await legacyOf();
     assert.equal(before.length, 1, 'CAT-3 A2-i E2: one legacy global sled_push before the seed');
     const counts = await seedReference(asDb(tx), {

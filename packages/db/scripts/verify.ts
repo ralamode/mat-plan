@@ -24,6 +24,7 @@ import {
   METRIC_KEYS,
   PRACTICE_UNIT,
   METRIC_VALUE_TYPES,
+  MODALITY,
   MOVEMENT_PATTERNS,
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
@@ -271,9 +272,10 @@ await seed(asPg, { fixtures: true }).catch((e: unknown) =>
   assert.fail(`FAM-1 6c-i: a second seed run succeeds (${String(e)})`),
 );
 
-// 🔴 CAT-3 A2-ii, E4 (A2): a fixtures seed writes the test library, then the legacy rows, then the
-// household fixtures, and EVERY fixture program. Here, before any other proof reads the shared state,
-// so a fixtures seed that writes the wrong library (mutation 599) fails on this line. Every program:
+// 🔴 CAT-3 A2-ii, E4 (A2): a fixtures seed writes the test library (and, since F1-i, no legacy row),
+// then the household fixtures, and EVERY fixture program. Here, before any other proof reads the shared state.
+// (Since F1-i a fixtures seed that writes the wrong library, mutation 599, fails even earlier: the
+// legacy program fixture's test-library slugs do not resolve, so the first seed run above throws.) Every program:
 // since #763 each name the world shares with the test library logs the same way, and a program with
 // one item whose library row logs another way would be skipped whole (`seedProgramFixtures`).
 {
@@ -297,8 +299,8 @@ await seed(asPg, { fixtures: true }).catch((e: unknown) =>
         (m) => !isFixtureLibraryRow(m) && !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId),
       ).length,
     },
-    { library: [...FIXTURE_LIBRARY_SLUGS].sort(), legacy: MOVEMENT_SEED_ROWS.length, other: 0 },
-    'CAT-3 A2-ii A2: seed({ fixtures: true }) writes the test library and the 35 legacy rows, and no other global row',
+    { library: [...FIXTURE_LIBRARY_SLUGS].sort(), legacy: 0, other: 0 },
+    'CAT-3 A2-ii A2: seed({ fixtures: true }) writes the test library and no other global row, no legacy row among them (F1-i)',
   );
   const programs = await db
     .select({ clientId: schema.programBlocks.clientId })
@@ -310,7 +312,7 @@ await seed(asPg, { fixtures: true }).catch((e: unknown) =>
     'CAT-3 A2-ii A2: …and every fixture program, none skipped for an item the test library logs another way',
   );
   console.log(
-    '✓ CAT-3 A2-ii A2: a fixtures seed writes the test library, the legacy rows and every fixture program',
+    '✓ CAT-3 A2-ii A2: a fixtures seed writes the test library, no legacy row, and every fixture program',
   );
 }
 
@@ -766,7 +768,7 @@ assert.equal(
   'metric_definitions: full catalog seeded from the shared const, exactly once',
 );
 // CAT-3 A2-ii (plan D3): the shared database is a fixtures database, as every e2e and preview one is:
-// the 35 legacy rows plus the test library, each exactly once.
+// the test library, exactly once, and since F1-i no legacy row (production's state after the fresh start).
 assert.deepEqual(
   {
     legacy: movements.filter(
@@ -780,8 +782,8 @@ assert.deepEqual(
         !isFixtureLibraryRow(m),
     ).length,
   },
-  { legacy: MOVEMENT_SEED_ROWS.length, library: FIXTURE_LIBRARY_SLUGS.size, other: 0 },
-  'movements: the legacy catalog and the test library seeded from their shared consts, exactly once (CAT-3 A2-ii)',
+  { legacy: 0, library: FIXTURE_LIBRARY_SLUGS.size, other: 0 },
+  'movements: the test library seeded from its shared const, exactly once, and no legacy row (CAT-3 F1-i)',
 );
 // The seed writes household items only through the fixture programs (FAM-1 6c-i): each one in the
 // seed household, and each named for a fixture item the catalog does not already have.
@@ -906,11 +908,12 @@ async function activityTypeIdByKey(key: string): Promise<number> {
   assert.ok(row, `activity_type '${key}' resolves`);
   return row.id;
 }
-const [frontSquat] = await db
+// CAT-3 F1-i: a test-library row, since a fixtures database holds no old built-in (was `front_squat`).
+const [liftMovement] = await db
   .select({ id: schema.movements.id })
   .from(schema.movements)
-  .where(eq(schema.movements.slug, 'front_squat'));
-assert.ok(frontSquat, 'front_squat movement is seeded');
+  .where(and(eq(schema.movements.slug, 'goblet_squat'), isNull(schema.movements.householdId)));
+assert.ok(liftMovement, 'goblet_squat (the test library) movement is seeded');
 
 // set_list → movement_id (metric_key NULL)
 await db.insert(schema.entries).values({
@@ -920,9 +923,9 @@ await db.insert(schema.entries).values({
   activityDate: '2026-07-21',
   kind: 'strength', // legacy guard: strength needs movement_name
   unit: 'lb',
-  movementName: 'Front Squat',
+  movementName: 'Goblet squat',
   activityTypeId: await activityTypeIdByKey('sc_lift'),
-  movementId: frontSquat.id,
+  movementId: liftMovement.id,
 });
 // single_metric → metric_key + value_num (movement_id NULL)
 await db.insert(schema.entries).values({
@@ -3151,18 +3154,21 @@ assert.deepEqual(
   'YDP: both day letters are programmed',
 );
 
-// The core four run on BOTH days; the rotating pair is A-only and the swing is B-only. That is the
-// design — the athlete does a jump OR a swing daily while each movement lands every other session.
+// The core four run on BOTH days; the rotating pair is A-only and the chest pass is B-only: the old
+// block's shape, over test-library slugs since CAT-3 F1-i (LEGACY_PROGRAM_FIXTURE).
 const slugsOn = (role: string) =>
   new Set(realBlock.filter((r) => r.day_role === role).map((r) => r.movement_slug));
 const dayA = slugsOn('strength_a');
 const dayB = slugsOn('strength_b');
-for (const core of ['push-ups', 'pull-up', 'leg_raises', 'v-sit_crunches']) {
+for (const core of ['incline_push-up', 'chin-up', 'reverse_lunge', 'dead_hang']) {
   assert.ok(dayA.has(core) && dayB.has(core), `YDP: '${core}' runs every session`);
 }
-assert.ok(dayA.has('box_jump') && !dayB.has('box_jump'), 'YDP: box jumps are Day A only');
-assert.ok(dayA.has('inverted_rows') && !dayB.has('inverted_rows'), 'YDP: inverted rows are A only');
-assert.ok(dayB.has('kb_swings') && !dayA.has('kb_swings'), 'YDP: KB swings are Day B only');
+assert.ok(dayA.has('squat_jump') && !dayB.has('squat_jump'), 'YDP: squat jumps are Day A only');
+assert.ok(dayA.has('dumbbell_row') && !dayB.has('dumbbell_row'), 'YDP: dumbbell rows are A only');
+assert.ok(
+  dayB.has('medicine_ball_chest_pass') && !dayA.has('medicine_ball_chest_pass'),
+  'YDP: medicine-ball chest passes are Day B only',
+);
 
 // ⚠️ NO AUTHORED LOADS ANYWHERE. Two independent reasons, and both matter: the product rule that the
 // LLM never authors loads, and the sheet's own design — it deliberately shows no goal numbers,
@@ -3297,14 +3303,15 @@ const athleteOneDayA = await programDayRows(asPg, {
 assert.equal(athleteOneDayA.length, 7, 'YDP: programDayRows returns Day A’s 7 movements');
 assert.deepEqual(
   athleteOneDayA.map((r) => r.movementName),
+  // CAT-3 F1-i: LEGACY_PROGRAM_FIXTURE's Day A, the test library's names.
   [
-    'Push-Ups',
-    'Pull-Up',
-    'Leg Raises',
-    'V-Sit Crunches',
-    'Box Jump',
-    'Inverted Rows',
-    'Single-Leg Hip Thrusts',
+    'Incline push-up',
+    'Chin-up',
+    'Reverse lunge',
+    'Dead hang',
+    'Squat jump',
+    'Dumbbell row',
+    'Single-leg Romanian deadlift',
   ],
   'YDP: programDayRows orders by the prescription idx (the coach’s authored order)',
 );
@@ -3381,8 +3388,7 @@ assert.deepEqual(
   );
 }
 
-// Day B swaps the rotating pair for the swing — 6 movements, and the athlete does a jump OR a swing
-// every day while each individual movement lands every other session.
+// Day B swaps the rotating pair for the chest pass — 6 movements (LEGACY_PROGRAM_FIXTURE, CAT-3 F1-i).
 const athleteOneDayB = await programDayRows(asPg, {
   scope: A_SCOPE,
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
@@ -3390,11 +3396,11 @@ const athleteOneDayB = await programDayRows(asPg, {
 });
 assert.equal(athleteOneDayB.length, 6, 'YDP: programDayRows returns Day B’s 6 movements');
 assert.ok(
-  athleteOneDayB.some((r) => r.movementName === 'KB Swings'),
-  'YDP: Day B carries the swing',
+  athleteOneDayB.some((r) => r.movementName === 'Medicine ball chest pass'),
+  'YDP: Day B carries the chest pass',
 );
 assert.ok(
-  !athleteOneDayB.some((r) => r.movementName === 'Box Jump'),
+  !athleteOneDayB.some((r) => r.movementName === 'Squat jump'),
   'YDP: Day B does NOT carry the jump',
 );
 
@@ -3414,15 +3420,18 @@ assert.ok(
 
 // (b2) V1-26 PR-A — the MOVEMENT's declaration rides out of the shipped query.
 //
-// This is the column pair that feeds the log form's Unit select and its BW-tap warning, and the seed
-// is the real catalog, so this proves the actual movements the athletes log against — not a fixture.
-// `KB Swings` is the 2026-09-28 movement: declared loaded, in pounds, and logged `20 × BW`.
-const kbSwings = athleteOneDayB.find((r) => r.movementName === 'KB Swings');
-assert.equal(kbSwings?.movementUnitDefault, 'lb', 'V1-26: KB Swings declares a pound default');
-assert.equal(kbSwings?.movementIsBodyweight, false, 'V1-26: ...and is NOT a bodyweight movement');
+// This is the column pair that feeds the log form's Unit select and its BW-tap warning. Since CAT-3
+// F1-i the block's movements are test-library rows: one loaded in pounds, one bodyweight.
+const loaded = athleteOneDayB.find((r) => r.movementName === 'Single-leg Romanian deadlift');
+assert.equal(
+  loaded?.movementUnitDefault,
+  'lb',
+  'V1-26: Single-leg Romanian deadlift declares a pound default',
+);
+assert.equal(loaded?.movementIsBodyweight, false, 'V1-26: ...and is NOT a bodyweight movement');
 
-const pushUps = athleteOneDayA.find((r) => r.movementName === 'Push-Ups');
-assert.equal(pushUps?.movementIsBodyweight, true, 'V1-26: Push-Ups declares bodyweight');
+const pushUps = athleteOneDayA.find((r) => r.movementName === 'Incline push-up');
+assert.equal(pushUps?.movementIsBodyweight, true, 'V1-26: Incline push-up declares bodyweight');
 assert.equal(pushUps?.movementUnitDefault, null, 'V1-26: ...and declares no unit');
 
 // ⚠️ The declaration is the MOVEMENT's, never the coach's. `load` stays null on every YDP row (asserted
@@ -3433,9 +3442,9 @@ assert.ok(
 );
 
 // The one fixed prescription in the program survives the read.
-const hipThrust = athleteOneDayA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
-assert.equal(hipThrust?.sets, 3, 'YDP: hip thrusts keep their fixed 3 sets');
-assert.equal(hipThrust?.targetReps, '10 per side', 'YDP: ...and their per-side prescription');
+const fixedOne = athleteOneDayA.find((r) => r.movementName === 'Single-leg Romanian deadlift');
+assert.equal(fixedOne?.sets, 3, 'YDP: the single-leg RDL keeps its fixed 3 sets');
+assert.equal(fixedOne?.targetReps, '10 per side', 'YDP: ...and their per-side prescription');
 
 // (c) A day with no prescriptions → zero rows (the page renders no card). Strength B exists; 'skill' doesn't.
 assert.equal(
@@ -4799,36 +4808,41 @@ assert.deepEqual(
 );
 
 // (c) And the metadata it inherits can be a declaration this function could never have written.
-// `Box Jump` is in the SEEDED catalog as `is_bodyweight: true`; `findOrCreateMovement` can only ever
+// `Squat jump` is in the test library as `is_bodyweight: true`; `findOrCreateMovement` can only ever
 // write `false`. So a free-text name that happens to slug onto a catalog row inherits the catalog's
-// declaration wholesale — which is the benign half of the same mechanism as (d).
-const seededBoxJump = MOVEMENT_SEED_ROWS.find((m) => m.slug === 'box_jump');
+// declaration wholesale — which is the benign half of the same mechanism as (d). CAT-3 F1-i: a
+// test-library row, since a fixtures database holds no old built-in (this was `box_jump`).
+const seededJump = CATALOG_FIXTURE.find((m) => m.slug === 'squat_jump');
 assert.ok(
-  seededBoxJump?.isBodyweight,
-  'TEN-1 1d fixture: box_jump is a seeded bodyweight movement',
+  seededJump?.isBodyweight,
+  'TEN-1 1d fixture: squat_jump is a test-library bodyweight movement',
 );
-const boxJumpId = await findOrCreateMovement(asPg, A_SCOPE, seededBoxJump.name);
-const boxJump = await movementRow(boxJumpId);
+const [seededJumpRow] = await db
+  .select({ publicId: schema.movements.publicId })
+  .from(schema.movements)
+  .where(and(eq(schema.movements.slug, seededJump.slug), isNull(schema.movements.householdId)));
+const jumpId = await findOrCreateMovement(asPg, A_SCOPE, seededJump.name);
+const jump = await movementRow(jumpId);
 assert.equal(
-  boxJump.publicId,
-  seededBoxJump.publicId,
+  jump.publicId,
+  seededJumpRow?.publicId,
   'TEN-1 1d READ: free text matching a catalog slug resolves to the SEEDED row, not a new one',
 );
 // TEN-2b fact 1: now resolved GLOBAL-FIRST and explicitly, rather than by accident of there being
 // only one namespace — and it must hold from the OTHER household's scope too, or a household could
 // shadow curated metadata with a row this writer is incapable of authoring properly.
 assert.equal(
-  boxJump.householdId,
+  jump.householdId,
   null,
   'TEN-2b: …and the seeded row it resolved to is still GLOBAL (household_id IS NULL) — global-first returned reference data, it did not clone it into a household',
 );
 assert.equal(
-  await findOrCreateMovement(asPg, B_SCOPE, seededBoxJump.name),
-  boxJumpId,
+  await findOrCreateMovement(asPg, B_SCOPE, seededJump.name),
+  jumpId,
   'TEN-2b: …and household B resolves the SAME seeded row — a household cannot shadow a curated movement, which is the direction household-first would have broken',
 );
 assert.equal(
-  boxJump.isBodyweight,
+  jump.isBodyweight,
   true,
   'TEN-1 1d READ: …carrying `is_bodyweight: true`, which this function can never write — whatever the row declares, the caller did not declare it',
 );
@@ -4930,14 +4944,14 @@ assert.equal(
   'TEN-2b WRITE: …with NOTHING written — `seedProgram` resolves every ref before the block insert, so a refusal leaves no partial block and household A’s pull card does not render another household’s string at all',
 );
 
-// TEN-2b: the ids the REAL resolver returned in this run — one curated global resolve (box_jump),
+// TEN-2b: the ids the REAL resolver returned in this run — one curated global resolve (squat_jump),
 // one owned insert, and the leak's row. The re-taken dark gate in the TEN-2a/2b section below
 // asserts over exactly these, because they are the only rows a resolver touched; V1-1b's raw-SQL
 // backfill fixture also writes `movements`, and nothing scopes those.
 const TEN2B_RESOLVER_IDS: number[] = [
   aMovementId,
   bMovementId,
-  boxJumpId,
+  jumpId,
   poisonedId,
   // TEN-2c: the two rows 0017 made reachable — household A's own row for a slug B typed first, and
   // (via `bMovementId` above) B's own row for a slug A typed first. They are the inverted
@@ -5055,8 +5069,8 @@ console.log(
   // criterion stated at the schema level rather than through the resolver. From TEN-2a until 0017 it
   // read `expectRejectedBy(SLUG_CONSTRAINT, insert box_jump owned by this household)` — "the OLD
   // constraint is still non-partial and still binding, so a household-owned row cannot share a slug
-  // with a GLOBAL row". `box_jump` is a seeded (`household_id IS NULL`) row, so the insert now
-  // SUCCEEDS and the two rows coexist.
+  // with a GLOBAL row". `squat_jump` is a seeded (`household_id IS NULL`) test-library row (CAT-3
+  // F1-i: it was the old built-in `box_jump`), so the insert now SUCCEEDS and the two rows coexist.
   //
   // ⚠️ **It is OUTSIDE any transaction, so the row must be DELETED, and that is load-bearing in two
   // directions.** (4)'s dark gate and (5)'s discriminator read the WHOLE table a few lines down, and
@@ -5064,25 +5078,27 @@ console.log(
   // there; a committed app-authored row carrying a non-NULL `pattern` would redden discriminator 2/3,
   // which is also why `movementRowValues` must NOT grow a `pattern` and only the GLOBAL probes below
   // pass one. Deleting it is simpler than reasoning about either.
-  await db.insert(schema.movements).values(movementRowValues('02', 'box_jump', ten2aHousehold.id));
-  const boxJumpNamespaces = await db
+  await db
+    .insert(schema.movements)
+    .values(movementRowValues('02', 'squat_jump', ten2aHousehold.id));
+  const jumpNamespaces = await db
     .select({ householdId: schema.movements.householdId })
     .from(schema.movements)
-    .where(eq(schema.movements.slug, 'box_jump'));
+    .where(eq(schema.movements.slug, 'squat_jump'));
   assert.deepEqual(
-    boxJumpNamespaces.map((r) => r.householdId).sort(),
+    jumpNamespaces.map((r) => r.householdId).sort(),
     [null, ten2aHousehold.id].sort(),
     'TEN-2c: a household now holds its OWN row for a SEEDED slug, alongside the curated global one — the state movements_slug_unique forbade, asserted on committed rows rather than inside a rolled-back transaction. ⚠️ Inverted from TEN-2a’s expectRejectedBy(movements_slug_unique, …); do NOT "fix" a failure here by restoring the rejection',
   );
   // …and gone again, before (4) and (5) read the table. See the ⚠️ above.
   await db
     .delete(schema.movements)
-    .where(eq(schema.movements.publicId, movementRowValues('02', 'box_jump', null).publicId));
+    .where(eq(schema.movements.publicId, movementRowValues('02', 'squat_jump', null).publicId));
   assert.deepEqual(
     await db
       .select({ householdId: schema.movements.householdId })
       .from(schema.movements)
-      .where(eq(schema.movements.slug, 'box_jump')),
+      .where(eq(schema.movements.slug, 'squat_jump')),
     [{ householdId: null }],
     'TEN-2c: …and the probe row is deleted again, leaving only the curated global row — (4) and (5) below read the WHOLE table',
   );
@@ -5258,16 +5274,20 @@ console.log(
   // NOT a `SEED_PUBLIC_ID_PREFIX` test: that prefix is the GLOBAL seed namespace shared by every
   // seeded table, so a `movements` row carrying `seedPublicId('010')` (the household's id) would pass
   // a prefix test and be mistaken for curated reference data.
+  //
+  // CAT-3 F1-i: a fixtures database holds no old built-in, so the set has no member here and the
+  // curated rows are the test library's alone. (1/4) is re-aimed at those rows.
   const seeded = allMovements.filter((m) => MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId));
   assert.equal(
     seeded.length,
-    MOVEMENT_SEED_ROWS.length,
-    'TEN-2a: every seeded movement is present exactly once',
+    0,
+    'TEN-2a: no old built-in is on a fixtures database (CAT-3 F1-i): the curated rows are the test library’s',
   );
-  assert.deepEqual(
-    seeded.filter((m) => m.pattern === null),
-    [],
-    'TEN-2a discriminator (1/4): a row IN the set has a non-NULL `pattern` — `movementSeedRowSchema` makes it non-nullable',
+  const curated = allMovements.filter(isFixtureLibraryRow);
+  assert.ok(
+    curated.length > 0 &&
+      curated.every((m) => m.pattern !== null || m.modality !== MODALITY.strength),
+    'TEN-2a discriminator (1/4): a curated row (a test-library row since CAT-3 F1-i) has a `pattern`, or a modality other than strength — what the CHECK requires of a global row',
   );
   assert.deepEqual(
     appAuthored.filter((m) => m.pattern !== null),
@@ -5309,13 +5329,8 @@ console.log(
     [],
     'TEN-2c END-STATE MEMBERSHIP (4/4): every GLOBAL row the resolver returned is a member of MOVEMENT_SEED_PUBLIC_IDS — exact set membership, not a slug test and not a public_id-prefix test (both were tried in this arc and both were wrong). This is layer 2 of movements_global_row_has_pattern, which can only require a `pattern` (or, since CAT-3 A1, a non-strength modality)',
   );
-  assert.deepEqual(
-    allMovements
-      .filter((m) => MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) && m.pattern === null)
-      .map((m) => m.publicId),
-    [],
-    'TEN-2c: …and every curated row carries the `pattern` the CHECK requires of a global row, so the two layers agree rather than one of them being decoration',
-  );
+  // CAT-3 F1-i: "every curated row carries the `pattern` the CHECK requires" read the old built-ins,
+  // of which a fixtures database holds none; (1/4) above proves it over the test library's rows.
   // And the obligation behind all three: a `movements.public_id` only ever comes from `newId()` or
   // the seed const. Asserted nowhere before this. ⚠️ Version-agnostic on purpose: V1-1b's backfill
   // fixture ~4,500 lines up inserts via raw SQL with `gen_random_uuid()` (a UUIDv4), so a
@@ -5371,11 +5386,16 @@ console.log(
   // BURNS a sequence value on an absorbed insert and a plain SELECT consumes none. So the sequence
   // standing still is the only observable that says "step 1 returned; step 3 never ran".
   const seqBefore = await movementsSeqValue();
-  const seededForSeq = MOVEMENT_SEED_ROWS[0];
+  // CAT-3 F1-i: a test-library row, since a fixtures database holds no old built-in.
+  const seededForSeq = CATALOG_FIXTURE[0]!;
+  const [seededForSeqRow] = await db
+    .select({ publicId: schema.movements.publicId })
+    .from(schema.movements)
+    .where(and(eq(schema.movements.slug, seededForSeq.slug), isNull(schema.movements.householdId)));
   const seqResolved = await findOrCreateMovement(asPg, A_SCOPE, seededForSeq.name);
   assert.equal(
     (await movementRow(seqResolved)).publicId,
-    seededForSeq.publicId,
+    seededForSeqRow?.publicId,
     'TEN-2b: a seeded name resolves to its curated row',
   );
   assert.equal(
@@ -5595,23 +5615,28 @@ console.log(
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
   assert.ok(guardHousehold, 'TEN-2b guard fixture: the seed household resolves');
 
-  // ⚠️ **The shadowed seed row is CHOSEN AT RUNTIME, and it has to be.** (b) below DELETES the
+  // ⚠️ **The shadowed library row is CHOSEN AT RUNTIME, and it has to be.** (b) below DELETES the
   // curated row to prove the seed puts it back, and `entries.movement_id` / `prescriptions.movement_id`
-  // would abort that delete `23503` — `MOVEMENT_SEED_ROWS[0]` (`box_jump`) is referenced by this
-  // file's own fixtures, measured. So pick the first seed row nothing references, through the SHARED
-  // census (`queries/movement-ownership.ts`) rather than a hand-written join: `householdRefs === 0`
-  // is that module's definition of unreferenced, and it covers both referencing tables.
+  // would abort that delete `23503` — this file's own fixtures and the fixture programs reference
+  // several. So pick the first test-library row nothing references, through the SHARED census
+  // (`queries/movement-ownership.ts`) rather than a hand-written join: `householdRefs === 0` is that
+  // module's definition of unreferenced, and it covers both referencing tables.
+  //
+  // CAT-3 F1-i: a test-library row, where this used to be an old built-in. No seed writes those any
+  // more, so "the seed restores it" holds only of the library, and the report counts the household
+  // row as sharing a LIBRARY slug. Production's seed still takes the legacy-slug count (`verify/seed.ts`
+  // B4 proves that one).
   const unreferencedGlobalIds = new Set(
     (await sharedMovementRows(asPg)).filter((r) => r.householdRefs === 0).map((r) => r.movementId),
   );
   const globalRowIds = await db
-    .select({ id: schema.movements.id, publicId: schema.movements.publicId })
+    .select({ id: schema.movements.id, slug: schema.movements.slug })
     .from(schema.movements)
     .where(movementIsGlobal());
-  const shadowed = MOVEMENT_SEED_ROWS.find((m) => {
-    const row = globalRowIds.find((g) => g.publicId === m.publicId);
-    return row !== undefined && unreferencedGlobalIds.has(row.id);
-  });
+  const shadowedRow = globalRowIds.find(
+    (g) => FIXTURE_LIBRARY_SLUGS.has(g.slug) && unreferencedGlobalIds.has(g.id),
+  );
+  const shadowed = shadowedRow && { id: shadowedRow.id, slug: shadowedRow.slug };
   assert.ok(
     shadowed,
     'TEN-2c guard fixture: at least one curated movement is referenced by nothing, so (b) can delete it and watch the seed restore it',
@@ -5666,6 +5691,11 @@ console.log(
     name: SHADOW_NAME,
     householdId: guardHousehold.id,
   });
+  // A library row carries join rows (CAT-3 A2-i), which the seed writes again with the row.
+  await db
+    .delete(schema.movementEquipment)
+    .where(eq(schema.movementEquipment.movementId, shadowed.id));
+  await db.delete(schema.movementMuscles).where(eq(schema.movementMuscles.movementId, shadowed.id));
   await db
     .delete(schema.movements)
     .where(and(eq(schema.movements.slug, shadowed.slug), movementIsGlobal()));
@@ -5683,12 +5713,29 @@ console.log(
   assert.deepEqual(
     (
       await db
-        .select({ publicId: schema.movements.publicId })
+        .select({
+          householdId: schema.movements.householdId,
+          modality: schema.movements.modality,
+          slug: schema.movements.slug,
+        })
         .from(schema.movements)
         .where(and(eq(schema.movements.slug, shadowed.slug), movementIsGlobal()))
-    ).map((r) => r.publicId),
-    [shadowed.publicId],
+    ).map(isFixtureLibraryRow),
+    [true],
     'TEN-2c SHADOW REPORT: `seed()` INSERTS the curated catalog row even though a household owns that slug — the `seedableMovements` filter is gone, so the guard suppresses no write. ⚠️ This is the half a `throw`-only demotion would have left broken FOREVER and silently: the curated row never inserted, with nothing complaining loudly',
+  );
+  // CAT-3 F1-i: the restored row is a library row, so the seed writes join rows beside it: never
+  // onto the household's own row on the same slug.
+  assert.equal(
+    (
+      await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.movementEquipment)
+        .innerJoin(schema.movements, eq(schema.movements.id, schema.movementEquipment.movementId))
+        .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'))
+    )[0]?.n,
+    0,
+    "TEN-2c SHADOW REPORT: …and the seed writes no join row for a household's movement on that slug (CAT-3 F1-i)",
   );
   assert.match(
     guardMessage,
@@ -5699,7 +5746,7 @@ console.log(
   // is also the household's own row's slug, which says what they typed. The operator lists the rows
   // from their own console (docs/runbooks.md → "the seed's shadow guard fired").
   assert.ok(
-    /\b1 household-owned movement\(s\) share a legacy seed slug/.test(guardMessage),
+    /share a legacy seed slug and 1 share a library slug/.test(guardMessage),
     'TEN-2c SHADOW REPORT: …it COUNTS the shadowed row (CAT-3 A2-i: counts only)',
   );
   assert.ok(
@@ -5725,10 +5772,13 @@ console.log(
     await seed(asPg, { fixtures: true });
   });
   // What the test means, not "prints nothing": since CAT-3 A2-i the seed also prints its catalog
-  // counts, which A2-ii's fixture seed will do on every run.
+  // counts, which A2-ii's fixture seed will do on every run. ⚠️ CAT-3 F1-i: the fixture world's own
+  // items now include rows on old built-in slugs (no global row holds those any more), so a fixtures
+  // seed's legacy-slug count is never 0 here; CAT-3 PR 3 retires that count. The library count is the
+  // one this probe moved.
   assert.ok(
-    !/share a legacy seed slug|share a library slug/.test(quietMessage),
-    'TEN-2c: …and with no shadow the seed warns about NOTHING — the report is a report, not noise on every run',
+    !/and [1-9]\d* share a library slug/.test(quietMessage),
+    'TEN-2c: …and with no shadow the seed counts no household row on a library slug — the probe row is gone from the report (CAT-3 F1-i)',
   );
   assert.equal(
     (

@@ -25,8 +25,9 @@ lane N's ([catalog-data.md](./catalog-data.md)).
 | `seedCatalog` (`seed.ts`)                      | The library's one writer (A2-i), called by `seedReference` with the library `seedLibraryOf` names: `CATALOG_MOVEMENTS` in production, `CATALOG_FIXTURE` with fixtures.  |
 | `movementIsCatalog()` (`writers/ownership.ts`) | Rule 2's predicate: global and `modality IS NOT NULL`. Never a slug test.                                                                                               |
 
-Since A2-ii production's seed writes `CATALOG_MOVEMENTS` and no legacy rows; a fixtures database gets
-`CATALOG_FIXTURE`, then the 35 legacy rows ([plan](../plans/cat-3-a2-ii-seed-switch.md), E4). The app
+Since A2-ii production's seed writes `CATALOG_MOVEMENTS` and no legacy rows; since F1-i a fixtures
+database gets `CATALOG_FIXTURE` and no legacy row either ([plan](../plans/cat-3-after-the-fresh-start.md),
+PR 1), so CI tests the state production is in after the fresh start. The app
 reads the library that database holds (K29: `catalogLibraryNameFor`, `apps/web/lib/env.ts`).
 Since CAT-3 P11-ii-b the picker's read reads the two join tables (`catalogTaxonomyRows` in
 `queries/program/movement-options.ts`); the stays-dark scan that held them unread until then is retired,
@@ -59,8 +60,9 @@ and that read's proofs replace it: `verify/program.ts`'s (b1)–(b3) with mutati
    is public, and a slug a household also holds says what that household typed. The proofs capture
    everything printed to stdout and stderr around
    the whole seed run.
-8. **`db:verify`'s shared database is a fixtures database** (A2-ii, D3): the test library plus the
-   legacy rows, as every e2e and preview database is. Every production seed in `db:verify` runs inside
+8. **`db:verify`'s shared database is a fixtures database** (A2-ii, D3): the test library only since
+   F1-i, as every e2e and preview database is. A proof that needs a legacy-shaped global row plants it
+   in its own rolled-back transaction. Every production seed in `db:verify` runs inside
    `rolledBack` with `seed(asDb(tx), …)` and reads on `tx` (a read through `db` hangs on PGlite's one
    connection). A proof that needs the real library writes it in its own rolled-back transaction.
 9. **"A library row" is an exact test where it feeds a decision** (A2-ii, D4): a modality AND a slug of

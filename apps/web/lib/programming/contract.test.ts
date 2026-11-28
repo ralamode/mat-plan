@@ -3,7 +3,6 @@ import {
   DAY_ROLE_TO_SESSION_TYPE,
   DAY_ROLES,
   dayRoleSchema,
-  MOVEMENT_SEED_ROWS,
   movementSlug,
   PROGRAM_NAME_MAX,
   LEGACY_PROGRAM_FIXTURE,
@@ -14,6 +13,7 @@ import {
   SESSION_TYPE_LABELS,
   sessionTypeSchema,
 } from '@mat-plan/shared';
+import { CATALOG_FIXTURE } from '@mat-plan/shared/catalog/fixture';
 import { describe, expect, it } from 'vitest';
 
 // V1-10 shared programming contract. Lives in the WEB test tree (like routine/contract.test.ts): the shared
@@ -160,14 +160,13 @@ describe('LEGACY_PROGRAM_FIXTURE — the legacy block fixture, authoring-consist
   });
 
   it('prescribes no reps or loads except the one fixed movement', () => {
-    // The paper sheet deliberately shows no goal numbers — "the absence of a target reduced the
-    // 'I failed today' effect". Hip thrusts are the single exception (3 x 10 per side).
+    // The block it replaced showed no goal numbers but one fixed "3 x 10 per side" (CAT-3 F1-i).
     const prescribed = LEGACY_PROGRAM_FIXTURE.flatMap((b) => b.prescriptions).filter(
       (p) => p.sets !== null || p.targetReps !== null,
     );
     expect(prescribed.map((p) => p.movementSlug)).toEqual([
-      'single-leg_hip_thrusts',
-      'single-leg_hip_thrusts',
+      'single-leg_romanian_deadlift',
+      'single-leg_romanian_deadlift',
     ]);
     // And no authored loads anywhere — the LLM-never-authors-loads rule, and the sheet's own design.
     for (const p of LEGACY_PROGRAM_FIXTURE.flatMap((b) => b.prescriptions)) {
@@ -181,8 +180,8 @@ describe('LEGACY_PROGRAM_FIXTURE — the legacy block fixture, authoring-consist
     }
   });
 
-  it('every prescription references a real catalog movement slug', () => {
-    const slugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
+  it('every prescription references a test-library slug, which a fixtures database holds (CAT-3 F1-i)', () => {
+    const slugs = new Set<string>(CATALOG_FIXTURE.map((m) => m.slug));
     for (const block of LEGACY_PROGRAM_FIXTURE) {
       for (const p of block.prescriptions) {
         expect(slugs.has(p.movementSlug)).toBe(true);

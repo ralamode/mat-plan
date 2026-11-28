@@ -136,12 +136,19 @@ test('a parent writes a new workout with two items, saves, and Back never reopen
   await page.getByRole('button', { name: ITEM_PICKER_COPY.open }).click();
   const picker = page.getByRole('dialog', { name: ITEM_PICKER_COPY.title });
   await expect(picker).toBeVisible();
-  for (const item of ['Box Jump', 'Pull-Up']) {
+  for (const item of ['Chin-up', 'Squat jump']) {
     await picker.getByRole('searchbox').fill(item);
     // The row's name is "<item>, <its lines>" (movement-picker.tsx), so the item ends at the comma:
-    // "Pull-Up" never also matches a longer name that starts the same. Chrome puts a space between
-    // the row's stacked spans when it builds the name ("Box Jump , Reps"), hence `\s*`.
+    // searching "Chin-up" also lists "Weighted chin-up", which this never matches. Chrome puts a space
+    // between the row's stacked spans when it builds the name ("Squat jump , Reps"), hence `\s*`.
+    // Test-library names since CAT-3 F1-i: a fixtures database holds no old built-in.
     await picker.getByRole('checkbox', { name: new RegExp(`^${item}\\s*,`) }).click();
+    if (item === 'Chin-up') {
+      // The narrowing is real: the longer name is listed too, and only the intended row is ticked.
+      const longer = picker.getByRole('checkbox', { name: /^Weighted chin-up\s*,/ });
+      await expect(longer).toBeVisible();
+      await expect(longer).not.toBeChecked();
+    }
   }
   // "2 items added." is said only once the picker is gone: jsdom closes the sheet before a frame,
   // so only a browser can show the order (guide invariant 16).
@@ -165,7 +172,7 @@ test('a parent writes a new workout with two items, saves, and Back never reopen
     )
     .toBe(false);
 
-  for (const item of ['Box Jump', 'Pull-Up']) {
+  for (const item of ['Chin-up', 'Squat jump']) {
     await page
       .getByRole('group', { name: item, exact: true })
       .getByLabel(EDITOR_COPY.sets, { exact: true })
@@ -189,7 +196,7 @@ test('a parent writes a new workout with two items, saves, and Back never reopen
   await expect(page).toHaveTitle(new RegExp(`^${EDITOR_COPY.editWorkout}\\b`));
   await expect(
     page.getByRole('region', { name: EDITOR_COPY.items }).getByRole('heading', { level: 3 }),
-  ).toHaveText(['Box Jump', 'Pull-Up']);
+  ).toHaveText(['Chin-up', 'Squat jump']);
 });
 
 test('a workout opened under another of the household’s programs is the builder’s 404', async ({

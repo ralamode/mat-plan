@@ -330,5 +330,9 @@ flowchart TD
 
 ## Changing it
 
+Since CAT-3 F1-i a fixtures database, and `db:verify`'s shared one, holds the test library and no old
+built-in: `seedProgramFixtures` resolves 4 world items to test-library rows and makes the other 22 the
+household's own. A proof that needs an old built-in plants one in its own rolled-back transaction.
+
 Start from the step's row in the plan (§5) and the decisions it cites (D19 for matching a saved
 workout to its rows). Re-run `pnpm db:verify` and `pnpm db:mutations`.

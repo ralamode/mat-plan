@@ -1,8 +1,7 @@
 diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
-index c18e26e0..151e1699 100644
 --- a/packages/db/src/seed.ts
 +++ b/packages/db/src/seed.ts
-@@ -391,7 +391,7 @@ export async function seedReference(
+@@ -430,7 +430,7 @@ export async function seedReference(
    const legacySlugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
    const householdRowsOnCatalogSlugs = await countOwnedRowsOn(
      db,
@@ -10,4 +9,4 @@ index c18e26e0..151e1699 100644
 +    catalog.map((entry) => entry.slug),
    );
  
-   // CAT-3 A2-i: the library first, so on a shared slug the catalog row wins and the legacy insert's
+   // CAT-3 A2-i: the library's one writer. Since F1-i no legacy row follows it on any database.

@@ -757,8 +757,8 @@ in the [V1-9b plan](../plans/v1-9b-delete-and-restore.md); `delete-and-restore.m
   `seedReference` (`OPS-2` PR 1). Production's `db:seed` runs without the flag on every push to `main`,
   so anything outside the branch reaches a real family's database. `verify/seed.ts`'s Proof A counts
   every `HOUSEHOLD_GRAPH` table after a production seed, and it fails on the first such row.
-- **The flag also picks the movement library** (`CAT-3` A2-ii): without it `CATALOG_MOVEMENTS` and no
-  legacy rows, with it `CATALOG_FIXTURE` then the legacy rows, both from `seedLibraryOf`. With fixtures,
+- **The flag also picks the movement library** (`CAT-3` A2-ii, F1-i): without it `CATALOG_MOVEMENTS`,
+  with it `CATALOG_FIXTURE`, both from `seedLibraryOf`, and no legacy row on either since F1-i. With fixtures,
   `assertSeedOwnsDatabase` runs before any write: the library is global, so a refused run must not
   leave it behind ([plan](../plans/cat-3-a2-ii-seed-switch.md), D1, D2).
 - **The seed's report is counts only** (`CAT-3` A2-i). `seedReference` returns `SeedCounts`, numbers

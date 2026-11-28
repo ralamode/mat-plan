@@ -243,7 +243,7 @@ proofs go in `packages/db/scripts/verify/catalog.ts` (lane A).
 - **E3.** The seed shall never delete a `movements` row, never write a row that has a
   `household_id`, and never write a join row for one (a planted household row on a catalog slug;
   mutations drop the global predicate in the insert and in the join-row write).
-- **E4.** Without the fixtures flag the seed shall write `CATALOG_MOVEMENTS` (nothing while it is empty) and no fixture, **and from A2 on it shall no longer write `MOVEMENT_SEED_ROWS`**: production's 35 old rows are there already, and a seed that still wrote them would put them back at step 6 of the fresh start, in the same sitting that deleted them. **With** the flag it shall write `CATALOG_FIXTURE` in its place, then the legacy fixtures, `MOVEMENT_SEED_ROWS` among them until F1: a test, CI or preview database never holds a real batch, so a batch PR cannot
+- **E4.** Without the fixtures flag the seed shall write `CATALOG_MOVEMENTS` (nothing while it is empty) and no fixture, **and from A2 on it shall no longer write `MOVEMENT_SEED_ROWS`**: production's 35 old rows are there already, and a seed that still wrote them would put them back at step 6 of the fresh start, in the same sitting that deleted them. **With** the flag it shall write `CATALOG_FIXTURE` in its place, then the legacy fixtures, `MOVEMENT_SEED_ROWS` among them until F1-i: a test, CI or preview database never holds a real batch, so a batch PR cannot
   break another lane's proof.
 - **E5.** The seed's report shall contain counts only for any row a household owns (the existing
   privacy assertion on the shadow report, extended), and the seed shall exit 0 on a database whose

@@ -6,7 +6,6 @@ import {
   movementNameKey,
   MUSCLE_ROLE,
   musclesInOrder,
-  pickerEntryOf,
   trackingTypeSchema,
   existingItem,
   ACTIVITY_TYPE_KEYS,
@@ -129,6 +128,7 @@ import {
   asTx,
   lockTimeoutSetBy,
   orFail,
+  plantLegacyGlobals,
   rolledBack,
   type VerifyContext,
   type VerifyTx,
@@ -1850,8 +1850,8 @@ async function verifyCatalogTaxonomyFromTables({ A_SCOPE }: VerifyContext): Prom
  */
 async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void> {
   const libraryEntry = (slug: string) => CATALOG_MOVEMENTS.find((e) => e.slug === slug)!;
-  const OHP = libraryEntry('overhead_press'); // aliases OHP, Strict press: OHP is also the old built-in's
-  const DIP = libraryEntry('dip'); // beside the old built-in "Dips"
+  const OHP = libraryEntry('overhead_press'); // aliases OHP, Strict press
+  const DIP = libraryEntry('dip'); // "Dips" shares its name key
   const FOAM = libraryEntry('foam_rolling'); // alias "Foam roll"
   const LIB = [OHP, DIP, FOAM];
   /**
@@ -1950,35 +1950,17 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
       );
     }
 
-    // (a2) The old built-ins: still every one, with the const's group, and the library's taxonomy and
-    // aliases where it has an entry on the slug (the DTO the picker showed before; picker.test.ts).
-    const legacy = options.filter(
-      (o) => o.owner === 'catalog' && Object.hasOwn(MOVEMENT_PICKER_ENTRIES, o.slug),
+    // (a2) CAT-3 F1-i: a fixtures database holds no old built-in, so the catalog options are the
+    // library rows this proof wrote, exactly. (It was "every old built-in is still listed (K22)", with
+    // the const's group: the fresh start removed those rows from every database.)
+    assert.deepEqual(
+      options
+        .filter((o) => o.owner === 'catalog')
+        .map((o) => o.publicId)
+        .sort(),
+      libraryRows.map((r) => r.publicId).sort(),
+      'CAT-3 P11-ii-a (a2): a fixtures database holds no old built-in: the catalog options are the library rows, exactly',
     );
-    assert.equal(
-      legacy.length,
-      Object.keys(MOVEMENT_PICKER_ENTRIES).length,
-      'CAT-3 P11-ii-a (a2): every old built-in is still listed (K22)',
-    );
-    for (const seedRow of MOVEMENT_SEED_ROWS) {
-      const o = legacy.find((x) => x.owner === 'catalog' && x.slug === seedRow.slug)!;
-      assert.deepEqual(
-        o,
-        expectedOption(
-          {
-            publicId: o.publicId,
-            slug: seedRow.slug,
-            name: seedRow.name,
-            unitDefault: seedRow.unitDefault,
-            isBodyweight: seedRow.isBodyweight,
-            trackingType: seedRow.trackingType,
-          },
-          pickerEntryOf(seedRow.slug),
-          CATALOG_MOVEMENTS.find((e) => e.slug === seedRow.slug),
-        ),
-        `CAT-3 P11-ii-a (a2): the old built-in ${seedRow.slug} keeps its group, joins the library's aliases, and has taxonomy exactly when the library has an entry`,
-      );
-    }
 
     // (a8) The internal id never reaches an option.
     assert.ok(
@@ -2004,16 +1986,16 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
     );
 
     // (a6) K23: Enter and newItem pick the same row, because both match over this list.
-    // Pinned literally, so a divergence in WHICH row is picked shows. "OHP" is both the old built-in's
-    // alias and the library row's; "Overhead press" sorts first. "Dips" and "Dip" share one name key
-    // (the fold drops a plural s), so both are exact matches and the tie goes to the name that sorts
-    // first: the library's "Dip". The picker's search breaks it the same way, which is K23.
+    // Pinned literally, so a divergence in WHICH row is picked shows. "OHP" and "Strict press" are the
+    // library row's aliases. "Dips" and "Dip" share one name key (the fold drops a plural s), so
+    // "Dips" matches the library's "Dip". The picker's search does the same, which is K23. (CAT-3
+    // F1-i: the old built-ins that shared these names and aliases are on no database any more; the
+    // trap-bar deadlift case below plants its built-in.)
     const expectedSlug: Record<string, string> = {
       OHP: OHP.slug,
       'Strict press': OHP.slug,
       Dips: DIP.slug,
       Dip: DIP.slug,
-      'Hex-bar deadlift': 'trap-bar_deadlift',
     };
     const slugOf = (publicId: string) => {
       const o = options.find((x) => x.publicId === publicId);
@@ -2038,33 +2020,43 @@ async function verifyCatalogRowsListed({ A_SCOPE, B_SCOPE }: VerifyContext): Pro
         `CAT-3 P11-ii-a (a6): "${typed}" selects ${slug}`,
       );
     }
-    const trapBar = options.find((o) => o.owner === 'catalog' && o.slug === 'trap-bar_deadlift');
-    const hexBar = await newItem(
-      asTx(tx),
-      A_SCOPE,
-      {
-        name: 'Hex-bar deadlift',
-        trackingType: TRACKING_TYPE.check,
-      },
-      CATALOG_MOVEMENTS,
-    );
-    assert.deepEqual(
-      hexBar.ok && hexBar.itemPublicId,
-      trapBar?.publicId,
-      'CAT-3 P11-ii-a (a6): an alias only the library entry of an old built-in has selects that built-in',
-    );
-    // …and a household item NAMED it wins: an exact name beats an alias, on both sides (bestFirst).
+    // An alias only an old built-in's library entry has selects that built-in: the read's picker-slug
+    // branch stays until CAT-3 PR 2. CAT-3 F1-i: `trap-bar_deadlift` is planted, in a savepoint of its
+    // own, since no database holds an old built-in.
+    await rolledBack(async (sp) => {
+      await plantLegacyGlobals(sp, ['trap-bar_deadlift']);
+      const trapBar = (await listedOn(sp, A_SCOPE)).find(
+        (o) => o.owner === 'catalog' && o.slug === 'trap-bar_deadlift',
+      );
+      const hexBar = await newItem(
+        asTx(sp),
+        A_SCOPE,
+        {
+          name: 'Hex-bar deadlift',
+          trackingType: TRACKING_TYPE.check,
+        },
+        CATALOG_MOVEMENTS,
+      );
+      assert.deepEqual(
+        hexBar.ok && hexBar.itemPublicId,
+        trapBar?.publicId,
+        'CAT-3 P11-ii-a (a6): an alias only the library entry of an old built-in has selects that built-in',
+      );
+    }, tx);
+    // …and a household item NAMED like a library alias wins: an exact name beats an alias, on both
+    // sides (bestFirst). CAT-3 F1-i: the alias is the library row's "Strict press" (it was "Hex-bar
+    // deadlift", the alias of an old built-in no database holds now).
     const ownHex = newId();
     await insertMovementOwnedBy(asTx(tx), A_SCOPE, {
       publicId: ownHex,
-      slug: 'a_hex_bar_deadlift_item',
-      name: 'Hex-bar deadlift',
+      slug: 'a_strict_press_item',
+      name: 'Strict press',
       isBodyweight: false,
     });
     const named = await newItem(
       asTx(tx),
       A_SCOPE,
-      { name: 'Hex-bar deadlift', trackingType: TRACKING_TYPE.check },
+      { name: 'Strict press', trackingType: TRACKING_TYPE.check },
       CATALOG_MOVEMENTS,
     );
     assert.deepEqual(
@@ -2202,7 +2194,8 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       .set({ deletedAt: sql`now()` })
       .where(eq(schema.movements.publicId, gone));
     // A household row under a catalog slug: the resolver is global-first, so it never answers a name.
-    const catalogSeed = MOVEMENT_SEED_ROWS[0]!;
+    // CAT-3 F1-i: a test-library row, since a fixtures database holds no old built-in.
+    const catalogSeed = CATALOG_FIXTURE[0]!;
     const shadowed = newId();
     await insertMovementOwnedBy(exec, A_SCOPE, {
       publicId: shadowed,
@@ -2211,13 +2204,14 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       isBodyweight: false,
     });
 
-    // A household "RDL" made before the alias rule, beside the catalog's Romanian Deadlift (alias
-    // `RDL`): since C30 an item's own name ranks before another item's alias, so `RDL` is the
-    // household's own item in this household.
-    const ourRdl = await own(A_SCOPE, 'RDL');
+    // A household "Single-leg RDL" made before the alias rule, beside the catalog's Single-leg Romanian
+    // deadlift (the library's alias `Single-leg RDL`): since C30 an item's own name ranks before another
+    // item's alias, so `Single-leg RDL` is the household's own item in this household. (CAT-3 F1-i: it
+    // was "RDL", an old built-in's alias.)
+    const ourRdl = await own(A_SCOPE, 'Single-leg RDL');
     // A household name with the catalog name's key but another slug (so not shadowed), that sorts
     // first by name: only `isCatalog` puts the catalog's row first, as the picker does.
-    await own(A_SCOPE, 'Romanian Dead-lift');
+    await own(A_SCOPE, 'Single-leg Romanian Dead-lift');
     // Two names whose code-point order and folded order differ ('Z' sorts before 'a' in C collation).
     const zebra = await own(A_SCOPE, 'Zebra Step Drill');
     const apple = await own(A_SCOPE, 'apple Reach Drill');
@@ -2226,8 +2220,8 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     const options = await movementOptions(exec, A_SCOPE, CATALOG_MOVEMENTS);
     const ids = options.map((o) => o.publicId);
     const catalog = options.filter((o) => o.owner === 'catalog');
-    // CAT-3 A2-ii: the shared database is a fixtures database, so the catalog arm is the old built-ins
-    // AND the test library's rows (P11-ii-a lists every library row).
+    // CAT-3 A2-ii: the shared database is a fixtures database, so the catalog arm is the test
+    // library's rows (P11-ii-a lists every library row). Since F1-i it holds no old built-in.
     const libraryRows = await tx
       .select({ id: schema.movements.id })
       .from(schema.movements)
@@ -2240,45 +2234,66 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
       );
     assert.equal(
       catalog.length,
-      Object.keys(MOVEMENT_PICKER_ENTRIES).length + libraryRows.length,
-      'FAM-1 6a-iii-a: the read lists every catalog row the picker map names',
+      libraryRows.length,
+      'FAM-1 6a-iii-a: the read lists every catalog row, the test library’s alone on a fixtures database (CAT-3 F1-i)',
     );
-    const rdl = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('RDL'));
+    const rdl = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('Single-leg RDL'));
     assert.ok(rdl, 'FAM-1 6a-iii-a: a catalog row carries its aliases');
     const ohp = catalog.find((o) => o.owner === 'catalog' && o.aliases.includes('OHP'));
     assert.ok(ohp, 'FAM-1 6a-iii-a: the catalog has the OHP alias the proof uses');
-    const boxJump = MOVEMENT_SEED_ROWS.find((r) => r.slug === 'box_jump')!;
-    const { publicId: _boxId, ...boxOption } = catalog.find((o) => o.name === boxJump.name)!;
+    // CAT-3 F1-i: a test-library row (it was the old built-in `box_jump`, with the picker map's group).
+    // Its identity is the row the seed wrote from the test library; its aliases, supervision and "How
+    // to" come from the library the read is given, by slug; its taxonomy is the tables', which the seed
+    // wrote from the test library's entry.
+    const press = CATALOG_FIXTURE.find((e) => e.slug === 'overhead_press')!;
+    const { publicId: _pressId, ...pressOption } = catalog.find((o) => o.name === press.name)!;
+    const pressTables = catalogOptionOf(press, '');
     assert.deepEqual(
-      boxOption,
+      pressOption,
       (({ publicId: _id, ...rest }) => rest)(
         catalogArmOption(
           {
             publicId: '',
-            slug: boxJump.slug,
-            name: boxJump.name,
-            unitDefault: boxJump.unitDefault,
-            isBodyweight: boxJump.isBodyweight,
-            trackingType: boxJump.trackingType,
+            slug: press.slug,
+            name: press.name,
+            unitDefault: press.unitDefault,
+            isBodyweight: press.isBodyweight,
+            trackingType: press.trackingType,
           },
-          MOVEMENT_PICKER_ENTRIES.box_jump,
-          CATALOG_MOVEMENTS.find((e) => e.slug === boxJump.slug),
+          undefined,
+          CATALOG_MOVEMENTS.find((e) => e.slug === press.slug),
+          {
+            modality: pressTables.modality,
+            pattern: pressTables.pattern,
+            equipment: pressTables.equipment,
+            primaryMuscle: pressTables.primaryMuscle,
+            secondaryMuscles: pressTables.secondaryMuscles,
+          },
         ),
       ),
-      "FAM-1 6a-iii-a: a catalog option carries its row's declaration and the picker map's group and aliases (CAT-3 P11-ii-a: and the library's by slug, through catalogArmOption)",
+      "FAM-1 6a-iii-a: a catalog option carries its row's declaration, the library's aliases and labels by slug, and the tables' taxonomy, through catalogArmOption (CAT-3 F1-i: a test-library row, no picker-map group)",
     );
-    const boxListed = catalog.find((o) => o.name === boxJump.name);
-    assert.deepEqual(
-      boxListed?.owner === 'catalog' && [boxListed.group, boxListed.aliases],
-      [
-        MOVEMENT_PICKER_ENTRIES.box_jump.group,
+    // The read's picker-slug branch stays until CAT-3 PR 2, so its pin does too. CAT-3 F1-i: no
+    // database holds an old built-in, so `box_jump` is planted, in a savepoint of its own, and the
+    // read is taken again over it.
+    await rolledBack(async (sp) => {
+      await plantLegacyGlobals(sp, ['box_jump']);
+      const boxJump = MOVEMENT_SEED_ROWS.find((r) => r.slug === 'box_jump')!;
+      const boxListed = (await movementOptions(asTx(sp), A_SCOPE, CATALOG_MOVEMENTS)).find(
+        (o) => o.owner === 'catalog' && o.name === boxJump.name,
+      );
+      assert.deepEqual(
+        boxListed?.owner === 'catalog' && [boxListed.group, boxListed.aliases],
         [
-          ...(MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? []),
-          ...(CATALOG_MOVEMENTS.find((e) => e.slug === 'box_jump')?.aliases ?? []),
+          MOVEMENT_PICKER_ENTRIES.box_jump.group,
+          [
+            ...(MOVEMENT_PICKER_ENTRIES.box_jump.aliases ?? []),
+            ...(CATALOG_MOVEMENTS.find((e) => e.slug === 'box_jump')?.aliases ?? []),
+          ],
         ],
-      ],
-      "FAM-1 6a-iii-a: the old built-in keeps the picker map's group, and its aliases are the map's then the library's",
-    );
+        "FAM-1 6a-iii-a: the old built-in keeps the picker map's group, and its aliases are the map's then the library's",
+      );
+    }, tx);
     assert.ok(ids.includes(hop), 'FAM-1 6a-iii-a: an unused household item is listed');
     assert.ok(
       options.every((o) => (o.owner === 'catalog') === 'slug' in o),
@@ -2318,8 +2333,18 @@ async function verifyMovementOptionsAndNewItem({ A_SCOPE, B_SCOPE }: VerifyConte
     // ── newItem selects what the list already names ──
     const selects: Array<[string, string, string, string]> = [
       ['an alias', 'ohp', ohp.publicId, ohp.name],
-      ["the household's own item named like a catalog alias (C30)", 'rdl', ourRdl, 'RDL'],
-      ['a catalog name a household item ties with', 'romanian deadlift', rdl.publicId, rdl.name],
+      [
+        "the household's own item named like a catalog alias (C30)",
+        'single-leg rdl',
+        ourRdl,
+        'Single-leg RDL',
+      ],
+      [
+        'a catalog name a household item ties with',
+        'single-leg romanian deadlift',
+        rdl.publicId,
+        rdl.name,
+      ],
       ['a re-spelled household name', ' garden-hop drill ', hop, 'Garden Hop Drill'],
       [
         'a catalog name in another case',
@@ -3773,7 +3798,8 @@ async function verifySeedFixtures({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<
 async function verifyNewItemLocksTheHousehold(): Promise<void> {
   await rolledBack(async (tx) => {
     const { scope } = await capsHousehold(tx);
-    const builtIn = MOVEMENT_SEED_ROWS[0]!;
+    // CAT-3 F1-i: a test-library row, since a fixtures database holds no old built-in.
+    const builtIn = CATALOG_FIXTURE[0]!;
     const result = await newItem(
       asTx(tx),
       scope,
@@ -4295,10 +4321,10 @@ async function verifyCaps(): Promise<void> {
       });
     }
     // An item a catalog row shadows (its slug is a catalog slug): the picker does not list it, so it
-    // never counts toward the cap.
+    // never counts toward the cap. CAT-3 F1-i: a test-library slug, since no old built-in is here.
     await insertMovementOwnedBy(exec, scope, {
       publicId: newId(),
-      slug: MOVEMENT_SEED_ROWS[0]!.slug,
+      slug: CATALOG_FIXTURE[0]!.slug,
       name: 'Caps shadowed item',
       isBodyweight: false,
       trackingType: TRACKING_TYPE.reps,
@@ -4375,7 +4401,7 @@ async function verifyCaps(): Promise<void> {
       exec,
       scope,
       {
-        name: MOVEMENT_SEED_ROWS[0]!.name,
+        name: CATALOG_FIXTURE[0]!.name,
         trackingType: TRACKING_TYPE.reps,
       },
       CATALOG_MOVEMENTS,

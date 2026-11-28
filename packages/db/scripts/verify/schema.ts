@@ -101,6 +101,7 @@ import {
   db,
   expectRejectedBy,
   idsOf,
+  plantLegacyGlobals,
   rolledBack,
   rowsOf,
   type VerifyContext,
@@ -237,15 +238,15 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
     "✓ FAM-1 3: a 'workout' session inserts; sessions_session_type_check is SESSION_TYPES exactly",
   );
 
-  // ── (c) every built-in is typed as its seed row says (the fresh-seed path) ───────────────────────
+  // ── (c) CAT-3 F1-i: no seed writes a built-in any more, so there is none to type ────────────────
+  // It was "every built-in is typed as its seed row says (the fresh-seed path)". The typing is proved
+  // below on built-ins planted inside each proof's own transaction, the shape production held.
   assert.deepEqual(
     Object.fromEntries(await globalTypesBySlug(db)),
-    Object.fromEntries(SEEDED_TYPE_BY_SLUG),
-    'FAM-1 3: every global seeded movement carries the trackingType MOVEMENT_SEED_ROWS declares',
+    {},
+    'FAM-1 3: a fixtures database holds no built-in (CAT-3 F1-i), so the typing is proved on planted rows',
   );
-  console.log(
-    `✓ FAM-1 3: all ${SEEDED_TYPE_BY_SLUG.size} built-in items are typed as the seed declares`,
-  );
+  console.log('✓ FAM-1 3: a fixtures database holds no built-in to type (CAT-3 F1-i)');
 
   // ── (d) the migration's typing, run as written, on rows that hold the default (the prod path) ────
   // Every gate migrates an EMPTY movements table, so this is the only place the UPDATE meets rows
@@ -260,6 +261,8 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
   // migrations left them"). The typing touches only these slugs, so nothing outside them can move.
   const seededSlug = inArray(schema.movements.slug, [...SEEDED_TYPE_BY_SLUG.keys()]);
   await rolledBack(async (tx) => {
+    // CAT-3 F1-i: the built-ins, planted as production held them; no seed writes them any more.
+    await plantLegacyGlobals(tx);
     await tx
       .update(schema.movements)
       .set({ trackingType: DEFAULT_TRACKING_TYPE })
@@ -398,6 +401,8 @@ async function verifyStep3({ A_SCOPE }: VerifyContext): Promise<void> {
     );
 
     const [seededReps] = notAtDefault;
+    // CAT-3 F1-i: the built-in is planted; a fixtures database holds none.
+    await plantLegacyGlobals(tx, [seededReps[0]]);
     const seededName = MOVEMENT_SEED_ROWS.find((r) => r.slug === seededReps[0])!.name;
     const global = await findOrCreateTypedMovement(exec, A_SCOPE, seededName, TRACKING_TYPE.check);
     assert.equal(
