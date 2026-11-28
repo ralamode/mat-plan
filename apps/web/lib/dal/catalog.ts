@@ -27,11 +27,10 @@ import { db } from './db';
  *   `household_id` column** to scope by. Resolving one reveals nothing about any household.
  *
  * ✅ **`findOrCreateMovementId` was the third; TEN-2b removed it from that list, and PICK-1 PR 2
- * deleted the wrapper itself.** Movement resolution now lives wholly in `packages/db`
- * (`writers/movement-catalog.ts` → `resolveSessionMovements`), which nothing in the app calls since
- * LEGACY-1 C1 deleted `logStrengthSession` (C2 deletes the resolver), so there is no app-side
- * movement write path left here to scope. The reasoning that was in this
- * wrapper's docblock — global-first and why, and the pre-2b residual closing at `TEN-2c-1` — lives
+ * deleted the wrapper itself.** Movement resolution lives wholly in `packages/db`
+ * (`writers/movement-catalog.ts`, `writers/program/new-item.ts`); LEGACY-1 deleted the old session
+ * resolver and its app caller, so there is no app-side movement write path left here to scope. The
+ * reasoning that was in this wrapper's docblock — global-first and why, and the pre-2b residual closing at `TEN-2c-1` — lives
  * in `findOrCreateMovement`'s own docblock, which is where the behaviour is.
  *
  * `reportScopeMiss`'s existence-only probe (`household.ts`) is the other unscoped query, allowlisted

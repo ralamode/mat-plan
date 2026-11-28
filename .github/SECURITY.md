@@ -101,7 +101,7 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     and the other household's Today card can no longer render it — `seedProgram` resolves the global
     namespace only and **refuses** loudly instead. ✅ **The surviving-row primitive is gone (LEGACY-1, 2026-11-21):**
     it was `logStrengthSession` running find-or-create _before_ the write core's in-transaction
-    profile resolve, and that DAL function is deleted. The live creator, `newItem`, creates in one
+    profile resolve; that DAL function is deleted, and the write core with it (LEGACY-1 C2b). The live creator, `newItem`, creates in one
     transaction and refuses before it inserts. `TEN-2b-1` closed as overtaken. ⚠️ **This said "the rate limiter is wired to the gate login only, so a gate-code
     holder can still mint unbounded `movements` rows of chosen text" — that is false as of AUTH-1 1d,
     in the SAFE direction, and leaving it would tell a reader a live minting primitive exists.** The

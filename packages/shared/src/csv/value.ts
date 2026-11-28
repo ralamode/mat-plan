@@ -34,8 +34,9 @@ export const CSV_UNIT_SUFFIX: Record<Unit, string | null> = {
   yd: 'yd',
   mi: 'mi', // FAM-1 step 3
   min: 'min',
-  // No form offers these (they are not LOGGABLE_UNITS). `null` means "cannot appear in a load", which
-  // `assertExportableUnit` turns into a loud refusal rather than a plausible-looking wrong number.
+  // No load is logged in these (a Count's number goes to reps). `null` means "cannot appear in a
+  // load", which `assertExportableUnit` turns into a loud refusal rather than a plausible-looking
+  // wrong number.
   count: null,
   bool: null,
   timing: null,
@@ -55,9 +56,9 @@ export const EXPORTABLE_UNITS = (Object.keys(CSV_UNIT_SUFFIX) as Unit[]).filter(
  * injury risk, that is the worst defect available in this feature.
  *
  * Converting was rejected: it writes a number the athlete never logged, and ADR 0004 §6's whole point
- * is that the resolved unit rides the row. Since V1-30 every unit a form offers has a spelling (the
- * chain test in `units.test.ts` enforces it), so this guards only units no form offers: a
- * **tripwire, not a tax**.
+ * is that the resolved unit rides the row. Every unit a tracking type offers has a spelling, or a
+ * Count's goes to `reps` (`csv/strength-log-types.test.ts` enforces it), so this guards only units
+ * no form offers: a **tripwire, not a tax**.
  */
 export function assertExportableUnit(unit: Unit, context: string): string {
   const suffix = CSV_UNIT_SUFFIX[unit];

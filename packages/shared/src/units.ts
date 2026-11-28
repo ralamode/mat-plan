@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { keyBySelf } from './enums';
-import { QUANTITY_SLOT, QUANTITY_SLOT_DIMENSIONS_BY_CODE } from './quantity-slots';
 
 /**
  * What KIND of quantity a unit measures — GAP-3 / [ADR 0004 §6](../../../docs/decisions/0004-typed-measurements.md).
@@ -113,59 +112,6 @@ export function unitsOfDimension(dimension: UnitDimension): Unit[] {
 }
 
 /**
- * The dimensions a MOVEMENT may be logged in, and the units that follow from them.
- *
- * DERIVED, never hand-listed (AGENTS.md constants rule). The authority is the `primary` slot's own
- * declared dimension set in `quantity-slots.ts` — so "every loggable unit is legal in the primary
- * slot" is true by construction rather than by a reviewer noticing. A dimension added there shows up
- * here, in the form's picker and in the composite FK, with no second edit — unless it is excluded
- * by name below, as `count` is.
- *
- * Excludes `bool` and `timing` because no slot accepts them: a checkbox is not a measurement, and a
- * clock reading is not a duration.
- *
- * ⚠️ **Excludes `count` BY NAME, although the primary slot accepts it since FAM-1 step 3.** A Count
- * item (plan §2) logs a plain number through the new day page, which reads `TRACKING_TYPE_FIELDS`. The
- * legacy strength form and its write path (`loggableUnitSchema`) stay as they were: a rep count is not
- * a load there, and the CSV export has no spelling for `count` (`csv/value.ts`).
- */
-export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] = QUANTITY_SLOT_DIMENSIONS_BY_CODE[
-  QUANTITY_SLOT.primary
-].filter((d) => d !== UNIT_DIMENSION.count);
-
-/**
- * ⚠️ **Excludes `mi` BY NAME, for the same reason as `count` above.** FAM-1 step 3 adds it for a
- * Distance item on the new day page (`TRACKING_TYPE_FIELDS`); the legacy form keeps the five length
- * units it had, so step 3 changes nothing a person sees there.
- */
-const NOT_LOGGABLE_IN_THE_LEGACY_FORM: readonly Unit[] = ['mi'];
-
-export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension).filter(
-  (u) => !NOT_LOGGABLE_IN_THE_LEGACY_FORM.includes(u),
-);
-
-/**
- * The movement unit the write path accepts: exactly `LOGGABLE_UNITS`. zod 4 takes the widened
- * `readonly Unit[]` and still infers `Unit`. The chain test (`units.test.ts`) holds it to the form on
- * one side and the export on the other (docs/plans/v1-30-loggable-units.md).
- */
-export const loggableUnitSchema = z.enum(LOGGABLE_UNITS);
-
-/** The one "may a movement be logged in this?" predicate — a narrowing guard, no casts. */
-export function isLoggableUnit(value: string): value is Unit {
-  return loggableUnitSchema.safeParse(value).success;
-}
-
-/**
- * The units a movement measured in `dimension` may be logged in: what the form's Unit select offers.
- * Named so "offerable" is a code fact the chain test can iterate, rather than a re-derivation inside
- * a component.
- */
-export function loggableUnitsOf(dimension: UnitDimension): Unit[] {
-  return unitsOfDimension(dimension).filter(isLoggableUnit);
-}
-
-/**
  * What a movement's primary quantity is called, in words a parent or a ten-year-old reads without
  * translating. `mass` → "Weight", not "Mass"; `length` covers a box-jump HEIGHT and a broad-jump
  * DISTANCE, so it cannot be called either one alone.
@@ -177,20 +123,10 @@ export const LOGGABLE_DIMENSION_LABELS: Record<string, string> = {
 };
 
 /**
- * The same dimensions as a noun for running copy ("…don't apply to a TIME"). Its own map, not the
- * label rewritten by string surgery, so respelling a label can't silently garble an error message.
- * `units.test.ts` requires a noun for every loggable dimension.
- */
-export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = {
-  mass: 'weight',
-  length: 'height or distance',
-  time: 'time',
-};
-
-/**
- * Decimal places a logged quantity may carry — ONE precision for every unit, read by the server's
- * format check (`strength.ts`) and by the number field's `step` (`set-fields.tsx`), so the browser
- * refuses exactly where the server would.
+ * Decimal places a logged quantity may carry — ONE precision for every unit, read by `PLAIN_DECIMAL`
+ * below, so a field that types a quantity refuses what the `numeric(8,3)` column would round. ⚠️ The
+ * row schemas (`rowValuesSchema`) do not check decimal places: a fourth place reaching the writer is
+ * rounded by the column (`writers/day/log-row.ts`), not refused.
  *
  * 3, matching `numeric(8,3)` on `entry_sets.value_num`. It replaces a `step="0.5"` that was sized for
  * barbell plates and blocked `6.25 ft`, `1.25 min` and `61.25 kg` — 1.25 kg plates are real. A 0.5
@@ -289,8 +225,8 @@ export const UNIT_SINGULAR_LABELS: Record<Unit, string | null> = {
  * `db:correct` run. Tightening them is a product decision, not a code one — the table is the
  * maintainer's (v1-30b plan, decision 2). Do not quietly narrow it here; raise it there.
  *
- * Every value is ≤ `numeric(8,3)`'s 99999.999, and `units.test.ts` requires a cap for every loggable
- * unit — a missing entry must REFUSE, never read as "no cap" (see `quantityCeiling`).
+ * Every value is ≤ `numeric(8,3)`'s 99999.999, and `units.test.ts` requires a cap for every unit a
+ * tracking type offers — a missing entry must REFUSE, never read as "no cap" (see `quantityCeiling`).
  */
 /**
  * The largest value `entry_sets.value_num numeric(8,3)` can STORE. A structural bound, not a

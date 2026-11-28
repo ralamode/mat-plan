@@ -6,9 +6,9 @@ import type { Executor } from './executor';
 
 /**
  * The check-in / life insert (V1-5), single-sourced HERE in `packages/db` so the app DAL and
- * `db:verify` prove the IDENTICAL statement — the `updateStrengthSetById` doctrine, and the reason
- * it cannot live in `apps/web/lib/dal`: `verify.ts` imports only `../src/*`, so a writer the app
- * keeps to itself is a writer no real database ever tests.
+ * `db:verify` prove the IDENTICAL statement, and the reason it cannot live in `apps/web/lib/dal`:
+ * `verify.ts` imports only `../src/*`, so a writer the app keeps to itself is a writer no real
+ * database ever tests.
  *
  * 🔴 **Why it moved, and why that is a bug fix rather than a tidy-up (V1-9b B1-1, correctness 6).**
  * It lived in `apps/web/lib/dal/entries.ts`, where its only coverage was an emitted-SQL assertion —
@@ -20,11 +20,10 @@ import type { Executor } from './executor';
  * row is not logged, it was deleted, and nothing tells the person that.
  *
  * ⚠️ **Not to be confused with the plan's accepted 500.** That Risks row — *"between B0 and B1-1 a
- * hidden row's replay throws instead of inserting"* — is the **strength** path, where
- * `reselectLiveByClientId` (`strength-session.ts`) refuses rather than attaching children to a dead
- * parent. This file does not close that; `B1-2` maps it to an envelope. What the check-in path does
- * today is quieter and in some ways worse: it answers `created: false`, which the action renders as
- * *"already logged"* — about a row that was deleted. Telling the four cases apart is the
+ * hidden row's replay throws instead of inserting"* — was the legacy **strength** path, whose
+ * re-select refused rather than attaching children to a dead parent (deleted by LEGACY-1). What the
+ * check-in path does today is quieter and in some ways worse: it answers `created: false`, which the
+ * action renders as *"already logged"* — about a row that was deleted. Telling the four cases apart is the
  * prerequisite for `B1-2` saying so; nothing user-visible changes until then.
  *
  * **What it does NOT do:** resolve the catalog, or resolve the profile. Both stay with the caller,
@@ -159,8 +158,7 @@ export async function writeCheckinEntries(
     const result = first[i] ?? byClientId.get(v.clientId);
     if (result == null) {
       // No insert, no holder and no taken day, twice. The insert collided on another unique (a reused
-      // `public_id`), which no app path sends. Say so rather than guess: `reselectLiveByClientId`'s
-      // judgement about its own impossible branch.
+      // `public_id`), which no app path sends. Say so rather than guess.
       throw new Error(`check-in client_id ${v.clientId} neither inserted nor held by any row`);
     }
     return result;
@@ -192,10 +190,9 @@ async function attemptCheckinEntries(
   const createdByClientId = new Map(inserted.map((r) => [r.clientId, r.publicId]));
 
   // 🔴 **The re-select is over the client_ids that did NOT insert, and it is deliberately NOT
-  // guarded by `deleted_at IS NULL`** — which is the opposite of `reselectLiveByClientId` in
-  // `strength-session.ts`, for a reason worth stating so neither is "corrected" into the other.
-  // That helper must return a LIVE parent or refuse, because it is about to attach children to the
-  // row it returns. This one is a CLASSIFIER: a hidden row holding the id is precisely the answer
+  // guarded by `deleted_at IS NULL`**, for a reason worth stating so it is not "corrected" into
+  // one that is. A re-select about to attach children to the row it returns must return a LIVE
+  // parent or refuse. This one is a CLASSIFIER: a hidden row holding the id is precisely the answer
   // it exists to report, so filtering tombstones here would collapse `own_hidden` back into the
   // silence this file was written to remove.
   const unresolved = args.values

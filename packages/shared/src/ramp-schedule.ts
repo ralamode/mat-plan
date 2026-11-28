@@ -16,12 +16,12 @@ import { type CalisthenicsMetricKey, CALISTHENICS_METRIC_KEYS } from './activity
 /** The metric keys a ramp week targets — exactly the calisthenics metric set. */
 export type CalisthenicsRampMetricKey = CalisthenicsMetricKey;
 
-/** Re-exported for the ramp's readers (the weekly adherence SQL and its proof). */
+/** Re-exported for the ramp's readers (`db:verify`'s ramp proof). */
 export { CALISTHENICS_METRIC_KEYS };
 
 /**
  * Days in a ramp week — the half-open adherence window is `[week_start, week_start + WEEK_LENGTH_DAYS)`.
- * Named so the weekly-adherence SQL (`week_start + N`) and the `db:verify` proof share one literal.
+ * Named so `db:verify`'s ramp join (`week_start + N`) reads one literal.
  */
 export const WEEK_LENGTH_DAYS = 7;
 

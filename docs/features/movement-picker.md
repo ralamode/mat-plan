@@ -24,7 +24,7 @@ path and **creating** the deliberate one.
 
 - **PR 1 (U0, #364)** — `components/ui/sheet.tsx`, the surface. Not owned by this guide.
 - **PR 2 (#372)** — the server takes a movement **public id**; the id decides the row, the name is a
-  label. [write-path.md](./write-path.md) invariant 14 is the rule.
+  label. That resolver is deleted with the legacy writer (LEGACY-1 C2b; write-path invariant 14).
 - **PR 3** — this guide's files: the fold and the search, the browse groups and aliases, the DTOs, the
   copy, and the component itself. **Unmounted** — nothing renders it yet.
 - **FAM-1 step 9** — a multi-select mode (`multiple`), mounted by the program builder's item
@@ -96,17 +96,11 @@ path and **creating** the deliberate one.
    fold-based check drops them into browse mode and never renders the disabled footer that tells
    someone why they cannot create them. Probed: a fold-based check reddens the `aria-disabled` cases.
 
-6. **A dead movement id THROWS until `C4m`.** `resolveMovementByPublicId` returns `null` and the
-   resolver raises `MovementNotAvailableError`; no screen can produce one, because the picker offers
-   only rows its read returned and movements are never deleted. ✅ **Ruled 2026-11-12: it stays a
-   throw.** A review argued a crafted body makes it an _expected_ refusal owed a typed envelope; the
-   maintainer kept Decision 2, and `C4m` (merge) — the chunk that makes a dead id genuinely reachable
-   — owns turning it into one. ⚠️ The error surfaces at `app/error.tsx` and the form is lost; the
-   docblock used to claim otherwise. ⚠️ The DAL that rethrew it as a `DbWriteError`
-   (`logStrengthSession`) is deleted (LEGACY-1 C1, 2026-11-21), so no app path reaches this throw:
-   it holds only for the callerless resolver, which LEGACY-1 C2 deletes. The live save refuses a
-   dead or foreign item id with a typed `not_found` (`writers/program/save-workout.ts`), and `C4m`
-   builds on that path.
+6. ✅ **A dead movement id is a typed `not_found`.** The legacy session resolver threw on one
+   (ruled 2026-11-12 to stay a throw until `C4m`); it is deleted with the legacy writer (LEGACY-1
+   C2b). The live save refuses a dead or foreign item id with a typed `not_found`
+   (`writers/program/save-workout.ts`), and `C4m` (merge), the chunk that makes a dead id
+   genuinely reachable, builds on that path.
 
 7. ✅ **The `prescribed` match compares `movement_id` on BOTH sides, and a rename cannot move it.**
    **Closed, not pending.** This invariant used to read "after C4r renames a row, chunk 2's slug match
@@ -383,11 +377,6 @@ path and **creating** the deliberate one.
   A suite over invented options passes while the catalog does something else. The test library
   holds more than `BROWSE_OPEN_AT_MOST` rows, so its tree starts closed: open the groups a test needs
   (`expandBrowse`, in the fixtures file; the item picker's suite uses it too).
-- ⚠️ **One bounded consequence lives in [write-path.md](./write-path.md) invariant 14, not here.** A
-  household row whose slug a global row shadows is reachable by id, and freezes `''` for the
-  `prescribed` snapshot. It stays in that guide — the behaviour is `resolveMovementByPublicId`'s, and
-  moving it here would make a later PR edit a file PR 2 edited, which is a
-  [parallel-work](../parallel-work.md) Gate 1 collision.
 
 ## What is NOT covered by jsdom — all PR 4, in a browser
 

@@ -268,6 +268,20 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **`log-bodyweight.spec.ts:46` failed at `steps.ts:206`: `getByText('90 min')` resolved to 0, with
+  the snapshot showing the empty practice field focused and "cleared. It was 300 min." (#711,
+  #830).** → No log was ever sent. A row's island announces and hands focus from the action's
+  RESULT, which arrives before the revalidated tree (`single-value-live.tsx`), and the open
+  editor's field has the same accessible name as the create form's field. So `clearPractice` saw
+  "field focused, status cleared" while the editor was still on screen, and `logPractice`'s
+  `count()` checks found neither the ✓ nor a Change and skipped the log. → Settle on a control only
+  the new tree has (the form's ✓) before relying on focus. Before branching on `count()`, wait for
+  one of the expected states (`button.or(change)`). Reproduce it on demand by throttling the
+  download through CDP before the clear (`Network.emulateNetworkConditions`, 8000 B/s): it fails
+  3 in 3, and passes 3 in 3 with the fix. The retry's `document-title` failure was a second
+  window: a Server Action's tree drops the streamed `<title>` from `<head>` for a few hundred ms.
+  That spec's 360px scan waits for a title first (`tech-debt.md` has the entry). (LEGACY-1 C2,
+  #828)
 - **A redirect chain read from the browser was wrong on two CI runs (td-signed-out-e2e, #791).**
   (1) Concatenating `response.request().redirectedFrom()` hops with `framenavigated` URLs counted each
   hop twice. (2) Reading either one alone still failed: a late navigation from the previous page

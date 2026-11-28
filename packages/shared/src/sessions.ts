@@ -27,8 +27,8 @@ export const LEGACY_SESSION_TYPES = [
 
 /**
  * Every session type `sessions_session_type_check` accepts (db:verify pins the CHECK to this list).
- * FAM-1 step 3 appends `workout`: the session a template workout's rows are logged into (plan D6). It
- * is APPENDED, never inserted, because `SESSION_TYPES[0]` is `DEFAULT_SESSION_TYPE`.
+ * FAM-1 step 3 appends `workout`: the session a template workout's rows are logged into (plan D6),
+ * after the legacy types rather than among them.
  */
 export const SESSION_TYPES = [...LEGACY_SESSION_TYPES, 'workout'] as const;
 
@@ -38,13 +38,6 @@ export const sessionTypeSchema = z.enum(SESSION_TYPES);
 
 /** Branch on a NAMED member (`SESSION_TYPE.workout`), never a bare string (constants convention). */
 export const SESSION_TYPE = keyBySelf(SESSION_TYPES);
-
-/**
- * The default session type — a kids' S&C day is 'strength' (Ray's PPL push/pull/legs come at v2).
- * Named off the const (mirroring `DEFAULT_BODYWEIGHT_UNIT`) so a form/schema default is sourced,
- * never a re-typed literal (AGENTS.md constants convention).
- */
-export const DEFAULT_SESSION_TYPE: SessionType = SESSION_TYPES[0];
 
 /**
  * Display labels for the session types (V1-8-3a) — the single source for the Today session-block

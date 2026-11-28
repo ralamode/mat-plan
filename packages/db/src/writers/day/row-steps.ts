@@ -119,7 +119,7 @@ export type RowItem = {
  *   own locked entry), and must belong to `workoutId`: a mismatched pair is `not_found`. Its live
  *   quantities come in the same statement. A hidden one is `program_changed`.
  * - The movement is re-checked inside the transaction against the household
- *   (`movementIsAvailableTo`), as `writeStrengthSession` does, else `not_found`.
+ *   (`movementIsAvailableTo`), else `not_found`.
  */
 export async function rowItem(
   exec: Executor,
@@ -164,8 +164,7 @@ export async function rowItem(
   // Its live quantities as numbers; two in one slot throw (`liveQuantities`, E5).
   const quantities = liveQuantities(prescription.id, rows);
 
-  // 6 — the movement, re-checked inside the transaction against the household, as
-  //     `writeStrengthSession` does.
+  // 6 — the movement, re-checked inside the transaction against the household.
   const [movement] = await exec
     .select({ name: schema.movements.name, trackingType: schema.movements.trackingType })
     .from(schema.movements)

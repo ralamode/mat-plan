@@ -18,8 +18,6 @@ export {
   type HouseholdScope,
   type OwnerScope,
 } from './scope';
-// The single-sourced weekly-adherence query (V1-6b-2), run by both the app DAL and db:verify.
-export * from './queries/weekly-adherence';
 // The single-sourced programmed-day query (V1-10 slice 2), run by both the app DAL and db:verify.
 export * from './queries/program-day';
 export * from './queries/export-month';
@@ -63,7 +61,6 @@ export * from './writers/movement-catalog';
 // row count, which only a real database can report.
 export * from './writers/profile';
 export * from './writers/ownership';
-export * from './writers/strength-session';
 // FAM-1 11b: the row writer, its un-tick and its re-tick, for step 12b's Server Actions.
 export * from './writers/day';
 // FAM-1 12a: the day resolver, and 12b's scope-miss read (`prescriptionLiveIn`), for step 12b's

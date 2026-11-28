@@ -32,10 +32,10 @@ import type { Executor } from './executor';
  * validation/derivation used in two places becomes one exported helper, not a copy-paste."* This is a
  * **security** predicate, which is the strongest case there is for single-sourcing it.
  *
- * ⚠️ Extracted here with **two** consumers, not speculatively: `updateStrengthSetById` converts to a
- * caller in the same PR, so V1-9's existing `db:verify` cross-profile proof covers this helper for
- * free (and `db:verify` proves the profile soft-delete half for both writers). `listEntriesForDay`
- * (the app DAL's day read) and `weeklyAdherenceRows` joined in DAL-1 — the two sites that had
+ * ⚠️ Extracted here with **two** consumers, not speculatively: the old set-edit writer converted to
+ * a caller in the same PR, and LEGACY-1 deleted it. This helper's live proofs are `db:verify`'s
+ * V1-24 1b, including (j), the soft-deleted profile, and TEN-1 1b's `ownedEntryIds` read-matrix
+ * row. `listEntriesForDay` (the app DAL's day read) joined in DAL-1, one of the two sites that had
  * skipped the soft-delete half.
  *
  * ## TEN-1 1b — the third conjunct IS the tenancy seam
@@ -50,7 +50,7 @@ import type { Executor } from './executor';
  *
  * ## TEN-1 1c — the hand-written count is ZERO
  *
- * 1c converted the tail: `logCheckinEntries`, `writeStrengthSession`'s in-transaction resolve,
+ * 1c converted the tail: `logCheckinEntries`, the legacy strength writer's resolve (since deleted),
  * `programDayRows`'s `isThisProfile`, `export-month`'s three reads, and `seed.ts`'s plural variant
  * (`inArray` where this has `eq`, so it takes `inHousehold` directly — the household half, from the
  * one function allowed to unwrap the scope). **There is no copy of this predicate left in
@@ -246,19 +246,20 @@ export function movementInHousehold(scope: HouseholdScope) {
  * 🔴 **THE movement-availability predicate: live ∧ (global ∨ this household's own).** The composite,
  * not the leaves — "may this household use this movement at all".
  *
- * **Composed once, here, for exactly the reason `isLiveProfile` is** (see that function): two call
- * sites must answer **identically** or one of them scopes weaker, and they are the two sides of one
- * seam — `resolveMovementByPublicId`'s pre-check outside the transaction and
- * `assertMovementsAreAvailable`'s re-check inside it (`writers/movement-catalog.ts`,
- * `writers/strength-session.ts`).
+ * **Composed once, here, for exactly the reason `isLiveProfile` is** (see that function): every call
+ * site must answer **identically** or one of them scopes weaker. Its first pair, PICK-1's pre-check
+ * outside the transaction and the legacy writer's re-check inside it, were deleted by LEGACY-1; the
+ * live users are the in-transaction re-checks of `saveWorkout`, `day/row-steps.ts` and `newItem`,
+ * and the day-plan read.
  *
  * ⚠️ **The cost of hand-composing it at each site was concrete, not theoretical.** PICK-1 PR 2
  * drafted it that way first, and `36-availability-ignores-household.patch`'s first version widened
  * only the **resolver's** copy — so nothing in the repo could have caught the **in-transaction**
  * copy being widened instead, which is the dangerous direction, since the pre-check is the one a
- * reader assumes is sufficient. Pointed at this helper, that widening now reaches **both** call
- * sites from one edit. (`db:verify` is fail-fast, so case (a) is the assertion that reports it;
- * the property that matters is that the in-transaction copy can no longer be widened alone.)
+ * reader assumes is sufficient. Pointed at this helper, that widening reaches **every** call site
+ * from one edit. (`db:verify` is fail-fast, so mutation 36 reddens `FAM-1 6a-ii: saving another
+ * household's item is not_found` first; the property that matters is that no in-transaction copy
+ * can be widened alone.)
  *
  * ⚠️ **Sharing the expression does not collapse the defence into one.** What makes the re-check a
  * seam is *when* it runs — inside the transaction the rollback protects, after the profile resolve.

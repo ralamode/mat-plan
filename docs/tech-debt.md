@@ -15,6 +15,32 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The page's `<title>` briefly disappears after a Server Action's re-render (added 2026-11-26, from #830's e2e retry)
+
+- **What & why it's debt:** in #830's retry trace (run 45895755653), the `<title>`, a `<meta>` and a
+  `<link>` were gone from `<head>` for about 370 ms after the Change action's response, then came
+  back. No request was in flight in that gap. A screen reader or an axe scan in that window finds no
+  title; `log-bodyweight.spec.ts` failed `document-title` at its 360px scan this way. The mechanism
+  is **not verified**: where Next holds the streamed metadata while it applies an action's tree.
+  Related to "The route announcer sometimes says the athlete, not the day" below, but not the same:
+  that one is a late title on arrival, this one is the title removed after a write.
+- **Impact:** low. The title is right again within a moment; the spec waits for it before its scan.
+- **Proposed fix:** find why the action's tree drops the metadata (a Suspense boundary around it is
+  the first guess), and keep the old title until the new one arrives.
+- **Severity:** low.
+
+### After Clear on the Life row, the old editor stays on screen until the new form arrives (added 2026-11-26, from #830's e2e diagnosis)
+
+- **What & why it's debt:** the row's island reports the clear and moves focus from the action's
+  result, which arrives before the revalidated tree (`single-value-live.tsx`). On a slow connection
+  the "cleared" status and focus land while the old editor is still showing: 3.7 s in a run with the
+  download throttled to 8000 B/s. A value typed then is discarded when the replacement form mounts,
+  or a Save sends it against the row just cleared, which is refused. Nothing is overwritten.
+- **Impact:** low. A person on a slow phone may have to type the minutes again.
+- **Proposed fix, to weigh:** hide or disable the editor once its clear succeeds, or announce and
+  move focus only after the new tree lands. Owner: the bodyweight / practice lane (lane S).
+- **Severity:** low.
+
 ### The seed's session timeouts are fired, not awaited, so its first query races them (added 2026-11-21, from CAT-3 A2-ii's rehearsal)
 
 - **What & why it's debt:** `packages/db/scripts/seed.ts` sets `lock_timeout` and
@@ -268,19 +294,50 @@ check`), and AGENTS.md → "Database / migration PR rules" named it first among 
   branch is reset from main afterwards, or stop recommending the branch refresh.
 - **Severity:** low.
 
-### Older days have no in-app fix, and the old forms left callerless code in the packages (added 2026-11-15, 12f half closed 2026-11-20)
+### Older days have no in-app fix (added 2026-11-15; the callerless-code half closed by LEGACY-1, 2026-11-26)
 
-- **What & why it's debt:** FAM-1 12f deleted the old log forms, their actions, totals, copy and
-  capture states. What is left on purpose has no caller in the app and sits in packages 12f may not
-  edit: `lib/entries/entry-label.ts`; `logStrengthSession` and `editStrengthSet` (deleted, LEGACY-1 C1);
-  `weeklyAdherenceRows`, with the comments that still say the DAL or the Today page calls it
-  (`verify.ts:1418`, `:5355`, `queries/weekly-adherence.ts:11-12`); `readsHouseholdProgram`,
-  `STRENGTH_DAY_ROLES` and `ACTIVITY_INPUT_SHAPE` (deleted, LEGACY-1 A); and `loggableUnitsOf`
-  (`units.ts:164`).
-- **And:** days before yesterday are read-only, and the page states no way to fix a wrong value
-  there; the route is a correction (`db:correct`). Acceptable while one household uses the app.
-- **Fix:** the package owners delete the callerless code in their own PRs. Revisit the older-day recovery path before FAM-1 slice 3 opens
-  the new page to the household, or before a second household.
+- **What & why it's debt:** days before yesterday are read-only, and the page states no way to fix a
+  wrong value there; the route is a correction (`db:correct`). Acceptable while one household uses
+  the app.
+- **Closed half:** the callerless code FAM-1 12f left in the packages is deleted
+  ([LEGACY-1](./plans/legacy-1-retire-strength-path.md), A through C2b). `lib/entries/entry-label.ts`
+  stays, by recorded decision D21: it words an old entry.
+- **Fix:** revisit the older-day recovery path before FAM-1 slice 3 opens the new page to the
+  household, or before a second household.
+
+### Small leftovers after LEGACY-1 (added 2026-11-26, LEGACY-1 C2b)
+
+- **What & why it's debt:** three body-only leftovers found during the deletion, none worth a PR alone:
+  - `DAY_ROLE_TO_SESSION_TYPE` (`packages/shared/src/programming.ts`) is read only by
+    `apps/web/lib/programming/contract.test.ts` and a comment in `packages/db/src/schema.ts`, whose
+    "writer/action-enforced" invariant is out of date: nothing writes `sessions.day_role` now;
+  - `DROPPED_GLOBAL_SLUG_UNIQUE` in `packages/db/src/writers/movement-catalog.ts` is unused; its
+    docblock still describes a `catch` that TEN-2d deleted;
+  - `EntryDTO.sessionDayRole` (`apps/web/lib/dal/entries.ts`) is selected for the day page and
+    rendered nowhere.
+- **Fix:** delete each (and the schema comment's claim) in the next PR that touches the file.
+- **Severity:** low.
+
+### Columns the legacy strength writer was the last to write (added 2026-11-26, LEGACY-1 C2b)
+
+- **What & why it's debt:** LEGACY-1 deleted the old strength writer, the last code that wrote
+  most of these, and the adherence read. Nothing writes or reads them now, beyond the export,
+  erasure, `db:verify` and the one reader named below:
+  - `ramp_targets`, last read by `weeklyAdherenceRows` (deleted); the old writer never wrote it;
+  - `sessions.day_role` and `feel`. `day_role` still has one reader: `listEntriesForDay`
+    (`apps/web/lib/dal/entries.ts`, the day page's read) selects it into `EntryDTO.sessionDayRole`,
+    which nothing renders;
+  - `supersets.label` and `note`;
+  - the NULL arm of `entries.prescribed_snapshot`;
+  - inserts into `uq_entries_superset_order`.
+
+  `sessions.client_id` and `supersets.client_id` are server-minted now, so their indexes no longer
+  arbitrate a replay.
+
+- **Why not dropped:** production rows still hold all of these, and the export still reads them.
+- **Fix:** a separate expand→contract change per column, once the export no longer needs them
+  ([plan](./plans/legacy-1-retire-strength-path.md) → "Left in the schema").
+- **Severity:** low.
 
 ### The day resolver's proof seeds the week, prescriptions and assignments by direct insert (added 2026-11-16, FAM-1 step 12a-i; reworded at 12a-ii)
 
@@ -1109,18 +1166,18 @@ success.` Harmless there — nothing referenced the files yet.
 
 ## Set-edit LWW uses server-`now()`, not the client-supplied timestamp (V1-9)
 
-- **What:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`, V1-9) advances
-  `entry_sets.updated_at` to the DB `now()` on each edit. The AGENTS.md schema convention mandates
-  last-writer-wins on the **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so
-  offline clock-skew resolves correctly. **The day page's Change does the same** (FAM-1 11c-i,
-  `amendRow` → `updateEntrySetRows` in `writers/session-rows.ts`: the set, its quantities and the
-  entry), and so does 11c-ii's revive (`logRow` in `writers/day/log-row.ts`: the entry it brings
+- **What:** the day page's Change (FAM-1 11c-i, `amendRow` → `updateEntrySetRows` in
+  `writers/session-rows.ts`: the set, its quantities and the entry) advances `updated_at` to the DB
+  `now()` on each edit. The AGENTS.md schema convention mandates last-writer-wins on the
+  **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so offline clock-skew
+  resolves correctly. The V1-9 set edit that first did this is deleted (LEGACY-1); 11c-ii's revive
+  does the same (`logRow` in `writers/day/log-row.ts`: the entry it brings
   back and the set it soft-deletes); v1.5 sync must find all of them.
 - **Impact:** none today — there is a single ONLINE writer (no offline outbox until v1.5), so `now()` is
   always `> created_at` and no two devices race an edit. Correct for the current deployment.
 - **Proposed fix:** at **v1.5** (offline + TanStack Query + the sync outbox), take the client `updated_at`
-  in `editStrengthSetSchema`, thread it into the writer, and add `.where(incoming >= stored)` to the UPDATE
-  (the same LWW guard the sync path applies to every mutable row). The writer edge already flags the spot.
+  in the row-amend schema, thread it into the writer, and add `.where(incoming >= stored)` to the UPDATE
+  (the same LWW guard the sync path applies to every mutable row).
 - **Severity:** low (deferred with the rest of the offline/LWW work).
 
 ## `profiles.routine_config` is JSONB — a knowing exception to the typed-columns rule (V1-18)

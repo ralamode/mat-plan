@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { foldName, isBlankEntry } from './text';
+import { foldName, freeTextNoteSchema, isBlankEntry } from './text';
 
 /**
  * ⚠️ **Every name below is INVENTED**, chosen for the Unicode property it exercises (a combining
@@ -59,5 +59,29 @@ describe('isBlankEntry (V1-24 3b-bw; shared with practice at 3b-life)', () => {
 
   it('is false for anything that is not a string: no clear by omission', () => {
     for (const v of [null, undefined, 0, new File([], 'x')]) expect(isBlankEntry(v)).toBe(false);
+  });
+});
+
+// GAP-1 P2-3 — single-line, but commas are fine. Moved from the deleted legacy session-schema test
+// (LEGACY-1 C2b), which ran these through its `feel` field.
+describe('freeTextNoteSchema', () => {
+  it('rejects an INTERIOR newline — it would split the record', () => {
+    expect(freeTextNoteSchema.safeParse('felt strong\nback tight').success).toBe(false);
+  });
+
+  it('ALLOWS a comma — the contract quotes a comma-bearing note on export instead', () => {
+    expect(freeTextNoteSchema.safeParse('felt strong, back tight').success).toBe(true);
+  });
+
+  it('still maps a blank/whitespace-only note to undefined (the transform survives the refine)', () => {
+    const res = freeTextNoteSchema.safeParse('   ');
+    expect(res.success).toBe(true);
+    expect(res.success && res.data).toBeUndefined();
+  });
+
+  it('trims a LEADING/TRAILING newline rather than rejecting it', () => {
+    const res = freeTextNoteSchema.safeParse('\nfelt strong\n');
+    expect(res.success).toBe(true);
+    expect(res.success && res.data).toBe('felt strong');
   });
 });

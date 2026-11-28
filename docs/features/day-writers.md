@@ -94,8 +94,9 @@ writer's sequence diagram is [architecture.md §2i](../architecture.md), the day
    mutation that turns it red (`scripts/mutations/README.md`, 110–119, 121–129 and 170–186; 120 is unused; the revive's are
    341–347 and 357). The two:
    the quantity's derived `dimension` in
-   `insertEntrySetRows` has no patch of its own, because hard-coding it reddens `verify.ts`'s GAP-3
-   hold proof first; and the replay pin's `prescription_set IS NOT NULL` (3d) is implied by
+   `insertEntrySetRows` has no patch of its own, because hard-coding it breaks `verify.ts`'s V1-30
+   round-trip first (its `m` set's insert fails the composite FK; the GAP-3 hold proof that used to
+   go first was deleted by LEGACY-1 C2a); and the replay pin's `prescription_set IS NOT NULL` (3d) is implied by
    `prescription_set = write.set`. Reorder nothing without moving its proof.
 9. 🔴 **The replay answers first, and it is pinned.** `classifyRowHolder` finds the entry holding the
    `clientId`, live or hidden (unguarded, so a hidden holder answers `own_hidden`, D18), and it is
@@ -182,9 +183,8 @@ IS NULL OR scoped_prescription.id IS NOT NULL)`. A foreign pointer (runbook (f),
       `rowWorkout` BEFORE the schedule, so a foreign block's week is never read.
     - `program_changed`: a hidden workout or block (355); a purged prescription (363). A hidden
       prescription is `rowItem`'s refusal, proved by 11b.
-    - It is the ONLY writer of a program row's numbers: the old V1-9 fix-a-set path
-      (`updateStrengthSetById`) refuses a program row (`db:verify`'s "TD fix-a-set" block, last in
-      `verifyDay`; mutations 449 and 450).
+    - It is the ONLY writer of a program row's numbers. The old V1-9 fix-a-set path is deleted
+      (LEGACY-1; its proof and mutations 449 and 450 in C2a, the function in C2b).
     - `bad_value`: a number not in the unit the row was LOGGED in, or a blank (353; C28). The
       prescription's own fit (`fitsItsType`) is NOT checked: Change judges the row as logged.
     - The write is `updateEntrySetRows` (`session-rows.ts`): the one LIVE set (356) and its

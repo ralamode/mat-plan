@@ -176,10 +176,18 @@ export function practiceChange(page: Page, value: string = PRACTICE_SHOWN) {
   });
 }
 
+/** The logged practice's Change at any value (`changeLabel`'s own prefix). */
+export const anyPracticeChange = (page: Page) =>
+  lifeSection(page).getByRole('button', { name: changePrefix(PRACTICE_COPY.changeSubject) });
+
 /** The unlogged practice row's minutes field and its ✓ (V1-24 3b-life-b). */
 export function practiceLogField(page: Page) {
   return lifeSection(page).getByLabel(PRACTICE_COPY.fieldLabel, { exact: true });
 }
+
+/** That row's ✓, the one control only the unlogged row has (the editor's ✓ is Save or Clear). */
+export const practiceLogTick = (page: Page) =>
+  lifeSection(page).getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
 
 /**
  * Type the practice minutes, tap ✓, and assert the Life section's logged row: the label and its
@@ -193,8 +201,11 @@ export function practiceLogField(page: Page) {
 export async function logPractice(page: Page): Promise<void> {
   const life = lifeSection(page);
   await openIfCollapsed(life, LIFE_COPY.heading);
-  const button = life.getByRole('button', { name: PRACTICE_COPY.logLabel, exact: true });
+  const button = practiceLogTick(page);
   const change = practiceChange(page);
+  // Wait for the row to settle into one of its two states before the counts read it: an editor still
+  // open (a clear whose tree has not landed) has neither, and the counts would skip the log unseen.
+  await expect(button.or(anyPracticeChange(page))).toBeVisible();
   // A retry after a failed change left another value on the row: clear it, so the log below runs.
   if ((await button.count()) === 0 && (await change.count()) === 0) await clearAnyPractice(page);
   if ((await button.count()) > 0) {
@@ -220,14 +231,21 @@ export async function changePractice(page: Page, from: string, minutes: string):
   await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedChanged(to));
 }
 
-/** Clear the logged practice shown as `from`: empty the field, the ✓ is named Clear; the cleared line is
- * shown and focus lands on the empty minutes field that comes back (V1-24 3b-life A3, A4). */
+/**
+ * Clear the logged practice shown as `from`: empty the field, the ✓ is named Clear; the cleared line is
+ * shown and focus lands on the empty minutes field that comes back (V1-24 3b-life A3, A4).
+ *
+ * ⚠️ Waits for the form's own ✓ first. The island reports the clear from the action's RESULT, which
+ * can land before the revalidated tree does (`single-value-live.tsx`), and the open editor's field has
+ * the same name as the form's, so "the field is focused" alone can be the editor's, still on screen.
+ */
 export async function clearPractice(page: Page, from: string): Promise<void> {
   const life = lifeSection(page);
   await practiceChange(page, from).click();
   await life.getByLabel(PRACTICE_COPY.fieldLabel, { exact: true }).fill('');
   await life.getByRole('button', { name: PRACTICE_COPY.clearLabel, exact: true }).click();
-  await expect(practiceLogField(page)).toBeFocused({ timeout: 15_000 });
+  await expect(practiceLogTick(page)).toBeVisible({ timeout: 15_000 });
+  await expect(practiceLogField(page)).toBeFocused();
   await expect(life.getByRole('status')).toHaveText(PRACTICE_COPY.announcedCleared(from));
 }
 
@@ -240,7 +258,7 @@ export async function clearAnyPractice(page: Page): Promise<void> {
   // Folded, its Change is hidden, and this would return as if nothing were logged.
   await openIfCollapsed(life, LIFE_COPY.heading);
   const prefix = changeLabel(PRACTICE_COPY.changeSubject, '');
-  const anyChange = life.getByRole('button', { name: changePrefix(PRACTICE_COPY.changeSubject) });
+  const anyChange = anyPracticeChange(page);
   if ((await anyChange.count()) === 0) return;
   const shown = (await anyChange.getAttribute('aria-label'))!.slice(prefix.length);
   await clearPractice(page, shown);
