@@ -196,7 +196,10 @@ and panelled; the milestones order them.
   in [FAM-1](./milestones/fam-1-family-program.md) step 4; the typed targets stay Beta 1.
   _2026-11-17:_ **a rep range on a program row is this row's.** FAM-1's row takes one whole number
   for reps, so a range is entered as its low number with the range in the instructions (found while
-  writing `CAT-3`'s spec).
+  writing `CAT-3`'s spec). _2026-11-28 (maintainer):_ the household's first real programs in the
+  builder hit this on almost every item: rep ranges (3 × 5–6) and hold ranges (20–30 s) went in as one
+  number with the range in the instructions, and a starter program ([ONB-2](#onb-2)) needs the same.
+  A range on the movement's own quantity (seconds, distance) belongs here as well as a rep range.
 
 <a id="act-1"></a>
 
@@ -1981,6 +1984,26 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   [programs/daily-five-default.md](./programs/daily-five-default.md). _(Beta 0.)_ ⚠️ _Re-stated
   2026-11-14 (maintainer): **Beta 1**, with the first invite — see
   [beta-1 → Beta 0](./milestones/beta-1.md#beta-0--one-invited-family). Was "(Beta 0.)"._
+
+  ⚠️ _2026-11-28 (maintainer): a candidate **adult** starter_ for the re-scoped ONB-2 (2–3 curated
+  starters, tried as an editable copy; [beta-1](./milestones/beta-1.md) item 3). **ROOM-3**, from
+  "ROOM Strength v0.1", a bodyweight program under review: three non-consecutive days a week (workouts
+  A, B and C, seven slots of two sets each), 30–50 minutes, a floor and a wall, a pull-up bar optional.
+  Effort is set by reps in reserve and no weight appears anywhere, so it seeds as prescriptions with no
+  targets, as the Daily Five does. Before it can ship:
+
+  - **Sign-off.** The source is marked "proposed, not approved for publication", reviewed only by its
+    author, and carries no licence statement. The Daily Five's sign-off rule applies, and the source
+    document is not committed.
+  - **Adults only**, by its own statement. It sits beside a youth starter, never in place of one.
+  - **Catalog.** About 22 of its ~90 named exercises have no movement, several of them in ROOM-3's own
+    days (the self-resisted pulldown, row and curl, the manual lateral raise, the elbow-drive row, the
+    long-lever bridge). A `CAT-3`-style batch comes first.
+  - **What the builder cannot express yet:** rep ranges ([TGT-1](#tgt-1)), its 12-week phases, and "any
+    three non-consecutive days, resume in sequence", which a calendar-indexed week does not do. The
+    starter's shape is a fixed Monday/Wednesday/Friday week.
+
+  ROOM-6, the same program's six-day track (106 sets a week), is not a starter.
 
   ONB-0 establishes that a brand-new household's first screen is **Ray's family's routine**. That is one
   of two shapes: `routine_config` is an ordered list of activity keys; a **program** is
