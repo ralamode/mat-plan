@@ -442,7 +442,7 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
   // empty-list guard (drizzle throws on an empty insert) is proved here, first, on its own.
   await rolledBack(async (tx) => {
     await assert.doesNotReject(
-      () => seedReference(asDb(tx), { library: { entries: [], legacyMovements: true } }),
+      () => seedReference(asDb(tx), { library: { entries: [] } }),
       'CAT-3 A2-ii: seedReference resolves on an empty library list (A2-i D5.4)',
     );
   });
@@ -454,7 +454,7 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
     assert.equal(before?.n, 0, 'CAT-3 A2-i E1: the proof starts with no global movement');
 
     const counts = await seedReference(asDb(tx), {
-      library: { entries: CATALOG_MOVEMENTS, legacyMovements: true },
+      library: { entries: CATALOG_MOVEMENTS },
     }).catch((e: unknown) =>
       assert.fail(`CAT-3 A2-i E1: the catalog seed resolves on a fresh database (${String(e)})`),
     );
@@ -510,7 +510,7 @@ export async function verifyCatalogSeedOnAFreshDatabase(): Promise<void> {
     let again: Awaited<ReturnType<typeof seedReference>> | undefined;
     await assert.doesNotReject(async () => {
       again = await seedReference(asDb(tx), {
-        library: { entries: CATALOG_MOVEMENTS, legacyMovements: true },
+        library: { entries: CATALOG_MOVEMENTS },
       });
     }, 'CAT-3 A2-i rule 7: a second run, with every entry present, resolves');
     assert.deepEqual(
@@ -597,7 +597,7 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
     const before = await legacyOf();
     assert.equal(before.length, 1, 'CAT-3 A2-i E2: one legacy global sled_push before the seed');
     const counts = await seedReference(asDb(tx), {
-      library: { entries: [entry], legacyMovements: true },
+      library: { entries: [entry] },
     });
     assert.deepEqual(
       await legacyOf(),
@@ -647,7 +647,7 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
     let counts!: Awaited<ReturnType<typeof seedReference>>;
     const printed = await captureOutput(async () => {
       counts = await seedReference(asDb(tx), {
-        library: { entries: [entry], legacyMovements: true },
+        library: { entries: [entry] },
       });
       reportSeed(counts);
     });
@@ -686,7 +686,7 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
   await rolledBack(async (tx) => {
     const entry = CATALOG_MOVEMENTS.find((e) => e.slug === 'sled_push')!;
     const baseline = await seedReference(asDb(tx), {
-      library: { entries: [], legacyMovements: true },
+      library: { entries: [] },
     });
     await insertMovementOwnedBy(asTx(tx), ctx.A_SCOPE, {
       publicId: newId(),
@@ -695,7 +695,7 @@ async function verifyCatalogSeedWriter(ctx: VerifyContext): Promise<void> {
       isBodyweight: false,
     });
     const counts = await seedReference(asDb(tx), {
-      library: { entries: [entry], legacyMovements: true },
+      library: { entries: [entry] },
     });
     assert.deepEqual(
       [

@@ -30,7 +30,7 @@ import {
   PROGRAM_BLOCK_KIND,
   PROGRAM_NAME_MAX,
   PROGRAM_REFUSAL,
-  PROGRAM_SEED,
+  LEGACY_PROGRAM_FIXTURE,
   QUANTITY_SLOT,
   SLOT_LABEL_MAX,
   TRACKING_TYPE,
@@ -216,12 +216,12 @@ async function blocksIn(tx: VerifyTx, scope: HouseholdScope): Promise<number> {
 }
 
 /**
- * THE seeded block of `scope`'s household: `PROGRAM_SEED`'s, live, picked by its slug. Never "the
+ * THE seeded block of `scope`'s household: `LEGACY_PROGRAM_FIXTURE`'s, live, picked by its slug. Never "the
  * first legacy row": `verify.ts` adds legacy fixture blocks of its own, whose slugs are not their
  * names', and an unordered pick made the slug proof pass on one of those.
  */
 async function seededBlock(tx: VerifyTx, scope: HouseholdScope) {
-  const seed = PROGRAM_SEED[0]!;
+  const seed = LEGACY_PROGRAM_FIXTURE[0]!;
   const [row] = await tx
     .select({ publicId: schema.programBlocks.publicId, name: schema.programBlocks.name })
     .from(schema.programBlocks)

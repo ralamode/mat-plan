@@ -23,7 +23,7 @@ import {
   unitsForTrackingType,
   WEEKDAYS,
   WORKOUT_NAME_MAX,
-  PROGRAM_SEED,
+  LEGACY_PROGRAM_FIXTURE,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_HOUSEHOLD_PUBLIC_ID,
   QUANTITY_SLOT,
@@ -983,11 +983,13 @@ async function verifyStep4ai({ A_SCOPE, B_SCOPE }: VerifyContext): Promise<void>
  *
  * In a rolled-back transaction: hard-delete the seed household's program (targets → prescriptions →
  * blocks; nothing else references them), then `seed(…, { fixtures: false })` must leave it empty and
- * `seed(…, { fixtures: true })` must put `PROGRAM_SEED` back, every block, prescription and target.
+ * `seed(…, { fixtures: true })` must put `LEGACY_PROGRAM_FIXTURE` back, every block, prescription and target.
  * The seed runs on the transaction's own handle (PGlite has one connection).
  */
 async function verifyStep1(): Promise<void> {
-  const seedBlocks = PROGRAM_SEED.filter((b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID);
+  const seedBlocks = LEGACY_PROGRAM_FIXTURE.filter(
+    (b) => b.householdPublicId === SEED_HOUSEHOLD_PUBLIC_ID,
+  );
   assert.ok(seedBlocks.length > 0, 'FAM-1 1: PROGRAM_SEED has a block for the seed household');
   const expected = {
     blocks: seedBlocks.map((b) => b.slug).sort(),
@@ -1037,7 +1039,7 @@ async function verifyStep1(): Promise<void> {
       .where(inArray(schema.programAssignments.blockId, blocksOf));
 
     /**
-     * What the seed household's program holds now. The LEGACY rows (`PROGRAM_SEED`: block slugs,
+     * What the seed household's program holds now. The LEGACY rows (`LEGACY_PROGRAM_FIXTURE`: block slugs,
      * prescriptions, targets), and apart from them the fixture programs (FAM-1 6c-i, named by their
      * fixed client ids), with their workouts and assignments: every block of the household is one
      * or the other, so a program that is neither is still caught.

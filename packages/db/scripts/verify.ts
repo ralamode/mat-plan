@@ -30,7 +30,7 @@ import {
   PROFILE_KIND,
   PROFILE_NAME_MAX,
   PROGRAM_BLOCK_KIND,
-  PROGRAM_SEED,
+  LEGACY_PROGRAM_FIXTURE,
   QUANTITY_SLOT,
   QUANTITY_SLOT_ROWS,
   ROUTINE_VERSION,
@@ -3045,7 +3045,7 @@ console.log(
 // ── V1-10 (PR 1): the programming data model (program_blocks → prescriptions → prescription_targets) ──
 // DB-only, ships dark; the seed ships EMPTY. Prove the SCHEMA (columns, CHECK↔const parity, FK/unique/CHECK
 // rejections) AND the seed RESOLVER — a test-only fixture driven through the REAL seedProgram, since the empty
-// PROGRAM_SEED otherwise leaves the resolve-by-slug/public_id + ON CONFLICT arbiter unexercised until real data.
+// LEGACY_PROGRAM_FIXTURE otherwise leaves the resolve-by-slug/public_id + ON CONFLICT arbiter unexercised until real data.
 
 const V1_10_COLUMNS = [
   ['program_blocks', { public_id: 'uuid', household_id: 'bigint', slug: 'text', name: 'text' }],
@@ -3085,7 +3085,7 @@ await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 
 // The seed is now POPULATED with the maintainer's authored block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
 assert.ok(
-  PROGRAM_SEED.length >= 1,
+  LEGACY_PROGRAM_FIXTURE.length >= 1,
   'V1-10: PROGRAM_SEED is populated (the maintainer’s authored block)',
 );
 const seededBlocks = (
@@ -3097,13 +3097,13 @@ const seededBlocks = (
     count: number;
   }[]
 )[0].count;
-// EXACT count (not just ≥1): the DB must hold precisely the LEGACY blocks PROGRAM_SEED declares — nothing
+// EXACT count (not just ≥1): the DB must hold precisely the LEGACY blocks LEGACY_PROGRAM_FIXTURE declares — nothing
 // extra (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard
 // provided). Since FAM-1 6c-i the seed also writes the fixture TEMPLATE programs, so a stray template
 // block is caught by `verify/schema.ts`'s 4a-i kind check, which names the fixture programs alone.
 assert.equal(
   seededBlocks,
-  PROGRAM_SEED.length,
+  LEGACY_PROGRAM_FIXTURE.length,
   'V1-10: exactly PROGRAM_SEED’s blocks are seeded (no unexpected extras)',
 );
 

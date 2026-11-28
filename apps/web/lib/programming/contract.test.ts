@@ -6,7 +6,7 @@ import {
   MOVEMENT_SEED_ROWS,
   movementSlug,
   PROGRAM_NAME_MAX,
-  PROGRAM_SEED,
+  LEGACY_PROGRAM_FIXTURE,
   prescriptionSeedRowSchema,
   programBlockSeedRowSchema,
   LEGACY_SESSION_TYPES,
@@ -142,25 +142,27 @@ describe('seed-row schemas', () => {
   });
 });
 
-describe('PROGRAM_SEED — Ray’s real block, authoring-consistent', () => {
+describe('LEGACY_PROGRAM_FIXTURE — the legacy block fixture, authoring-consistent', () => {
   it('is populated (the Youth Daily Program block)', () => {
-    expect(PROGRAM_SEED.length).toBeGreaterThanOrEqual(1);
+    expect(LEGACY_PROGRAM_FIXTURE.length).toBeGreaterThanOrEqual(1);
     // 2026-09-24: replaced `kids_s&c_foundation`, archived verbatim at
     // docs/programs/kids-sc-foundation-archived.md. Both cannot be active — programDayRows picks
     // the newest block per day-role, so seeding two would silently hijack one card with the other.
-    expect(PROGRAM_SEED.some((b) => b.slug === 'youth_daily_program')).toBe(true);
-    expect(PROGRAM_SEED.some((b) => b.slug === 'kids_s&c_foundation')).toBe(false);
+    expect(LEGACY_PROGRAM_FIXTURE.some((b) => b.slug === 'youth_daily_program')).toBe(true);
+    expect(LEGACY_PROGRAM_FIXTURE.some((b) => b.slug === 'kids_s&c_foundation')).toBe(false);
   });
 
   it('programs BOTH day letters, so every calendar day has a card', () => {
-    const roles = new Set(PROGRAM_SEED.flatMap((b) => b.prescriptions.map((p) => p.dayRole)));
+    const roles = new Set(
+      LEGACY_PROGRAM_FIXTURE.flatMap((b) => b.prescriptions.map((p) => p.dayRole)),
+    );
     expect([...roles].sort()).toEqual(['strength_a', 'strength_b']);
   });
 
   it('prescribes no reps or loads except the one fixed movement', () => {
     // The paper sheet deliberately shows no goal numbers — "the absence of a target reduced the
     // 'I failed today' effect". Hip thrusts are the single exception (3 x 10 per side).
-    const prescribed = PROGRAM_SEED.flatMap((b) => b.prescriptions).filter(
+    const prescribed = LEGACY_PROGRAM_FIXTURE.flatMap((b) => b.prescriptions).filter(
       (p) => p.sets !== null || p.targetReps !== null,
     );
     expect(prescribed.map((p) => p.movementSlug)).toEqual([
@@ -168,20 +170,20 @@ describe('PROGRAM_SEED — Ray’s real block, authoring-consistent', () => {
       'single-leg_hip_thrusts',
     ]);
     // And no authored loads anywhere — the LLM-never-authors-loads rule, and the sheet's own design.
-    for (const p of PROGRAM_SEED.flatMap((b) => b.prescriptions)) {
+    for (const p of LEGACY_PROGRAM_FIXTURE.flatMap((b) => b.prescriptions)) {
       for (const t of p.targets) expect(t.load).toBeNull();
     }
   });
 
   it('validates against the seed-row schemas (every block, prescription, target)', () => {
-    for (const block of PROGRAM_SEED) {
+    for (const block of LEGACY_PROGRAM_FIXTURE) {
       expect(programBlockSeedRowSchema.safeParse(block).success).toBe(true);
     }
   });
 
   it('every prescription references a real catalog movement slug', () => {
     const slugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
-    for (const block of PROGRAM_SEED) {
+    for (const block of LEGACY_PROGRAM_FIXTURE) {
       for (const p of block.prescriptions) {
         expect(slugs.has(p.movementSlug)).toBe(true);
       }
@@ -192,13 +194,13 @@ describe('PROGRAM_SEED — Ray’s real block, authoring-consistent', () => {
   // its name, a duplicate (day_role, idx) slot, or a repeated profile in one prescription's targets — would
   // be silently swallowed at seed time. Catch it here instead.
   it('every block slug equals movementSlug(name)', () => {
-    for (const block of PROGRAM_SEED) {
+    for (const block of LEGACY_PROGRAM_FIXTURE) {
       expect(block.slug).toBe(movementSlug(block.name));
     }
   });
 
   it('no duplicate (day_role, idx) slot within a block, and no repeated profile within a prescription', () => {
-    for (const block of PROGRAM_SEED) {
+    for (const block of LEGACY_PROGRAM_FIXTURE) {
       const slots = block.prescriptions.map((p) => `${p.dayRole}#${p.idx}`);
       expect(new Set(slots).size).toBe(slots.length);
       for (const p of block.prescriptions) {
